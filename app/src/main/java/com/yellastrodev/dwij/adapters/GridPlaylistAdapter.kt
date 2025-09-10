@@ -13,6 +13,7 @@ import androidx.recyclerview.widget.RecyclerView
 import com.google.android.material.snackbar.Snackbar
 import com.yellastrodev.dwij.R
 import com.yellastrodev.dwij.utils.DurationFormat.Companion.formatDuration
+import com.yellastrodev.dwij.utils.PlaylistsDiff
 import com.yellastrodev.yandexmusiclib.entities.YaPlaylist
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
@@ -38,15 +39,52 @@ RecyclerView.Adapter<GridPlaylistAdapter.ViewHolder>() {
 	var mScope: CoroutineScope? = null
 
 	private var mList: ArrayList<YaPlaylist> = ArrayList()
-	fun setList(fList: ArrayList<YaPlaylist>){
-		mList = ArrayList()
-//		if (mTrack != null){
-//			fList.removeAll(
-//				fList.filter { it.getType()==YaLikedTracks.LIKED_ID })
-//		}
-//		mList.add(PlaylistCreateItem())
-		mList.addAll(fList)
-		notifyDataSetChanged()
+	fun setList(newList: ArrayList<YaPlaylist>){
+
+		// Считаем дифф
+		val diff = PlaylistsDiff.diffPlaylists(
+			oldMap = mList.associateBy { it.playlistUuid },
+			newList = newList
+		)
+
+		if (!diff.isNotEmpty()) return // ничего не изменилось
+
+		// --- Удаления ---
+		// Удаляем с конца, чтобы индексы не сдвигались
+		diff.removed
+			.mapNotNull { uuid -> mList.indexOfFirst { it.playlistUuid == uuid }.takeIf { it != -1 } }
+			.sortedDescending()
+			.forEach { index ->
+				mList.removeAt(index)
+				notifyItemRemoved(index)
+			}
+
+		// --- Добавления ---
+		diff.added.forEach { uuid ->
+			val indexInNew = newList.indexOfFirst { it.playlistUuid == uuid }
+			if (indexInNew != -1) {
+				mList.add(indexInNew, newList[indexInNew])
+				notifyItemInserted(indexInNew)
+			}
+		}
+
+		// --- Изменения ---
+		diff.changed.forEach { uuid ->
+			val indexInNew = newList.indexOfFirst { it.playlistUuid == uuid }
+			if (indexInNew != -1) {
+				mList[indexInNew] = newList[indexInNew]
+				notifyItemChanged(indexInNew)
+			}
+		}
+
+//		mList = ArrayList()
+////		if (mTrack != null){
+////			fList.removeAll(
+////				fList.filter { it.getType()==YaLikedTracks.LIKED_ID })
+////		}
+////		mList.add(PlaylistCreateItem())
+//		mList.addAll(fList)
+//		notifyDataSetChanged()
 	}
 
 	fun getList() = mList

@@ -231,14 +231,14 @@ class YamApiClient(
 	}
 
 
-	suspend fun getPlaylistObj(f_id: String, user_id: String? = null): YaPlaylist {
+	suspend fun getPlaylistObj(kind: Int, user_id: String? = null): YaPlaylist {
 
-		val f_json = getPlaylistJSON(f_id,user_id)
+		val f_json = getPlaylistJSON(kind,user_id)
 
 		return Json {ignoreUnknownKeys = true }.decodeFromString(f_json.toString())
 	}
 
-    suspend fun getPlaylistJSON(f_id: String, user_id: String? = null): JSONObject {
+    suspend fun getPlaylistJSON(kind: Int, user_id: String? = null): JSONObject {
 
 		var f_user_id =if (user_id == null) {
 			mUserID
@@ -246,7 +246,7 @@ class YamApiClient(
 			user_id
 		}
 
-		val url = "$BASE_URL/users/$f_user_id/playlists/$f_id"
+		val url = "$BASE_URL/users/$f_user_id/playlists/$kind"
 
 
 		val result = yNetwork.get(mToken, url)

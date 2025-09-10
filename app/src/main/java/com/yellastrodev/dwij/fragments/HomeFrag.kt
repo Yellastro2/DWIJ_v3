@@ -2,28 +2,18 @@ package com.yellastrodev.dwij.fragments
 
 import android.annotation.SuppressLint
 import android.app.AlertDialog
-import android.content.Context
 import android.os.Bundle
 import android.preference.PreferenceManager
-import android.util.Log
 import android.view.View
 import android.widget.AutoCompleteTextView
 import android.widget.ImageButton
 import androidx.fragment.app.Fragment
-import androidx.lifecycle.lifecycleScope
 import com.yellastrodev.dwij.DWIJ_ACC_TOKEN
 import com.yellastrodev.dwij.R
-import com.yellastrodev.dwij.YA_ID
 import com.yellastrodev.dwij.YA_TOKEN
 import com.yellastrodev.dwij.activities.MainActivity
-import com.yellastrodev.yandexmusiclib.kot_utils.yNetwork.Companion.NetResult
-import com.yellastrodev.yandexmusiclib.yAccount
-import com.yellastrodev.yandexmusiclib.YamApiClient
-import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.launch
-import kotlinx.coroutines.withContext
 
-class HomeFrag: Fragment(R.layout.fr_home) {
+class HomeFrag: Fragment(R.layout.frag_home) {
 
 
 

@@ -5,6 +5,6 @@ import com.yellastrodev.yandexmusiclib.entities.YaPlaylist
 import org.json.JSONObject
 
 class PlaylistRemoteSource(private val client: YamApiClient) {
-    suspend fun fetch(kind: String): YaPlaylist = client.getPlaylistObj(kind)
+    suspend fun fetch(kind: Int): YaPlaylist = client.getPlaylistObj(kind)
     suspend fun fetchAll(): List<YaPlaylist> = client.getUserListPllists()
 }

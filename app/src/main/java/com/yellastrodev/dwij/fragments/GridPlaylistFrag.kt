@@ -6,10 +6,12 @@ import android.util.DisplayMetrics
 import android.view.View
 import androidx.appcompat.app.AlertDialog
 import androidx.fragment.app.Fragment
+import androidx.fragment.app.viewModels
 import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.viewModelScope
 import androidx.recyclerview.widget.GridLayoutManager
 import androidx.recyclerview.widget.RecyclerView
+import androidx.swiperefreshlayout.widget.SwipeRefreshLayout
 import com.google.android.material.snackbar.Snackbar
 import kotlinx.coroutines.Deferred
 import kotlinx.coroutines.Dispatchers
@@ -53,8 +55,8 @@ class GridPlaylistFrag() : Fragment(R.layout.frag_grid_playlist) {
 	var mPickedTrack: String = "-1"
 //	var mTrackObj: YaTrack? = null
 
-	private val model: GridPlaylistModel by lazy {
-		GridPlaylistModel(
+	private val model: GridPlaylistModel by viewModels {
+		GridPlaylistModel.Factory(
 			repo = (requireActivity().application as yApplication).playlistRepository,
 			coverRepo = (requireActivity().application as yApplication).albumCoverRepository
 		)
@@ -140,6 +142,14 @@ class GridPlaylistFrag() : Fragment(R.layout.frag_grid_playlist) {
 			val dialog: AlertDialog = builder.create()
 			dialog.show()
 
+		}
+
+		view.findViewById<SwipeRefreshLayout>(R.id.fr_ls_plls_swip).setOnRefreshListener {
+			model.viewModelScope.launch { model.refreshPlaylists()
+				withContext(Dispatchers.Main) {
+					view.findViewById<SwipeRefreshLayout>(R.id.fr_ls_plls_swip).isRefreshing = false
+				}
+			}
 		}
 
 		mvRecyclerView.adapter = model.adapter

@@ -1,6 +1,6 @@
 package com.yellastrodev.yandexmusiclib.entities
 
-import com.yellastrodev.yandexmusiclib.yUtils.IntOrStringSerializer
+import com.yellastrodev.yandexmusiclib.yUtils.IntOrStringAsStringSerializer
 import org.json.JSONObject
 import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
@@ -81,8 +81,8 @@ data class Tag(val id: String, val value: String, val name: String, val ogDescri
 
 @Serializable
 data class TrackShort(
-//	@Serializable(with = IntOrStringSerializer::class)
-	@Serializable()
+	@Serializable(with = IntOrStringAsStringSerializer::class)
+//	@Serializable()
 	val id: String,
 //	val timestamp: Instant
 ) {

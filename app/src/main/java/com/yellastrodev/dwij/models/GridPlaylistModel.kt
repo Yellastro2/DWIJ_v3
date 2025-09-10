@@ -1,6 +1,7 @@
 package com.yellastrodev.dwij.models
 
 import androidx.lifecycle.ViewModel
+import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.viewModelScope
 import com.yellastrodev.dwij.adapters.GridPlaylistAdapter
 import com.yellastrodev.dwij.data.repo.AlbumCoverRepository
@@ -13,6 +14,19 @@ class GridPlaylistModel(
 	private val coverRepo: AlbumCoverRepository
 ): ViewModel() {
 
+	class Factory(
+		private val repo: PlaylistRepository,
+		private val coverRepo: AlbumCoverRepository
+	) : ViewModelProvider.Factory {
+		@Suppress("UNCHECKED_CAST")
+		override fun <T : ViewModel> create(modelClass: Class<T>): T {
+			if (modelClass.isAssignableFrom(GridPlaylistModel::class.java)) {
+				return GridPlaylistModel(repo, coverRepo) as T
+			}
+			throw IllegalArgumentException("Unknown ViewModel class")
+		}
+	}
+
 
 	val adapter: GridPlaylistAdapter by lazy {
 		GridPlaylistAdapter { coverUrl ->
@@ -24,27 +38,17 @@ class GridPlaylistModel(
 	}
 
 	init {
-		loadPlaylists()
+		viewModelScope.launch {
+			repo.playlists.collect {
+				if (it.isNotEmpty()) {
+					adapter.setList(ArrayList(it))
+				}
+			}
+		}
 	}
 
-	private fun loadPlaylists() {
-		viewModelScope.launch {
-//			val playlists = repo.getAll() // синхронно или suspend
-			repo._playlists.collect {
-				adapter.setList(ArrayList(it))
-			}
-//			adapter.setList(ArrayList(playlists))
-//			playlists.forEach { playlist ->
-//				// добавляем в адаптер, он сам через DiffUtil обновится
-//				adapter.addItem(playlist)
-//
-//				// фоновая загрузка треков для ускорения открытия
-//				launch {
-//					val tracks = repo.getTracksForPlaylist(playlist.id)
-//					playlist.tracks = tracks
-//				}
-//			}
-		}
+	suspend fun refreshPlaylists() {
+		repo.refreshPlaylists()
 	}
 
 //	fun getAdapter(fTrack: Any? = null): GridPlaylistAdapter {

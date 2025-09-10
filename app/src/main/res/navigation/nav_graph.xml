@@ -8,7 +8,7 @@
         android:id="@+id/homeFrag"
         android:name="com.yellastrodev.dwij.fragments.HomeFrag"
         android:label="HomeFrag"
-        tools:layout="@layout/fr_home">
+        tools:layout="@layout/frag_home">
 
         <action
             android:id="@+id/action_homeFrag_to_settingsAct"

@@ -50,11 +50,20 @@
 <!--            tools:visibility="gone" />-->
     </LinearLayout>
 
-    <androidx.recyclerview.widget.RecyclerView
-        tools:listitem="@layout/it_playlist_grid"
-        android:id="@+id/fr_ls_plls_recycl"
+    <androidx.swiperefreshlayout.widget.SwipeRefreshLayout
+        android:id="@+id/fr_ls_plls_swip"
         android:layout_width="match_parent"
         android:layout_height="match_parent"
-        app:layoutManager="GridLayoutManager"
-        app:spanCount="3"/>
+        app:layout_constraintBottom_toBottomOf="parent">
+
+        <androidx.recyclerview.widget.RecyclerView
+            tools:listitem="@layout/it_playlist_grid"
+            android:id="@+id/fr_ls_plls_recycl"
+            android:layout_width="match_parent"
+            android:layout_height="match_parent"
+            app:layoutManager="GridLayoutManager"
+            app:spanCount="3"/>
+
+    </androidx.swiperefreshlayout.widget.SwipeRefreshLayout>
+
 </LinearLayout>
