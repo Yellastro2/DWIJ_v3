@@ -29,6 +29,15 @@
         android:id="@+id/gridPlaylistFrag"
         android:name="com.yellastrodev.dwij.fragments.GridPlaylistFrag"
         android:label="frag_grid_playlist"
-        tools:layout="@layout/frag_grid_playlist" />
+        tools:layout="@layout/frag_grid_playlist" >
+        <action
+            android:id="@+id/action_gridPlaylistFrag_to_objectFrag"
+            app:destination="@id/objectFrag" />
+    </fragment>
+    <fragment
+        android:id="@+id/objectFrag"
+        android:name="com.yellastrodev.dwij.fragments.ObjectFrag"
+        android:label="frag_object"
+        tools:layout="@layout/frag_object" />
 
 </navigation>

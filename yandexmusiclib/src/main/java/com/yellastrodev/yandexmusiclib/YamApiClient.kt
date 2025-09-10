@@ -2,6 +2,8 @@ package com.yellastrodev.yandexmusiclib
 
 import android.util.Log
 import com.yellastrodev.yandexmusiclib.entities.YaPlaylist
+import com.yellastrodev.yandexmusiclib.entities.YaTrack
+import com.yellastrodev.yandexmusiclib.entities.YaTrackList
 import com.yellastrodev.yandexmusiclib.kot_utils.yNetwork
 import com.yellastrodev.yandexmusiclib.yUtils.yUtils.Companion.getArray
 import kotlinx.serialization.json.Json
@@ -230,12 +232,29 @@ class YamApiClient(
 		return yNetwork.post(mToken, fUrl, fJson, contentType = "json")
 	}
 
+	sealed class PlaylistResult {
+		data class Success(
+			val YaPlaylist: YaPlaylist,
+			val trackList: List<YaTrack>) : PlaylistResult()
+		sealed class Error : PlaylistResult() {
+			object netError : Error()
+			object NoInternet : Error()
+			object AccessDenied : Error()
+			data class Unknown(val throwable: Throwable) : Error()
+		}
+	}
 
-	suspend fun getPlaylistObj(kind: Int, user_id: String? = null): YaPlaylist {
+	suspend fun getPlaylistObj(kind: Int, user_id: String? = null): PlaylistResult {
 
 		val f_json = getPlaylistJSON(kind,user_id)
 
-		return Json {ignoreUnknownKeys = true }.decodeFromString(f_json.toString())
+		val trakWrapList = Json {ignoreUnknownKeys = true }.decodeFromString<YaTrackList>(f_json.toString())
+		val playlist: YaPlaylist = Json {ignoreUnknownKeys = true }.decodeFromString(f_json.toString())
+		return PlaylistResult.Success(playlist,unwrapTrackList(trakWrapList))
+	}
+
+	fun unwrapTrackList(trakWrapList: YaTrackList): List<YaTrack> {
+		return trakWrapList.tracks.map { it.track }
 	}
 
     suspend fun getPlaylistJSON(kind: Int, user_id: String? = null): JSONObject {

@@ -9,6 +9,7 @@ import androidx.lifecycle.lifecycleScope
 import com.yellastrodev.dwij.activities.MainActivity
 import com.yellastrodev.dwij.data.repo.AlbumCoverRepository
 import com.yellastrodev.dwij.data.repo.PlaylistRepository
+import com.yellastrodev.dwij.data.repo.TrackRepository
 import com.yellastrodev.dwij.data.source.PlaylistCacheSource
 import com.yellastrodev.dwij.data.source.PlaylistRemoteSource
 import com.yellastrodev.yandexmusiclib.YamApiClient
@@ -31,6 +32,9 @@ class yApplication: Application() {
             (result as ClientResult.Success).client
         }
     }
+    val trackRepository: TrackRepository by lazy {
+        TrackRepository()
+    }
 
     @OptIn(DelicateCoroutinesApi::class)
     val playlistRepository: PlaylistRepository by lazy {
@@ -40,7 +44,8 @@ class yApplication: Application() {
         PlaylistRepository(
             cache = PlaylistCacheSource(lruCache),
             remote = PlaylistRemoteSource(yamClient),
-            scope = GlobalScope
+            scope = GlobalScope,
+            trackRepo = trackRepository
         )
     }
 

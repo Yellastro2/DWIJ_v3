@@ -31,7 +31,8 @@ open class YaPlaylist(
 	val isBanner: Boolean,
 	val isPremiere: Boolean,
 	val durationMs: Int? = null,
-	@SerialName("ogImage") val ogImageUri: String? = null,
+	@SerialName("ogImage")
+	val ogImageUri: String? = null,
 	val tracks: List<TrackShort> = listOf()
 ) {
 //	private var fullTracks: List<TrackData>? = null
@@ -82,13 +83,5 @@ data class Tag(val id: String, val value: String, val name: String, val ogDescri
 @Serializable
 data class TrackShort(
 	@Serializable(with = IntOrStringAsStringSerializer::class)
-//	@Serializable()
-	val id: String,
-//	val timestamp: Instant
-) {
-//	var track: TrackData? = null
-//	suspend fun fetchTrack(client: YamApiClient): TrackData? {
-//		track = client.tracks(id)[0]
-//		return track
-//	}
-}
+	val id: String
+)

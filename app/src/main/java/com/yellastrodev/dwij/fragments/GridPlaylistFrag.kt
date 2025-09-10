@@ -7,26 +7,21 @@ import android.view.View
 import androidx.appcompat.app.AlertDialog
 import androidx.fragment.app.Fragment
 import androidx.fragment.app.viewModels
-import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.viewModelScope
+import androidx.navigation.fragment.findNavController
 import androidx.recyclerview.widget.GridLayoutManager
 import androidx.recyclerview.widget.RecyclerView
 import androidx.swiperefreshlayout.widget.SwipeRefreshLayout
-import com.google.android.material.snackbar.Snackbar
 import kotlinx.coroutines.Deferred
 import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.GlobalScope
-import kotlinx.coroutines.Job
-import kotlinx.coroutines.async
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import com.yellastrodev.dwij.R
-import com.yellastrodev.dwij.data.repo.PlaylistRepository
-import com.yellastrodev.dwij.data.source.PlaylistCacheSource
-import com.yellastrodev.dwij.data.source.PlaylistRemoteSource
+import com.yellastrodev.dwij.TYPE
+import com.yellastrodev.dwij.VALUE
 import com.yellastrodev.dwij.models.GridPlaylistModel
 import com.yellastrodev.dwij.yApplication
-import com.yellastrodev.yandexmusiclib.YamApiClient
+import com.yellastrodev.yandexmusiclib.entities.YaPlaylist
 
 class GridPlaylistFrag() : Fragment(R.layout.frag_grid_playlist) {
 
@@ -44,13 +39,14 @@ class GridPlaylistFrag() : Fragment(R.layout.frag_grid_playlist) {
 
 	var mGridSize = 0
 
-//	var mOnIteClick: (iPlaylist) -> Unit = {
-//			fPl: iPlaylist ->
-////		val snack = Snackbar.make(requireActivity().findViewById(android.R.id.content),
-////			"Start playlist ${fPl.mTitle}", Snackbar.LENGTH_LONG)
-////
-////		snack.show()
-//		(requireActivity() as MainActivity).showPlaylist(fPl.mId) }
+	var mOnItemClick: (YaPlaylist) -> Unit = {
+			playlist: YaPlaylist ->
+		val bundle = Bundle().apply {
+			putString(TYPE, ObjectFrag.PLAYLIST)
+			putString(VALUE, playlist.playlistUuid)
+		}
+		findNavController().navigate(R.id.action_gridPlaylistFrag_to_objectFrag,bundle)
+	}
 
 	var mPickedTrack: String = "-1"
 //	var mTrackObj: YaTrack? = null
@@ -123,7 +119,7 @@ class GridPlaylistFrag() : Fragment(R.layout.frag_grid_playlist) {
 
 		mvRecyclerView = view.findViewById<RecyclerView>(R.id.fr_ls_plls_recycl)
 
-//		model.adapter.onClick = mOnIteClick
+		model.adapter.onClick = mOnItemClick
 		model.adapter.mGridSize = mGridSize
 //		model.adapter.onCreatePlClick = {
 //			(activity as MainActivity).openFrame(CreateListFrag())

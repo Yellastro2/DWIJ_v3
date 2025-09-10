@@ -10,36 +10,32 @@ import android.view.View
 import android.view.ViewGroup
 import android.widget.ImageView
 import android.widget.TextView
+import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.lifecycleScope
+import androidx.lifecycle.repeatOnLifecycle
 import androidx.lifecycle.viewModelScope
 import androidx.recyclerview.widget.LinearLayoutManager
 import androidx.recyclerview.widget.RecyclerView
+import com.google.android.material.appbar.AppBarLayout
+import com.google.android.material.appbar.CollapsingToolbarLayout
+import com.yellastrodev.dwij.R
 import com.yellastrodev.dwij.TYPE
 import com.yellastrodev.dwij.VALUE
-import com.yellastrodev.dwij.models.GridPlaylistModel
 import com.yellastrodev.dwij.models.TracklistModel
 import com.yellastrodev.dwij.yApplication
-import com.yelldev.dwij.android.KeyStore
-import com.yelldev.dwij.android.MainActivity
-import com.yelldev.dwij.android.R
-import com.yelldev.dwij.android.entitis.YaM.YaPlaylist
-import com.yelldev.dwij.android.entitis.YaM.YaSingleTrackList
-import com.yelldev.dwij.android.entitis.YaM.YaTrack
-import com.yelldev.dwij.android.entitis.YaM.yWave
-import com.yelldev.dwij.android.entitis.iTrackList
-import com.yelldev.dwij.android.models.ObjectViewModel
-import com.yelldev.dwij.android.yMediaStore
+import com.yellastrodev.yandexmusiclib.entities.CoverSize
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.GlobalScope
+import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 
-class ObjectFrag : Fragment(R.layout.fragment_object) {
+class ObjectFrag : Fragment(R.layout.frag_object) {
 
     companion object {
         val TRACK = "track"
-        val PLAYLIST = "playlust"
+        val PLAYLIST = "playlist"
         val ARTIST = "artist"
 
         fun newInstance() = ObjectFrag()
@@ -51,8 +47,13 @@ class ObjectFrag : Fragment(R.layout.fragment_object) {
 
 //    private val mViewModel: ObjectViewModel by viewModels()
 
-    lateinit var model: GridPlaylistModel
-    lateinit var tracklistModel: TracklistModel
+    private val model: TracklistModel by viewModels {
+        TracklistModel.Factory(
+            repo = (requireActivity().application as yApplication).playlistRepository,
+            coverRepo = (requireActivity().application as yApplication).albumCoverRepository,
+            trackRepo = (requireActivity().application as yApplication).trackRepository
+        )
+    }
 
     var mType = ""
     var mValue: String = ""
@@ -66,130 +67,154 @@ class ObjectFrag : Fragment(R.layout.fragment_object) {
     override fun onViewCreated(view: View, savedInstanceState: Bundle?) {
         super.onViewCreated(view, savedInstanceState)
 
-//        val fMain = requireActivity() as MainActivity
+        val appBarLayout = view.findViewById<AppBarLayout>(R.id.appBarLayout)
+        val pinnedLayout = view.findViewById<View>(R.id.pinnedLayout)
+
+        appBarLayout.addOnOffsetChangedListener(
+            AppBarLayout.OnOffsetChangedListener { appBar, verticalOffset ->
+                val isCollapsed = Math.abs(verticalOffset) >= appBar.totalScrollRange
+                pinnedLayout.visibility = if (isCollapsed) View.VISIBLE else View.GONE
+                pinnedLayout.visibility = View.VISIBLE
+
+            }
+        )
+
+
 
         if(arguments != null) {
-            model = GridPlaylistModel(
-                repo = (requireActivity().application as yApplication).playlistRepository,
-                coverRepo = (requireActivity().application as yApplication).albumCoverRepository
-            )
             mType = requireArguments().getString(TYPE)!!
             mValue = requireArguments().getString(VALUE)!!
 
             if (mType == PLAYLIST){
 
-                model = GridPlaylistModel(
-                    repo = (requireActivity().application as yApplication).playlistRepository,
-                    coverRepo = (requireActivity().application as yApplication).albumCoverRepository
-                )
+                lifecycleScope.launch {
+                    model.setType(mType, mValue)
 
-                tracklistModel = TracklistModel()
+                }
 
-                val fMain = requireActivity() as MainActivity
+                viewLifecycleOwner.lifecycleScope.launch {
+                    viewLifecycleOwner.repeatOnLifecycle(Lifecycle.State.STARTED) {
+                        model.playlist.collect { playlist ->
+                            if (playlist != null) {
+                                lifecycleScope.launch(Dispatchers.IO) {
+                                    val bitmap = model.coverRepo.getCover(playlist, CoverSize.`200x200`)
 
-                mViewModel.viewModelScope.launch(Dispatchers.Default) {
-                    requireArguments().getString(KeyStore.USER)?.let {
-                        mViewModel.mUser = it
-                        mViewModel.mDataObject = yMediaStore.store(requireContext())
-                            .getPlaylist(mViewModel.mValue, mViewModel.mUser!!)
-                    }
-                    if (mViewModel.mUser == null)
-                        mViewModel.mDataObject = yMediaStore.store(requireContext())
-                            .getYamPlaylist(mViewModel.mValue)
-                    mViewModel.getAdapter(fMain)
-                        .setList(mViewModel.mDataObject as iTrackList)
-                    withContext(Dispatchers.Main) {
-                        loadObject()
+                                    // Ставим в ImageView на главном потоке
+                                    withContext(Dispatchers.Main) {
+                                        view.findViewById<ImageView>(R.id.fr_object_image).setImageBitmap(bitmap)
+                                    }
+                                }
+                                view.findViewById<TextView>(R.id.fr_object_title).text = playlist.title
+                                view.findViewById<TextView>(R.id.fr_object_title2).text = playlist.description ?: ""
+                            }
+                        }
                     }
                 }
+
+//                mViewModel.viewModelScope.launch(Dispatchers.Default) {
+//                    requireArguments().getString(KeyStore.USER)?.let {
+//                        mViewModel.mUser = it
+//                        mViewModel.mDataObject = yMediaStore.store(requireContext())
+//                            .getPlaylist(mViewModel.mValue, mViewModel.mUser!!)
+//                    }
+//                    if (mViewModel.mUser == null)
+//                        mViewModel.mDataObject = yMediaStore.store(requireContext())
+//                            .getYamPlaylist(mViewModel.mValue)
+//                    mViewModel.getAdapter(fMain)
+//                        .setList(mViewModel.mDataObject as iTrackList)
+//                    withContext(Dispatchers.Main) {
+//                        loadObject()
+//                    }
+//                }
                 view.findViewById<RecyclerView>(R.id.fr_obj_recycler)
-                    .adapter = mViewModel.getAdapter(fMain)
+                    .adapter = model.adapter
                 view.findViewById<RecyclerView>(R.id.fr_obj_recycler)
                     .layoutManager = LinearLayoutManager(context)
 
-            }else if (mViewModel.mType == TRACK){
-                mViewModel.viewModelScope.launch(Dispatchers.Default) {
-                    mViewModel.mDataObject = yMediaStore.store(requireContext())
-                        .getTrack(mViewModel.mValue)
-                    withContext(Dispatchers.Main) {
-                        loadObject()
-                    }
-
-                }
             }
+//            else if (mViewModel.mType == TRACK){
+//                mViewModel.viewModelScope.launch(Dispatchers.Default) {
+//                    mViewModel.mDataObject = yMediaStore.store(requireContext())
+//                        .getTrack(mViewModel.mValue)
+//                    withContext(Dispatchers.Main) {
+//                        loadObject()
+//                    }
+//
+//                }
+//            }
         }
-        mMain = requireActivity() as MainActivity
 
         mvTitle2 = requireView().findViewById<TextView>(R.id.fr_object_title2)
+        view.findViewById<TextView>(R.id.fr_object_title)
         view.findViewById<View>(R.id.fr_object_wave_btn).setOnClickListener { onWaveBtn() }
         view.findViewById<View>(R.id.fr_object_play).setOnClickListener { onPlayBtn() }
         view.findViewById<View>(R.id.fr_object_share).setOnClickListener { share() }
     }
 
     private fun share() {
-        if (mViewModel.mDataObject is YaTrack ||
-        mViewModel.mDataObject is YaPlaylist){
-            val fLink = mViewModel.mDataObject!!.getLink()
-
-            val sendIntent: Intent = Intent().apply {
-                action = Intent.ACTION_SEND
-                putExtra(Intent.EXTRA_TEXT, fLink)
-                putExtra(Intent.EXTRA_TITLE,mViewModel.mDataObject!!.getTitle())
-                type = "text/plain"
-            }
-
-            val shareIntent = Intent.createChooser(sendIntent, null)
-            startActivity(shareIntent)
-        }
+//        if (mViewModel.mDataObject is YaTrack ||
+//        mViewModel.mDataObject is YaPlaylist){
+//            val fLink = mViewModel.mDataObject!!.getLink()
+//
+//            val sendIntent: Intent = Intent().apply {
+//                action = Intent.ACTION_SEND
+//                putExtra(Intent.EXTRA_TEXT, fLink)
+//                putExtra(Intent.EXTRA_TITLE,mViewModel.mDataObject!!.getTitle())
+//                type = "text/plain"
+//            }
+//
+//            val shareIntent = Intent.createChooser(sendIntent, null)
+//            startActivity(shareIntent)
+//        }
     }
 
     private fun onWaveBtn() {
-        val fMain = requireActivity() as MainActivity
-        GlobalScope.launch(Dispatchers.IO){
-
-            withContext(Dispatchers.Main) {
-
-            }
-            val fStore = yMediaStore.store(fMain)
-
-            fMain.mPlayer?.setWaveList(mViewModel.mDataObject?.let { fStore.getWave(it) } as yWave)
-        }
-        fMain.openPlayer()
+//        val fMain = requireActivity() as MainActivity
+//        GlobalScope.launch(Dispatchers.IO){
+//
+//            withContext(Dispatchers.Main) {
+//
+//            }
+//            val fStore = yMediaStore.store(fMain)
+//
+//            fMain.mPlayer?.setWaveList(mViewModel.mDataObject?.let { fStore.getWave(it) } as yWave)
+//        }
+//        fMain.openPlayer()
     }
 
     private fun onPlayBtn() {
-        val fMain = requireActivity() as MainActivity
-
-        lifecycleScope.launch(Dispatchers.Default) {
-            if (mViewModel.mDataObject is YaPlaylist)
-                fMain.setTrack(0,mViewModel.mDataObject as YaPlaylist)
-            if (mViewModel.mDataObject is YaTrack)
-                fMain.setTrack(0, YaSingleTrackList(mViewModel.mDataObject as YaTrack))
-        }
+//        val fMain = requireActivity() as MainActivity
+//
+//        lifecycleScope.launch(Dispatchers.Default) {
+//            if (mViewModel.mDataObject is YaPlaylist)
+//                fMain.setTrack(0,mViewModel.mDataObject as YaPlaylist)
+//            if (mViewModel.mDataObject is YaTrack)
+//                fMain.setTrack(0, YaSingleTrackList(mViewModel.mDataObject as YaTrack))
+//        }
 
     }
 
     private fun loadObject() {
 
-        mViewModel.mDataObject?.let {
-            lifecycleScope.launch(Dispatchers.Default){
-                val fRes = it.getImage(yMediaStore.store(requireContext()))
-                withContext(Dispatchers.Main) {
-                    requireView().findViewById<ImageView>(R.id.fr_object_image)
-                        .setImageBitmap(fRes)
-                }
-            }
-            requireView().findViewById<TextView>(R.id.fr_object_title)
-                .text = it.getTitle()
-            mvTitle2.text = it.getInfo()
-            if (mViewModel.mType == TRACK){
-                mvTitle2.setOnClickListener {v->
-                    lifecycleScope.launch(Dispatchers.Default) {
-                        mMain.showArtistChoise(it as YaTrack)
-                    }
-                }
-            }
-        }
+//        mViewModel.mDataObject?.let {
+//            lifecycleScope.launch(Dispatchers.Default){
+//                val fRes = it.getImage(yMediaStore.store(requireContext()))
+//                withContext(Dispatchers.Main) {
+//                    requireView().findViewById<ImageView>(R.id.fr_object_image)
+//                        .setImageBitmap(fRes)
+//                }
+//            }
+//            requireView().findViewById<TextView>(R.id.fr_object_title)
+//                .text = it.getTitle()
+//            mvTitle2.text = it.getInfo()
+//            if (mViewModel.mType == TRACK){
+//                mvTitle2.setOnClickListener {v->
+//                    lifecycleScope.launch(Dispatchers.Default) {
+//                        mMain.showArtistChoise(it as YaTrack)
+//                    }
+//                }
+//            }
+//        }
     }
 
 }

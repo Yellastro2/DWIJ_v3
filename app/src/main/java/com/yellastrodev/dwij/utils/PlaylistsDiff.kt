@@ -36,6 +36,10 @@ class PlaylistsDiff {
                     oldPl == null && newPl != null -> added.add(uuid)
                     oldPl != null && newPl == null -> removed.add(uuid)
                     oldPl != null && newPl != null && oldPl.revision != newPl.revision -> changed.add(uuid)
+                    // особый случай когда ревижны и всяхня остались теже, но у старой версии не прогруженны треки.
+                    (oldPl == null || oldPl.tracks.isEmpty()) && (newPl != null && newPl.tracks.isNotEmpty()) ->
+                            changed.add(uuid)
+
                 }
             }
 
