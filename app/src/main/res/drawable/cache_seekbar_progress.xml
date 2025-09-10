@@ -1,0 +1,27 @@
+<?xml version="1.0" encoding="utf-8"?>
+<layer-list xmlns:android="http://schemas.android.com/apk/res/android">
+    <!-- фон -->
+    <item android:id="@android:id/background">
+        <shape>
+            <solid android:color="@color/background" />
+        </shape>
+    </item>
+
+    <!-- текущий размер кеша -->
+    <item android:id="@android:id/secondaryProgress">
+        <clip>
+            <shape>
+                <solid android:color="@color/colorPrimary"/> <!-- зеленая полоска -->
+            </shape>
+        </clip>
+    </item>
+
+    <!-- выбранный лимит -->
+    <item android:id="@android:id/progress">
+        <clip>
+            <shape>
+                <solid android:color="@color/colorAccent"/> <!-- синяя полоска -->
+            </shape>
+        </clip>
+    </item>
+</layer-list>

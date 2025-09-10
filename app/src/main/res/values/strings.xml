@@ -1,0 +1,8 @@
+
+<resources>
+    <string name="app_name">Д в и ж</string>
+    <string name="no_auth">не авторизован</string>
+    <string name="auth_btn">Войти</string>
+    <string name="auth_btn_exit">Удалить</string>
+    <string name="title_placehold">некий ДвИж</string>
+</resources>

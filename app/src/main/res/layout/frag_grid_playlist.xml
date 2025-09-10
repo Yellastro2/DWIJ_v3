@@ -1,0 +1,60 @@
+<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
+    xmlns:tools="http://schemas.android.com/tools"
+    android:orientation="vertical"
+    tools:context=".fragments.GridPlaylistFrag"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent">
+
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_gravity="center"
+        android:gravity="center"
+        android:orientation="horizontal">
+
+        <ImageButton
+            android:id="@+id/fr_list_pllist_back"
+            style="@style/ImgBtnNoBkg"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_weight="0.3"
+            app:srcCompat="@drawable/abc_vector_test" />
+
+<!--        <Button-->
+<!--            android:id="@+id/fr_ls_plls_btn_sd"-->
+<!--            style="@style/BtnNoBkg"-->
+<!--            android:layout_width="wrap_content"-->
+<!--            android:layout_height="wrap_content"-->
+<!--            android:layout_weight="1"-->
+<!--            android:text="Память"-->
+<!--            tools:visibility="gone" />-->
+
+        <Button
+            android:id="@+id/fr_ls_plls_btn_ya"
+            style="@style/BtnNoBkg"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_weight="1"
+            android:text="YaMusic"
+            android:visibility="invisible" />
+
+<!--        <Button-->
+<!--            android:id="@+id/fr_ls_plls_btn_create"-->
+<!--            style="@style/BtnNoBkg"-->
+<!--            android:layout_width="wrap_content"-->
+<!--            android:layout_height="wrap_content"-->
+<!--            android:layout_weight="0.3"-->
+<!--            android:text="Создать"-->
+<!--            tools:visibility="gone" />-->
+    </LinearLayout>
+
+    <androidx.recyclerview.widget.RecyclerView
+        tools:listitem="@layout/it_playlist_grid"
+        android:id="@+id/fr_ls_plls_recycl"
+        android:layout_width="match_parent"
+        android:layout_height="match_parent"
+        app:layoutManager="GridLayoutManager"
+        app:spanCount="3"/>
+</LinearLayout>

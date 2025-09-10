@@ -1,0 +1,34 @@
+<?xml version="1.0" encoding="utf-8"?>
+<navigation xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
+    xmlns:tools="http://schemas.android.com/tools"
+    android:id="@+id/nav_graph.xml"
+    app:startDestination="@id/homeFrag">
+    <fragment
+        android:id="@+id/homeFrag"
+        android:name="com.yellastrodev.dwij.fragments.HomeFrag"
+        android:label="HomeFrag"
+        tools:layout="@layout/fr_home">
+
+        <action
+            android:id="@+id/action_homeFrag_to_settingsAct"
+            app:destination="@id/settingsAct" />
+        <action
+            android:id="@+id/action_homeFrag_to_gridPlaylistFrag"
+            app:destination="@id/gridPlaylistFrag" />
+
+    </fragment>
+
+
+    <activity
+        android:id="@+id/settingsAct"
+        android:name="com.yellastrodev.dwij.activities.SettingsAct"
+        android:label="SettingsAct"
+        tools:layout="@layout/lay_settings"/>
+    <fragment
+        android:id="@+id/gridPlaylistFrag"
+        android:name="com.yellastrodev.dwij.fragments.GridPlaylistFrag"
+        android:label="frag_grid_playlist"
+        tools:layout="@layout/frag_grid_playlist" />
+
+</navigation>
