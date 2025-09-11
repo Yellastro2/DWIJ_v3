@@ -2,7 +2,6 @@ package com.yellastrodev.dwij.adapters
 
 import android.annotation.SuppressLint
 import android.graphics.Bitmap
-import android.util.Log
 import android.view.LayoutInflater
 import android.view.View
 import android.view.ViewGroup
@@ -12,17 +11,17 @@ import androidx.recyclerview.widget.RecyclerView
 import com.yellastrodev.dwij.R
 import com.yellastrodev.yandexmusiclib.entities.YaPlaylist
 import com.yellastrodev.yandexmusiclib.entities.YaTrack
-import com.yellastrodev.yandexmusiclib.kot_utils.yTrack
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Deferred
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.GlobalScope
-import kotlinx.coroutines.async
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 
 class TrackListAdapter(
-    private val loadCover: suspend (YaPlaylist) -> Bitmap
+    private val loadCover: suspend (YaTrack) -> Bitmap
 ) :
     RecyclerView.Adapter<TrackListAdapter.ViewHolder>() {
     var mScope: CoroutineScope? = null
@@ -46,16 +45,42 @@ class TrackListAdapter(
 
     }
 
-    class ViewHolder(view: View) : RecyclerView.ViewHolder(view) {
+    class ViewHolder(view: View, private val loadCover: suspend (YaTrack) -> Bitmap) : RecyclerView.ViewHolder(view) {
         val vTitle: TextView
-        val vAutor: TextView
+        val vArtist: TextView
         val vImg: ImageView
         var mId: Int = -1
 
+
+        private var coverJob: Job? = null
+
         init {
             vTitle = view.findViewById(R.id.it_track_title)
-            vAutor = view.findViewById(R.id.it_track_autor)
+            vArtist = view.findViewById(R.id.it_track_autor)
             vImg = view.findViewById(R.id.it_track_img)
+        }
+
+        fun bind(track: YaTrack) {
+            // Отменяем предыдущую загрузку для этого ViewHolder
+            coverJob?.cancel()
+
+            // Ставим placeholder или очищаем
+//			vImg.setImageResource(R.drawable.placeholder)
+
+            // Запускаем новую корутину для загрузки картинки
+            coverJob = CoroutineScope(Dispatchers.IO).launch {
+                try {
+                    val bitmap = loadCover(track)
+                    withContext(Dispatchers.Main) {
+                        vImg.setImageBitmap(bitmap)
+                    }
+                } catch (_: CancellationException) {
+                    // если отменили, ничего не делаем
+                } catch (e: Exception) {
+                    // можно логировать или ставить ошибочный placeholder
+//					imageView.setImageResource(R.drawable.error_placeholder)
+                }
+            }
         }
     }
 
@@ -64,7 +89,7 @@ class TrackListAdapter(
             .inflate(R.layout.it_track, viewGroup, false)
 
 
-        return ViewHolder(view)
+        return ViewHolder(view, loadCover)
     }
 
     @SuppressLint("SuspiciousIndentation")
@@ -74,10 +99,14 @@ class TrackListAdapter(
 //            CoroutineScope(Dispatchers.Default).async {
 //                mMain.setTrack(position, mTrackList)
 //            }}
-
+        viewHolder.bind(mListOfObj[position])
 
         viewHolder.vTitle.text = mListOfObj[position].title
-//        viewHolder.vAutor.text = mListOfObj[position].mArtist
+        var artistsString = mListOfObj[position].artists.fold("") { acc, yaArtist ->
+            acc + yaArtist.name + ", "
+        }
+        artistsString = artistsString.removeSuffix(",")
+        viewHolder.vArtist.text = artistsString
 //
 //        CoroutineScope(Dispatchers.Default)
 //            .async(Dispatchers.Default) {

@@ -17,6 +17,7 @@ import androidx.lifecycle.repeatOnLifecycle
 import androidx.lifecycle.viewModelScope
 import androidx.recyclerview.widget.LinearLayoutManager
 import androidx.recyclerview.widget.RecyclerView
+import androidx.swiperefreshlayout.widget.SwipeRefreshLayout
 import com.google.android.material.appbar.AppBarLayout
 import com.google.android.material.appbar.CollapsingToolbarLayout
 import com.yellastrodev.dwij.R
@@ -69,12 +70,30 @@ class ObjectFrag : Fragment(R.layout.frag_object) {
 
         val appBarLayout = view.findViewById<AppBarLayout>(R.id.appBarLayout)
         val pinnedLayout = view.findViewById<View>(R.id.pinnedLayout)
+        val toolbar = view.findViewById<View>(R.id.toolbar)
+        val swipeRefreshLayout = view.findViewById<SwipeRefreshLayout>(R.id.fr_obj_refresher)
+
+        swipeRefreshLayout.setOnRefreshListener {
+            model.viewModelScope.launch { model.refreshObject()
+                withContext(Dispatchers.Main) {
+                    swipeRefreshLayout.isRefreshing = false
+                }
+            }
+        }
 
         appBarLayout.addOnOffsetChangedListener(
             AppBarLayout.OnOffsetChangedListener { appBar, verticalOffset ->
-                val isCollapsed = Math.abs(verticalOffset) >= appBar.totalScrollRange
-                pinnedLayout.visibility = if (isCollapsed) View.VISIBLE else View.GONE
-                pinnedLayout.visibility = View.VISIBLE
+//                if (verticalOffset  == appBarLayout.totalScrollRange) {
+//                    // Полностью схлопнулся → показываем pinnedLayout
+//                    pinnedLayout.visibility = View.VISIBLE
+//                } else {
+//                    // Любое другое состояние → скрываем pinnedLayout
+//                    pinnedLayout.visibility = View.GONE
+//                }
+                    val percent = Math.abs(verticalOffset).toFloat() / appBarLayout.totalScrollRange
+                toolbar.alpha = percent  // 0 — раскрыт, 1 — полностью схлопнул
+
+//                swipeRefreshLayout.isEnabled = verticalOffset == 0
 
             }
         )
@@ -105,6 +124,7 @@ class ObjectFrag : Fragment(R.layout.frag_object) {
                                     }
                                 }
                                 view.findViewById<TextView>(R.id.fr_object_title).text = playlist.title
+                                view.findViewById<TextView>(R.id.fr_object_title_colaps).text = playlist.title
                                 view.findViewById<TextView>(R.id.fr_object_title2).text = playlist.description ?: ""
                             }
                         }

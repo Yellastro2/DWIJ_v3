@@ -71,4 +71,16 @@ class PlaylistRepository(
             .map { it[playlistUuid] }      // достаём элемент по ключу
             .filterNotNull()               // пропускаем null
             .distinctUntilChanged()        // опционально, чтобы не пушить одинаковое
+
+    suspend fun refreshPlaylist(plUuid: String) {
+        val playlist = _playlistMap.value[plUuid]!!
+        val plResult = remote.fetch(playlist.kind)
+        if (plResult is PlaylistResult.Success) {
+            if (playlist.revision != plResult.YaPlaylist.revision){
+                cache.put(plResult.YaPlaylist)
+                _playlistMap.value = _playlistMap.value + (plUuid to plResult.YaPlaylist)
+                trackRepo.putTracks(plResult.trackList)
+            }
+        }
+    }
 }

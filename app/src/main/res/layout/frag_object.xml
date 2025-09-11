@@ -17,7 +17,6 @@
         android:layout_width="match_parent"
         android:layout_height="300dp"
         android:minHeight="?attr/actionBarSize"
-        app:scrimAnimationDuration="0"
         app:layout_scrollFlags="scroll|exitUntilCollapsed"
         app:contentScrim="?attr/colorPrimary"
         app:titleEnabled="false">
@@ -118,20 +117,24 @@
     </androidx.constraintlayout.widget.ConstraintLayout>
 
         <!-- Сворачиваемый Toolbar -->
+
+        <androidx.appcompat.widget.Toolbar
+            android:id="@+id/toolbar"
+            android:layout_width="match_parent"
+            android:layout_height="?attr/actionBarSize"
+            app:layout_collapseMode="pin"
+            android:background="?attr/colorPrimary">
         <!-- Твой закреплённый ConstraintLayout -->
         <androidx.constraintlayout.widget.ConstraintLayout
             android:id="@+id/pinnedLayout"
             android:layout_width="match_parent"
             android:layout_height="?attr/actionBarSize"
             android:background="?attr/colorPrimary"
-            android:elevation="8dp"
-            android:translationZ="8dp"
-            android:visibility="gone"
-            app:layout_collapseMode="pin">
+            >
 
 
             <TextView
-                android:id="@+id/title"
+                android:id="@+id/fr_object_title_colaps"
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
                 android:text="Закреплённый заголовок"
@@ -140,16 +143,22 @@
                 app:layout_constraintStart_toStartOf="parent"
                 app:layout_constraintEnd_toEndOf="parent"
                 app:layout_constraintTop_toTopOf="parent"
-                app:layout_constraintBottom_toBottomOf="parent"
-                android:layout_marginStart="8dp" />
+                app:layout_constraintBottom_toBottomOf="parent"/>
 
         </androidx.constraintlayout.widget.ConstraintLayout>
+        </androidx.appcompat.widget.Toolbar>
 
     </com.google.android.material.appbar.CollapsingToolbarLayout>
 
 
     </com.google.android.material.appbar.AppBarLayout>
 
+    <androidx.swiperefreshlayout.widget.SwipeRefreshLayout
+        android:id="@+id/fr_obj_refresher"
+        android:layout_width="match_parent"
+        android:layout_height="match_parent"
+        app:layout_behavior="@string/appbar_scrolling_view_behavior"
+        app:layout_constraintBottom_toBottomOf="parent">
         <androidx.recyclerview.widget.RecyclerView
             android:id="@+id/fr_obj_recycler"
             android:layout_width="match_parent"
@@ -159,6 +168,8 @@
             app:layout_constraintStart_toStartOf="parent"
             app:layout_behavior="@string/appbar_scrolling_view_behavior"
             />
+
+    </androidx.swiperefreshlayout.widget.SwipeRefreshLayout>
 
 
 

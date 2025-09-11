@@ -39,8 +39,8 @@ class TracklistModel(
     val playlist: StateFlow<YaPlaylist?> = _playlist
 
     val adapter: TrackListAdapter by lazy {
-        TrackListAdapter { coverUrl ->
-            coverRepo.getCover(coverUrl, CoverSize.`100x100`) // suspend функция
+        TrackListAdapter { track ->
+            coverRepo.getCover(track, CoverSize.`100x100`) // suspend функция
         }
             .apply {
                 mScope = viewModelScope
@@ -59,6 +59,10 @@ class TracklistModel(
             }
 
         }
+    }
+
+    suspend fun refreshObject() {
+        repo.refreshPlaylist(_playlist.value!!.playlistUuid)
     }
 
 

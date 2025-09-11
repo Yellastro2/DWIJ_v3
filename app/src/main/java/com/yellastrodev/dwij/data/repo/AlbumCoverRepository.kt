@@ -5,6 +5,7 @@ import android.graphics.BitmapFactory
 import com.yellastrodev.yandexmusiclib.YamApiClient
 import com.yellastrodev.yandexmusiclib.entities.CoverSize
 import com.yellastrodev.yandexmusiclib.entities.YaPlaylist
+import com.yellastrodev.yandexmusiclib.entities.YaTrack
 import kotlinx.coroutines.DelicateCoroutinesApi
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.GlobalScope
@@ -19,18 +20,33 @@ class AlbumCoverRepository(
     // in-memory cache
     private val memoryCache = mutableMapOf<String, Bitmap>()
 
-    private suspend fun downloadCover(playlist: YaPlaylist, size: CoverSize): Bitmap{
-        val stream = fClient.getCover(playlist.ogImageUri!!,200)
+    private suspend fun downloadCover(url: String, size: CoverSize): Bitmap{
+        val stream = fClient.getCover(url,200)
         return stream.use {
             BitmapFactory.decodeStream(it)
         }
     }
 
     @OptIn(DelicateCoroutinesApi::class)
+    suspend fun getCover(track: YaTrack, size: CoverSize = CoverSize.`200x200`): Bitmap {
+
+        val key = "track_"+ track.id
+
+        return getCover(key, track.ogImageUri!!, size)
+
+    }
+
+    @OptIn(DelicateCoroutinesApi::class)
     suspend fun getCover(playlist: YaPlaylist, size: CoverSize = CoverSize.`200x200`): Bitmap {
 
-        val key = playlist.playlistUuid
+        val key = "playlist_" + playlist.playlistUuid
 
+        return getCover(key, playlist.ogImageUri!!, size)
+
+
+    }
+
+    suspend fun getCover(key: String, url: String, size: CoverSize = CoverSize.`200x200`): Bitmap {
         // 1. Сначала память
         memoryCache[key]?.let { return it }
 
@@ -44,7 +60,7 @@ class AlbumCoverRepository(
         }
 
         // 3. Если нет, загружаем с сети
-        val bitmap = downloadCover(playlist, size)
+        val bitmap = downloadCover(url, size)
 
         // сохраняем в память
         memoryCache[key] = bitmap
