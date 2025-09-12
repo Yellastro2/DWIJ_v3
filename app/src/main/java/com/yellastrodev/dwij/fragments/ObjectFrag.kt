@@ -52,7 +52,8 @@ class ObjectFrag : Fragment(R.layout.frag_object) {
         TracklistModel.Factory(
             repo = (requireActivity().application as yApplication).playlistRepository,
             coverRepo = (requireActivity().application as yApplication).albumCoverRepository,
-            trackRepo = (requireActivity().application as yApplication).trackRepository
+            trackRepo = (requireActivity().application as yApplication).trackRepository,
+            playerRepo = (requireActivity().application as yApplication).playerRepo
         )
     }
 

@@ -21,7 +21,8 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 
 class TrackListAdapter(
-    private val loadCover: suspend (YaTrack) -> Bitmap
+    private val loadCover: suspend (YaTrack) -> Bitmap,
+    private val onItemClicked: suspend (pos: Int) -> Unit,
 ) :
     RecyclerView.Adapter<TrackListAdapter.ViewHolder>() {
     var mScope: CoroutineScope? = null
@@ -95,41 +96,18 @@ class TrackListAdapter(
     @SuppressLint("SuspiciousIndentation")
     override fun onBindViewHolder(viewHolder: ViewHolder, position: Int) {
         viewHolder.mId = position
-//        viewHolder.itemView.setOnClickListener {
-//            CoroutineScope(Dispatchers.Default).async {
-//                mMain.setTrack(position, mTrackList)
-//            }}
+        viewHolder.itemView.setOnClickListener {
+            mScope?.launch {
+                onItemClicked(position)
+            }
+        }
+
+
         viewHolder.bind(mListOfObj[position])
 
         viewHolder.vTitle.text = mListOfObj[position].title
-        var artistsString = mListOfObj[position].artists.fold("") { acc, yaArtist ->
-            acc + yaArtist.name + ", "
-        }
-        artistsString = artistsString.removeSuffix(",")
+        var artistsString = mListOfObj[position].artists.joinToString(", ") { it.name }
         viewHolder.vArtist.text = artistsString
-//
-//        CoroutineScope(Dispatchers.Default)
-//            .async(Dispatchers.Default) {
-//                // если так не делать, при быстром скроле списка на одном вьюхолдере
-//                // будут висеть сразу несколько асинхов - загрузятся поочередно несколько картинок
-//                if (viewHolder.mId != position)
-//                    return@async
-//                val fSingle = mListOfObj[position].set_Cover_toView(
-//                    yMediaStore.store(viewHolder.vAutor.context),400)
-//                if (viewHolder.mId != position)
-//                    return@async
-//                CoroutineScope(Dispatchers.Main).async {
-//                    if (viewHolder.mId != position)
-//                        return@async
-//                    if (fSingle!=null)
-//                        viewHolder.vImg.setImageBitmap(fSingle)
-//                    else
-//                        Log.w("DWIJ_DEBUG",fSingle)
-//                }
-//            }
-
-
-
 
         val f_name_patrn = "back1_1"
         val i = 0//Random.nextInt(300)
@@ -137,24 +115,7 @@ class TrackListAdapter(
         val globeId = viewHolder.itemView.resources.getIdentifier(name, "drawable",
             viewHolder.itemView.context.getPackageName());
         viewHolder.vImg.setImageResource(globeId)
-        GlobalScope.launch(Dispatchers.IO){
-
-        }
-//			val fSingle = dataSet[position].set_Cover_toView(
-//				yMediaStore.store(viewHolder.vAutor.context),400)
-//			if(fSingle != null)
-//				fSingle.subscribe({viewHolder.vImg.setImageBitmap(it)},{Log.w("DWIJ_DEBUG",it)})
-
-//				Thread {
-//					val bitmap = dataSet[position].set_Cover_toView(yMediaStore.store(viewHolder.vAutor.context))
-//					if (bitmap != null){
-//						viewHolder.itemView.post { viewHolder.vImg.setImageBitmap(bitmap) }
-//					}
-//				}.start()
     }
 
     override fun getItemCount() = mListOfObj.size
-
-
-
 }

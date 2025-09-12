@@ -5,13 +5,14 @@ import android.content.Context
 import android.preference.PreferenceManager
 import android.util.Log
 import android.util.LruCache
-import androidx.lifecycle.lifecycleScope
 import com.yellastrodev.dwij.activities.MainActivity
 import com.yellastrodev.dwij.data.repo.AlbumCoverRepository
+import com.yellastrodev.dwij.data.repo.PlayerRepository
 import com.yellastrodev.dwij.data.repo.PlaylistRepository
 import com.yellastrodev.dwij.data.repo.TrackRepository
 import com.yellastrodev.dwij.data.source.PlaylistCacheSource
 import com.yellastrodev.dwij.data.source.PlaylistRemoteSource
+import com.yellastrodev.dwij.data.source.TrackRemoteSource
 import com.yellastrodev.yandexmusiclib.YamApiClient
 import com.yellastrodev.yandexmusiclib.entities.YaPlaylist
 import com.yellastrodev.yandexmusiclib.kot_utils.yNetwork.Companion.NetResult
@@ -19,7 +20,6 @@ import com.yellastrodev.yandexmusiclib.yAccount
 import kotlinx.coroutines.DelicateCoroutinesApi
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.GlobalScope
-import kotlinx.coroutines.launch
 import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.withContext
 import java.io.File
@@ -28,12 +28,12 @@ class yApplication: Application() {
 
     val yamClient: YamApiClient by lazy {
         runBlocking(Dispatchers.IO) {
-            val result = init_YaM(applicationContext)
+            val result = initYaM(applicationContext)
             (result as ClientResult.Success).client
         }
     }
     val trackRepository: TrackRepository by lazy {
-        TrackRepository()
+        TrackRepository(TrackRemoteSource(yamClient))
     }
 
     @OptIn(DelicateCoroutinesApi::class)
@@ -49,6 +49,10 @@ class yApplication: Application() {
         )
     }
 
+    val playerRepo: PlayerRepository by lazy {
+        PlayerRepository(applicationContext)
+    }
+
     val albumCoverRepository: AlbumCoverRepository by lazy {
         val dir = File(applicationContext.cacheDir, "album_covers")
         if (!dir.exists()) {
@@ -62,6 +66,7 @@ class yApplication: Application() {
     @OptIn(DelicateCoroutinesApi::class)
     override fun onCreate() {
         super.onCreate()
+        playerRepo.bind()
 
 
     }
@@ -77,7 +82,7 @@ class yApplication: Application() {
         }
     }
 
-    suspend fun init_YaM(context: Context): ClientResult {
+    suspend fun initYaM(context: Context): ClientResult {
 
         val sharedPref = PreferenceManager.getDefaultSharedPreferences(context)
 

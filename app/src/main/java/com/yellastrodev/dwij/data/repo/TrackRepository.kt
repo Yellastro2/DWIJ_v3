@@ -1,14 +1,18 @@
 package com.yellastrodev.dwij.data.repo
 
+import com.yellastrodev.dwij.data.source.TrackRemoteSource
 import com.yellastrodev.yandexmusiclib.entities.TrackShort
 import com.yellastrodev.yandexmusiclib.entities.YaTrack
+import com.yellastrodev.yandexmusiclib.kot_utils.yTrack
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.map
 
-class TrackRepository {
+class TrackRepository(
+    private val remote: TrackRemoteSource
+) {
     private val _tracks = MutableStateFlow<Map<String, YaTrack>>(emptyMap())
     val tracks: StateFlow<Map<String, YaTrack>> = _tracks
 
@@ -22,19 +26,20 @@ class TrackRepository {
         _tracks.value = updated
     }
 
-//    fun getTrack(id: String) = _tracks.value[id]
+    fun tracksFlow(shorts: List<TrackShort>): Flow<List<YaTrack>> =
+        _tracks
+            .map { cache ->
+                shorts.mapNotNull { cache[it.id] }
+            }
+            .distinctUntilChanged()
 
-    fun trackFlow(id: String): Flow<YaTrack?> =
-        _tracks.map { it[id] }.distinctUntilChanged()
-
-    // возвращает треки по списку TrackShort, если нет в кеше — null
-    fun getTracks(shorts: List<TrackShort>): List<YaTrack?> {
-        val cache = _tracks.value
-        return shorts.map { cache[it.id] }
+    suspend fun getTrack(track: YaTrack): yTrack.Companion.Mp3LinkResult {
+        return remote.fetch(track)
     }
 
-    // альтернативно — фильтровать только найденные
-    fun getTracksNotNull(shorts: List<TrackShort>): List<YaTrack> =
-        shorts.mapNotNull { _tracks.value[it.id] }
+    suspend fun getTrack(trackSh: TrackShort): yTrack.Companion.Mp3LinkResult {
+        val track = _tracks.value[trackSh.id]!!
+        return remote.fetch(track)
+    }
 
 }

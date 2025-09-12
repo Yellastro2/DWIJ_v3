@@ -16,6 +16,11 @@
         android:theme="@style/AppTheme"
         tools:targetApi="31" >
 
+        <service
+            android:name=".PlayerService"
+            android:foregroundServiceType="mediaPlayback"
+            android:exported="false" />
+
     <activity
         android:name=".activities.SettingsAct"
         android:exported="true"
