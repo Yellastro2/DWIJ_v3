@@ -6,9 +6,10 @@ import android.preference.PreferenceManager
 import android.util.Log
 import android.util.LruCache
 import com.yellastrodev.dwij.activities.MainActivity
-import com.yellastrodev.dwij.data.repo.AlbumCoverRepository
+import com.yellastrodev.dwij.data.repo.CoverRepository
 import com.yellastrodev.dwij.data.repo.PlayerRepository
 import com.yellastrodev.dwij.data.repo.PlaylistRepository
+import com.yellastrodev.dwij.data.repo.TrackCacheRepository
 import com.yellastrodev.dwij.data.repo.TrackRepository
 import com.yellastrodev.dwij.data.source.PlaylistCacheSource
 import com.yellastrodev.dwij.data.source.PlaylistRemoteSource
@@ -49,16 +50,23 @@ class yApplication: Application() {
         )
     }
 
-    val playerRepo: PlayerRepository by lazy {
-        PlayerRepository(applicationContext)
+    val trackCacheRepo: TrackCacheRepository by lazy {
+        TrackCacheRepository(
+            applicationContext,
+            trackRepository
+        )
     }
 
-    val albumCoverRepository: AlbumCoverRepository by lazy {
+    val playerRepo: PlayerRepository by lazy {
+        PlayerRepository(applicationContext, trackCacheRepo)
+    }
+
+    val coverRepository: CoverRepository by lazy {
         val dir = File(applicationContext.cacheDir, "album_covers")
         if (!dir.exists()) {
             dir.mkdirs() // создаёт папку, если её нет
         }
-        AlbumCoverRepository(
+        CoverRepository(
             yamClient,
             dir)
     }

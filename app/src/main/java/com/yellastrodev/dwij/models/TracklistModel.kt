@@ -9,13 +9,14 @@ import androidx.media3.common.MediaItem
 import androidx.media3.common.MediaMetadata
 import com.yellastrodev.dwij.TRACK_ID
 import com.yellastrodev.dwij.adapters.TrackListAdapter
-import com.yellastrodev.dwij.data.repo.AlbumCoverRepository
+import com.yellastrodev.dwij.data.repo.CoverRepository
 import com.yellastrodev.dwij.data.repo.PlayerRepository
 import com.yellastrodev.dwij.data.repo.PlaylistRepository
 import com.yellastrodev.dwij.data.repo.TrackRepository
 import com.yellastrodev.yandexmusiclib.entities.CoverSize
 import com.yellastrodev.yandexmusiclib.entities.TrackShort
 import com.yellastrodev.yandexmusiclib.entities.YaPlaylist
+import com.yellastrodev.yandexmusiclib.entities.YaTrack
 import com.yellastrodev.yandexmusiclib.kot_utils.yTrack
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -26,7 +27,7 @@ import kotlinx.coroutines.flow.launchIn
 
 class TracklistModel(
     private val repo: PlaylistRepository,
-    val coverRepo: AlbumCoverRepository,
+    val coverRepo: CoverRepository,
     private val trackRepo: TrackRepository,
     private val playerRepo: PlayerRepository
 ) : ViewModel() {
@@ -40,7 +41,7 @@ class TracklistModel(
      */
     class Factory(
         private val repo: PlaylistRepository,
-        private val coverRepo: AlbumCoverRepository,
+        private val coverRepo: CoverRepository,
         private val trackRepo: TrackRepository,
         private val playerRepo: PlayerRepository
     ) : ViewModelProvider.Factory {
@@ -53,6 +54,10 @@ class TracklistModel(
             throw IllegalArgumentException("Unknown ViewModel class")
         }
     }
+
+    private val _openPlayerScreen = MutableStateFlow<Boolean>(false)
+    val openPlayerScreen: StateFlow<Boolean> = _openPlayerScreen
+
 
     /** Текущее состояние плейлиста (null, пока не загружен). */
     private val _playlist = MutableStateFlow<YaPlaylist?>(null)
@@ -111,24 +116,20 @@ class TracklistModel(
     }
 
     suspend fun onTrackClicked(tracks: List<TrackShort>, index: Int) {
-        val mediaItems = tracks.map { trackSh ->
-            trackRepo.tracks.value[trackSh.id]?. let { track ->
-                val result = trackRepo.getTrack(track)
-                if (result is yTrack.Companion.Mp3LinkResult.Success)
-                    return@map MediaItem.Builder()
-                        .setUri(result.url)
-                        .setMediaMetadata(
-                            MediaMetadata.Builder()
-                                .setExtras(Bundle().apply { putString(TRACK_ID, track.id) })
-                                .setTitle(track.title ?: "Unknown title")
-                                .setArtist(track.artists.joinToString(", ") { it.name } ?: "Unknown artist")
-    //                            .setArtworkUri(Uri.parse("https://example.com/cover.jpg"))
-                                .build()
-                        )
-                        .build()
-            }
-            null
+        // уведомляем UI, что надо открыть плеер
+        _openPlayerScreen.value = true
+
+        val curentTrackList: List<YaTrack?> = tracks.map { trackSh ->
+                trackRepo.tracks.value[trackSh.id]?.let { track ->
+                    return@map track
+
+                }
+            return@map null
         }
-        playerRepo.playQueue(mediaItems as List<MediaItem>, index)
+        playerRepo.playQueue(curentTrackList as List<YaTrack>, index)
+    }
+
+    fun resetOpenPlayerScreen() {
+        _openPlayerScreen.value = false
     }
 }

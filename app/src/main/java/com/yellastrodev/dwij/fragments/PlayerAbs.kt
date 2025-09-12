@@ -11,13 +11,20 @@ import android.widget.ImageView
 import android.widget.SeekBar
 import android.widget.TextView
 import androidx.fragment.app.Fragment
+import androidx.fragment.app.viewModels
+import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.lifecycleScope
+import androidx.lifecycle.repeatOnLifecycle
 import com.yellastrodev.dwij.R
+import com.yellastrodev.dwij.models.PlayerModel
+import com.yellastrodev.dwij.yApplication
+import com.yellastrodev.yandexmusiclib.entities.CoverSize
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.GlobalScope
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
+import kotlin.getValue
 
 open class PlayerAbs() : Fragment() {
 
@@ -30,6 +37,14 @@ open class PlayerAbs() : Fragment() {
 	var mvRandom: ImageButton? = null
 	lateinit var mvNext: ImageButton
 	lateinit var mvPrev: ImageButton
+
+	val playerModel: PlayerModel by viewModels {
+		PlayerModel.Factory(
+			playerRepo = (requireActivity().application as yApplication).playerRepo,
+			trackRepo = (requireActivity().application as yApplication).trackRepository,
+			coverRepo = (requireActivity().application as yApplication).coverRepository
+		)
+	}
 
 //	lateinit var mModel: PlayerModel
 
@@ -52,19 +67,54 @@ open class PlayerAbs() : Fragment() {
 		mvNext.setOnClickListener {
 //
 			detachSeekbar()
+			lifecycleScope.launch {
+				playerModel.nextTrack()
+			}
 //			GlobalScope.launch(Dispatchers.IO){mPlayer?.nextTrack()}
 
 		}
 
-//		mvPrev.setOnClickListener {
-//			detachSeekbar()
-//			mPlayer?.prevTrack()
-//
-//		}
-//		mvPlay.setOnClickListener {
-//			//val f_pos = mPlayer!!.mMediaPlayer.currentPosition
-//			mPlayer?.playAudio()
-//		}
+		mvPrev.setOnClickListener {
+			detachSeekbar()
+			lifecycleScope.launch {
+				playerModel.prevTrack()
+			}
+
+		}
+		mvPlay.setOnClickListener {
+			//val f_pos = mPlayer!!.mMediaPlayer.currentPosition
+			playerModel.playAudio()
+		}
+
+		viewLifecycleOwner.lifecycleScope.launch {
+			viewLifecycleOwner.repeatOnLifecycle(Lifecycle.State.STARTED) {
+				playerModel.track.collect { track ->
+					if (track != null) {
+						lifecycleScope.launch(Dispatchers.IO) {
+							val bitmap = playerModel.coverRepo.getCover(track, CoverSize.`200x200`)
+
+							// Ставим в ImageView на главном потоке
+							withContext(Dispatchers.Main) {
+								mvCover.setImageBitmap(bitmap)
+							}
+						}
+						mvTitle.text = track.title
+						mvArtist.text = track.artists.joinToString(", ") { it.name }
+					}
+				}
+			}
+		}
+
+		lifecycleScope.launch {
+			viewLifecycleOwner.repeatOnLifecycle(Lifecycle.State.STARTED) {
+				playerModel.playerState.collect {
+					if (it.isPlaying) setPlay() else setPause()
+//					val progress = if (it.currentPosition > 0) it.duration / it.currentPosition else 0L
+					mvSeekBar?.progress = it.currentPosition.toInt()
+					mvSeekBar?.max = it.duration.toInt()
+				}
+			}
+		}
 //		mvRandom?.setOnClickListener { v -> setRandom(v) }
 //
 //

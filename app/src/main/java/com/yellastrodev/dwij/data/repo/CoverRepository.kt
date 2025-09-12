@@ -12,7 +12,7 @@ import kotlinx.coroutines.GlobalScope
 import kotlinx.coroutines.launch
 import java.io.File
 
-class AlbumCoverRepository(
+class CoverRepository(
     private val fClient: YamApiClient,
     private val cacheDir: File
 ) {

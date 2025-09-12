@@ -1,7 +1,6 @@
 package com.yellastrodev.dwij.fragments
 
 import android.annotation.SuppressLint
-import android.graphics.Color
 import android.os.Bundle
 import android.os.Handler
 import android.util.DisplayMetrics
@@ -10,22 +9,29 @@ import android.view.View
 import android.view.ViewGroup
 import android.view.ViewPropertyAnimator
 import android.widget.Button
-import android.widget.ImageButton
 import android.widget.ImageView
 import android.widget.SeekBar
 import android.widget.TextView
 import androidx.constraintlayout.widget.ConstraintLayout
+import androidx.fragment.app.viewModels
+import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.lifecycleScope
-import androidx.lifecycle.viewModelScope
+import androidx.lifecycle.repeatOnLifecycle
 import androidx.recyclerview.widget.RecyclerView
 import com.yellastrodev.dwij.R
+import com.yellastrodev.dwij.models.PlayerModel
+import com.yellastrodev.dwij.yApplication
+import com.yellastrodev.yandexmusiclib.entities.CoverSize
 import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.GlobalScope
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
+import kotlin.getValue
 
 class BigPlayerFrag() :
-	PlayerAbs() {
+	PlayerAbs()
+{
+	val TAG = "BigPlayerFrag"
+
 
 	val sPrevieAlpha = 0.3F
 
@@ -65,6 +71,8 @@ class BigPlayerFrag() :
 		mvRestrict =  view.findViewById(R.id.fr_player_restrict)
 
 		mvTitle.setOnClickListener { openTrackInfo() }
+
+
 
 
 		var doubleClick = false

@@ -54,7 +54,7 @@ class GridPlaylistFrag() : Fragment(R.layout.frag_grid_playlist) {
 	private val model: GridPlaylistModel by viewModels {
 		GridPlaylistModel.Factory(
 			repo = (requireActivity().application as yApplication).playlistRepository,
-			coverRepo = (requireActivity().application as yApplication).albumCoverRepository
+			coverRepo = (requireActivity().application as yApplication).coverRepository
 		)
 	}
 

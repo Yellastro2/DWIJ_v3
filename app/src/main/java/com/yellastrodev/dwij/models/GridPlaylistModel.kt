@@ -7,7 +7,7 @@ import androidx.lifecycle.viewModelScope
 import com.yellastrodev.dwij.TYPE
 import com.yellastrodev.dwij.VALUE
 import com.yellastrodev.dwij.adapters.GridPlaylistAdapter
-import com.yellastrodev.dwij.data.repo.AlbumCoverRepository
+import com.yellastrodev.dwij.data.repo.CoverRepository
 import com.yellastrodev.dwij.data.repo.PlaylistRepository
 import com.yellastrodev.dwij.fragments.ObjectFrag
 import com.yellastrodev.yandexmusiclib.entities.CoverSize
@@ -18,12 +18,12 @@ import kotlinx.coroutines.launch
 
 class GridPlaylistModel(
 	private val repo: PlaylistRepository,
-	private val coverRepo: AlbumCoverRepository
+	private val coverRepo: CoverRepository
 ): ViewModel() {
 
 	class Factory(
 		private val repo: PlaylistRepository,
-		private val coverRepo: AlbumCoverRepository
+		private val coverRepo: CoverRepository
 	) : ViewModelProvider.Factory {
 		@Suppress("UNCHECKED_CAST")
 		override fun <T : ViewModel> create(modelClass: Class<T>): T {

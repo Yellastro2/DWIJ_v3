@@ -8,82 +8,94 @@
     android:layout_height="match_parent"
     android:gravity="center"
     android:orientation="vertical">
-
     <androidx.constraintlayout.widget.ConstraintLayout
-        android:id="@+id/player_top_lay"
+        app:layout_constraintTop_toTopOf="parent"
         android:layout_width="match_parent"
-        android:layout_height="wrap_content"
-        android:layout_weight="1">
+        android:layout_height="wrap_content">
 
-        <ImageButton
-            android:id="@+id/fr_bg_player_btn_close"
-            android:layout_width="wrap_content"
-            android:layout_height="wrap_content"
-            android:layout_marginLeft="10dp"
-            app:srcCompat="@android:drawable/arrow_down_float" />
-
-        <TextView
-            android:id="@+id/bigplayer_main_title"
-            android:layout_width="wrap_content"
-            android:layout_height="wrap_content"
-            android:layout_marginTop="8dp"
-            android:text="TextView"
-            app:layout_constraintEnd_toEndOf="parent"
-            app:layout_constraintStart_toStartOf="@+id/fr_bg_player_btn_close"
-            app:layout_constraintTop_toTopOf="parent" />
-
-    </androidx.constraintlayout.widget.ConstraintLayout>
-
-    <androidx.constraintlayout.widget.ConstraintLayout
-        android:id="@+id/player_second_lay"
-        android:layout_width="match_parent"
-        android:layout_height="wrap_content"
-        app:layout_constraintTop_toBottomOf="@+id/player_top_lay">
-
-        <ImageView
-            android:id="@+id/fr_player_cover"
+        <androidx.constraintlayout.widget.ConstraintLayout
+            android:id="@+id/player_top_lay"
             android:layout_width="match_parent"
-            android:layout_height="100dp"
-            android:scaleType="centerCrop"
-            android:src="@drawable/logo_big"
-            app:srcCompat="@drawable/logo_big" />
-
-        <ImageButton
-            android:id="@+id/imageView"
-            style="@style/ImgBtnNoBkg"
-            android:layout_width="wrap_content"
             android:layout_height="wrap_content"
-            android:layout_marginTop="32dp"
-            android:layout_marginEnd="32dp"
-            android:layout_weight="1"
-            android:visibility="invisible"
-            app:layout_constraintEnd_toEndOf="parent"
-            app:layout_constraintTop_toTopOf="parent"
-            app:srcCompat="@drawable/more" />
-        <TextView
-            android:background="#70AAAAAA"
-            android:id="@+id/fr_player_album_name"
-            android:layout_width="wrap_content"
-            android:layout_height="wrap_content"
-            android:layout_marginTop="16dp"
-            android:text="Album"
-            android:textColor="#FFFFFF"
-            android:textSize="24sp"
-            app:layout_constraintEnd_toEndOf="parent"
-            app:layout_constraintStart_toStartOf="parent"
-            app:layout_constraintTop_toTopOf="parent" />
+            android:layout_weight="1">
 
-        <ImageView
-            android:id="@+id/fr_player_like"
-            android:layout_width="200dp"
-            android:layout_height="200dp"
-            android:layout_marginTop="64dp"
-            app:layout_constraintBottom_toBottomOf="parent"
-            app:layout_constraintEnd_toEndOf="parent"
-            app:layout_constraintStart_toStartOf="parent"
-            app:layout_constraintTop_toBottomOf="@+id/fr_player_album_name"
-            app:srcCompat="@drawable/img_like" />
+            <ImageButton
+                android:id="@+id/fr_bg_player_btn_close"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_marginLeft="10dp"
+                app:srcCompat="@android:drawable/arrow_down_float" />
+
+            <TextView
+                android:id="@+id/bigplayer_main_title"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="8dp"
+                android:text="TextView"
+                app:layout_constraintEnd_toEndOf="parent"
+                app:layout_constraintStart_toStartOf="@+id/fr_bg_player_btn_close"
+                app:layout_constraintTop_toTopOf="parent" />
+
+        </androidx.constraintlayout.widget.ConstraintLayout>
+
+        <androidx.constraintlayout.widget.ConstraintLayout
+            android:id="@+id/player_second_lay"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            app:layout_constraintTop_toBottomOf="@+id/player_top_lay">
+
+            <ImageView
+                android:id="@+id/fr_player_cover"
+                android:layout_width="match_parent"
+                android:layout_height="100dp"
+                android:scaleType="centerCrop"
+                android:src="@drawable/logo_big"
+                app:srcCompat="@drawable/logo_big" />
+
+            <ImageButton
+                android:id="@+id/imageView"
+                style="@style/ImgBtnNoBkg"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="32dp"
+                android:layout_marginEnd="32dp"
+                android:layout_weight="1"
+                android:visibility="invisible"
+                app:layout_constraintEnd_toEndOf="parent"
+                app:layout_constraintTop_toTopOf="parent"
+                app:srcCompat="@drawable/more" />
+            <TextView
+                android:background="#70AAAAAA"
+                android:id="@+id/fr_player_album_name"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="16dp"
+                android:text="Album"
+                android:textColor="#FFFFFF"
+                android:textSize="24sp"
+                app:layout_constraintEnd_toEndOf="parent"
+                app:layout_constraintStart_toStartOf="parent"
+                app:layout_constraintTop_toTopOf="parent" />
+
+            <ImageView
+                android:id="@+id/fr_player_like"
+                android:layout_width="200dp"
+                android:layout_height="200dp"
+                android:layout_marginTop="64dp"
+                app:layout_constraintBottom_toBottomOf="parent"
+                app:layout_constraintEnd_toEndOf="parent"
+                app:layout_constraintStart_toStartOf="parent"
+                app:layout_constraintTop_toBottomOf="@+id/fr_player_album_name"
+                app:srcCompat="@drawable/img_like" />
+        </androidx.constraintlayout.widget.ConstraintLayout>
+
     </androidx.constraintlayout.widget.ConstraintLayout>
+
+    <androidx.constraintlayout.widget.ConstraintLayout
+        app:layout_constraintBottom_toBottomOf="parent"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content">
+
 
     <RelativeLayout
         android:id="@+id/player_third_lay"
@@ -152,8 +164,6 @@
         app:layout_constraintStart_toStartOf="parent"
         app:layout_constraintTop_toBottomOf="@+id/seekBar"
         tools:itemCount="3" />
-
-    tools:listitem="text" />
 
     <LinearLayout
         android:id="@+id/linearLayout"
@@ -229,5 +239,7 @@
         app:layout_constraintEnd_toEndOf="@+id/fr_bg_player_pllist_flex"
         app:layout_constraintStart_toStartOf="@+id/fr_bg_player_pllist_flex"
         app:layout_constraintTop_toTopOf="@+id/fr_bg_player_pllist_flex" />
+
+    </androidx.constraintlayout.widget.ConstraintLayout>
 
 </androidx.constraintlayout.widget.ConstraintLayout>

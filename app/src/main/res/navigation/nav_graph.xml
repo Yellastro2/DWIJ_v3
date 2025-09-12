@@ -38,6 +38,14 @@
         android:id="@+id/objectFrag"
         android:name="com.yellastrodev.dwij.fragments.ObjectFrag"
         android:label="frag_object"
-        tools:layout="@layout/frag_object" />
+        tools:layout="@layout/frag_object" >
+        <action
+            android:id="@+id/action_objectFrag_to_bigPlayerFrag"
+            app:destination="@id/bigPlayerFrag" />
+    </fragment>
+    <fragment
+        android:id="@+id/bigPlayerFrag"
+        android:name="com.yellastrodev.dwij.fragments.BigPlayerFrag"
+        android:label="BigPlayerFrag" />
 
 </navigation>

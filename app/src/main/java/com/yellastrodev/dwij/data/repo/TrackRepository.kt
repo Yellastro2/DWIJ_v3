@@ -37,8 +37,8 @@ class TrackRepository(
         return remote.fetch(track)
     }
 
-    suspend fun getTrack(trackSh: TrackShort): yTrack.Companion.Mp3LinkResult {
-        val track = _tracks.value[trackSh.id]!!
+    suspend fun getTrackUrl(trackId: String): yTrack.Companion.Mp3LinkResult {
+        val track = _tracks.value[trackId]!!
         return remote.fetch(track)
     }
 

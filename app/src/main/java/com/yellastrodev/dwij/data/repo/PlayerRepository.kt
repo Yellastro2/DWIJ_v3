@@ -4,35 +4,55 @@ import android.content.ComponentName
 import android.content.Context
 import android.content.Intent
 import android.content.ServiceConnection
+import android.os.Bundle
 import android.os.IBinder
 import androidx.annotation.OptIn
 import androidx.core.content.ContextCompat
 import androidx.media3.common.MediaItem
+import androidx.media3.common.MediaMetadata
 import androidx.media3.common.util.UnstableApi
-import com.yellastrodev.dwij.PlayerService
-import com.yellastrodev.dwij.PlayerState
+import com.yellastrodev.dwij.TRACK_ID
+import com.yellastrodev.dwij.service.PlayerService
+import com.yellastrodev.dwij.service.PlayerState
+import com.yellastrodev.yandexmusiclib.entities.YaTrack
 import kotlinx.coroutines.GlobalScope
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.onEach
 import kotlinx.coroutines.flow.launchIn
+import kotlinx.coroutines.launch
 
 @OptIn(UnstableApi::class)
 class PlayerRepository(
-    private val context: Context
+    private val context: Context,
+    private val trackCacheRepo: TrackCacheRepository
 ) {
 
     private var service: PlayerService? = null
+
     private val _state = MutableStateFlow(PlayerState())
     val state: StateFlow<PlayerState> = _state
+
+    var currentTrackList: List<String> = listOf()
+
+    private val _currentTrack = MutableStateFlow<String?>(null)
+    val currentTrack: StateFlow<String?> = _currentTrack
 
     private val serviceConnection = object : ServiceConnection {
         override fun onServiceConnected(name: ComponentName?, binder: IBinder?) {
             service = (binder as PlayerService.PlayerBinder).getService()
             // Подписываемся на state сервиса
-            service?.state?.onEach { _state.value = it }
+            service?.state?.onEach { playerState ->
+                if (playerState.currentIndex != _state.value.currentIndex) {
+                    _currentTrack.value = currentTrackList[playerState.currentIndex]
+//                    loanNextTracks(playerState, _state.value.currentIndex - playerState.currentIndex)
+                }
+                _state.value = playerState
+            }
                 ?.launchIn(GlobalScope) // лучше передать свой scope
         }
+
+
 
         override fun onServiceDisconnected(name: ComponentName?) {
             service = null
@@ -49,13 +69,89 @@ class PlayerRepository(
         context.unbindService(serviceConnection)
     }
 
-    // API для VM
-    fun playQueue(tracks: List<MediaItem>, startIndex: Int = 0) {
-        service?.playQueue(tracks, startIndex)
+    var tracksAndUrls: Map<String,YaTrack> = mapOf()
+    var relativeIndex = 0
+
+    /**
+     * @param tracks список треков и их урл ссылок (на скачивание, либо на кеш файл)
+     * @param startIndex индекс трека в списке, который будет проигран
+     */
+    suspend fun playQueue(tracks: List<YaTrack>, startIndex: Int = 0) {
+        tracksAndUrls = tracks.associate { track -> track.id to track  }
+        currentTrackList = tracks.map { track -> track.id }
+        _currentTrack.value = tracks[startIndex].id
+
+        relativeIndex = startIndex
+
+
+        // Абсолютные индексы соседей
+        val prevIndex = startIndex - 1
+        val nextIndex = startIndex + 1
+
+        // 1️⃣ Загружаем текущий трек синхронно
+        val currentTrack = tracks[startIndex]
+        val currentUri = trackCacheRepo.getOrDownload(currentTrack.id)
+        val currentItem = MediaItem.Builder()
+            .setUri(currentUri)
+            .setMediaMetadata(
+                MediaMetadata.Builder()
+                    .setExtras(Bundle().apply { putString(TRACK_ID, currentTrack.id) })
+                    .setTitle(currentTrack.title ?: "Unknown title")
+                    .setArtist(currentTrack.artists.joinToString(", ") { it.name } ?: "Unknown artist")
+                    .build()
+            )
+            .build()
+
+        // Отправляем в сервис сразу для воспроизведения
+        service?.playTrack(currentItem)
+
+        // 2️⃣ Подгружаем соседние треки асинхронно
+        GlobalScope.launch {
+            if (prevIndex >= 0) {
+                val prevTrack = tracks[prevIndex]
+                trackCacheRepo.getOrDownload(prevTrack.id) // просто кешируем
+            }
+            if (nextIndex < tracks.size) {
+                val nextTrack = tracks[nextIndex]
+                trackCacheRepo.getOrDownload(nextTrack.id) // просто кешируем
+            }
+        }
+    }
+
+    /**
+     * Подгружаем следующий трек заранее, если он есть
+     * @param stepTo 1 - следующий, -1 - предыдущий
+     */
+    private suspend fun loanNextTracks( stepTo: Int) {
+        // Подгружаем следующий трек заранее, если он есть
+        val nextIndex = relativeIndex + stepTo
+        if (nextIndex < currentTrackList.size && nextIndex >= 0) {
+
+            val nextTrackId = currentTrackList[nextIndex]
+            val track = tracksAndUrls[nextTrackId]!!
+            val nextUri = trackCacheRepo.getOrDownload(nextTrackId)
+            val trackMedia = MediaItem.Builder()
+                .setUri(nextUri)
+                .setMediaMetadata(
+                    MediaMetadata.Builder()
+                        .setExtras(Bundle().apply { putString(TRACK_ID, track.id) })
+                        .setTitle(track.title ?: "Unknown title")
+                        .setArtist(track.artists.joinToString(", ") { it.name } ?: "Unknown artist")
+                        //                            .setArtworkUri(Uri.parse("https://example.com/cover.jpg"))
+                        .build()
+                )
+                .build()
+            service?.playTrack(trackMedia) // добавляем в очередь ExoPlayer
+            _currentTrack.value = currentTrackList[nextIndex]
+            relativeIndex = nextIndex
+        }
     }
 
     fun pause() = service?.pause()
-    fun resume() = service?.resume()
-    fun skipNext() = service?.skipNext()
-    fun skipPrev() = service?.skipPrev()
+    suspend fun skipNext() {
+        loanNextTracks(1)
+    }
+    suspend fun skipPrev() {
+        loanNextTracks(-1)
+    }
 }

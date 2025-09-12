@@ -1,25 +1,20 @@
 package com.yellastrodev.dwij.fragments
 
-import android.content.Intent
-import android.net.Uri
 import androidx.fragment.app.viewModels
 import android.os.Bundle
 import androidx.fragment.app.Fragment
-import android.view.LayoutInflater
 import android.view.View
-import android.view.ViewGroup
 import android.widget.ImageView
 import android.widget.TextView
 import androidx.lifecycle.Lifecycle
-import androidx.lifecycle.ViewModel
 import androidx.lifecycle.lifecycleScope
 import androidx.lifecycle.repeatOnLifecycle
 import androidx.lifecycle.viewModelScope
+import androidx.navigation.fragment.findNavController
 import androidx.recyclerview.widget.LinearLayoutManager
 import androidx.recyclerview.widget.RecyclerView
 import androidx.swiperefreshlayout.widget.SwipeRefreshLayout
 import com.google.android.material.appbar.AppBarLayout
-import com.google.android.material.appbar.CollapsingToolbarLayout
 import com.yellastrodev.dwij.R
 import com.yellastrodev.dwij.TYPE
 import com.yellastrodev.dwij.VALUE
@@ -27,8 +22,6 @@ import com.yellastrodev.dwij.models.TracklistModel
 import com.yellastrodev.dwij.yApplication
 import com.yellastrodev.yandexmusiclib.entities.CoverSize
 import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.GlobalScope
-import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 
@@ -51,7 +44,7 @@ class ObjectFrag : Fragment(R.layout.frag_object) {
     private val model: TracklistModel by viewModels {
         TracklistModel.Factory(
             repo = (requireActivity().application as yApplication).playlistRepository,
-            coverRepo = (requireActivity().application as yApplication).albumCoverRepository,
+            coverRepo = (requireActivity().application as yApplication).coverRepository,
             trackRepo = (requireActivity().application as yApplication).trackRepository,
             playerRepo = (requireActivity().application as yApplication).playerRepo
         )
@@ -170,6 +163,18 @@ class ObjectFrag : Fragment(R.layout.frag_object) {
         view.findViewById<View>(R.id.fr_object_wave_btn).setOnClickListener { onWaveBtn() }
         view.findViewById<View>(R.id.fr_object_play).setOnClickListener { onPlayBtn() }
         view.findViewById<View>(R.id.fr_object_share).setOnClickListener { share() }
+
+        viewLifecycleOwner.lifecycleScope.launchWhenStarted {
+            model.openPlayerScreen.collect { shouldOpen ->
+                if (shouldOpen) {
+                    findNavController().navigate(
+                        R.id.action_objectFrag_to_bigPlayerFrag
+                    )
+                    // после навигации сбрасываем, чтобы событие не сработало повторно
+                    model.resetOpenPlayerScreen()
+                }
+            }
+        }
     }
 
     private fun share() {
