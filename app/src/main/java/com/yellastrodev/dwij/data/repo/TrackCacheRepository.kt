@@ -10,7 +10,7 @@ import java.io.File
 import java.net.URL
 
 class TrackCacheRepository(
-    context: Context,
+    val context: Context,
     val trackRepo: TrackRepository
 ) {
 

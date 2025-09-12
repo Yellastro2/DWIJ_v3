@@ -142,9 +142,11 @@ class BigPlayerFrag() :
 
 
 		mvSeekBar?.setOnSeekBarChangeListener(object : SeekBar.OnSeekBarChangeListener {
-			override fun onProgressChanged(seekBar: SeekBar, i: Int, b: Boolean) {
-				if (b) {
-//					mPlayer?.mMediaPlayer?.seekTo(i )
+			override fun onProgressChanged(seekBar: SeekBar, progress: Int, fromUser: Boolean) {
+				if (fromUser) {
+					lifecycleScope.launch {
+						playerModel.seekTo(progress.toLong())
+					}
 					val dsds =5
 				}
 			}

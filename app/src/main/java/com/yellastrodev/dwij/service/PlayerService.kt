@@ -17,7 +17,9 @@ import androidx.media3.common.MediaItem
 import androidx.media3.common.MediaMetadata
 import androidx.media3.common.Player
 import androidx.media3.common.util.UnstableApi
+import androidx.media3.exoplayer.DefaultLoadControl
 import androidx.media3.exoplayer.ExoPlayer
+import androidx.media3.exoplayer.source.DefaultMediaSourceFactory
 import androidx.media3.ui.PlayerNotificationManager
 import androidx.media3.session.MediaSession
 import androidx.media3.session.SessionCommand
@@ -26,7 +28,10 @@ import com.google.common.util.concurrent.Futures
 import com.google.common.util.concurrent.ListenableFuture
 import com.yellastrodev.dwij.data.repo.CoverRepository
 import com.yellastrodev.dwij.data.repo.PlayerRepository
+import com.yellastrodev.dwij.data.repo.TrackCacheRepository
 import com.yellastrodev.dwij.data.repo.TrackRepository
+import com.yellastrodev.dwij.data.source.YaLazyDataSourceFactory
+import com.yellastrodev.dwij.data.source.YaTrackMediaSourceFactory
 import com.yellastrodev.dwij.yApplication
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.DelicateCoroutinesApi
@@ -56,6 +61,9 @@ class PlayerService : Service() {
     val playerRepo: PlayerRepository by lazy {
         (application as yApplication).playerRepo
     }
+    val trackCacheRepo: TrackCacheRepository by lazy {
+        (application as yApplication).trackCacheRepo
+    }
 
     /** Горячие стримы состояния плеера для UI или наблюдения */
     private val _state = MutableStateFlow(PlayerState())
@@ -68,7 +76,26 @@ class PlayerService : Service() {
         Log.d(TAG, "onCreate called: создаем канал и плеер")
         createChannel()
 
-        player = ExoPlayer.Builder(this).build()
+        val loadControl = DefaultLoadControl.Builder()
+            .setBufferDurationsMs(
+                5_000,   // minBufferMs
+                10_000,  // maxBufferMs
+                1_000,   // bufferForPlaybackMs
+                2_000    // bufferForPlaybackAfterRebufferMs
+            )
+            .build()
+
+        val dataSourceFactory = YaLazyDataSourceFactory(this, trackCacheRepo)
+        val mediaSourceFactory = DefaultMediaSourceFactory(dataSourceFactory)
+
+        player = ExoPlayer.Builder(this)
+            .setMediaSourceFactory(mediaSourceFactory)
+            .build()
+
+//        player = ExoPlayer.Builder(this)
+//            .setLoadControl(loadControl)
+//            .setMediaSourceFactory(YaTrackMediaSourceFactory(trackCacheRepo))
+//            .build()
         Log.d(TAG, "ExoPlayer инициализирован")
 
         mediaSession = MediaSession.Builder(this, player)
@@ -99,10 +126,10 @@ class PlayerService : Service() {
         // Слушаем изменения состояния воспроизведения
         player.addListener(object : Player.Listener {
             override fun onPlaybackStateChanged(playbackState: Int) {
-//                _state.value = _state.value.copy(
-//                    isPlaying = player.isPlaying,
-//                    currentIndex = player.currentMediaItemIndex
-//                )
+                _state.value = _state.value.copy(
+                    isPlaying = player.isPlaying,
+                    currentIndex = player.currentMediaItemIndex
+                )
                 if (playbackState == Player.STATE_ENDED) {
                     GlobalScope.launch {
                         playerRepo.skipNext()
@@ -308,6 +335,10 @@ class PlayerService : Service() {
         val manager = getSystemService(NotificationManager::class.java)
         manager.createNotificationChannel(channel)
         Log.d(TAG, "Notification channel created: player_channel")
+    }
+
+    fun seekTo(lng: Long) {
+        player.seekTo(lng)
     }
 
 

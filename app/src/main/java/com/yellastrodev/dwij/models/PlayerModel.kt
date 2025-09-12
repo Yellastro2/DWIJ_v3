@@ -30,6 +30,10 @@ class PlayerModel(
         playerRepo.pause()
     }
 
+    fun seekTo(lng: Long) {
+        playerRepo.seekTo(lng)
+    }
+
     companion object {
         val TAG = "PlayerModel"
     }

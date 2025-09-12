@@ -6,6 +6,7 @@ import android.content.Intent
 import android.content.ServiceConnection
 import android.os.Bundle
 import android.os.IBinder
+import android.util.Log
 import androidx.annotation.OptIn
 import androidx.core.content.ContextCompat
 import androidx.media3.common.MediaItem
@@ -27,6 +28,7 @@ class PlayerRepository(
     private val context: Context,
     private val trackCacheRepo: TrackCacheRepository
 ) {
+    val TAG = "PlayerRepository"
 
     private var service: PlayerService? = null
 
@@ -83,39 +85,59 @@ class PlayerRepository(
 
         relativeIndex = startIndex
 
+        Log.d(TAG, "playQueue called: startIndex=$startIndex, tracks=${tracks.size}")
 
-        // Абсолютные индексы соседей
-        val prevIndex = startIndex - 1
-        val nextIndex = startIndex + 1
-
-        // 1️⃣ Загружаем текущий трек синхронно
-        val currentTrack = tracks[startIndex]
-        val currentUri = trackCacheRepo.getOrDownload(currentTrack.id)
-        val currentItem = MediaItem.Builder()
-            .setUri(currentUri)
-            .setMediaMetadata(
-                MediaMetadata.Builder()
-                    .setExtras(Bundle().apply { putString(TRACK_ID, currentTrack.id) })
-                    .setTitle(currentTrack.title ?: "Unknown title")
-                    .setArtist(currentTrack.artists.joinToString(", ") { it.name } ?: "Unknown artist")
-                    .build()
-            )
-            .build()
-
-        // Отправляем в сервис сразу для воспроизведения
-        service?.playTrack(currentItem)
-
-        // 2️⃣ Подгружаем соседние треки асинхронно
-        GlobalScope.launch {
-            if (prevIndex >= 0) {
-                val prevTrack = tracks[prevIndex]
-                trackCacheRepo.getOrDownload(prevTrack.id) // просто кешируем
-            }
-            if (nextIndex < tracks.size) {
-                val nextTrack = tracks[nextIndex]
-                trackCacheRepo.getOrDownload(nextTrack.id) // просто кешируем
-            }
+        val mediaItems = tracks.map { track ->
+            MediaItem.Builder()
+                .setMediaId(track.id) // без URI — фабрика подставит на лету
+                .setUri("ya://${track.id}") // фейковый URI
+                .setMediaMetadata(
+                    MediaMetadata.Builder()
+                        .setExtras(Bundle().apply { putString(TRACK_ID, track.id) })
+                        .setTitle(track.title ?: "Unknown title")
+                        .setArtist(track.artists.joinToString(", ") { it.name } ?: "Unknown artist")
+                        .build()
+                )
+                .build()
         }
+
+        Log.d(TAG, "playQueue ready: startIndex=$startIndex, tracks=${tracks.size}")
+
+        service?.playQueue(mediaItems, startIndex)
+
+
+//        // Абсолютные индексы соседей
+//        val prevIndex = startIndex - 1
+//        val nextIndex = startIndex + 1
+//
+//        // 1️⃣ Загружаем текущий трек синхронно
+//        val currentTrack = tracks[startIndex]
+//        val currentUri = trackCacheRepo.getOrDownload(currentTrack.id)
+//        val currentItem = MediaItem.Builder()
+//            .setUri(currentUri)
+//            .setMediaMetadata(
+//                MediaMetadata.Builder()
+//                    .setExtras(Bundle().apply { putString(TRACK_ID, currentTrack.id) })
+//                    .setTitle(currentTrack.title ?: "Unknown title")
+//                    .setArtist(currentTrack.artists.joinToString(", ") { it.name } ?: "Unknown artist")
+//                    .build()
+//            )
+//            .build()
+//
+//        // Отправляем в сервис сразу для воспроизведения
+//        service?.playTrack(currentItem)
+//
+//        // 2️⃣ Подгружаем соседние треки асинхронно
+//        GlobalScope.launch {
+//            if (prevIndex >= 0) {
+//                val prevTrack = tracks[prevIndex]
+//                trackCacheRepo.getOrDownload(prevTrack.id) // просто кешируем
+//            }
+//            if (nextIndex < tracks.size) {
+//                val nextTrack = tracks[nextIndex]
+//                trackCacheRepo.getOrDownload(nextTrack.id) // просто кешируем
+//            }
+//        }
     }
 
     /**
@@ -149,9 +171,15 @@ class PlayerRepository(
 
     fun pause() = service?.pause()
     suspend fun skipNext() {
-        loanNextTracks(1)
+//        loanNextTracks(1)
+        service?.skipNext()
     }
     suspend fun skipPrev() {
-        loanNextTracks(-1)
+//        loanNextTracks(-1)
+        service?.skipPrev()
+    }
+
+    fun seekTo(lng: Long) {
+        service?.seekTo(lng)
     }
 }
