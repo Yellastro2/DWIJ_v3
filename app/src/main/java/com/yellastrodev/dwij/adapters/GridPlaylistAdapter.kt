@@ -99,8 +99,10 @@ RecyclerView.Adapter<GridPlaylistAdapter.ViewHolder>() {
 //		notifyDataSetChanged()
 //	}
 
-	class ViewHolder(view: View,
-					 private val loadCover: suspend (dYaPlaylist) -> Bitmap) : RecyclerView.ViewHolder(view) {
+	class ViewHolder(
+		view: View,
+		private val loadCover: suspend (dYaPlaylist) -> Bitmap,
+		val scope: CoroutineScope) : RecyclerView.ViewHolder(view) {
 		val vTitle: TextView
 		val vAutor: TextView
 		val vImg: ImageView
@@ -121,7 +123,7 @@ RecyclerView.Adapter<GridPlaylistAdapter.ViewHolder>() {
 //			vImg.setImageResource(R.drawable.placeholder)
 
 			// Запускаем новую корутину для загрузки картинки
-			coverJob = CoroutineScope(Dispatchers.IO).launch {
+			coverJob = scope.launch(Dispatchers.IO) {
 				try {
 					val bitmap = loadCover(playlist)
 					withContext(Dispatchers.Main) {
@@ -142,7 +144,7 @@ RecyclerView.Adapter<GridPlaylistAdapter.ViewHolder>() {
 			.inflate(R.layout.it_playlist_grid, viewGroup, false)
 		view.layoutParams = ViewGroup.LayoutParams(mGridSize,mGridSize)
 
-		return ViewHolder(view, loadCover)
+		return ViewHolder(view, loadCover, mScope!!)
 	}
 
 	@SuppressLint("CheckResult")
@@ -173,24 +175,10 @@ RecyclerView.Adapter<GridPlaylistAdapter.ViewHolder>() {
 //			return
 //		}
 
-		val s_many = 2
-		val s_fev = 1
-		val s_one = 0
 
 		val f_size = mList[position].trackCount
 		val f_dur = mList[position].durationMs ?: 0
 		val fDurStr = formatDuration(f_dur)
-		var f_numb = 0
-		if(f_dur>60){
-		}else{
-			var f_end_type = 0
-			var f_end_lettr = ""
-			val f_end_num = (f_dur -
-					Math.round((f_dur/10).toDouble())).toInt()
-			if (f_end_num>4 || f_end_num == 0) f_end_lettr = "ов"
-			else if (f_end_num>1) f_end_lettr = "а"
-
-		}
 
 		var f_end_lettr = ""
 		val f_end_num = (f_size -
@@ -254,7 +242,9 @@ RecyclerView.Adapter<GridPlaylistAdapter.ViewHolder>() {
 //					"Track already in", Snackbar.LENGTH_SHORT).show()}
 //		}else {
 			viewHolder.vTitle.setBackgroundColor(0x7AD5A54F.toInt())
-			viewHolder.itemView.setOnClickListener {onClick(mList[position])
+			viewHolder.itemView.setOnClickListener {
+				Log.d("DWIJ_TIMING", "click on playlist item")
+				onClick(mList[position])
 			}
 //		}
 

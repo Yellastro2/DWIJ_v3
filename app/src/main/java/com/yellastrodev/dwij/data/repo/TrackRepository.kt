@@ -33,16 +33,20 @@ class TrackRepository(
     }
 
     suspend fun putTracks(trackList: List<dYaTrack>) {
-        val updated = _tracks.value.toMutableMap()
+//        val updated = _tracks.value.toMutableMap()
+        val updated = mutableMapOf<String, dYaTrack>()
         trackList.forEach { track ->
-            if (!updated.containsKey(track.id)) {
+            if (!_tracks.value.containsKey(track.id)) {
                 updated[track.id] = track
             }
         }
-        _tracks.value = updated
 
-        GlobalScope.launch(Dispatchers.IO) {
-            local.saveAll(trackList)
+        if (updated.isNotEmpty()) {
+            _tracks.value = updated
+
+            GlobalScope.launch(Dispatchers.IO) {
+                local.saveAll(trackList)
+            }
         }
     }
 

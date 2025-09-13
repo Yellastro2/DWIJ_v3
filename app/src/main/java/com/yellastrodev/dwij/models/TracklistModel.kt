@@ -1,13 +1,9 @@
 package com.yellastrodev.dwij.models
 
-import android.os.Bundle
 import android.util.Log
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.viewModelScope
-import androidx.media3.common.MediaItem
-import androidx.media3.common.MediaMetadata
-import com.yellastrodev.dwij.TRACK_ID
 import com.yellastrodev.dwij.adapters.TrackListAdapter
 import com.yellastrodev.dwij.data.repo.CoverRepository
 import com.yellastrodev.dwij.data.repo.PlayerRepository
@@ -17,10 +13,6 @@ import com.yellastrodev.dwij.entities.dPlaylistTrack
 import com.yellastrodev.dwij.entities.dYaPlaylist
 import com.yellastrodev.dwij.entities.dYaTrack
 import com.yellastrodev.yandexmusiclib.entities.CoverSize
-import com.yellastrodev.yandexmusiclib.entities.TrackShort
-import com.yellastrodev.yandexmusiclib.entities.YaPlaylist
-import com.yellastrodev.yandexmusiclib.entities.YaTrack
-import com.yellastrodev.yandexmusiclib.kot_utils.yTrack
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.flatMapLatest
@@ -30,7 +22,7 @@ import kotlinx.coroutines.launch
 
 
 class TracklistModel(
-    private val repo: PlaylistRepository,
+    private val playlistRepo: PlaylistRepository,
     val coverRepo: CoverRepository,
     private val trackRepo: TrackRepository,
     private val playerRepo: PlayerRepository
@@ -48,7 +40,8 @@ class TracklistModel(
         private val coverRepo: CoverRepository,
         private val trackRepo: TrackRepository,
         private val playerRepo: PlayerRepository
-    ) : ViewModelProvider.Factory {
+    ) : ViewModelProvider.Factory
+    {
         @Suppress("UNCHECKED_CAST")
         override fun <T : ViewModel> create(modelClass: Class<T>): T {
             if (modelClass.isAssignableFrom(TracklistModel::class.java)) {
@@ -62,6 +55,8 @@ class TracklistModel(
     private val _openPlayerScreen = MutableStateFlow<Boolean>(false)
     val openPlayerScreen: StateFlow<Boolean> = _openPlayerScreen
 
+    var trackList = ArrayList<dYaTrack>()
+
 
     /** Текущее состояние плейлиста (null, пока не загружен). */
     private val _playlist = MutableStateFlow<dYaPlaylist?>(null)
@@ -73,8 +68,6 @@ class TracklistModel(
         TrackListAdapter({ track ->
             Log.d(TAG, "Загрузка обложки для трека: ${track.id}")
             coverRepo.getCover(track, CoverSize.`100x100`)
-        }, { pos ->
-            onTrackClicked(playlist.value!!.tracks, pos)
         }).apply {
             mScope = viewModelScope
         }
@@ -90,7 +83,7 @@ class TracklistModel(
     suspend fun setType(type: String, value: String) {
         Log.d(TAG, "setType: type=$type, value=$value")
         if (type == "playlist") {
-            repo.playlistFlow(value)
+            playlistRepo.playlistFlow(value)
                 .onEach { playlist ->
                     Log.d(TAG, "Получен плейлист: ${playlist.playlistUuid}, треков=${playlist.tracks.size}")
                     _playlist.value = playlist
@@ -100,7 +93,8 @@ class TracklistModel(
                 }
                 .onEach { tracks ->
                     Log.d(TAG, "Треки после collect: ${tracks.size}")
-                    adapter.setList(ArrayList(tracks))
+                    trackList = ArrayList(tracks)
+                    adapter.setList(trackList)
                 }
                 .launchIn(viewModelScope) // подписка живёт пока жив ViewModel
         } else {
@@ -116,24 +110,22 @@ class TracklistModel(
         val current = _playlist.value
         requireNotNull(current) { "Невозможно обновить: плейлист не загружен" }
         Log.d(TAG, "Обновляем плейлист: ${current.playlistUuid}")
-        repo.refreshPlaylist(current.playlistUuid)
+        playlistRepo.refreshPlaylist(current.playlistUuid)
     }
 
-    suspend fun onTrackClicked(tracks: List<dPlaylistTrack>, index: Int) {
-        // уведомляем UI, что надо открыть плеер
-        _openPlayerScreen.value = true
+    suspend fun onTrackClicked( index: Int) {
 
         // что бы не тормозить смену экрана, иначе валью будет ждать этого почемуто
         // нихуя не изменилось
         viewModelScope.launch {
-            val curentTrackList: List<dYaTrack?> = tracks.map { trackSh ->
-                    trackRepo.tracks.value[trackSh.trackId]?.let { track ->
-                        return@map track
-
-                    }
-                return@map null
-            }
-            playerRepo.playQueue(curentTrackList as List<dYaTrack>, index)
+//            val curentTrackList: List<dYaTrack?> = trackList.map { trackSh ->
+//                    trackRepo.tracks.value[trackSh.trackId]?.let { track ->
+//                        return@map track
+//
+//                    }
+//                return@map null
+//            }
+            playerRepo.playQueue(trackList as List<dYaTrack>, index)
         }
     }
 

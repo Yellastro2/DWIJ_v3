@@ -3,6 +3,7 @@ package com.yellastrodev.dwij.fragments
 import android.annotation.SuppressLint
 import android.os.Bundle
 import android.util.DisplayMetrics
+import android.util.Log
 import android.view.View
 import androidx.appcompat.app.AlertDialog
 import androidx.fragment.app.Fragment
@@ -46,7 +47,9 @@ class GridPlaylistFrag() : Fragment(R.layout.frag_grid_playlist) {
 			putString(TYPE, ObjectFrag.PLAYLIST)
 			putString(VALUE, playlist.playlistUuid)
 		}
+//		Log.d("DWIJ_TIMING", "click on playlist item: start navigate")
 		findNavController().navigate(R.id.action_gridPlaylistFrag_to_objectFrag,bundle)
+//		Log.d("DWIJ_TIMING", "click on playlist item: finish navigate")
 	}
 
 	var mPickedTrack: String = "-1"

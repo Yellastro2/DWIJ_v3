@@ -4,6 +4,7 @@ import android.annotation.SuppressLint
 import android.os.Bundle
 import android.os.Handler
 import android.util.DisplayMetrics
+import android.util.Log
 import android.view.LayoutInflater
 import android.view.View
 import android.view.ViewGroup
@@ -54,6 +55,8 @@ class BigPlayerFrag() :
 		savedInstanceState: Bundle?
 	): View? {
 
+		Log.d("DWIJ_TIMING", "BigPlayerFrag onCreateView")
+
 
 		val view = inflater.inflate(R.layout.frag_player,container,false)
 
@@ -69,6 +72,16 @@ class BigPlayerFrag() :
 		mvAlbum = view.findViewById(R.id.fr_player_album_name)
 		mvLike = view.findViewById(R.id.fr_player_like)
 		mvRestrict =  view.findViewById(R.id.fr_player_restrict)
+
+
+		Log.d("DWIJ_TIMING", "BigPlayerFrag onCreateView finish")
+		return view
+	}
+
+	override fun onViewCreated(view: View, savedInstanceState: Bundle?) {
+		super.onViewCreated(view, savedInstanceState)
+
+
 
 		mvTitle.setOnClickListener { openTrackInfo() }
 
@@ -177,7 +190,9 @@ class BigPlayerFrag() :
 //			setTrack(mTrack!!,null)
 //		}
 
-		return view
+
+		Log.d("DWIJ_TIMING", "BigPlayerFrag onViewCreated")
+		view.post { Log.d("TIMING", "BigPlayerFrag first frame drawn") }
 	}
 
 	private fun openTrackInfo() {
@@ -206,9 +221,6 @@ class BigPlayerFrag() :
 	}
 
 
-	override fun onViewCreated(view: View, savedInstanceState: Bundle?) {
-		super.onViewCreated(view, savedInstanceState)
-	}
 
 //	fun setLikedState(fStore: yMediaStore){
 //		val fisLiked = fStore.isTrackLiked(mTrackId)

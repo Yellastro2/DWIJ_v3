@@ -22,8 +22,7 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 
 class TrackListAdapter(
-    private val loadCover: suspend (dYaTrack) -> Bitmap,
-    private val onItemClicked: suspend (pos: Int) -> Unit,
+    private val loadCover: suspend (dYaTrack) -> Bitmap
 ) :
     RecyclerView.Adapter<TrackListAdapter.ViewHolder>() {
     var mScope: CoroutineScope? = null
@@ -32,6 +31,9 @@ class TrackListAdapter(
     var mListOfObj: ArrayList<dYaTrack> = ArrayList<dYaTrack>()
 
     var mInitJob:  Deferred<Unit>? = null
+
+
+    var onItemClicked: (pos: Int) -> Unit = { pos ->}
 
 
     fun setList(allTracks: ArrayList<dYaTrack>) {
@@ -98,9 +100,7 @@ class TrackListAdapter(
     override fun onBindViewHolder(viewHolder: ViewHolder, position: Int) {
         viewHolder.mId = position
         viewHolder.itemView.setOnClickListener {
-            mScope?.launch {
-                onItemClicked(position)
-            }
+            onItemClicked(position)
         }
 
 

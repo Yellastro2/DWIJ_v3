@@ -86,7 +86,7 @@ open class PlayerAbs() : Fragment() {
 			playerModel.playAudio()
 		}
 
-		viewLifecycleOwner.lifecycleScope.launch {
+		viewLifecycleOwner.lifecycleScope.launch(Dispatchers.IO) {
 			viewLifecycleOwner.repeatOnLifecycle(Lifecycle.State.STARTED) {
 				playerModel.track.collect { track ->
 					if (track != null) {
@@ -98,14 +98,16 @@ open class PlayerAbs() : Fragment() {
 								mvCover.setImageBitmap(bitmap)
 							}
 						}
-						mvTitle.text = track.title
-						mvArtist.text = track.artists.joinToString(", ") { it.name }
+						withContext(Dispatchers.Main) {
+							mvTitle.text = track.title
+							mvArtist.text = track.artists.joinToString(", ") { it.name }
+						}
 					}
 				}
 			}
 		}
 
-		lifecycleScope.launch {
+		lifecycleScope.launch(Dispatchers.IO) {
 			viewLifecycleOwner.repeatOnLifecycle(Lifecycle.State.STARTED) {
 				playerModel.playerState.collect {
 					if (it.isPlaying) setPlay() else setPause()

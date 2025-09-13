@@ -25,12 +25,18 @@ import android.widget.RelativeLayout
 import android.widget.TextView
 import androidx.appcompat.app.AppCompatActivity
 import androidx.core.os.bundleOf
+import androidx.core.view.isVisible
 import androidx.fragment.app.Fragment
+import androidx.fragment.app.commit
+import androidx.lifecycle.lifecycleScope
 import androidx.navigation.NavController
 import androidx.navigation.NavOptions
 import androidx.navigation.fragment.NavHostFragment
 import com.google.android.material.snackbar.Snackbar
 import com.yellastrodev.dwij.R
+import com.yellastrodev.dwij.data.repo.PlayerRepository
+import com.yellastrodev.dwij.fragments.LilPlayerFrag
+import com.yellastrodev.dwij.yApplication
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import java.io.File
@@ -54,6 +60,10 @@ class MainActivity : AppCompatActivity() {
 
     lateinit var mNavController: NavController
 
+    val playerRepo: PlayerRepository by lazy {
+        (application as yApplication).playerRepo
+    }
+
     @SuppressLint("MissingInflatedId")
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -65,8 +75,32 @@ class MainActivity : AppCompatActivity() {
 
         }
 
+        // Добавляем мини-плеер один раз
+        supportFragmentManager.commit {
+            replace(R.id.main_frag_bott, LilPlayerFrag())
+        }
+
+        // Подписка на навигацию
+        mNavController.addOnDestinationChangedListener { _, destination, _ ->
+            updateMiniPlayerVisibility(destination.id)
+        }
+
+        // Подписка на репо
+        lifecycleScope.launchWhenStarted {
+            playerRepo.currentTrack.collect {
+                updateMiniPlayerVisibility(mNavController.currentDestination?.id)
+            }
+        }
 
 
+
+    }
+
+    private fun updateMiniPlayerVisibility(currentDestinationId: Int?) {
+        val miniPlayerFragment = supportFragmentManager.findFragmentById(R.id.main_frag_bott)
+        val shouldShow = playerRepo.currentTrack.value != null &&
+                currentDestinationId != R.id.bigPlayerFrag
+        miniPlayerFragment?.view?.isVisible = shouldShow
     }
 
 }

@@ -2,6 +2,7 @@ package com.yellastrodev.dwij.fragments
 
 import androidx.fragment.app.viewModels
 import android.os.Bundle
+import android.util.Log
 import androidx.fragment.app.Fragment
 import android.view.View
 import android.widget.ImageView
@@ -18,6 +19,8 @@ import com.google.android.material.appbar.AppBarLayout
 import com.yellastrodev.dwij.R
 import com.yellastrodev.dwij.TYPE
 import com.yellastrodev.dwij.VALUE
+import com.yellastrodev.dwij.entities.dPlaylistTrack
+import com.yellastrodev.dwij.entities.dYaTrack
 import com.yellastrodev.dwij.models.TracklistModel
 import com.yellastrodev.dwij.yApplication
 import com.yellastrodev.yandexmusiclib.entities.CoverSize
@@ -56,11 +59,12 @@ class ObjectFrag : Fragment(R.layout.frag_object) {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
 
-        // TODO: Use the ViewModel
+//        Log.d("DWIJ_TIMING", "ObjectFrag created")
     }
 
     override fun onViewCreated(view: View, savedInstanceState: Bundle?) {
         super.onViewCreated(view, savedInstanceState)
+//        Log.d("DWIJ_TIMING", "ObjectFrag start onViewCreated")
 
         val appBarLayout = view.findViewById<AppBarLayout>(R.id.appBarLayout)
         val pinnedLayout = view.findViewById<View>(R.id.pinnedLayout)
@@ -100,7 +104,7 @@ class ObjectFrag : Fragment(R.layout.frag_object) {
 
             if (mType == PLAYLIST){
 
-                lifecycleScope.launch {
+                lifecycleScope.launch(Dispatchers.IO) {
                     model.setType(mType, mValue)
 
                 }
@@ -142,6 +146,16 @@ class ObjectFrag : Fragment(R.layout.frag_object) {
 //                }
                 view.findViewById<RecyclerView>(R.id.fr_obj_recycler)
                     .adapter = model.adapter
+                model.adapter.onItemClicked = { pos ->
+                    Log.d("DWIJ_TIMING", "ObjectFrag onItemClick")
+                    findNavController().navigate(
+                        R.id.action_objectFrag_to_bigPlayerFrag
+                    )
+                    lifecycleScope.launch {
+                        model.onTrackClicked(pos)
+                    }
+
+                }
                 view.findViewById<RecyclerView>(R.id.fr_obj_recycler)
                     .layoutManager = LinearLayoutManager(context)
 
@@ -164,17 +178,21 @@ class ObjectFrag : Fragment(R.layout.frag_object) {
         view.findViewById<View>(R.id.fr_object_play).setOnClickListener { onPlayBtn() }
         view.findViewById<View>(R.id.fr_object_share).setOnClickListener { share() }
 
-        viewLifecycleOwner.lifecycleScope.launchWhenStarted {
-            model.openPlayerScreen.collect { shouldOpen ->
-                if (shouldOpen) {
-                    findNavController().navigate(
-                        R.id.action_objectFrag_to_bigPlayerFrag
-                    )
-                    // после навигации сбрасываем, чтобы событие не сработало повторно
-                    model.resetOpenPlayerScreen()
-                }
-            }
-        }
+//        viewLifecycleOwner.lifecycleScope.launchWhenStarted {
+//            model.openPlayerScreen.collect { shouldOpen ->
+//                if (shouldOpen) {
+//                    findNavController().navigate(
+//                        R.id.action_objectFrag_to_bigPlayerFrag
+//                    )
+//                    // после навигации сбрасываем, чтобы событие не сработало повторно
+//                    model.resetOpenPlayerScreen()
+//                }
+//            }
+//        }
+
+
+//        Log.d("DWIJ_TIMING", "ObjectFrag on view created")
+//        view.post { Log.d("DWIJ_TIMING", "first frame drawn") }
     }
 
     private fun share() {

@@ -53,7 +53,7 @@ class GridPlaylistModel(
 				}
 			}
 		}
-		adapter.onClick = { playlist -> onPlaylistClicked(playlist) }
+//		adapter.onClick = { playlist -> onPlaylistClicked(playlist) }
 	}
 
 	private val _navigateTo = MutableSharedFlow<Bundle>()

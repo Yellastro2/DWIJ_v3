@@ -1,0 +1,84 @@
+<?xml version="1.0" encoding="utf-8"?>
+<androidx.constraintlayout.widget.ConstraintLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
+    xmlns:tools="http://schemas.android.com/tools"
+    android:layout_width="match_parent"
+    android:layout_height="wrap_content"
+    android:background="#1A03A9F4"
+    android:orientation="vertical">
+
+    <ImageView
+        android:id="@+id/fr_lil_pl_image"
+        android:layout_width="40dp"
+        android:layout_height="40dp"
+        android:layout_centerVertical="true"
+        app:layout_constraintBottom_toBottomOf="parent"
+        app:layout_constraintStart_toStartOf="parent"
+        app:layout_constraintTop_toTopOf="parent"
+        app:srcCompat="@drawable/icon" />
+
+    <LinearLayout
+        android:id="@+id/linearLayout3"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_alignParentRight="true"
+        android:orientation="horizontal"
+        app:layout_constraintBottom_toBottomOf="parent"
+        app:layout_constraintEnd_toEndOf="parent"
+        app:layout_constraintTop_toTopOf="parent">
+
+        <ImageButton
+            android:id="@+id/fr_lil_pl_prev"
+            style="@style/ImgBtnNoBkg"
+            android:layout_width="50dp"
+            android:layout_height="50dp"
+            app:srcCompat="@drawable/previous" />
+
+        <ImageButton
+            android:id="@+id/fr_lil_pl_play"
+            style="@style/ImgBtnNoBkg"
+            android:layout_width="50dp"
+            android:layout_height="50dp"
+            android:layout_marginEnd="3dp"
+            android:scaleType="fitXY"
+            app:srcCompat="@drawable/play" />
+
+        <ImageButton
+            android:id="@+id/fr_lil_pl_next"
+            style="@style/ImgBtnNoBkg"
+            android:layout_width="50dp"
+            android:layout_height="50dp"
+            app:srcCompat="@drawable/next" />
+    </LinearLayout>
+
+    <LinearLayout
+        android:layout_marginHorizontal="10dp"
+        android:layout_width="0dp"
+        android:layout_height="0dp"
+        android:gravity="center_vertical"
+        android:orientation="vertical"
+        app:layout_constraintBottom_toBottomOf="parent"
+        app:layout_constraintEnd_toStartOf="@+id/linearLayout3"
+        app:layout_constraintStart_toEndOf="@+id/fr_lil_pl_image"
+        app:layout_constraintTop_toTopOf="parent">
+
+        <TextView
+            style="@style/elipsizeTextVIew"
+            android:id="@+id/fr_lil_player_title"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_toStartOf="@+id/linearLayout3"
+            android:layout_toEndOf="@+id/fr_lil_pl_image"
+            android:text="@string/title_placehold" />
+
+        <TextView
+            style="@style/elipsizeTextVIew"
+            android:id="@+id/fr_lil_player_artist"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_below="@+id/fr_lil_player_title"
+            android:layout_toEndOf="@+id/fr_lil_pl_image"
+            android:text="@string/title_placehold" />
+    </LinearLayout>
+
+</androidx.constraintlayout.widget.ConstraintLayout>
