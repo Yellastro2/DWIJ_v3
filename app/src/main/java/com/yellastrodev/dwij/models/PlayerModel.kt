@@ -7,6 +7,7 @@ import androidx.lifecycle.viewModelScope
 import com.yellastrodev.dwij.data.repo.CoverRepository
 import com.yellastrodev.dwij.data.repo.PlayerRepository
 import com.yellastrodev.dwij.data.repo.TrackRepository
+import com.yellastrodev.dwij.entities.dYaTrack
 import com.yellastrodev.yandexmusiclib.entities.YaTrack
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -57,8 +58,8 @@ class PlayerModel(
     }
 
     // Flow для UI с полным объектом Track
-    private val _track = MutableStateFlow<YaTrack?>(null)
-    val track: StateFlow<YaTrack?> = _track
+    private val _track = MutableStateFlow<dYaTrack?>(null)
+    val track: StateFlow<dYaTrack?> = _track
 
     val playerState = playerRepo.state
 

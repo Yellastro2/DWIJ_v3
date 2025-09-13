@@ -15,6 +15,7 @@ import android.util.Log
 import androidx.core.app.NotificationCompat
 import androidx.media3.common.MediaItem
 import androidx.media3.common.MediaMetadata
+import androidx.media3.common.PlaybackException
 import androidx.media3.common.Player
 import androidx.media3.common.util.UnstableApi
 import androidx.media3.exoplayer.DefaultLoadControl
@@ -142,6 +143,11 @@ class PlayerService : Service() {
 
                 if (isPlaying) startProgressUpdates() else stopProgressUpdates()
                 Log.d(TAG, "onIsPlayingChanged: $isPlaying")
+            }
+
+            override fun onPlayerError(error: PlaybackException) {
+                Log.e(TAG, "Ошибка проигрывания: ${error.message}")
+                player.seekToNext() // просто перескакиваем
             }
 
         })

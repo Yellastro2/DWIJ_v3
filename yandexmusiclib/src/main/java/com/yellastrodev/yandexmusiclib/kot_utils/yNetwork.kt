@@ -26,6 +26,26 @@ class yNetwork {
         private var X_Yandex_Music_Client = "YandexMusicAndroid/24022571"
         private val SECRET = "p93jhgh689SBReK6ghtw62"
 
+        sealed class NetResult {
+            data class Success(val json: JSONObject) : NetResult()
+            sealed class Error : NetResult() {
+                object Timeout : Error()
+                object NoInternet : Error()
+                object AccessDenied : Error()
+                data class Unknown(val throwable: Throwable) : Error()
+            }
+        }
+
+        sealed class NetStreamResult {
+            data class Success(val stream: InputStream) : NetStreamResult()
+            sealed class Error : NetStreamResult() {
+                object Timeout : Error()
+                object NoInternet : Error()
+                object AccessDenied : Error()
+                data class Unknown(val throwable: Throwable) : Error()
+            }
+        }
+
 
         suspend fun post(
             token: String,
@@ -110,15 +130,7 @@ class yNetwork {
             return result
         }
 
-        sealed class NetResult {
-            data class Success(val json: JSONObject) : NetResult()
-            sealed class Error : NetResult() {
-                object Timeout : Error()
-                object NoInternet : Error()
-                object AccessDenied : Error()
-                data class Unknown(val throwable: Throwable) : Error()
-            }
-        }
+
 
 
         private suspend fun getWithHeader(
@@ -161,38 +173,46 @@ class yNetwork {
             token: String,
             fAdrPart: String,
             fSize: Int
-        ): InputStream? = withContext(Dispatchers.IO) {
-            val fSizeStr = "${fSize}x$fSize"
-            val fAdrPart2 = fAdrPart.replace("%%", fSizeStr)
-            val fAdr = "https://$fAdrPart2"
+        ): NetStreamResult {
+            return withContext(Dispatchers.IO) {
+                val fSizeStr = "${fSize}x$fSize"
+                val fAdrPart2 = fAdrPart.replace("%%", fSizeStr)
+                val fAdr = "https://$fAdrPart2"
 
-            println("[getCoverStream] Start request")
-            println("[getCoverStream] URL: $fAdr")
-            println("[getCoverStream] Token: ${token.take(4)}..")
+                println("[getCoverStream] Start request")
+                println("[getCoverStream] URL: $fAdr")
+                println("[getCoverStream] Token: ${token.take(4)}..")
 
-            val url = URL(fAdr)
-            val conn = (url.openConnection() as HttpURLConnection).apply {
-                requestMethod = "GET"
-                setRequestProperty("User-Agent", userAgent)
-                setRequestProperty("Accept", "application/json")
-                setRequestProperty("Authorization", "OAuth ${token}")
-                connectTimeout = 10_000
-                readTimeout = 15_000
+                val url = URL(fAdr)
+                try {
+                    val conn = (url.openConnection() as HttpURLConnection).apply {
+                        requestMethod = "GET"
+                        setRequestProperty("User-Agent", userAgent)
+                        setRequestProperty("Accept", "application/json")
+                        setRequestProperty("Authorization", "OAuth ${token}")
+                        connectTimeout = 10_000
+                        readTimeout = 15_000
+                    }
+
+                    println("[getCoverStream] Sending GET request...")
+                    val code = conn.responseCode
+                    println("[getCoverStream] Response code: $code")
+
+                    if (code != HttpURLConnection.HTTP_OK) {
+                        println("[getCoverStream] Error: HTTP $code")
+                        conn.disconnect()
+                        return@withContext NetStreamResult.Error.Unknown(Exception(code.toString()))
+                    }
+
+                    println("[getCoverStream] Success, returning InputStream")
+                    // Возвращаем поток — закрывать его должен вызывающий код
+//                conn.inputStream
+                    return@withContext NetStreamResult.Success(conn.inputStream)
+                } catch (e: Exception) {
+                    e.printStackTrace()
+                    return@withContext NetStreamResult.Error.Unknown(e)
+                }
             }
-
-            println("[getCoverStream] Sending GET request...")
-            val code = conn.responseCode
-            println("[getCoverStream] Response code: $code")
-
-            if (code != HttpURLConnection.HTTP_OK) {
-                println("[getCoverStream] Error: HTTP $code")
-                conn.disconnect()
-                return@withContext null
-            }
-
-            println("[getCoverStream] Success, returning InputStream")
-            // Возвращаем поток — закрывать его должен вызывающий код
-            conn.inputStream
         }
 
         /**

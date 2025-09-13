@@ -31,18 +31,24 @@ class YaLazyDataSourceFactory(
             }
 
             override fun open(dataSpec: DataSpec): Long {
-                val uri = dataSpec.uri
-                if (uri.scheme == "ya") {
-                    val trackId = uri.authority
-                    val realUri = runBlocking {
-                        trackCacheRepo.getOrDownload(trackId.toString())
+                return try {
+
+                    val uri = dataSpec.uri
+                    if (uri.scheme == "ya") {
+                        val trackId = uri.authority
+                        val realUri = runBlocking {
+                            trackCacheRepo.getOrDownload(trackId.toString())
+                        }
+                        val newSpec = dataSpec.withUri(realUri)
+                        actual = upstream
+                        return actual!!.open(newSpec)
+                    } else {
+                        actual = upstream
+                        return actual!!.open(dataSpec)
                     }
-                    val newSpec = dataSpec.withUri(realUri)
-                    actual = upstream
-                    return actual!!.open(newSpec)
-                } else {
-                    actual = upstream
-                    return actual!!.open(dataSpec)
+                }catch (e: IOException) {
+                    actual?.close()
+                    throw e
                 }
             }
 

@@ -1,5 +1,6 @@
 package com.yellastrodev.dwij.utils
 
+import com.yellastrodev.dwij.entities.dYaPlaylist
 import com.yellastrodev.yandexmusiclib.entities.YaPlaylist
 
 class PlaylistsDiff {
@@ -18,8 +19,8 @@ class PlaylistsDiff {
         }
 
         fun diffPlaylists(
-            oldMap: Map<String, YaPlaylist>,
-            newList: List<YaPlaylist>
+            oldMap: Map<String, dYaPlaylist>,
+            newList: List<dYaPlaylist>
         ): PlaylistDiffResult {
             val newMap = newList.associateBy { it.playlistUuid }
 

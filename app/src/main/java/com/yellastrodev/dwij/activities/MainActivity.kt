@@ -46,7 +46,7 @@ class MainActivity : AppCompatActivity() {
         val FIRST_PLLIST = "playlist"
         val FIRST_TYPES = listOf<String>(FIRST_PLAYER, FIRST_PLLIST, FIRST_TRACKLIST)
 
-        lateinit var LOG: Logger
+        val LOG = Logger.getLogger("MainActivity")
         val RECORD_REQUEST_CODE = 31437
 
     }
@@ -64,7 +64,7 @@ class MainActivity : AppCompatActivity() {
         mNavController.addOnDestinationChangedListener(){controller, destination, arguments ->
 
         }
-        LOG = Logger.getLogger("MainActivity")
+
 
 
     }

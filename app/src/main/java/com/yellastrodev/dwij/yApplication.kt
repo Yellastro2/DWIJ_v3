@@ -5,6 +5,10 @@ import android.content.Context
 import android.preference.PreferenceManager
 import android.util.Log
 import android.util.LruCache
+import androidx.room.Database
+import androidx.room.Room
+import androidx.room.RoomDatabase
+import androidx.room.TypeConverters
 import com.yellastrodev.dwij.activities.MainActivity
 import com.yellastrodev.dwij.data.repo.CoverRepository
 import com.yellastrodev.dwij.data.repo.PlayerRepository
@@ -12,8 +16,19 @@ import com.yellastrodev.dwij.data.repo.PlaylistRepository
 import com.yellastrodev.dwij.data.repo.TrackCacheRepository
 import com.yellastrodev.dwij.data.repo.TrackRepository
 import com.yellastrodev.dwij.data.source.PlaylistCacheSource
+import com.yellastrodev.dwij.data.source.PlaylistLocalSource
 import com.yellastrodev.dwij.data.source.PlaylistRemoteSource
+import com.yellastrodev.dwij.data.source.TrackLocalSource
 import com.yellastrodev.dwij.data.source.TrackRemoteSource
+import com.yellastrodev.dwij.data.source.dPlaylistDao
+import com.yellastrodev.dwij.data.source.dTrackDao
+import com.yellastrodev.dwij.entities.dPlaylistTrack
+import com.yellastrodev.dwij.entities.dTrackAlbumCrossRef
+import com.yellastrodev.dwij.entities.dTrackArtistCrossRef
+import com.yellastrodev.dwij.entities.dYaAlbum
+import com.yellastrodev.dwij.entities.dYaArtist
+import com.yellastrodev.dwij.entities.dYaPlaylist
+import com.yellastrodev.dwij.entities.dYaTrack
 import com.yellastrodev.yandexmusiclib.YamApiClient
 import com.yellastrodev.yandexmusiclib.entities.YaPlaylist
 import com.yellastrodev.yandexmusiclib.kot_utils.yNetwork.Companion.NetResult
@@ -30,23 +45,68 @@ class yApplication: Application() {
     val yamClient: YamApiClient by lazy {
         runBlocking(Dispatchers.IO) {
             val result = initYaM(applicationContext)
-            (result as ClientResult.Success).client
+            when (result) {
+                is ClientResult.Error -> YamApiClient("","",noAuthorize = true)
+                is ClientResult.Success -> result.client
+            }
         }
     }
-    val trackRepository: TrackRepository by lazy {
-        TrackRepository(TrackRemoteSource(yamClient))
+
+
+
+    @Database(
+        entities = [
+            dYaPlaylist::class,
+            dPlaylistTrack::class,
+            dYaTrack::class,
+            dYaAlbum::class,
+            dYaArtist::class,
+            dTrackAlbumCrossRef::class,
+            dTrackArtistCrossRef::class
+                   ],
+        version = 1
+    )
+//    @TypeConverters(StringListConverter::class) // если у тебя есть поля List<String>
+    abstract class AppDatabase : RoomDatabase() {
+        abstract fun dPlaylistDao(): dPlaylistDao
+        abstract fun dTrackDao(): dTrackDao
     }
+
+    val trackLocalSource by lazy {
+        TrackLocalSource(db.dTrackDao())
+    }
+
+    val trackRepository: TrackRepository by lazy {
+        TrackRepository(TrackRemoteSource(yamClient),
+            trackLocalSource)
+    }
+
+    val db by lazy {
+        Room.databaseBuilder(
+            applicationContext,
+            AppDatabase::class.java,
+            "my_database"
+        ).build()
+    }
+
+    val playlistLocalSource by lazy {
+        PlaylistLocalSource(db.dPlaylistDao())
+    }
+
+
 
     @OptIn(DelicateCoroutinesApi::class)
     val playlistRepository: PlaylistRepository by lazy {
-        val lruCache = object : LruCache<Int, YaPlaylist>(50) {
-            override fun sizeOf(key: Int, value: YaPlaylist) = 1
+        val lruCache = object : LruCache<Int, dYaPlaylist>(50) {
+            override fun sizeOf(key: Int, value: dYaPlaylist) = 1
         }
         PlaylistRepository(
             cache = PlaylistCacheSource(lruCache),
             remote = PlaylistRemoteSource(yamClient),
             scope = GlobalScope,
-            trackRepo = trackRepository
+            trackRepo = trackRepository,
+            local = playlistLocalSource
+
         )
     }
 
@@ -67,6 +127,7 @@ class yApplication: Application() {
             dir.mkdirs() // создаёт папку, если её нет
         }
         CoverRepository(
+            applicationContext,
             yamClient,
             dir)
     }

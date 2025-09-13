@@ -12,6 +12,7 @@ import androidx.appcompat.app.AlertDialog
 import androidx.recyclerview.widget.RecyclerView
 import com.google.android.material.snackbar.Snackbar
 import com.yellastrodev.dwij.R
+import com.yellastrodev.dwij.entities.dYaPlaylist
 import com.yellastrodev.dwij.utils.DurationFormat.Companion.formatDuration
 import com.yellastrodev.dwij.utils.PlaylistsDiff
 import com.yellastrodev.yandexmusiclib.entities.YaPlaylist
@@ -25,21 +26,21 @@ import kotlin.random.Random
 
 class GridPlaylistAdapter(
 	var mTrack: Any? = null,
-	private val loadCover: suspend (YaPlaylist) -> Bitmap
+	private val loadCover: suspend (dYaPlaylist) -> Bitmap
 ) :
 RecyclerView.Adapter<GridPlaylistAdapter.ViewHolder>() {
 
 	var mGridSize = 3
-	var onClick: (YaPlaylist)-> Unit = {}
+	var onClick: (dYaPlaylist)-> Unit = {}
 
 	var onCreatePlClick: () -> Unit = {}
 
-	var onLongItemClick: (YaPlaylist) -> Unit = {}
+	var onLongItemClick: (dYaPlaylist) -> Unit = {}
 
 	var mScope: CoroutineScope? = null
 
-	private var mList: ArrayList<YaPlaylist> = ArrayList()
-	fun setList(newList: ArrayList<YaPlaylist>){
+	private var mList: ArrayList<dYaPlaylist> = ArrayList()
+	fun setList(newList: ArrayList<dYaPlaylist>){
 
 		// Считаем дифф
 		val diff = PlaylistsDiff.diffPlaylists(
@@ -99,7 +100,7 @@ RecyclerView.Adapter<GridPlaylistAdapter.ViewHolder>() {
 //	}
 
 	class ViewHolder(view: View,
-					 private val loadCover: suspend (YaPlaylist) -> Bitmap) : RecyclerView.ViewHolder(view) {
+					 private val loadCover: suspend (dYaPlaylist) -> Bitmap) : RecyclerView.ViewHolder(view) {
 		val vTitle: TextView
 		val vAutor: TextView
 		val vImg: ImageView
@@ -112,7 +113,7 @@ RecyclerView.Adapter<GridPlaylistAdapter.ViewHolder>() {
 			vImg = view.findViewById(R.id.it_pl_grid_img)
 		}
 
-		fun bind(playlist: YaPlaylist) {
+		fun bind(playlist: dYaPlaylist) {
 			// Отменяем предыдущую загрузку для этого ViewHolder
 			coverJob?.cancel()
 
@@ -224,7 +225,7 @@ RecyclerView.Adapter<GridPlaylistAdapter.ViewHolder>() {
 //					.setPositiveButton("Yes,remove") { fD, o ->
 //						fD.dismiss()
 //						CoroutineScope(Dispatchers.IO).launch {
-//							val fRes = (mList[position] as YaPlaylist).removeTrack(
+//							val fRes = (mList[position] as dYaPlaylist).removeTrack(
 //								yMediaStore.store(viewHolder.itemView.context),
 //								mTrack!!
 //							)
@@ -260,7 +261,7 @@ RecyclerView.Adapter<GridPlaylistAdapter.ViewHolder>() {
 	}
 
 	override fun getItemCount() = mList.size
-	fun removeItem(fPlist: YaPlaylist) {
+	fun removeItem(fPlist: dYaPlaylist) {
 		val fPos = mList.indexOf(fPlist)
 		mList.remove(fPlist)
 		notifyItemRemoved(fPos)

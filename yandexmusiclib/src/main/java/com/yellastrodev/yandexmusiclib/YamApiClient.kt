@@ -17,7 +17,8 @@ import java.time.format.DateTimeFormatter
 class YamApiClient(
 	val mToken: String,
 	val mUserID: String,
-	val mLogin: String = "") {
+	val mLogin: String = "",
+	val noAuthorize: Boolean = false) {
 
 //	val mapper = jacksonObjectMapper()
 
@@ -277,35 +278,10 @@ class YamApiClient(
 		return f_json
 	}
 
-	suspend fun getCover(adressPart: String, size: Int): InputStream? {
+	suspend fun getCover(adressPart: String, size: Int): yNetwork.Companion.NetStreamResult {
 		return yNetwork.getCoverStream(mToken, adressPart, size)
 	}
 
-	suspend fun getCover(coverData: JSONObject, size: Int): InputStream? {
-//		try {
-		if(coverData.has("error"))
-			return null
-		if (coverData.getString("type") == "mosaic") {
-			val f_adr_part = coverData
-				.getJSONArray("itemsUri")
-				.getString(0)
-			return getCover(f_adr_part, size)
-		}
-
-		return null
-	}
-
-	suspend fun getCoverPazle(coverData: JSONObject, size: Int): Array<InputStream?>? {
-		if(coverData.has("error"))
-			return null
-		val fList = Array(coverData.getJSONArray("itemsUri").length()) {
-			val qUrl = coverData
-				.getJSONArray("itemsUri")
-				.getString(it)
-			return@Array getCover(qUrl, size)
-		}
-		return fList
-	}
 
 	fun likePlaylist(fPlayList: YaPlaylist){
 //		TODO

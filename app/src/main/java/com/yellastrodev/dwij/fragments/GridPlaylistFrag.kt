@@ -19,6 +19,7 @@ import kotlinx.coroutines.withContext
 import com.yellastrodev.dwij.R
 import com.yellastrodev.dwij.TYPE
 import com.yellastrodev.dwij.VALUE
+import com.yellastrodev.dwij.entities.dYaPlaylist
 import com.yellastrodev.dwij.models.GridPlaylistModel
 import com.yellastrodev.dwij.yApplication
 import com.yellastrodev.yandexmusiclib.entities.YaPlaylist
@@ -39,8 +40,8 @@ class GridPlaylistFrag() : Fragment(R.layout.frag_grid_playlist) {
 
 	var mGridSize = 0
 
-	var mOnItemClick: (YaPlaylist) -> Unit = {
-			playlist: YaPlaylist ->
+	var mOnItemClick: (dYaPlaylist) -> Unit = {
+			playlist: dYaPlaylist ->
 		val bundle = Bundle().apply {
 			putString(TYPE, ObjectFrag.PLAYLIST)
 			putString(VALUE, playlist.playlistUuid)

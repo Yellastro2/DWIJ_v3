@@ -13,6 +13,9 @@ import com.yellastrodev.dwij.data.repo.CoverRepository
 import com.yellastrodev.dwij.data.repo.PlayerRepository
 import com.yellastrodev.dwij.data.repo.PlaylistRepository
 import com.yellastrodev.dwij.data.repo.TrackRepository
+import com.yellastrodev.dwij.entities.dPlaylistTrack
+import com.yellastrodev.dwij.entities.dYaPlaylist
+import com.yellastrodev.dwij.entities.dYaTrack
 import com.yellastrodev.yandexmusiclib.entities.CoverSize
 import com.yellastrodev.yandexmusiclib.entities.TrackShort
 import com.yellastrodev.yandexmusiclib.entities.YaPlaylist
@@ -23,6 +26,7 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.flatMapLatest
 import kotlinx.coroutines.flow.onEach
 import kotlinx.coroutines.flow.launchIn
+import kotlinx.coroutines.launch
 
 
 class TracklistModel(
@@ -60,8 +64,8 @@ class TracklistModel(
 
 
     /** Текущее состояние плейлиста (null, пока не загружен). */
-    private val _playlist = MutableStateFlow<YaPlaylist?>(null)
-    val playlist: StateFlow<YaPlaylist?> = _playlist
+    private val _playlist = MutableStateFlow<dYaPlaylist?>(null)
+    val playlist: StateFlow<dYaPlaylist?> = _playlist
 
     /** Адаптер списка треков с ленивой инициализацией. */
     val adapter: TrackListAdapter by lazy {
@@ -115,18 +119,22 @@ class TracklistModel(
         repo.refreshPlaylist(current.playlistUuid)
     }
 
-    suspend fun onTrackClicked(tracks: List<TrackShort>, index: Int) {
+    suspend fun onTrackClicked(tracks: List<dPlaylistTrack>, index: Int) {
         // уведомляем UI, что надо открыть плеер
         _openPlayerScreen.value = true
 
-        val curentTrackList: List<YaTrack?> = tracks.map { trackSh ->
-                trackRepo.tracks.value[trackSh.id]?.let { track ->
-                    return@map track
+        // что бы не тормозить смену экрана, иначе валью будет ждать этого почемуто
+        // нихуя не изменилось
+        viewModelScope.launch {
+            val curentTrackList: List<dYaTrack?> = tracks.map { trackSh ->
+                    trackRepo.tracks.value[trackSh.trackId]?.let { track ->
+                        return@map track
 
-                }
-            return@map null
+                    }
+                return@map null
+            }
+            playerRepo.playQueue(curentTrackList as List<dYaTrack>, index)
         }
-        playerRepo.playQueue(curentTrackList as List<YaTrack>, index)
     }
 
     fun resetOpenPlayerScreen() {

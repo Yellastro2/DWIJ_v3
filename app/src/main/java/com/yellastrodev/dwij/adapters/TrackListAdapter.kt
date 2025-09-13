@@ -9,6 +9,7 @@ import android.widget.ImageView
 import android.widget.TextView
 import androidx.recyclerview.widget.RecyclerView
 import com.yellastrodev.dwij.R
+import com.yellastrodev.dwij.entities.dYaTrack
 import com.yellastrodev.yandexmusiclib.entities.YaPlaylist
 import com.yellastrodev.yandexmusiclib.entities.YaTrack
 import kotlinx.coroutines.CancellationException
@@ -21,32 +22,32 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 
 class TrackListAdapter(
-    private val loadCover: suspend (YaTrack) -> Bitmap,
+    private val loadCover: suspend (dYaTrack) -> Bitmap,
     private val onItemClicked: suspend (pos: Int) -> Unit,
 ) :
     RecyclerView.Adapter<TrackListAdapter.ViewHolder>() {
     var mScope: CoroutineScope? = null
 
 
-    var mListOfObj: ArrayList<YaTrack> = ArrayList<YaTrack>()
+    var mListOfObj: ArrayList<dYaTrack> = ArrayList<dYaTrack>()
 
     var mInitJob:  Deferred<Unit>? = null
 
 
-    fun setList(allTracks: ArrayList<YaTrack>) {
+    fun setList(allTracks: ArrayList<dYaTrack>) {
         mListOfObj = allTracks
         mInitJob = null
         notifyDataSetChanged()
     }
 
-    fun addToList(fTracks: Collection<YaTrack>) {
+    fun addToList(fTracks: Collection<dYaTrack>) {
 
         mListOfObj.addAll(fTracks)
         notifyDataSetChanged()
 
     }
 
-    class ViewHolder(view: View, private val loadCover: suspend (YaTrack) -> Bitmap) : RecyclerView.ViewHolder(view) {
+    class ViewHolder(view: View, private val loadCover: suspend (dYaTrack) -> Bitmap) : RecyclerView.ViewHolder(view) {
         val vTitle: TextView
         val vArtist: TextView
         val vImg: ImageView
@@ -61,7 +62,7 @@ class TrackListAdapter(
             vImg = view.findViewById(R.id.it_track_img)
         }
 
-        fun bind(track: YaTrack) {
+        fun bind(track: dYaTrack) {
             // Отменяем предыдущую загрузку для этого ViewHolder
             coverJob?.cancel()
 

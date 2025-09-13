@@ -13,6 +13,7 @@ import androidx.media3.common.MediaItem
 import androidx.media3.common.MediaMetadata
 import androidx.media3.common.util.UnstableApi
 import com.yellastrodev.dwij.TRACK_ID
+import com.yellastrodev.dwij.entities.dYaTrack
 import com.yellastrodev.dwij.service.PlayerService
 import com.yellastrodev.dwij.service.PlayerState
 import com.yellastrodev.yandexmusiclib.entities.YaTrack
@@ -71,14 +72,14 @@ class PlayerRepository(
         context.unbindService(serviceConnection)
     }
 
-    var tracksAndUrls: Map<String,YaTrack> = mapOf()
+    var tracksAndUrls: Map<String,dYaTrack> = mapOf()
     var relativeIndex = 0
 
     /**
      * @param tracks список треков и их урл ссылок (на скачивание, либо на кеш файл)
      * @param startIndex индекс трека в списке, который будет проигран
      */
-    suspend fun playQueue(tracks: List<YaTrack>, startIndex: Int = 0) {
+    suspend fun playQueue(tracks: List<dYaTrack>, startIndex: Int = 0) {
         tracksAndUrls = tracks.associate { track -> track.id to track  }
         currentTrackList = tracks.map { track -> track.id }
         _currentTrack.value = tracks[startIndex].id

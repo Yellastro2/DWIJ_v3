@@ -9,6 +9,7 @@ import com.yellastrodev.dwij.VALUE
 import com.yellastrodev.dwij.adapters.GridPlaylistAdapter
 import com.yellastrodev.dwij.data.repo.CoverRepository
 import com.yellastrodev.dwij.data.repo.PlaylistRepository
+import com.yellastrodev.dwij.entities.dYaPlaylist
 import com.yellastrodev.dwij.fragments.ObjectFrag
 import com.yellastrodev.yandexmusiclib.entities.CoverSize
 import com.yellastrodev.yandexmusiclib.entities.YaPlaylist
@@ -58,7 +59,7 @@ class GridPlaylistModel(
 	private val _navigateTo = MutableSharedFlow<Bundle>()
 	val navigateTo: SharedFlow<Bundle> = _navigateTo
 
-	fun onPlaylistClicked(playlist: YaPlaylist) {
+	fun onPlaylistClicked(playlist: dYaPlaylist) {
 		val bundle = Bundle().apply {
 			putString(TYPE, ObjectFrag.PLAYLIST)
 			putString(VALUE, playlist.playlistUuid)

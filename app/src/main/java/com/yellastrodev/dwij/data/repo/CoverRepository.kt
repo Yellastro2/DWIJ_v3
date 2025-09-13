@@ -1,18 +1,26 @@
 package com.yellastrodev.dwij.data.repo
 
+import android.content.Context
 import android.graphics.Bitmap
 import android.graphics.BitmapFactory
+import com.yellastrodev.dwij.R
+import com.yellastrodev.dwij.entities.dYaPlaylist
+import com.yellastrodev.dwij.entities.dYaTrack
 import com.yellastrodev.yandexmusiclib.YamApiClient
+import com.yellastrodev.yandexmusiclib.kot_utils.yNetwork.Companion.NetStreamResult
 import com.yellastrodev.yandexmusiclib.entities.CoverSize
 import com.yellastrodev.yandexmusiclib.entities.YaPlaylist
 import com.yellastrodev.yandexmusiclib.entities.YaTrack
+import com.yellastrodev.yandexmusiclib.kot_utils.yNetwork
 import kotlinx.coroutines.DelicateCoroutinesApi
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.GlobalScope
 import kotlinx.coroutines.launch
 import java.io.File
+import java.io.InputStream
 
 class CoverRepository(
+    private val context: Context,
     private val fClient: YamApiClient,
     private val cacheDir: File
 ) {
@@ -21,23 +29,34 @@ class CoverRepository(
     private val memoryCache = mutableMapOf<String, Bitmap>()
 
     private suspend fun downloadCover(url: String, size: CoverSize): Bitmap{
-        val stream = fClient.getCover(url,200)
-        return stream.use {
-            BitmapFactory.decodeStream(it)
+        val result = fClient.getCover(url,200)
+        when(result){
+            is NetStreamResult.Success -> {
+                return result.stream.use {
+                    BitmapFactory.decodeStream(it)
+                }
+            }
+            else -> {
+                return BitmapFactory.decodeResource(context.resources, R.drawable.icon)
+            }
         }
+//        return stream.use {
+//            BitmapFactory.decodeStream(it)
+//        }
     }
 
     @OptIn(DelicateCoroutinesApi::class)
-    suspend fun getCover(track: YaTrack, size: CoverSize = CoverSize.`200x200`): Bitmap {
+    suspend fun getCover(track: dYaTrack, size: CoverSize = CoverSize.`200x200`): Bitmap {
 
         val key = "track_"+ track.id
-
-        return getCover(key, track.ogImageUri!!, size)
+        track.ogImageUri?. let {
+            return getCover(key, it, size)
+        }?: return BitmapFactory.decodeResource(context.resources, R.drawable.icon)
 
     }
 
     @OptIn(DelicateCoroutinesApi::class)
-    suspend fun getCover(playlist: YaPlaylist, size: CoverSize = CoverSize.`200x200`): Bitmap {
+    suspend fun getCover(playlist: dYaPlaylist, size: CoverSize = CoverSize.`200x200`): Bitmap {
 
         val key = "playlist_" + playlist.playlistUuid
 
