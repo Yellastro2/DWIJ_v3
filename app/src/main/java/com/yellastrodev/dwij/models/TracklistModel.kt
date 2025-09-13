@@ -64,12 +64,13 @@ class TracklistModel(
 
     /** Адаптер списка треков с ленивой инициализацией. */
     val adapter: TrackListAdapter by lazy {
-        Log.d(TAG, "Инициализация адаптера треков")
+        Log.d(TAG, "Инициализация адаптера треков | Model id=${this.hashCode()}")
         TrackListAdapter({ track ->
             Log.d(TAG, "Загрузка обложки для трека: ${track.id}")
             coverRepo.getCover(track, CoverSize.`100x100`)
         }).apply {
             mScope = viewModelScope
+            Log.d(TAG, "Адаптер инициализирован | Adapter id=${this.hashCode()}")
         }
     }
 

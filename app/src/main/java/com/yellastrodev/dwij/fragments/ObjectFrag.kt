@@ -58,13 +58,27 @@ class ObjectFrag : Fragment(R.layout.frag_object) {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        Log.d("DWIJ_TIMING", "ObjectFrag created")
+
+        if(arguments != null) {
+            mType = requireArguments().getString(TYPE)!!
+            mValue = requireArguments().getString(VALUE)!!
+
+            if (mType == PLAYLIST) {
+
+                lifecycleScope.launch(Dispatchers.IO) {
+                    model.setType(mType, mValue)
+
+                }
+            }
+        }
 
 //        Log.d("DWIJ_TIMING", "ObjectFrag created")
     }
 
     override fun onViewCreated(view: View, savedInstanceState: Bundle?) {
         super.onViewCreated(view, savedInstanceState)
-//        Log.d("DWIJ_TIMING", "ObjectFrag start onViewCreated")
+        Log.d("DWIJ_TIMING", "ObjectFrag start onViewCreated")
 
         val appBarLayout = view.findViewById<AppBarLayout>(R.id.appBarLayout)
         val pinnedLayout = view.findViewById<View>(R.id.pinnedLayout)
@@ -99,15 +113,15 @@ class ObjectFrag : Fragment(R.layout.frag_object) {
 
 
         if(arguments != null) {
-            mType = requireArguments().getString(TYPE)!!
-            mValue = requireArguments().getString(VALUE)!!
+//            mType = requireArguments().getString(TYPE)!!
+//            mValue = requireArguments().getString(VALUE)!!
 
             if (mType == PLAYLIST){
 
-                lifecycleScope.launch(Dispatchers.IO) {
-                    model.setType(mType, mValue)
-
-                }
+//                lifecycleScope.launch(Dispatchers.IO) {
+//                    model.setType(mType, mValue)
+//
+//                }
 
                 viewLifecycleOwner.lifecycleScope.launch {
                     viewLifecycleOwner.repeatOnLifecycle(Lifecycle.State.STARTED) {

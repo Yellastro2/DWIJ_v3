@@ -2,6 +2,7 @@ package com.yellastrodev.dwij.adapters
 
 import android.annotation.SuppressLint
 import android.graphics.Bitmap
+import android.util.Log
 import android.view.LayoutInflater
 import android.view.View
 import android.view.ViewGroup
@@ -36,7 +37,9 @@ class TrackListAdapter(
     var onItemClicked: (pos: Int) -> Unit = { pos ->}
 
 
+    @SuppressLint("NotifyDataSetChanged")
     fun setList(allTracks: ArrayList<dYaTrack>) {
+        Log.d("TrackListAdapter", "setList: ${allTracks.size}")
         mListOfObj = allTracks
         mInitJob = null
         notifyDataSetChanged()

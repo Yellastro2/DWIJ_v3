@@ -90,7 +90,11 @@ open class PlayerAbs() : Fragment() {
 			viewLifecycleOwner.repeatOnLifecycle(Lifecycle.State.STARTED) {
 				playerModel.track.collect { track ->
 					if (track != null) {
-						lifecycleScope.launch(Dispatchers.IO) {
+						withContext(Dispatchers.Main) {
+							mvTitle.text = track.title
+							mvArtist.text = track.artists.joinToString(", ") { it.name }
+						}
+						viewLifecycleOwner.lifecycleScope.launch(Dispatchers.IO) {
 							val bitmap = playerModel.coverRepo.getCover(track, CoverSize.`200x200`)
 
 							// Ставим в ImageView на главном потоке
@@ -98,16 +102,13 @@ open class PlayerAbs() : Fragment() {
 								mvCover.setImageBitmap(bitmap)
 							}
 						}
-						withContext(Dispatchers.Main) {
-							mvTitle.text = track.title
-							mvArtist.text = track.artists.joinToString(", ") { it.name }
-						}
+
 					}
 				}
 			}
 		}
 
-		lifecycleScope.launch(Dispatchers.IO) {
+		viewLifecycleOwner.lifecycleScope.launch(Dispatchers.IO) {
 			viewLifecycleOwner.repeatOnLifecycle(Lifecycle.State.STARTED) {
 				playerModel.playerState.collect {
 					if (it.isPlaying) setPlay() else setPause()
