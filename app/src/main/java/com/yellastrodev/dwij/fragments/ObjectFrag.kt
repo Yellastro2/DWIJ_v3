@@ -19,8 +19,6 @@ import com.google.android.material.appbar.AppBarLayout
 import com.yellastrodev.dwij.R
 import com.yellastrodev.dwij.TYPE
 import com.yellastrodev.dwij.VALUE
-import com.yellastrodev.dwij.entities.dPlaylistTrack
-import com.yellastrodev.dwij.entities.dYaTrack
 import com.yellastrodev.dwij.models.TracklistModel
 import com.yellastrodev.dwij.yApplication
 import com.yellastrodev.yandexmusiclib.entities.CoverSize

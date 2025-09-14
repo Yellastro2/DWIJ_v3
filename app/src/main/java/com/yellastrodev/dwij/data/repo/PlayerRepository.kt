@@ -13,7 +13,7 @@ import androidx.media3.common.MediaItem
 import androidx.media3.common.MediaMetadata
 import androidx.media3.common.util.UnstableApi
 import com.yellastrodev.dwij.TRACK_ID
-import com.yellastrodev.dwij.entities.dYaTrack
+import com.yellastrodev.dwij.data.entities.dYaTrack
 import com.yellastrodev.dwij.service.PlayerService
 import com.yellastrodev.dwij.service.PlayerState
 import kotlinx.coroutines.GlobalScope

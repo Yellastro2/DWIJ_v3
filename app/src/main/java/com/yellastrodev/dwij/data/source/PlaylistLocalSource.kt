@@ -1,7 +1,7 @@
 package com.yellastrodev.dwij.data.source
 
-import com.yellastrodev.dwij.entities.dYaPlaylist
-import com.yellastrodev.yandexmusiclib.entities.YaPlaylist
+import com.yellastrodev.dwij.data.dao.dPlaylistDao
+import com.yellastrodev.dwij.data.entities.dYaPlaylist
 
 class PlaylistLocalSource(private val dao: dPlaylistDao) {
     suspend fun get(id: String): dYaPlaylist? = dao.getdPlaylistById(id)

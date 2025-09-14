@@ -1,4 +1,4 @@
-package com.yellastrodev.dwij.entities
+package com.yellastrodev.dwij.data.entities
 
 import androidx.room.Entity
 import androidx.room.ForeignKey
@@ -7,17 +7,12 @@ import androidx.room.Index
 import androidx.room.PrimaryKey
 import com.yellastrodev.yandexmusiclib.YamApiClient
 import com.yellastrodev.yandexmusiclib.YamApiClient.Companion.BASE_URL
-import com.yellastrodev.yandexmusiclib.entities.YaAlbum
-import com.yellastrodev.yandexmusiclib.entities.YaArtist
 import com.yellastrodev.yandexmusiclib.entities.YaTrack
 import com.yellastrodev.yandexmusiclib.kot_utils.yNetwork
 import com.yellastrodev.yandexmusiclib.kot_utils.yNetwork.Companion.NetResult
 import com.yellastrodev.yandexmusiclib.kot_utils.yTrack.Companion.Mp3LinkResult
 import com.yellastrodev.yandexmusiclib.kot_utils.yTrack.Companion.getMd5
 import com.yellastrodev.yandexmusiclib.kot_utils.yTrack.Companion.get_XML_Field
-import com.yellastrodev.yandexmusiclib.yUtils.IntOrStringAsStringSerializer
-import kotlinx.serialization.Serializable
-import kotlinx.serialization.SerialName
 
 @Entity(tableName = "tracks")
 class dYaTrack(

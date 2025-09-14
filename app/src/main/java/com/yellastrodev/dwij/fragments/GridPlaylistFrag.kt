@@ -3,7 +3,6 @@ package com.yellastrodev.dwij.fragments
 import android.annotation.SuppressLint
 import android.os.Bundle
 import android.util.DisplayMetrics
-import android.util.Log
 import android.view.View
 import androidx.appcompat.app.AlertDialog
 import androidx.fragment.app.Fragment
@@ -20,10 +19,9 @@ import kotlinx.coroutines.withContext
 import com.yellastrodev.dwij.R
 import com.yellastrodev.dwij.TYPE
 import com.yellastrodev.dwij.VALUE
-import com.yellastrodev.dwij.entities.dYaPlaylist
+import com.yellastrodev.dwij.data.entities.dYaPlaylist
 import com.yellastrodev.dwij.models.GridPlaylistModel
 import com.yellastrodev.dwij.yApplication
-import com.yellastrodev.yandexmusiclib.entities.YaPlaylist
 
 class GridPlaylistFrag() : Fragment(R.layout.frag_grid_playlist) {
 

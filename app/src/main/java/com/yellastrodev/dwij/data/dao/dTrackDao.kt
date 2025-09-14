@@ -1,16 +1,15 @@
-package com.yellastrodev.dwij.data.source
+package com.yellastrodev.dwij.data.dao
 
 import androidx.room.Dao
 import androidx.room.Insert
 import androidx.room.OnConflictStrategy
 import androidx.room.Query
 import androidx.room.Transaction
-import com.yellastrodev.dwij.entities.dTrackAlbumCrossRef
-import com.yellastrodev.dwij.entities.dTrackArtistCrossRef
-import com.yellastrodev.dwij.entities.dYaAlbum
-import com.yellastrodev.dwij.entities.dYaArtist
-import com.yellastrodev.dwij.entities.dYaPlaylist
-import com.yellastrodev.dwij.entities.dYaTrack
+import com.yellastrodev.dwij.data.entities.dTrackAlbumCrossRef
+import com.yellastrodev.dwij.data.entities.dTrackArtistCrossRef
+import com.yellastrodev.dwij.data.entities.dYaAlbum
+import com.yellastrodev.dwij.data.entities.dYaArtist
+import com.yellastrodev.dwij.data.entities.dYaTrack
 
 @Dao
 interface dTrackDao {

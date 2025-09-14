@@ -5,9 +5,9 @@ import com.yellastrodev.dwij.data.source.PlaylistLocalSource
 //import com.yellastrodev.dwij.data.source.PlaylistLocalSource
 import com.yellastrodev.dwij.data.source.PlaylistRemoteSource
 import com.yellastrodev.dwij.data.source.dPlaylistResult
-import com.yellastrodev.dwij.entities.dYaPlaylist
+import com.yellastrodev.dwij.data.entities.dYaPlaylist
 import com.yellastrodev.dwij.utils.PlaylistsDiff.Companion.diffPlaylists
-import com.yellastrodev.yandexmusiclib.YamApiClient.PlaylistResult
+import com.yellastrodev.yandexmusiclib.CONSTANTS.Companion.LIKED_ID
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -55,7 +55,9 @@ class PlaylistRepository(
     }
 
     suspend fun refreshPlaylists(){
-        val remoteData = remote.fetchAll()
+        val remoteData = ArrayList(remote.fetchAll())
+        val likeList = remote.fetchLikelist()
+        remoteData.add(likeList)
         val dif = diffPlaylists(_playlistMap.value, remoteData)
         if (dif.isNotEmpty()) {
 
@@ -63,10 +65,14 @@ class PlaylistRepository(
 
             dif.forEachNew {
                 var playlist = _playlistMap.value[it]!!
-                val plResult = remote.fetch(playlist.kind)
-                if (plResult is dPlaylistResult.Success) {
-                    playlist = plResult.YaPlaylist
-                    trackRepo.putTracks(plResult.trackList)
+                if (playlist.kind != LIKED_ID) {
+                    val plResult = remote.fetch(playlist.kind.toInt())
+                    if (plResult is dPlaylistResult.Success) {
+                        playlist = plResult.YaPlaylist
+                        trackRepo.putTracks(plResult.trackList)
+                    }
+                }else {
+
                 }
                 cache.put(playlist)
                 local.save(playlist)
@@ -88,7 +94,10 @@ class PlaylistRepository(
 
     suspend fun refreshPlaylist(plUuid: String) {
         val playlist = _playlistMap.value[plUuid]!!
-        val plResult = remote.fetch(playlist.kind)
+        val plResult = if (playlist.kind != LIKED_ID) {
+            remote.fetch(playlist.kind.toInt())
+        } else
+            remote.fetch(playlist.kind.toInt())
         if (plResult is dPlaylistResult.Success) {
             if (playlist.revision != plResult.YaPlaylist.revision){
                 cache.put(plResult.YaPlaylist)

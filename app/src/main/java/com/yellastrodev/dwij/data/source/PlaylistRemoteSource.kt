@@ -1,13 +1,12 @@
 package com.yellastrodev.dwij.data.source
 
-import com.yellastrodev.dwij.entities.dYaPlaylist
-import com.yellastrodev.dwij.entities.dYaTrack
-import com.yellastrodev.dwij.entities.toEntity
+import com.yellastrodev.dwij.data.entities.dYaLikeTracklist
+import com.yellastrodev.dwij.data.entities.dYaPlaylist
+import com.yellastrodev.dwij.data.entities.dYaTrack
+import com.yellastrodev.dwij.data.entities.toEntity
 import com.yellastrodev.yandexmusiclib.YamApiClient
 import com.yellastrodev.yandexmusiclib.YamApiClient.PlaylistResult
-import com.yellastrodev.yandexmusiclib.entities.YaPlaylist
-import com.yellastrodev.yandexmusiclib.entities.YaTrack
-import org.json.JSONObject
+import com.yellastrodev.yandexmusiclib.entities.YaLikeTracklist
 
 class PlaylistRemoteSource(private val client: YamApiClient) {
     suspend fun fetch(kind: Int): dPlaylistResult {
@@ -22,6 +21,9 @@ class PlaylistRemoteSource(private val client: YamApiClient) {
         }
     }
     suspend fun fetchAll(): List<dYaPlaylist> = client.getUserListPllists().map { it.toEntity() }
+    suspend fun fetchLikelist(): dYaLikeTracklist {
+        return client.getLikedTracklist().toEntity()
+    }
 }
 
 sealed class dPlaylistResult {

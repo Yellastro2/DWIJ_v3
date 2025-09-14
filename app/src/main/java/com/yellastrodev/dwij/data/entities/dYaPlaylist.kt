@@ -1,18 +1,17 @@
-package com.yellastrodev.dwij.entities
+package com.yellastrodev.dwij.data.entities
 
 import androidx.room.Entity
 import androidx.room.ForeignKey
 import androidx.room.Ignore
 import androidx.room.Index
 import androidx.room.PrimaryKey
-import com.yellastrodev.yandexmusiclib.entities.TrackShort
 import com.yellastrodev.yandexmusiclib.entities.YaPlaylist
 
 @Entity(tableName = "playlists")
-data class dYaPlaylist(
+open class dYaPlaylist(
      @PrimaryKey val playlistUuid: String,
      val uid: Int,
-     val kind: Int,
+     val kind: String,
      val title: String,
      val description: String?,
      val trackCount: Int,

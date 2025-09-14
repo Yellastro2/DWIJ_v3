@@ -1,9 +1,7 @@
 package com.yellastrodev.dwij.data.source
 
 import android.util.LruCache
-import com.yellastrodev.dwij.entities.dYaPlaylist
-import com.yellastrodev.yandexmusiclib.entities.YaPlaylist
-import kotlin.uuid.Uuid
+import com.yellastrodev.dwij.data.entities.dYaPlaylist
 
 class PlaylistCacheSource(private val cache: LruCache<Int, dYaPlaylist>) {
     fun get(id: Int): dYaPlaylist? = cache[id]

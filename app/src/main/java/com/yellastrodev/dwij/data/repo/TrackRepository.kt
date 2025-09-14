@@ -2,10 +2,8 @@ package com.yellastrodev.dwij.data.repo
 
 import com.yellastrodev.dwij.data.source.TrackLocalSource
 import com.yellastrodev.dwij.data.source.TrackRemoteSource
-import com.yellastrodev.dwij.entities.dPlaylistTrack
-import com.yellastrodev.dwij.entities.dYaTrack
-import com.yellastrodev.yandexmusiclib.entities.TrackShort
-import com.yellastrodev.yandexmusiclib.entities.YaTrack
+import com.yellastrodev.dwij.data.entities.dPlaylistTrack
+import com.yellastrodev.dwij.data.entities.dYaTrack
 import com.yellastrodev.yandexmusiclib.kot_utils.yTrack
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.GlobalScope

@@ -4,20 +4,16 @@ import android.content.Context
 import android.graphics.Bitmap
 import android.graphics.BitmapFactory
 import com.yellastrodev.dwij.R
-import com.yellastrodev.dwij.entities.dYaPlaylist
-import com.yellastrodev.dwij.entities.dYaTrack
+import com.yellastrodev.dwij.data.entities.dYaPlaylist
+import com.yellastrodev.dwij.data.entities.dYaTrack
 import com.yellastrodev.yandexmusiclib.YamApiClient
 import com.yellastrodev.yandexmusiclib.kot_utils.yNetwork.Companion.NetStreamResult
 import com.yellastrodev.yandexmusiclib.entities.CoverSize
-import com.yellastrodev.yandexmusiclib.entities.YaPlaylist
-import com.yellastrodev.yandexmusiclib.entities.YaTrack
-import com.yellastrodev.yandexmusiclib.kot_utils.yNetwork
 import kotlinx.coroutines.DelicateCoroutinesApi
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.GlobalScope
 import kotlinx.coroutines.launch
 import java.io.File
-import java.io.InputStream
 
 class CoverRepository(
     private val context: Context,

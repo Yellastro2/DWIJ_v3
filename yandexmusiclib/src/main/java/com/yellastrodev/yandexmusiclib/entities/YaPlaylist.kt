@@ -7,7 +7,25 @@ import kotlinx.serialization.Serializable
 
 @Serializable()
 open class YaPlaylist(
-	val playlistUuid: String,
+    open val playlistUuid: String,
+    val backgroundImageUrl: String? = null,
+    val uid: Int,
+	@Serializable(with = IntOrStringAsStringSerializer::class)
+    val kind: String,
+    val title: String,
+    val description: String? = null,
+    val trackCount: Int,
+    val revision: Int,
+    val snapshot: Int,
+    val visibility: String,
+    val collective: Boolean,
+    val isBanner: Boolean,
+    val isPremiere: Boolean,
+    val durationMs: Int? = null,
+    @SerialName("ogImage")
+	val ogImageUri: String? = null,
+    val tracks: List<TrackShort> = listOf(),
+	val tags: List<String> = listOf(),
 //	val owner: User? = null,
 	val cover: YaCover? = null,
 	val coverWithoutText: YaCover? = null,
@@ -16,24 +34,7 @@ open class YaPlaylist(
 //	val idForFrom: GeneratedPlaylistType? = null,
 	val urlPart: String? = null,
 	val descriptionFormatted: String? = null,
-	val backgroundVideoUrl: String? = null,
-	val backgroundImageUrl: String? = null,
-	val uid: Int,
-	val kind: Int,
-	val title: String,
-	val description: String? = null,
-	val trackCount: Int,
-	val tags: List<String> = listOf(),
-	val revision: Int,
-	val snapshot: Int,
-	val visibility: String,
-	val collective: Boolean,
-	val isBanner: Boolean,
-	val isPremiere: Boolean,
-	val durationMs: Int? = null,
-	@SerialName("ogImage")
-	val ogImageUri: String? = null,
-	val tracks: List<TrackShort> = listOf()
+	val backgroundVideoUrl: String? = null
 ) {
 //	private var fullTracks: List<TrackData>? = null
 //

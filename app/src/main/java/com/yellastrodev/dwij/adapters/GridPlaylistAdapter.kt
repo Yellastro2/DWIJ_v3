@@ -8,14 +8,11 @@ import android.view.View
 import android.view.ViewGroup
 import android.widget.ImageView
 import android.widget.TextView
-import androidx.appcompat.app.AlertDialog
 import androidx.recyclerview.widget.RecyclerView
-import com.google.android.material.snackbar.Snackbar
 import com.yellastrodev.dwij.R
-import com.yellastrodev.dwij.entities.dYaPlaylist
+import com.yellastrodev.dwij.data.entities.dYaPlaylist
 import com.yellastrodev.dwij.utils.DurationFormat.Companion.formatDuration
 import com.yellastrodev.dwij.utils.PlaylistsDiff
-import com.yellastrodev.yandexmusiclib.entities.YaPlaylist
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers

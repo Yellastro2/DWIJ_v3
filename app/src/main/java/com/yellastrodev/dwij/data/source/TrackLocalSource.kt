@@ -1,7 +1,7 @@
 package com.yellastrodev.dwij.data.source
 
-import com.yellastrodev.dwij.entities.dYaPlaylist
-import com.yellastrodev.dwij.entities.dYaTrack
+import com.yellastrodev.dwij.data.dao.dTrackDao
+import com.yellastrodev.dwij.data.entities.dYaTrack
 
 class TrackLocalSource(private val dao: dTrackDao) {
     suspend fun get(id: String): dYaTrack? = dao.getTrack(id)

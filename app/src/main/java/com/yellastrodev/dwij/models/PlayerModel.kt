@@ -7,8 +7,7 @@ import androidx.lifecycle.viewModelScope
 import com.yellastrodev.dwij.data.repo.CoverRepository
 import com.yellastrodev.dwij.data.repo.PlayerRepository
 import com.yellastrodev.dwij.data.repo.TrackRepository
-import com.yellastrodev.dwij.entities.dYaTrack
-import com.yellastrodev.yandexmusiclib.entities.YaTrack
+import com.yellastrodev.dwij.data.entities.dYaTrack
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.launch

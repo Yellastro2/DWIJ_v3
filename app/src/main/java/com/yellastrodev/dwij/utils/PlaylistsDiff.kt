@@ -1,7 +1,6 @@
 package com.yellastrodev.dwij.utils
 
-import com.yellastrodev.dwij.entities.dYaPlaylist
-import com.yellastrodev.yandexmusiclib.entities.YaPlaylist
+import com.yellastrodev.dwij.data.entities.dYaPlaylist
 
 class PlaylistsDiff {
     companion object {

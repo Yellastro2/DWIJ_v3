@@ -1,12 +1,12 @@
-package com.yellastrodev.dwij.data.source
+package com.yellastrodev.dwij.data.dao
 
 import androidx.room.Dao
 import androidx.room.Insert
 import androidx.room.OnConflictStrategy
 import androidx.room.Query
 import androidx.room.Transaction
-import com.yellastrodev.dwij.entities.dPlaylistTrack
-import com.yellastrodev.dwij.entities.dYaPlaylist
+import com.yellastrodev.dwij.data.entities.dPlaylistTrack
+import com.yellastrodev.dwij.data.entities.dYaPlaylist
 
 @Dao
 interface dPlaylistDao {

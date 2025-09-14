@@ -10,14 +10,11 @@ import android.widget.ImageView
 import android.widget.TextView
 import androidx.recyclerview.widget.RecyclerView
 import com.yellastrodev.dwij.R
-import com.yellastrodev.dwij.entities.dYaTrack
-import com.yellastrodev.yandexmusiclib.entities.YaPlaylist
-import com.yellastrodev.yandexmusiclib.entities.YaTrack
+import com.yellastrodev.dwij.data.entities.dYaTrack
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Deferred
 import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.GlobalScope
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext

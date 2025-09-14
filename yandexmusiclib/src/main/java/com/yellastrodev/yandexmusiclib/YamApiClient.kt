@@ -1,6 +1,7 @@
 package com.yellastrodev.yandexmusiclib
 
 import android.util.Log
+import com.yellastrodev.yandexmusiclib.entities.YaLikeTracklist
 import com.yellastrodev.yandexmusiclib.entities.YaPlaylist
 import com.yellastrodev.yandexmusiclib.entities.YaTrack
 import com.yellastrodev.yandexmusiclib.entities.YaTrackList
@@ -300,6 +301,13 @@ class YamApiClient(
 
 		val result = yNetwork.get(mToken, fPath, fParam)
 		return
+	}
+
+	suspend fun getLikedTracklist(fUserP: String = ""): YaLikeTracklist {
+		val response = getLiked("track", fUserP)
+		val library = response.getJSONObject("result").getJSONObject("library")
+		val likeList: YaLikeTracklist = Json {ignoreUnknownKeys = true }.decodeFromString(library.toString())
+		return likeList
 	}
 
 	/**

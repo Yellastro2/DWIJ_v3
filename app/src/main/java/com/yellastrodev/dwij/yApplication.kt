@@ -8,7 +8,6 @@ import android.util.LruCache
 import androidx.room.Database
 import androidx.room.Room
 import androidx.room.RoomDatabase
-import androidx.room.TypeConverters
 import com.yellastrodev.dwij.activities.MainActivity
 import com.yellastrodev.dwij.data.repo.CoverRepository
 import com.yellastrodev.dwij.data.repo.PlayerRepository
@@ -20,17 +19,16 @@ import com.yellastrodev.dwij.data.source.PlaylistLocalSource
 import com.yellastrodev.dwij.data.source.PlaylistRemoteSource
 import com.yellastrodev.dwij.data.source.TrackLocalSource
 import com.yellastrodev.dwij.data.source.TrackRemoteSource
-import com.yellastrodev.dwij.data.source.dPlaylistDao
-import com.yellastrodev.dwij.data.source.dTrackDao
-import com.yellastrodev.dwij.entities.dPlaylistTrack
-import com.yellastrodev.dwij.entities.dTrackAlbumCrossRef
-import com.yellastrodev.dwij.entities.dTrackArtistCrossRef
-import com.yellastrodev.dwij.entities.dYaAlbum
-import com.yellastrodev.dwij.entities.dYaArtist
-import com.yellastrodev.dwij.entities.dYaPlaylist
-import com.yellastrodev.dwij.entities.dYaTrack
+import com.yellastrodev.dwij.data.dao.dPlaylistDao
+import com.yellastrodev.dwij.data.dao.dTrackDao
+import com.yellastrodev.dwij.data.entities.dPlaylistTrack
+import com.yellastrodev.dwij.data.entities.dTrackAlbumCrossRef
+import com.yellastrodev.dwij.data.entities.dTrackArtistCrossRef
+import com.yellastrodev.dwij.data.entities.dYaAlbum
+import com.yellastrodev.dwij.data.entities.dYaArtist
+import com.yellastrodev.dwij.data.entities.dYaPlaylist
+import com.yellastrodev.dwij.data.entities.dYaTrack
 import com.yellastrodev.yandexmusiclib.YamApiClient
-import com.yellastrodev.yandexmusiclib.entities.YaPlaylist
 import com.yellastrodev.yandexmusiclib.kot_utils.yNetwork.Companion.NetResult
 import com.yellastrodev.yandexmusiclib.yAccount
 import kotlinx.coroutines.DelicateCoroutinesApi
@@ -64,7 +62,7 @@ class yApplication: Application() {
             dTrackAlbumCrossRef::class,
             dTrackArtistCrossRef::class
                    ],
-        version = 1
+        version = 2
     )
 //    @TypeConverters(StringListConverter::class) // если у тебя есть поля List<String>
     abstract class AppDatabase : RoomDatabase() {
@@ -86,7 +84,9 @@ class yApplication: Application() {
             applicationContext,
             AppDatabase::class.java,
             "my_database"
-        ).build()
+        )
+            .fallbackToDestructiveMigration()
+            .build()
     }
 
     val playlistLocalSource by lazy {
