@@ -1,20 +1,16 @@
 package com.yellastrodev.dwij.service
 
-import android.R
 import android.app.Notification
 import android.app.NotificationChannel
 import android.app.NotificationManager
 import android.app.PendingIntent
 import android.app.Service
-import android.content.Context
 import android.content.Intent
 import android.os.Binder
-import android.os.Bundle
 import android.os.IBinder
 import android.util.Log
 import androidx.core.app.NotificationCompat
 import androidx.media3.common.MediaItem
-import androidx.media3.common.MediaMetadata
 import androidx.media3.common.PlaybackException
 import androidx.media3.common.Player
 import androidx.media3.common.util.UnstableApi
@@ -23,16 +19,13 @@ import androidx.media3.exoplayer.ExoPlayer
 import androidx.media3.exoplayer.source.DefaultMediaSourceFactory
 import androidx.media3.ui.PlayerNotificationManager
 import androidx.media3.session.MediaSession
-import androidx.media3.session.SessionCommand
-import androidx.media3.session.SessionResult
-import com.google.common.util.concurrent.Futures
-import com.google.common.util.concurrent.ListenableFuture
+import com.yellastrodev.dwij.R
+import com.yellastrodev.dwij.activities.MainActivity
 import com.yellastrodev.dwij.data.repo.CoverRepository
 import com.yellastrodev.dwij.data.repo.PlayerRepository
 import com.yellastrodev.dwij.data.repo.TrackCacheRepository
 import com.yellastrodev.dwij.data.repo.TrackRepository
 import com.yellastrodev.dwij.data.source.YaLazyDataSourceFactory
-import com.yellastrodev.dwij.data.source.YaTrackMediaSourceFactory
 import com.yellastrodev.dwij.yApplication
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.DelicateCoroutinesApi
@@ -70,12 +63,36 @@ class PlayerService : Service() {
     private val _state = MutableStateFlow(PlayerState())
     val state: StateFlow<PlayerState> = _state
 
-
+    override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
+        return super.onStartCommand(intent, flags, startId)
+        Log.d(TAG, "onStartCommand called")
+    }
 
     override fun onCreate() {
         super.onCreate()
         Log.d(TAG, "onCreate called: создаем канал и плеер")
         createChannel()
+
+        val contentIntent: PendingIntent = PendingIntent.getActivity(
+            this@PlayerService,
+            0,
+            Intent(this, MainActivity::class.java).apply {
+                flags = Intent.FLAG_ACTIVITY_SINGLE_TOP or Intent.FLAG_ACTIVITY_CLEAR_TOP
+            },
+            PendingIntent.FLAG_IMMUTABLE
+        )
+
+        // Минимальное уведомление пока плеер готовится
+        val notification = NotificationCompat.Builder(this, "player_channel")
+            .setContentTitle("Загрузка плеера…")
+            .setSmallIcon(R.drawable.logo)
+            .setContentIntent(contentIntent)
+            .build()
+
+        startForeground(NOTIFICATION_ID, notification)
+        Log.d(TAG, "Foreground запущен с временным уведомлением")
+
+
 
         val loadControl = DefaultLoadControl.Builder()
             .setBufferDurationsMs(
@@ -92,6 +109,8 @@ class PlayerService : Service() {
         player = ExoPlayer.Builder(this)
             .setMediaSourceFactory(mediaSourceFactory)
             .build()
+
+        startForegroundWithNotification()
 
 //        player = ExoPlayer.Builder(this)
 //            .setLoadControl(loadControl)
@@ -150,18 +169,17 @@ class PlayerService : Service() {
                 player.seekToNext() // просто перескакиваем
             }
 
+            override fun onShuffleModeEnabledChanged(shuffleModeEnabled: Boolean) {
+                _state.value = _state.value.copy(isShuffle = shuffleModeEnabled)
+                Log.d(TAG, "ShuffleModeChanged: $shuffleModeEnabled")
+            }
+
+
         })
 
-        // Минимальное уведомление пока плеер готовится
-        val notification = NotificationCompat.Builder(this, "player_channel")
-            .setContentTitle("Загрузка плеера…")
-            .setSmallIcon(R.drawable.ic_media_play)
-            .build()
 
-        startForeground(NOTIFICATION_ID, notification)
-        Log.d(TAG, "Foreground запущен с временным уведомлением")
 
-        startForegroundWithNotification()
+
     }
 
     private var progressJob: Job? = null
@@ -253,50 +271,16 @@ class PlayerService : Service() {
 
     @OptIn(DelicateCoroutinesApi::class)
     private fun startForegroundWithNotification() {
-        val customReceiver = object : PlayerNotificationManager.CustomActionReceiver {
-            override fun createCustomActions(context: Context, instanceId: Int) =
-                mapOf(
-                    "ACTION_NEXT" to NotificationCompat.Action(
-                        R.drawable.ic_media_next, "Next", createPendingIntent(context, "ACTION_NEXT")
-                    ),
-                    "ACTION_PREV" to NotificationCompat.Action(
-                        R.drawable.ic_media_previous, "Prev", createPendingIntent(context, "ACTION_PREV")
-                    )
-                )
-
-            private fun createPendingIntent(
-                context: Context,
-                string: String
-            ): PendingIntent? {
-                Log.d(TAG, "createPendingIntent called: string=$string")
-                return null
-            }
-
-            override fun getCustomActions(player: Player) =
-                listOf("ACTION_PREV", "ACTION_NEXT") // всегда показывать
-
-            override fun onCustomAction(player: Player, action: String, intent: Intent) {
-                when (action) {
-                    "ACTION_NEXT" -> skipNextEvenIfSingle()
-                    "ACTION_PREV" -> skipPrevEvenIfSingle()
-                }
-            }
-
-            private fun skipPrevEvenIfSingle() {
-                TODO("Not yet implemented")
-            }
-
-            private fun skipNextEvenIfSingle() {
-                TODO("Not yet implemented")
-            }
-        }
         Log.d(TAG, "startForegroundWithNotification called")
+
         notificationManager = PlayerNotificationManager.Builder(
             this,
             NOTIFICATION_ID,
             "player_channel"
         )   .setMediaDescriptionAdapter(yPushMediaAdapterobject(this))
             .setNotificationListener(object : PlayerNotificationManager.NotificationListener {
+
+
             override fun onNotificationPosted(
                 notificationId: Int,
                 notification: Notification,
@@ -332,8 +316,8 @@ class PlayerService : Service() {
     fun createChannel(){
         val channel = NotificationChannel(
             "player_channel",
-            "Media playback",
-            NotificationManager.IMPORTANCE_LOW
+            "D W I J player",
+            NotificationManager.IMPORTANCE_HIGH
         ).apply {
             description = "Media playback controls"
         }
@@ -347,6 +331,10 @@ class PlayerService : Service() {
         player.seekTo(lng)
     }
 
+    fun shuffle() {
+        player.shuffleModeEnabled = !player.shuffleModeEnabled
+    }
+
 
 }
 
@@ -354,5 +342,6 @@ data class PlayerState(
     val isPlaying: Boolean = false,
     val currentIndex: Int = 0,
     val currentPosition: Long = 0,
-    val duration: Long = 0
+    val duration: Long = 0,
+    val isShuffle: Boolean = false
 )

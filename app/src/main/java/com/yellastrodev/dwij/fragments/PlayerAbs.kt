@@ -112,13 +112,16 @@ open class PlayerAbs() : Fragment() {
 			viewLifecycleOwner.repeatOnLifecycle(Lifecycle.State.STARTED) {
 				playerModel.playerState.collect {
 					if (it.isPlaying) setPlay() else setPause()
+					if (it.isShuffle != nowShuffle)
+						setRandomBtn(it.isShuffle)
 //					val progress = if (it.currentPosition > 0) it.duration / it.currentPosition else 0L
 					mvSeekBar?.progress = it.currentPosition.toInt()
 					mvSeekBar?.max = it.duration.toInt()
+
 				}
 			}
 		}
-//		mvRandom?.setOnClickListener { v -> setRandom(v) }
+		mvRandom?.setOnClickListener { v -> setRandom(v) }
 //
 //
 //		if(mPlayer != null && mPlayer!!.mList.size>0) {
@@ -149,21 +152,22 @@ open class PlayerAbs() : Fragment() {
 	}
 
 
+	var nowShuffle = false
 
-	fun setRandomBtn(){
+	fun setRandomBtn(isShuffle: Boolean){
 //		if (mPlayer == null) return
-//		if (mPlayer!!.is_random) {
-//			mvRandom?.setImageResource(R.drawable.random_on)
-//
-//		} else{
-//			mvRandom?.setImageResource(R.drawable.random)
-//
-//		}
+		nowShuffle = isShuffle
+		if (isShuffle) {
+			mvRandom?.setImageResource(R.drawable.random_on)
+		} else{
+			mvRandom?.setImageResource(R.drawable.random)
+
+		}
 	}
 
 	fun setRandom(fV: View){
 //		val f_mode = mPlayer?.setRandomMode() ?: false
-		setRandomBtn()
+		playerModel.shuffle()
 //		val f_msg = if (f_mode) "enable" else "disable"
 //		val snack = Snackbar.make(fV,"Random mode $f_msg",Snackbar.LENGTH_SHORT)
 //		snack.show()

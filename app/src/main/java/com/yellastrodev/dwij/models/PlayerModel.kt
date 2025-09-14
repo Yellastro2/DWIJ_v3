@@ -35,6 +35,10 @@ class PlayerModel(
         playerRepo.seekTo(lng)
     }
 
+    fun shuffle() {
+        playerRepo.shuffle()
+    }
+
     companion object {
         val TAG = "PlayerModel"
     }

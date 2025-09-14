@@ -16,13 +16,11 @@ import com.yellastrodev.dwij.TRACK_ID
 import com.yellastrodev.dwij.entities.dYaTrack
 import com.yellastrodev.dwij.service.PlayerService
 import com.yellastrodev.dwij.service.PlayerState
-import com.yellastrodev.yandexmusiclib.entities.YaTrack
 import kotlinx.coroutines.GlobalScope
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.onEach
 import kotlinx.coroutines.flow.launchIn
-import kotlinx.coroutines.launch
 
 @OptIn(UnstableApi::class)
 class PlayerRepository(
@@ -64,8 +62,8 @@ class PlayerRepository(
 
     fun bind() {
         val intent = Intent(context, PlayerService::class.java)
-        context.bindService(intent, serviceConnection, Context.BIND_AUTO_CREATE)
         ContextCompat.startForegroundService(context, intent)
+        context.bindService(intent, serviceConnection, Context.BIND_AUTO_CREATE)
     }
 
     fun unbind() {
@@ -182,5 +180,9 @@ class PlayerRepository(
 
     fun seekTo(lng: Long) {
         service?.seekTo(lng)
+    }
+
+    fun shuffle() {
+        service?.shuffle()
     }
 }
