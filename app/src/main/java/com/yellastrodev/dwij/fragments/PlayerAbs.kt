@@ -17,6 +17,7 @@ import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.lifecycleScope
 import androidx.lifecycle.repeatOnLifecycle
 import com.yellastrodev.dwij.R
+import com.yellastrodev.dwij.activities.MainActivity
 import com.yellastrodev.dwij.models.PlayerModel
 import com.yellastrodev.dwij.yApplication
 import com.yellastrodev.yandexmusiclib.entities.CoverSize
@@ -38,12 +39,8 @@ open class PlayerAbs() : Fragment() {
 	lateinit var mvNext: ImageButton
 	lateinit var mvPrev: ImageButton
 
-	val playerModel: PlayerModel by viewModels {
-		PlayerModel.Factory(
-			playerRepo = (requireActivity().application as yApplication).playerRepo,
-			trackRepo = (requireActivity().application as yApplication).trackRepository,
-			coverRepo = (requireActivity().application as yApplication).coverRepository
-		)
+	val playerModel by lazy {
+		(activity as MainActivity).playerModel
 	}
 
 //	lateinit var mModel: PlayerModel

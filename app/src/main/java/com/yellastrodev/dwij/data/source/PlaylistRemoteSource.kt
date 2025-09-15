@@ -21,8 +21,9 @@ class PlaylistRemoteSource(private val client: YamApiClient) {
         }
     }
     suspend fun fetchAll(): List<dYaPlaylist> = client.getUserListPllists().map { it.toEntity() }
-    suspend fun fetchLikelist(): dYaLikeTracklist {
-        return client.getLikedTracklist().toEntity()
+    suspend fun fetchLikelist(): dPlaylistResult {
+
+        return dPlaylistResult.Success(client.getLikedTracklist().toEntity(), emptyList())
     }
 }
 

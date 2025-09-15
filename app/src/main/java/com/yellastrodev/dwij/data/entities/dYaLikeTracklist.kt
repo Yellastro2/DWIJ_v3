@@ -12,8 +12,7 @@ class dYaLikeTracklist(
     uid: Int,
     revision: Int,
     trackCount: Int,
-    duration: Int,
-    tracks: List<dPlaylistTrack>
+    duration: Int
 ) : dYaPlaylist(
     playlistUuid,
     uid = uid,
@@ -45,8 +44,8 @@ fun YaLikeTracklist.toEntity(): dYaLikeTracklist {
         uid = uid,
         trackCount = tracks.size,
         revision = revision,
-        tracks = tracks,
         duration = 0
     )
+    entity.tracks = tracks
     return entity
 }

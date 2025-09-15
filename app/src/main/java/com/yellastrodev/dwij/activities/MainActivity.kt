@@ -23,11 +23,13 @@ import android.widget.FrameLayout
 import android.widget.LinearLayout
 import android.widget.RelativeLayout
 import android.widget.TextView
+import androidx.activity.viewModels
 import androidx.appcompat.app.AppCompatActivity
 import androidx.core.os.bundleOf
 import androidx.core.view.isVisible
 import androidx.fragment.app.Fragment
 import androidx.fragment.app.commit
+import androidx.fragment.app.viewModels
 import androidx.lifecycle.lifecycleScope
 import androidx.navigation.NavController
 import androidx.navigation.NavOptions
@@ -36,11 +38,13 @@ import com.google.android.material.snackbar.Snackbar
 import com.yellastrodev.dwij.R
 import com.yellastrodev.dwij.data.repo.PlayerRepository
 import com.yellastrodev.dwij.fragments.LilPlayerFrag
+import com.yellastrodev.dwij.models.PlayerModel
 import com.yellastrodev.dwij.yApplication
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import java.io.File
 import java.util.logging.Logger
+import kotlin.getValue
 
 
 class MainActivity : AppCompatActivity() {
@@ -62,6 +66,14 @@ class MainActivity : AppCompatActivity() {
 
     val playerRepo: PlayerRepository by lazy {
         (application as yApplication).playerRepo
+    }
+
+    val playerModel: PlayerModel by viewModels {
+        PlayerModel.Factory(
+            playerRepo = (application as yApplication).playerRepo,
+            trackRepo = (application as yApplication).trackRepository,
+            coverRepo = (application as yApplication).coverRepository
+        )
     }
 
     @SuppressLint("MissingInflatedId")

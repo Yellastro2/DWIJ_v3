@@ -4,8 +4,10 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.viewModelScope
 import com.yellastrodev.dwij.adapters.GridPlaylistAdapter
+import com.yellastrodev.dwij.data.entities.dYaPlaylist
 import com.yellastrodev.dwij.data.repo.CoverRepository
 import com.yellastrodev.dwij.data.repo.PlaylistRepository
+import com.yellastrodev.yandexmusiclib.CONSTANTS.Companion.LIKED_ID
 import com.yellastrodev.yandexmusiclib.entities.CoverSize
 import kotlinx.coroutines.launch
 
@@ -41,7 +43,11 @@ class GridPlaylistModel(
 		viewModelScope.launch {
 			repo.playlists.collect {
 				if (it.isNotEmpty()) {
-					adapter.setList(ArrayList(it))
+
+					adapter.setList(ArrayList(it.sortedWith(
+						compareBy<dYaPlaylist> { it.kind != "liked" }
+							.thenByDescending { it.kind.toIntOrNull() ?: Int.MIN_VALUE }
+					)))
 				}
 			}
 		}

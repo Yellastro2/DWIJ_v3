@@ -56,7 +56,7 @@ class PlaylistRepository(
 
     suspend fun refreshPlaylists(){
         val remoteData = ArrayList(remote.fetchAll())
-        val likeList = remote.fetchLikelist()
+        val likeList = (remote.fetchLikelist() as dPlaylistResult.Success).YaPlaylist
         remoteData.add(likeList)
         val dif = diffPlaylists(_playlistMap.value, remoteData)
         if (dif.isNotEmpty()) {
@@ -72,7 +72,7 @@ class PlaylistRepository(
                         trackRepo.putTracks(plResult.trackList)
                     }
                 }else {
-
+                    trackRepo.getTracks(playlist.tracks.map { it.trackId })
                 }
                 cache.put(playlist)
                 local.save(playlist)
@@ -97,19 +97,26 @@ class PlaylistRepository(
         val plResult = if (playlist.kind != LIKED_ID) {
             remote.fetch(playlist.kind.toInt())
         } else
-            remote.fetch(playlist.kind.toInt())
+            remote.fetchLikelist()
         if (plResult is dPlaylistResult.Success) {
             if (playlist.revision != plResult.YaPlaylist.revision){
                 cache.put(plResult.YaPlaylist)
                 local.save(plResult.YaPlaylist)
                 _playlistMap.value = _playlistMap.value + (plUuid to plResult.YaPlaylist)
-                trackRepo.putTracks(plResult.trackList)
+                if (playlist.kind != LIKED_ID) {
+                    trackRepo.putTracks(plResult.trackList)
+                }else{
+                    trackRepo.getTracks(plResult.YaPlaylist.tracks.map { it.trackId })
+                }
             }else {
                 scope.launch {
                     trackRepo.tracksFlow(plResult.YaPlaylist.tracks).collect { tracks ->
                         if (tracks.size != playlist.tracks.size)
                         {
-                            trackRepo.putTracks(plResult.trackList)
+                            if (playlist.kind != LIKED_ID)
+                                trackRepo.putTracks(plResult.trackList)
+                            else
+                                trackRepo.getTracks(plResult.YaPlaylist.tracks.map { it.trackId })
                             cache.put(plResult.YaPlaylist)
                             local.save(plResult.YaPlaylist)
                             _playlistMap.value = _playlistMap.value + (plUuid to plResult.YaPlaylist)

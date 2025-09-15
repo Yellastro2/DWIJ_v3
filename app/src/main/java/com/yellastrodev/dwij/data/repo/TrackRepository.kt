@@ -1,5 +1,6 @@
 package com.yellastrodev.dwij.data.repo
 
+import android.util.Log
 import com.yellastrodev.dwij.data.source.TrackLocalSource
 import com.yellastrodev.dwij.data.source.TrackRemoteSource
 import com.yellastrodev.dwij.data.entities.dPlaylistTrack
@@ -18,6 +19,8 @@ class TrackRepository(
     private val remote: TrackRemoteSource,
     private val local: TrackLocalSource
 ) {
+
+    val TAG = "TrackRepository"
     private val _tracks = MutableStateFlow<Map<String, dYaTrack>>(emptyMap())
     val tracks: StateFlow<Map<String, dYaTrack>> = _tracks
 
@@ -59,8 +62,30 @@ class TrackRepository(
             }
             .distinctUntilChanged()
 
-    suspend fun getTrack(track: dYaTrack): yTrack.Companion.Mp3LinkResult {
-        return remote.fetch(track)
+    /**
+     * Собирает треки из текущего кеша треков в _tracks.value,
+     * а недостающие в нем айдишки запрашивает в ремот
+     */
+    suspend fun getTracks(trackIds: List<String>): List<dYaTrack> {
+        Log.d(TAG, "getTracks(size=${trackIds.size})")
+        val updated = ArrayList<dYaTrack>()
+        val missing = mutableListOf<String>()
+        trackIds.forEach { trackId ->
+            if (!_tracks.value.containsKey(trackId)) {
+                missing.add(trackId)
+            } else {
+                updated.add(_tracks.value[trackId]!!)
+            }
+        }
+        Log.d(TAG, "missing=${missing.size}, updated=${updated.size}")
+        if (missing.isNotEmpty()) {
+            val remoteList = remote.fetchTracks(missing)
+            Log.d(TAG, "remote=${remoteList.size}")
+            updated.addAll(remoteList)
+            putTracks(remoteList)
+
+        }
+        return updated
     }
 
     suspend fun getTrackUrl(trackId: String): yTrack.Companion.Mp3LinkResult {

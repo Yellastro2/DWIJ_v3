@@ -407,6 +407,20 @@ class YamApiClient(
 	}
 
 
+
+	suspend fun getTracklist(trackIds: List<String>): List<YaTrack> {
+		val result = getObjList(TYPE_TRACK, JSONArray(trackIds))
+
+		val trackResult = ArrayList<YaTrack>()
+		val jsonTracks = result.getJSONArray("result")
+		for (qTrackJs in getArray<JSONObject>(jsonTracks)) {
+			val qObj: YaTrack = Json {ignoreUnknownKeys = true }.decodeFromString(qTrackJs.toString())
+			trackResult.add(qObj)
+		}
+		return trackResult
+	}
+
+
 	/**
 	 * Получает список плейлистов пользователя, каждый плейлист в режиме превью, отсутствуют данные треков
 	 *
