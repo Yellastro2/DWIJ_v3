@@ -47,6 +47,9 @@ class dYaTrack(
     @Ignore
     var albums: List<dYaAlbum> = emptyList()
 
+    @Ignore
+    var playlists: List<String> = emptyList()
+
     suspend fun mp3Link(fClient: YamApiClient): Mp3LinkResult {
         val urlToRequest = "/tracks/$id/download-info"
 

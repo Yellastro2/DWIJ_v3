@@ -9,6 +9,8 @@ import com.yellastrodev.dwij.data.entities.dYaPlaylist
 import com.yellastrodev.dwij.utils.PlaylistsDiff.Companion.diffPlaylists
 import com.yellastrodev.yandexmusiclib.CONSTANTS.Companion.LIKED_ID
 import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.GlobalScope
+import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
@@ -18,6 +20,10 @@ import kotlinx.coroutines.flow.filterNotNull
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
+import java.util.concurrent.ConcurrentHashMap
+import android.util.Log
 
 class PlaylistRepository(
     private val local: PlaylistLocalSource,
@@ -26,6 +32,8 @@ class PlaylistRepository(
     private val scope: CoroutineScope,
     private val trackRepo: TrackRepository
 ) {
+
+    val TAG = "PlaylistRepository"
 
     /**
      * Мапа плейлистов, кэшированный в памяти, ключи это .playlistUuid
@@ -39,10 +47,14 @@ class PlaylistRepository(
         scope.launch {
 
             val cached = cache.getAll()
-            if (cached.isNotEmpty()) _playlistMap.value = cached.associateBy { it.playlistUuid }
+            if (cached.isNotEmpty()) {
+                Log.d(TAG, "Используем кэш плейлистов, размер: ${cached.size}")
+                _playlistMap.value = cached.associateBy { it.playlistUuid }
+            }
 
             else {
                 // 1️⃣ Загружаем из локальной БД
+                Log.d(TAG, "Загружаем плейлисты из локальной БД")
                 val localData = local.getAll()
                 if (localData.isNotEmpty()) {
                     cache.putAll(localData)
@@ -53,6 +65,8 @@ class PlaylistRepository(
             refreshPlaylists()
         }
     }
+
+    val trackLocks = ConcurrentHashMap<String, Mutex>()
 
     suspend fun refreshPlaylists(){
         val remoteData = ArrayList(remote.fetchAll())
@@ -77,6 +91,14 @@ class PlaylistRepository(
                 cache.put(playlist)
                 local.save(playlist)
                 _playlistMap.value = _playlistMap.value + (playlist.playlistUuid to playlist)
+//                GlobalScope.launch {
+//                    trackRepo.getTracks(playlist.tracks.map { it.trackId }).forEach { qTrack ->
+//                        val mutex = trackLocks.computeIfAbsent(qTrack.id) { Mutex() }
+//                        mutex.withLock {
+//                            qTrack.playlists = qTrack.playlists + playlist.playlistUuid
+//                        }
+//                    }
+//                }
             }
             dif.removed.forEach {
                 cache.remove(it)
@@ -85,6 +107,11 @@ class PlaylistRepository(
             }
         }
     }
+
+    fun getPlaylistsByKeys(keys: List<String>): Flow<List<dYaPlaylist>> =
+        _playlistMap.map { map ->
+            keys.mapNotNull { map[it] }
+        }
 
     fun playlistFlow(playlistUuid: String): Flow<dYaPlaylist> =
         _playlistMap

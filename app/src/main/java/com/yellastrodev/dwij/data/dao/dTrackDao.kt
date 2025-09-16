@@ -5,6 +5,7 @@ import androidx.room.Insert
 import androidx.room.OnConflictStrategy
 import androidx.room.Query
 import androidx.room.Transaction
+import com.yellastrodev.dwij.data.entities.dPlaylistTrack
 import com.yellastrodev.dwij.data.entities.dTrackAlbumCrossRef
 import com.yellastrodev.dwij.data.entities.dTrackArtistCrossRef
 import com.yellastrodev.dwij.data.entities.dYaAlbum
@@ -76,12 +77,17 @@ interface dTrackDao {
     """)
     suspend fun getArtistsForTrack(trackId: String): List<dYaArtist>
 
+    @Query("SELECT playlistUuid FROM playlist_tracks WHERE trackId = :trackId")
+    suspend fun getPlaylistsForTrack(trackId: String): List<String>
+
+
     @Transaction
     suspend fun getTrack(id: String): dYaTrack? {
         val track = getTrackEntity(id) ?: return null
         val albums = getAlbumsForTrack(id)
         val artists = getArtistsForTrack(id)
-        return track.apply { this.albums = albums; this.artists = artists }
+        val playlists = getPlaylistsForTrack(id)
+        return track.apply { this.albums = albums; this.artists = artists; this.playlists = playlists }
     }
 
     @Query("SELECT * FROM tracks")
@@ -92,7 +98,9 @@ interface dTrackDao {
         val tracks = getAllTracksDump()
         tracks.forEach { track ->
             track.artists = getArtistsForTrack(track.id)
-            track.albums = getAlbumsForTrack(track.id) }
+            track.albums = getAlbumsForTrack(track.id)
+            track.playlists = getPlaylistsForTrack(track.id)
+        }
         return tracks
     }
     suspend fun insertAll(tracks: List<dYaTrack>) {

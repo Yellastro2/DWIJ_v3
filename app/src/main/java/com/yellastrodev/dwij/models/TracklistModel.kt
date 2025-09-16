@@ -125,7 +125,10 @@ class TracklistModel(
 //                    }
 //                return@map null
 //            }
-            playerRepo.playQueue(trackList as List<dYaTrack>, index)
+            playerRepo.playQueue(
+                trackList as List<dYaTrack>,
+                index,
+                playlist.value?.title ?: "noPlTitle")
         }
     }
 

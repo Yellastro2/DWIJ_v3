@@ -20,10 +20,14 @@ import androidx.lifecycle.lifecycleScope
 import androidx.lifecycle.repeatOnLifecycle
 import androidx.recyclerview.widget.RecyclerView
 import com.yellastrodev.dwij.R
+import com.yellastrodev.dwij.data.entities.dYaPlaylist
+import com.yellastrodev.dwij.data.entities.dYaTrack
 import com.yellastrodev.dwij.models.PlayerModel
 import com.yellastrodev.dwij.yApplication
+import com.yellastrodev.yandexmusiclib.CONSTANTS.Companion.LIKED_ID
 import com.yellastrodev.yandexmusiclib.entities.CoverSize
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.flow.take
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import kotlin.getValue
@@ -31,12 +35,11 @@ import kotlin.getValue
 class BigPlayerFrag() :
 	PlayerAbs()
 {
-	val TAG = "BigPlayerFrag"
+	override val TAG = "BigPlayerFrag"
 
 
 	val sPrevieAlpha = 0.3F
 
-	lateinit var mvMainTitle: TextView
 	lateinit var mvTrackList: Button
 	lateinit var mvPlListFlexbox: RecyclerView
 	lateinit var mvToPlaylist: View
@@ -195,6 +198,22 @@ class BigPlayerFrag() :
 		view.post { Log.d("TIMING", "BigPlayerFrag first frame drawn") }
 	}
 
+	override suspend fun onTrackFlow(track: dYaTrack){
+		playerModel.playlistRepo.getPlaylistsByKeys(track.playlists)
+			.take(1) // забираем только один результат
+			.collect { fPlLists ->
+			Log.d(TAG, "BigPlayer.onTrackFlow collect playlists=$fPlLists")
+			val filtered = fPlLists.filter { it.kind != LIKED_ID }
+			withContext(Dispatchers.Main) {
+				if (filtered.isNotEmpty())
+					mvToPlaylist.visibility = View.GONE
+				mvPlListFlexbox.adapter = CustomAdapter(filtered)
+			}
+		}
+	}
+
+
+
 	private fun openTrackInfo() {
 //		(activity as MainActivity).openTrackInfo(mTrackId)
 	}
@@ -277,25 +296,6 @@ class BigPlayerFrag() :
 //		}
 //	}
 
-//	private fun setPlaylists(fTrack: iTrack,fStore: yMediaStore) {
-//		val fPlLists = ArrayList<iPlaylist>()
-//		mvToPlaylist.visibility = View.VISIBLE
-//		mvPlListFlexbox.adapter = CustomAdapter(fPlLists,
-//			activity as MainActivity
-//		)
-//		for(qPl in fTrack.mPlaylists)
-//			mModel.viewModelScope.launch(Dispatchers.IO){
-//				val fRes = fStore.getYamPlaylist(qPl)
-//                withContext(Dispatchers.Main) {
-//                    if (fRes != null) {
-////						fPlLists.filter { (it as YaPlaylist).mKindId != YaLikedTracks.LIKED_ID }
-//                        if (fRes.mKindId != YaLikedTracks.LIKED_ID)
-//                            fPlLists.add(fRes)
-//                        updPlList(fPlLists)
-//                    }
-//                }
-//			}
-//	}
 
 	fun showPreviewLike(): List<ViewPropertyAnimator> {
 
@@ -328,50 +328,49 @@ class BigPlayerFrag() :
 //		}
 //	}
 
-//	class CustomAdapter(private val dataSet: ArrayList<iPlaylist>,
-//						val mMain: MainActivity) :
-//		RecyclerView.Adapter<CustomAdapter.ViewHolder>() {
-//
-//		lateinit var mRecyclerView: RecyclerView
-//
-//
-//
-//
-//		override fun onAttachedToRecyclerView(recyclerView: RecyclerView) {
-//			super.onAttachedToRecyclerView(recyclerView)
-//			mRecyclerView = recyclerView
-//		}
-//
-//		class ViewHolder(view: View) : RecyclerView.ViewHolder(view) {
-//			val vTitle: TextView
-//
-//			init {
-//				vTitle = view.findViewById(R.id.it_pllist_flex_title)
-//
-//			}
-//		}
-//
-//		override fun onCreateViewHolder(viewGroup: ViewGroup, viewType: Int): ViewHolder {
-//			val view = LayoutInflater.from(viewGroup.context)
-//				.inflate(R.layout.it_pllist_flex, viewGroup, false)
-//
-//			view.setOnClickListener {
+	class CustomAdapter(private val dataSet: List<dYaPlaylist>) :
+		RecyclerView.Adapter<CustomAdapter.ViewHolder>() {
+
+		lateinit var mRecyclerView: RecyclerView
+
+
+
+
+		override fun onAttachedToRecyclerView(recyclerView: RecyclerView) {
+			super.onAttachedToRecyclerView(recyclerView)
+			mRecyclerView = recyclerView
+		}
+
+		class ViewHolder(view: View) : RecyclerView.ViewHolder(view) {
+			val vTitle: TextView
+
+			init {
+				vTitle = view.findViewById(R.id.it_pllist_flex_title)
+
+			}
+		}
+
+		override fun onCreateViewHolder(viewGroup: ViewGroup, viewType: Int): ViewHolder {
+			val view = LayoutInflater.from(viewGroup.context)
+				.inflate(R.layout.it_playlist_flex, viewGroup, false)
+
+			view.setOnClickListener {
+				mRecyclerView.callOnClick() }
+			return ViewHolder(view)
+		}
+
+		override fun onBindViewHolder(viewHolder: ViewHolder, position: Int) {
+//			viewHolder.itemView.setOnClickListener {
+////				TODO
+//				  }
+			viewHolder.vTitle.text = dataSet[position].title
+//			viewHolder.itemView.setOnClickListener {
 //				mRecyclerView.callOnClick() }
-//			return ViewHolder(view)
-//		}
-//
-//		override fun onBindViewHolder(viewHolder: ViewHolder, position: Int) {
-////			viewHolder.itemView.setOnClickListener {
-//////				TODO
-////				  }
-//			viewHolder.vTitle.text = dataSet[position].mTitle
-////			viewHolder.itemView.setOnClickListener {
-////				mRecyclerView.callOnClick() }
-//		}
-//
-//		override fun getItemCount() = dataSet.size
-//
-//
-//
-//	}
+		}
+
+		override fun getItemCount() = dataSet.size
+
+
+
+	}
 }

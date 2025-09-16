@@ -18,6 +18,7 @@ import androidx.lifecycle.lifecycleScope
 import androidx.lifecycle.repeatOnLifecycle
 import com.yellastrodev.dwij.R
 import com.yellastrodev.dwij.activities.MainActivity
+import com.yellastrodev.dwij.data.entities.dYaTrack
 import com.yellastrodev.dwij.models.PlayerModel
 import com.yellastrodev.dwij.yApplication
 import com.yellastrodev.yandexmusiclib.entities.CoverSize
@@ -29,6 +30,8 @@ import kotlin.getValue
 
 open class PlayerAbs() : Fragment() {
 
+	open val TAG = "PlayerAbs"
+
 //	var mPlayer: PlayerService? = null
 	var mvSeekBar: SeekBar? = null
 	lateinit var mvArtist: TextView
@@ -38,6 +41,7 @@ open class PlayerAbs() : Fragment() {
 	var mvRandom: ImageButton? = null
 	lateinit var mvNext: ImageButton
 	lateinit var mvPrev: ImageButton
+	var mvMainTitle: TextView? = null
 
 	val playerModel by lazy {
 		(activity as MainActivity).playerModel
@@ -47,6 +51,7 @@ open class PlayerAbs() : Fragment() {
 
 	override fun onCreate(savedInstanceState: Bundle?) {
 		super.onCreate(savedInstanceState)
+		Log.d(TAG, "onCreate called")
 //		attachToService()
 		val fdsf = 5
 	}
@@ -57,7 +62,9 @@ open class PlayerAbs() : Fragment() {
 //	}
 
 
+	var title = ""
 	override fun onViewCreated(view: View, savedInstanceState: Bundle?) {
+		Log.d(TAG, "onViewCreated called")
 //		mModel = ViewModelProvider(this).get(PlayerModel::class.java)
 
 		//val someInt = requireArguments().getInt("some_int")
@@ -83,10 +90,12 @@ open class PlayerAbs() : Fragment() {
 			playerModel.playAudio()
 		}
 
-		viewLifecycleOwner.lifecycleScope.launch(Dispatchers.IO) {
+		viewLifecycleOwner.lifecycleScope.launch() {
 			viewLifecycleOwner.repeatOnLifecycle(Lifecycle.State.STARTED) {
 				playerModel.track.collect { track ->
+					Log.d(TAG, "collect track=$track")
 					if (track != null) {
+						onTrackFlow(track)
 						withContext(Dispatchers.Main) {
 							mvTitle.text = track.title
 							mvArtist.text = track.artists.joinToString(", ") { it.name }
@@ -99,21 +108,34 @@ open class PlayerAbs() : Fragment() {
 								mvCover.setImageBitmap(bitmap)
 							}
 						}
+						if (playerModel.playTitle.value != title) {
+							title = playerModel.playTitle.value
+							withContext(Dispatchers.Main) {
+								mvMainTitle?.text = title
+							}
+						}
 
 					}
 				}
 			}
 		}
 
-		viewLifecycleOwner.lifecycleScope.launch(Dispatchers.IO) {
+		viewLifecycleOwner.lifecycleScope.launch() {
+			var isPlaying = false
+
 			viewLifecycleOwner.repeatOnLifecycle(Lifecycle.State.STARTED) {
 				playerModel.playerState.collect {
-					if (it.isPlaying) setPlay() else setPause()
+
+					if (it.isPlaying != isPlaying) {
+						if (it.isPlaying) setPlay() else setPause()
+						isPlaying = it.isPlaying
+					}
 					if (it.isShuffle != nowShuffle)
 						setRandomBtn(it.isShuffle)
 //					val progress = if (it.currentPosition > 0) it.duration / it.currentPosition else 0L
 					mvSeekBar?.progress = it.currentPosition.toInt()
 					mvSeekBar?.max = it.duration.toInt()
+
 
 				}
 			}
@@ -136,6 +158,11 @@ open class PlayerAbs() : Fragment() {
 ////				"Media mPlayer not initialized", Snackbar.LENGTH_LONG
 ////			).show()
 //		}
+
+	}
+
+
+	open suspend fun onTrackFlow(track: dYaTrack){
 
 	}
 

@@ -34,6 +34,9 @@ class PlayerRepository(
     private val _state = MutableStateFlow(PlayerState())
     val state: StateFlow<PlayerState> = _state
 
+    private val _playTitle = MutableStateFlow("")
+    val playTitle: StateFlow<String> = _playTitle
+
     var currentTrackList: List<String> = listOf()
 
     private val _currentTrack = MutableStateFlow<String?>(null)
@@ -77,10 +80,16 @@ class PlayerRepository(
      * @param tracks список треков и их урл ссылок (на скачивание, либо на кеш файл)
      * @param startIndex индекс трека в списке, который будет проигран
      */
-    suspend fun playQueue(tracks: List<dYaTrack>, startIndex: Int = 0) {
+    suspend fun playQueue(
+        tracks: List<dYaTrack>,
+        startIndex: Int = 0,
+        title: String = "noTitle"
+    ) {
+        Log.d(TAG,"set playQueue()")
         tracksAndUrls = tracks.associate { track -> track.id to track  }
         currentTrackList = tracks.map { track -> track.id }
         _currentTrack.value = tracks[startIndex].id
+        _playTitle.value = title
 
         relativeIndex = startIndex
 

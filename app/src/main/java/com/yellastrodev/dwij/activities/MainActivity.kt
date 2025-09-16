@@ -72,7 +72,8 @@ class MainActivity : AppCompatActivity() {
         PlayerModel.Factory(
             playerRepo = (application as yApplication).playerRepo,
             trackRepo = (application as yApplication).trackRepository,
-            coverRepo = (application as yApplication).coverRepository
+            coverRepo = (application as yApplication).coverRepository,
+            playlistRepo = (application as yApplication).playlistRepository
         )
     }
 

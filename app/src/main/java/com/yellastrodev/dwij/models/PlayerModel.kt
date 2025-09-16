@@ -8,6 +8,7 @@ import com.yellastrodev.dwij.data.repo.CoverRepository
 import com.yellastrodev.dwij.data.repo.PlayerRepository
 import com.yellastrodev.dwij.data.repo.TrackRepository
 import com.yellastrodev.dwij.data.entities.dYaTrack
+import com.yellastrodev.dwij.data.repo.PlaylistRepository
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.launch
@@ -15,8 +16,29 @@ import kotlinx.coroutines.launch
 class PlayerModel(
     private val playerRepo: PlayerRepository,
     private val trackRepo: TrackRepository,
-    val coverRepo: CoverRepository
+    val coverRepo: CoverRepository,
+    val playlistRepo: PlaylistRepository
 )  : ViewModel() {
+
+    /**
+     * Factory для создания [TracklistModel] с передачей зависимостей.
+     */
+    class Factory(
+        private val playerRepo: PlayerRepository,
+        private val trackRepo: TrackRepository,
+        val coverRepo: CoverRepository,
+        val playlistRepo: PlaylistRepository
+    ) : ViewModelProvider.Factory
+    {
+        @Suppress("UNCHECKED_CAST")
+        override fun <T : ViewModel> create(modelClass: Class<T>): T {
+            if (modelClass.isAssignableFrom(PlayerModel::class.java)) {
+                Log.d(TAG, "Создаём экземпляр TracklistModel через Factory")
+                return PlayerModel(playerRepo, trackRepo, coverRepo, playlistRepo) as T
+            }
+            throw IllegalArgumentException("Unknown ViewModel class")
+        }
+    }
 
     suspend fun nextTrack() {
         playerRepo.skipNext()
@@ -42,29 +64,14 @@ class PlayerModel(
         val TAG = "PlayerModel"
     }
 
-    /**
-     * Factory для создания [TracklistModel] с передачей зависимостей.
-     */
-    class Factory(
-        private val playerRepo: PlayerRepository,
-        private val trackRepo: TrackRepository,
-        val coverRepo: CoverRepository
-    ) : ViewModelProvider.Factory {
-        @Suppress("UNCHECKED_CAST")
-        override fun <T : ViewModel> create(modelClass: Class<T>): T {
-            if (modelClass.isAssignableFrom(PlayerModel::class.java)) {
-                Log.d(TAG, "Создаём экземпляр TracklistModel через Factory")
-                return PlayerModel(playerRepo, trackRepo, coverRepo) as T
-            }
-            throw IllegalArgumentException("Unknown ViewModel class")
-        }
-    }
+
 
     // Flow для UI с полным объектом Track
     private val _track = MutableStateFlow<dYaTrack?>(null)
     val track: StateFlow<dYaTrack?> = _track
 
     val playerState = playerRepo.state
+    val playTitle = playerRepo.playTitle
 
     init {
         // Подписка на изменения ID трека из репо
