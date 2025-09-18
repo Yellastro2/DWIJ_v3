@@ -1,6 +1,8 @@
 package com.yellastrodev.dwij.fragments
 
 import android.annotation.SuppressLint
+import android.graphics.Color
+import android.graphics.drawable.GradientDrawable
 import android.os.Bundle
 import android.os.Handler
 import android.util.DisplayMetrics
@@ -31,6 +33,13 @@ import kotlinx.coroutines.flow.take
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import kotlin.getValue
+import androidx.core.content.ContextCompat
+import com.google.android.flexbox.AlignItems
+import com.google.android.flexbox.FlexDirection
+import com.google.android.flexbox.FlexWrap
+import com.google.android.flexbox.FlexboxLayoutManager
+import com.google.android.flexbox.JustifyContent
+import com.yellastrodev.dwij.activities.MainActivity
 
 class BigPlayerFrag() :
 	PlayerAbs()
@@ -81,16 +90,14 @@ class BigPlayerFrag() :
 		return view
 	}
 
+	override fun getCoverSize(): CoverSize {
+		return CoverSize.`400x400`
+	}
+
 	override fun onViewCreated(view: View, savedInstanceState: Bundle?) {
 		super.onViewCreated(view, savedInstanceState)
 
-
-
 		mvTitle.setOnClickListener { openTrackInfo() }
-
-
-
-
 		var doubleClick = false
 
 		mvLike.alpha = 0.0F
@@ -207,7 +214,14 @@ class BigPlayerFrag() :
 			withContext(Dispatchers.Main) {
 				if (filtered.isNotEmpty()) {
 					mvToPlaylist.visibility = View.GONE
-					mvPlListFlexbox.adapter = CustomAdapter(filtered)
+					val lm = FlexboxLayoutManager(context).apply {
+						flexDirection = FlexDirection.ROW
+						flexWrap = FlexWrap.WRAP
+						justifyContent = JustifyContent.CENTER
+						alignItems = AlignItems.CENTER
+					}
+					mvPlListFlexbox.layoutManager = lm
+					mvPlListFlexbox.adapter = CustomAdapter(filtered, playerModel)
 				}else {
 					mvToPlaylist.visibility = View.VISIBLE
 					mvPlListFlexbox.adapter = null
@@ -230,18 +244,11 @@ class BigPlayerFrag() :
 	}
 
 	private fun toPlaylist() {
-//		val fPlFrag = PlListFrag()
-//		val fBndl = Bundle()
-//		fBndl.putString(PlListFrag.PLAYLIST_ACTION,PlListFrag.ACTION_ADDTRACK)
-//		if(mPlayer != null){
-////			val fTr = mPlayer!!.mList.get(mPlayer!!.m_CurentTrack).mId
-//			fBndl.putString(PlListFrag.ACTION_DATA,mTrackId)
-//
-//		}
+		val fBndl = Bundle()
+		fBndl.putString(GridPlaylistFrag.PLAYLIST_ACTION,GridPlaylistFrag.ACTION_ADDTRACK)
+		fBndl.putString(GridPlaylistFrag.ACTION_DATA, playerModel.track.value!!.id)
 
-//		fPlFrag.arguments = fBndl
-////			(activity as MainActivity).openFrame(fPlFrag)
-//		(activity as MainActivity).mNavController.navigate(R.id.add_trackTo_plList,fBndl)
+		(activity as MainActivity).mNavController.navigate(R.id.gridPlaylistFrag, fBndl)
 	}
 
 
@@ -333,7 +340,10 @@ class BigPlayerFrag() :
 //		}
 //	}
 
-	class CustomAdapter(private val dataSet: List<dYaPlaylist>) :
+	class CustomAdapter(
+		private val dataSet: List<dYaPlaylist>,
+		val model: PlayerModel
+	) :
 		RecyclerView.Adapter<CustomAdapter.ViewHolder>() {
 
 		lateinit var mRecyclerView: RecyclerView
@@ -369,8 +379,13 @@ class BigPlayerFrag() :
 ////				TODO
 //				  }
 			viewHolder.vTitle.text = dataSet[position].title
-//			viewHolder.itemView.setOnClickListener {
-//				mRecyclerView.callOnClick() }
+
+			viewHolder.vTitle.apply {
+				background = model.getBackground(viewHolder.vTitle.context, dataSet[position].title)
+			}
+
+			viewHolder.itemView.setOnClickListener {
+				mRecyclerView.callOnClick() }
 		}
 
 		override fun getItemCount() = dataSet.size

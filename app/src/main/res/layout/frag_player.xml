@@ -151,8 +151,8 @@
 
     <androidx.recyclerview.widget.RecyclerView
         android:id="@+id/fr_bg_player_pllist_flex"
-        android:layout_width="wrap_content"
-        android:layout_height="40dp"
+        android:layout_width="match_parent"
+        android:layout_height="100dp"
         android:layout_marginTop="16dp"
         app:alignContent="center"
         app:alignItems="center"

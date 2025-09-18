@@ -101,7 +101,7 @@ open class PlayerAbs() : Fragment() {
 							mvArtist.text = track.artists.joinToString(", ") { it.name }
 						}
 						viewLifecycleOwner.lifecycleScope.launch(Dispatchers.IO) {
-							val bitmap = playerModel.coverRepo.getCover(track, CoverSize.`200x200`)
+							val bitmap = playerModel.coverRepo.getCover(track, getCoverSize())
 
 							// Ставим в ImageView на главном потоке
 							withContext(Dispatchers.Main) {
@@ -159,6 +159,10 @@ open class PlayerAbs() : Fragment() {
 ////			).show()
 //		}
 
+	}
+
+	open fun getCoverSize(): CoverSize {
+		return CoverSize.`100x100`
 	}
 
 

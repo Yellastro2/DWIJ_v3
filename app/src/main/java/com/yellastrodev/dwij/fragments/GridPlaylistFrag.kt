@@ -12,6 +12,7 @@ import androidx.navigation.fragment.findNavController
 import androidx.recyclerview.widget.GridLayoutManager
 import androidx.recyclerview.widget.RecyclerView
 import androidx.swiperefreshlayout.widget.SwipeRefreshLayout
+import com.google.android.material.snackbar.Snackbar
 import kotlinx.coroutines.Deferred
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
@@ -22,6 +23,7 @@ import com.yellastrodev.dwij.VALUE
 import com.yellastrodev.dwij.data.entities.dYaPlaylist
 import com.yellastrodev.dwij.models.GridPlaylistModel
 import com.yellastrodev.dwij.yApplication
+import kotlinx.coroutines.GlobalScope
 
 class GridPlaylistFrag() : Fragment(R.layout.frag_grid_playlist) {
 
@@ -31,9 +33,6 @@ class GridPlaylistFrag() : Fragment(R.layout.frag_grid_playlist) {
 		val ACTION_DATA = "action_data"
 
 	}
-
-//	val LOG = yLog.log(GridPlaylistFrag::class.java.name)
-
 
 	lateinit var mvRecyclerView: RecyclerView
 
@@ -45,13 +44,10 @@ class GridPlaylistFrag() : Fragment(R.layout.frag_grid_playlist) {
 			putString(TYPE, ObjectFrag.PLAYLIST)
 			putString(VALUE, playlist.playlistUuid)
 		}
-//		Log.d("DWIJ_TIMING", "click on playlist item: start navigate")
 		findNavController().navigate(R.id.action_gridPlaylistFrag_to_objectFrag,bundle)
-//		Log.d("DWIJ_TIMING", "click on playlist item: finish navigate")
 	}
 
 	var mPickedTrack: String = "-1"
-//	var mTrackObj: YaTrack? = null
 
 	private val model: GridPlaylistModel by viewModels {
 		GridPlaylistModel.Factory(
@@ -62,11 +58,7 @@ class GridPlaylistFrag() : Fragment(R.layout.frag_grid_playlist) {
 
 	@SuppressLint("CheckResult", "NotifyDataSetChanged")
 	override fun onViewCreated(view: View, savedInstanceState: Bundle?) {
-
-
 		val displayMetrics = DisplayMetrics()
-
-
 
 		requireActivity().windowManager.defaultDisplay.getMetrics(displayMetrics)
 
@@ -80,39 +72,25 @@ class GridPlaylistFrag() : Fragment(R.layout.frag_grid_playlist) {
 			val fAction = requireArguments().getString(PLAYLIST_ACTION)
 			val fTrackId = requireArguments().getString(ACTION_DATA)
 
-//			if(fAction == ACTION_ADDTRACK && fTrackId != null){
-////				model.viewModelScope.launch {
-//				val fStore = yMediaStore.store(mMainActivity)
-//				fTrackLoadJob = model.viewModelScope.async(Dispatchers.IO) {
-//					mTrackObj = fStore.getTrack(fTrackId)
-//                    withContext(Dispatchers.Main) {
-//                        model.getAdapter().setTrack(mTrackObj!!)
-//                    }
-//				}
-//					mPickedTrack = fTrackId
-//					mOnIteClick = {
-//							fPl: iPlaylist ->
-//						GlobalScope.launch(Dispatchers.Default){
-//							(fPl as YaPlaylist).addTrack(fStore,mTrackObj!!)
-//                            withContext(Dispatchers.Main) {
-//                                val snack = Snackbar.make(
-//                                    view.rootView.findViewById(R.id.content),
-//                                    "${mTrackObj!!.mTitle} added to ${fPl.mTitle}",
-//                                    Snackbar.LENGTH_LONG
-//                                )
-//                                (activity as MainActivity).mNavController.popBackStack()
-//                                snack.show()
-//                            }
-//						}.start()
-////					}
-//				}
-//
-////				Thread{
-////					val fStore = yMediaStore.store(mMainActivity)
-////					mTrackObj = fStore.getTrack(fTrackId)
-////				}.start()
-//
-//			}
+			if(fAction == ACTION_ADDTRACK && fTrackId != null){
+				model.adapter.pickedTrack = model.getTrack(fTrackId)
+				view.findViewById<View>(R.id.fr_list_pllist_title).visibility = View.VISIBLE
+				mOnItemClick = {
+							fPl: dYaPlaylist ->
+						GlobalScope.launch(Dispatchers.Default){
+							model.addTrackToPlaylist(fPl,fTrackId)
+                            withContext(Dispatchers.Main) {
+                                val snack = Snackbar.make(
+                                    view.rootView.findViewById(android.R.id.content),
+                                    "track added to playlist",
+                                    Snackbar.LENGTH_LONG
+                                )
+                                findNavController().popBackStack()
+                                snack.show()
+                            }
+						}
+					}
+			}
 		}else {
 			mPickedTrack = "-1"
 //			mTrackObj = null

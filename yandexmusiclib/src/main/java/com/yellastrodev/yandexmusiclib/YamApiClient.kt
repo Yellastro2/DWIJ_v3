@@ -6,6 +6,7 @@ import com.yellastrodev.yandexmusiclib.entities.YaPlaylist
 import com.yellastrodev.yandexmusiclib.entities.YaTrack
 import com.yellastrodev.yandexmusiclib.entities.YaTrackList
 import com.yellastrodev.yandexmusiclib.kot_utils.yNetwork
+import com.yellastrodev.yandexmusiclib.yUtils.Differenc
 import com.yellastrodev.yandexmusiclib.yUtils.yUtils.Companion.getArray
 import kotlinx.serialization.json.Json
 import org.json.JSONArray
@@ -292,6 +293,22 @@ class YamApiClient(
 		val url = "$BASE_URL/users/$mUserID/playlists/${fPlList}/change"
 		val fData =  JSONObject("{'kind': ${fPlList}, 'revision': $fRev, 'diff': $fDif}")
 		return yNetwork.post(mToken,url,fData)
+	}
+
+	suspend fun addTrack(playlistKind: Int, revision: Int, trackId: String, trackAlbum: String){
+//		TODO
+		val fDif = Differenc().addInsert(0, trackId, trackAlbum)
+		val fRes = changePlaylist(playlistKind.toString(), fDif.toJSON(), revision)
+		fRes.getJSONObject("result")
+	}
+
+	suspend fun removeTrack(playlistKind: Int, revision: Int, trackNumber: Int): Boolean {
+
+		val fDif = Differenc().addDelete(trackNumber, trackNumber+1)
+		val fRes = changePlaylist(playlistKind.toString(), fDif.toJSON(), revision)
+		fRes.getJSONObject("result")
+
+		return true
 	}
 
 	suspend fun getRotorList(){

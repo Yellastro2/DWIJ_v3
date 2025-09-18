@@ -118,13 +118,6 @@ class TracklistModel(
         // что бы не тормозить смену экрана, иначе валью будет ждать этого почемуто
         // нихуя не изменилось
         viewModelScope.launch {
-//            val curentTrackList: List<dYaTrack?> = trackList.map { trackSh ->
-//                    trackRepo.tracks.value[trackSh.trackId]?.let { track ->
-//                        return@map track
-//
-//                    }
-//                return@map null
-//            }
             playerRepo.playQueue(
                 trackList as List<dYaTrack>,
                 index,

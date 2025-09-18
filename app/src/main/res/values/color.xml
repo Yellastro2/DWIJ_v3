@@ -11,4 +11,16 @@
     <color name="colorPrimary2">#9259D3</color>
     <color name="colorPrimaryDark2">#7547AA</color>
     <color name="colorAccent2">#B7CC5D</color>
+    <color name="colorAccent3">#F44336</color> <!-- красный -->
+    <color name="colorAccent4">#2196F3</color> <!-- синий -->
+    <color name="colorAccent5">#4CAF50</color> <!-- зелёный -->
+    <color name="colorAccent6">#FF9800</color> <!-- оранжевый -->
+
+    <color name="purple_200">#FFBB86FC</color>
+    <color name="purple_500">#FF6200EE</color>
+    <color name="purple_700">#FF3700B3</color>
+    <color name="teal_200">#FF03DAC5</color>
+    <color name="teal_700">#FF018786</color>
+    <color name="black">#FF000000</color>
+    <color name="white">#FFFFFFFF</color>
 </resources>

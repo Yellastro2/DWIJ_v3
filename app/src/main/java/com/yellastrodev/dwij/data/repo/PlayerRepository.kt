@@ -86,6 +86,17 @@ class PlayerRepository(
         title: String = "noTitle"
     ) {
         Log.d(TAG,"set playQueue()")
+
+        if (tracks[startIndex].id == _currentTrack.value && _playTitle.value == title)
+            return
+
+        if (playTitle.value == title){
+            _currentTrack.value = tracks[startIndex].id
+            relativeIndex = startIndex
+            service?.playTrack(startIndex)
+            return
+        }
+
         tracksAndUrls = tracks.associate { track -> track.id to track  }
         currentTrackList = tracks.map { track -> track.id }
         _currentTrack.value = tracks[startIndex].id
@@ -146,35 +157,6 @@ class PlayerRepository(
 //                trackCacheRepo.getOrDownload(nextTrack.id) // просто кешируем
 //            }
 //        }
-    }
-
-    /**
-     * Подгружаем следующий трек заранее, если он есть
-     * @param stepTo 1 - следующий, -1 - предыдущий
-     */
-    private suspend fun loanNextTracks( stepTo: Int) {
-        // Подгружаем следующий трек заранее, если он есть
-        val nextIndex = relativeIndex + stepTo
-        if (nextIndex < currentTrackList.size && nextIndex >= 0) {
-
-            val nextTrackId = currentTrackList[nextIndex]
-            val track = tracksAndUrls[nextTrackId]!!
-            val nextUri = trackCacheRepo.getOrDownload(nextTrackId)
-            val trackMedia = MediaItem.Builder()
-                .setUri(nextUri)
-                .setMediaMetadata(
-                    MediaMetadata.Builder()
-                        .setExtras(Bundle().apply { putString(TRACK_ID, track.id) })
-                        .setTitle(track.title ?: "Unknown title")
-                        .setArtist(track.artists.joinToString(", ") { it.name } ?: "Unknown artist")
-                        //                            .setArtworkUri(Uri.parse("https://example.com/cover.jpg"))
-                        .build()
-                )
-                .build()
-            service?.playTrack(trackMedia) // добавляем в очередь ExoPlayer
-            _currentTrack.value = currentTrackList[nextIndex]
-            relativeIndex = nextIndex
-        }
     }
 
     fun pause() = service?.pause()

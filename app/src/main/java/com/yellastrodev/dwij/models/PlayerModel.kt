@@ -1,9 +1,15 @@
 package com.yellastrodev.dwij.models
 
+import android.content.Context
+import android.graphics.Color
+import android.graphics.drawable.Drawable
+import android.graphics.drawable.GradientDrawable
 import android.util.Log
+import androidx.core.content.ContextCompat
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.viewModelScope
+import com.yellastrodev.dwij.R
 import com.yellastrodev.dwij.data.repo.CoverRepository
 import com.yellastrodev.dwij.data.repo.PlayerRepository
 import com.yellastrodev.dwij.data.repo.TrackRepository
@@ -58,6 +64,38 @@ class PlayerModel(
 
     fun shuffle() {
         playerRepo.shuffle()
+    }
+
+    private val colorIds = listOf(
+//				R.color.colorAccent,
+        R.color.colorAccent2,
+        R.color.colorAccent3,
+        R.color.colorAccent4,
+        R.color.colorAccent5,
+        R.color.colorAccent6
+    )
+    private val colorsForTitle = HashMap<String, Drawable>()
+
+    /**
+     * для текущего тайтла формирует случайный цвет, либо если уже делал для него, то возвращает
+     * уже сделанный цвет
+     */
+    fun getBackground(context: Context, playlistTitle: String): Drawable {
+
+        if (!colorsForTitle.containsKey(playlistTitle)) {
+
+        val randomColorId = colorIds.random()
+        val randomColor = ContextCompat.getColor(context, randomColorId) // ← получаем сам цвет
+        val alpha = (0.5f * 255).toInt() // 50% прозрачности, можно менять
+
+        val background = ContextCompat.getDrawable(context, R.drawable.background_item_roundrect)!!.mutate()
+        (background as? GradientDrawable)?.setColor(
+            Color.argb(alpha, Color.red(randomColor), Color.green(randomColor), Color.blue(randomColor))
+        )
+            colorsForTitle.put(playlistTitle, background)
+        }
+        return colorsForTitle[playlistTitle]!!
+
     }
 
     companion object {

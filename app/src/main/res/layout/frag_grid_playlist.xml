@@ -22,6 +22,13 @@
             android:layout_weight="0.3"
             app:srcCompat="@drawable/abc_vector_test" />
 
+        <TextView
+            android:id="@+id/fr_list_pllist_title"
+            android:visibility="gone"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="добавить в плейлист"/>
+
 <!--        <Button-->
 <!--            android:id="@+id/fr_ls_plls_btn_sd"-->
 <!--            style="@style/BtnNoBkg"-->

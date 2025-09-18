@@ -25,6 +25,10 @@ class PlaylistRemoteSource(private val client: YamApiClient) {
 
         return dPlaylistResult.Success(client.getLikedTracklist().toEntity(), emptyList())
     }
+
+    suspend fun addTrackToPlaylist(playlist: dYaPlaylist, track: dYaTrack) {
+        client.addTrack(playlist.kind.toInt(), playlist.revision, track.id, track.albums[0].id.toString())
+    }
 }
 
 sealed class dPlaylistResult {

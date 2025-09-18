@@ -84,9 +84,6 @@ class MainActivity : AppCompatActivity() {
         val navHostFragment =
             supportFragmentManager.findFragmentById(R.id.fragmentContainerView) as NavHostFragment
         mNavController = navHostFragment.navController
-        mNavController.addOnDestinationChangedListener(){controller, destination, arguments ->
-
-        }
 
         // Добавляем мини-плеер один раз
         supportFragmentManager.commit {

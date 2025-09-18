@@ -208,34 +208,27 @@ class PlayerService : Service() {
         player.play()
     }
 
+    /**
+     * Воспроизвести конкретный трек из текущего списка загруженного в плеер.
+     */
+    fun playTrack(trackNumber: Int){
+        if (trackNumber in 0 until player.mediaItemCount) {
+            player.seekTo(trackNumber, 0L)
+            player.playWhenReady = true
+            if (player.playbackState == Player.STATE_IDLE) {
+                player.prepare()
+            }
+            Log.d(TAG, "playTrack: switched to index=$trackNumber")
+        } else {
+            Log.w(TAG, "playTrack: invalid index $trackNumber, total=${player.mediaItemCount}")
+        }
+    }
+
     fun playTrack(track: MediaItem) {
         Log.d(TAG, "playTrack called: track=$track")
         player.clearMediaItems()
         player.setMediaItem(track)
 
-//        // Заглушка предыдущего трека (можно silent файл)
-//        val prevPlaceholder = MediaItem.Builder()
-//            .setUri("android.resource://your.package.name/raw/silent")
-//            .setMediaMetadata(MediaMetadata.Builder()
-//                .setTitle("Loading...")
-//                .build())
-//            .build()
-//
-//        // Заглушка следующего трека
-//        val nextPlaceholder = MediaItem.Builder()
-//            .setUri("android.resource://your.package.name/raw/silent")
-//            .setMediaMetadata(MediaMetadata.Builder()
-//                .setTitle("Loading...")
-//                .build())
-//            .build()
-//
-//        // Добавляем в правильном порядке: prev, current, next
-//        player.addMediaItem(prevPlaceholder)
-//        player.addMediaItem(track)
-//        player.addMediaItem(nextPlaceholder)
-//
-//        // Ставим индекс на текущий трек
-//        player.seekTo(1, 0L)
         player.prepare()
         player.play()
     }

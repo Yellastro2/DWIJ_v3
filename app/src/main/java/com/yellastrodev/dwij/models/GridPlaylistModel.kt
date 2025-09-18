@@ -6,14 +6,16 @@ import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.viewModelScope
 import com.yellastrodev.dwij.adapters.GridPlaylistAdapter
 import com.yellastrodev.dwij.data.entities.dYaPlaylist
+import com.yellastrodev.dwij.data.entities.dYaTrack
 import com.yellastrodev.dwij.data.repo.CoverRepository
 import com.yellastrodev.dwij.data.repo.PlaylistRepository
-import com.yellastrodev.yandexmusiclib.CONSTANTS.Companion.LIKED_ID
+import com.yellastrodev.dwij.data.repo.TrackRepository
 import com.yellastrodev.yandexmusiclib.entities.CoverSize
 import kotlinx.coroutines.launch
 
 class GridPlaylistModel(
-	private val repo: PlaylistRepository,
+	private val playlistRepo: PlaylistRepository,
+	private val trackRepo: TrackRepository,
 	private val coverRepo: CoverRepository
 ): ViewModel() {
 
@@ -21,12 +23,13 @@ class GridPlaylistModel(
 
 	class Factory(
 		private val repo: PlaylistRepository,
+		private val trackRepo: TrackRepository,
 		private val coverRepo: CoverRepository
 	) : ViewModelProvider.Factory {
 		@Suppress("UNCHECKED_CAST")
 		override fun <T : ViewModel> create(modelClass: Class<T>): T {
 			if (modelClass.isAssignableFrom(GridPlaylistModel::class.java)) {
-				return GridPlaylistModel(repo, coverRepo) as T
+				return GridPlaylistModel(repo, trackRepo, coverRepo) as T
 			}
 			throw IllegalArgumentException("Unknown ViewModel class")
 		}
@@ -44,7 +47,7 @@ class GridPlaylistModel(
 
 	init {
 		viewModelScope.launch {
-			repo.playlists.collect {
+			playlistRepo.playlists.collect {
 				if (it.isNotEmpty()) {
 
 					adapter.setList(ArrayList(it.sortedWith(
@@ -58,6 +61,15 @@ class GridPlaylistModel(
 	}
 
 	suspend fun refreshPlaylists() {
-		repo.refreshPlaylists()
+		playlistRepo.refreshPlaylists()
+	}
+
+	suspend fun addTrackToPlaylist(playlist: dYaPlaylist, trackId: String) {
+		playlistRepo.addTrackToPlaylist(playlist, trackId)
+	}
+
+	fun getTrack(trackId: String): dYaTrack? {
+		return trackRepo.tracks.value[trackId]
+
 	}
 }

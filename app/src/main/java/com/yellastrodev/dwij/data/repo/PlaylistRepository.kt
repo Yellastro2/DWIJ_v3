@@ -149,4 +149,11 @@ class PlaylistRepository(
             }
         }
     }
+
+    suspend fun addTrackToPlaylist(playlist: dYaPlaylist, trackId: String) {
+        val track = trackRepo.tracks.value[trackId]!!
+        remote.addTrackToPlaylist(playlist, track)
+        refreshPlaylist(playlist.playlistUuid)
+
+    }
 }

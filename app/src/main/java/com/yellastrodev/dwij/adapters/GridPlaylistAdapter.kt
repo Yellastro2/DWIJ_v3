@@ -8,11 +8,15 @@ import android.view.View
 import android.view.ViewGroup
 import android.widget.ImageView
 import android.widget.TextView
+import androidx.appcompat.app.AlertDialog
 import androidx.recyclerview.widget.RecyclerView
+import com.google.android.material.snackbar.Snackbar
 import com.yellastrodev.dwij.R
 import com.yellastrodev.dwij.data.entities.dYaPlaylist
+import com.yellastrodev.dwij.data.entities.dYaTrack
 import com.yellastrodev.dwij.utils.DurationFormat.Companion.formatDuration
 import com.yellastrodev.dwij.utils.PlaylistsDiff
+import com.yellastrodev.yandexmusiclib.CONSTANTS.Companion.LIKED_ID
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -22,13 +26,14 @@ import kotlinx.coroutines.withContext
 import kotlin.random.Random
 
 class GridPlaylistAdapter(
-	var mTrack: Any? = null,
 	private val loadCover: suspend (dYaPlaylist) -> Bitmap
 ) :
 RecyclerView.Adapter<GridPlaylistAdapter.ViewHolder>() {
 
 	var mGridSize = 3
 	var onClick: (dYaPlaylist)-> Unit = {}
+
+	var pickedTrack: dYaTrack? = null
 
 	var onCreatePlClick: () -> Unit = {}
 
@@ -38,6 +43,12 @@ RecyclerView.Adapter<GridPlaylistAdapter.ViewHolder>() {
 
 	private var mList: ArrayList<dYaPlaylist> = ArrayList()
 	fun setList(newList: ArrayList<dYaPlaylist>){
+
+
+		if (pickedTrack != null){
+			newList.removeAll(
+				newList.filter { it.kind==LIKED_ID })
+		}
 
 		// Считаем дифф
 		val diff = PlaylistsDiff.diffPlaylists(
@@ -76,10 +87,6 @@ RecyclerView.Adapter<GridPlaylistAdapter.ViewHolder>() {
 		}
 
 //		mList = ArrayList()
-////		if (mTrack != null){
-////			fList.removeAll(
-////				fList.filter { it.getType()==YaLikedTracks.LIKED_ID })
-////		}
 ////		mList.add(PlaylistCreateItem())
 //		mList.addAll(fList)
 //		notifyDataSetChanged()
@@ -200,44 +207,45 @@ RecyclerView.Adapter<GridPlaylistAdapter.ViewHolder>() {
 			return@setOnLongClickListener true
 		}
 
-//		if(mTrack != null && mTrack!!.mPlaylists.contains(mList[position].mId)){
-//			viewHolder.vTitle.setBackgroundColor(0xD0080E75.toInt())
-//			viewHolder.itemView.setOnClickListener {
-//				val builder: AlertDialog.Builder = AlertDialog.Builder(viewHolder.itemView.context)
-//				builder
-//					.setMessage("Удалить трек?!!")
-//					.setTitle("Удалить трек из плейлиста?")
-//					.setPositiveButton("Yes,remove") { fD, o ->
-//						fD.dismiss()
-//						CoroutineScope(Dispatchers.IO).launch {
-//							val fRes = (mList[position] as dYaPlaylist).removeTrack(
-//								yMediaStore.store(viewHolder.itemView.context),
-//								mTrack!!
-//							)
-//                            withContext(Dispatchers.Main) {
-//                                if (fRes) {
-//                                    notifyItemChanged(position)
-//                                } else {
-//                                    Snackbar.make(
-//                                        viewHolder.itemView,
-//                                        KeyStore.s_network_error, Snackbar.LENGTH_LONG
-//                                    )
-//                                        .show()
-//                                }
-//                            }
-//
-//
-//						}
-//
-//
-//					}
-//					.setNegativeButton("nenada") { fD, o -> fD.dismiss() }
-//
-//				val dialog: AlertDialog = builder.create()
-//				dialog.show()
-//				Snackbar.make(viewHolder.itemView.rootView.findViewById(R.id.content),
-//					"Track already in", Snackbar.LENGTH_SHORT).show()}
-//		}else {
+		if(pickedTrack != null && pickedTrack!!.playlists.contains(mList[position].playlistUuid)){
+			viewHolder.vTitle.setBackgroundColor(0xD0080E75.toInt())
+			viewHolder.itemView.setOnClickListener {
+				val builder: AlertDialog.Builder = AlertDialog.Builder(viewHolder.itemView.context)
+				builder
+					.setMessage("Удалить трек?!!")
+					.setTitle("Удалить трек из плейлиста?")
+					.setPositiveButton("Yes,remove") { fD, o ->
+						fD.dismiss()
+						CoroutineScope(Dispatchers.IO).launch {
+							model.addTrackToPlaylist(fPl,fTrackId)
+							val fRes = (mList[position] as dYaPlaylist).removeTrack(
+								yMediaStore.store(viewHolder.itemView.context),
+								mTrack!!
+							)
+                            withContext(Dispatchers.Main) {
+                                if (fRes) {
+                                    notifyItemChanged(position)
+                                } else {
+                                    Snackbar.make(
+                                        viewHolder.itemView,
+                                       "error on remove", Snackbar.LENGTH_LONG
+                                    )
+                                        .show()
+                                }
+                            }
+
+
+						}
+
+
+					}
+					.setNegativeButton("nenada") { fD, o -> fD.dismiss() }
+
+				val dialog: AlertDialog = builder.create()
+				dialog.show()
+				Snackbar.make(viewHolder.itemView.rootView.findViewById(R.id.content),
+					"Track already in", Snackbar.LENGTH_SHORT).show()}
+		}else {
 			viewHolder.vTitle.setBackgroundColor(0x7AD5A54F.toInt())
 			viewHolder.itemView.setOnClickListener {
 				Log.d("DWIJ_TIMING", "click on playlist item")
