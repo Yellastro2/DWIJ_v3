@@ -24,9 +24,10 @@ import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import java.util.concurrent.ConcurrentHashMap
 import android.util.Log
+import com.yellastrodev.dwij.data.dao.dPlaylistDao
 
 class PlaylistRepository(
-    private val local: PlaylistLocalSource,
+    private val local: dPlaylistDao,
     private val remote: PlaylistRemoteSource,
     private val cache: PlaylistCacheSource,
     private val scope: CoroutineScope,
@@ -55,11 +56,13 @@ class PlaylistRepository(
             else {
                 // 1️⃣ Загружаем из локальной БД
                 Log.d(TAG, "Загружаем плейлисты из локальной БД")
-                val localData = local.getAll()
+                val localData = local.getAlldPlaylists()
+                Log.d(TAG, "плейлисты загружены, сохраняем в кеш")
                 if (localData.isNotEmpty()) {
                     cache.putAll(localData)
                     _playlistMap.value = localData.associateBy { it.playlistUuid }
                 }
+                Log.d(TAG, "Загружено плейлистов из локальной БД: ${localData.size}")
             }
 
             refreshPlaylists()
@@ -69,13 +72,14 @@ class PlaylistRepository(
     val trackLocks = ConcurrentHashMap<String, Mutex>()
 
     suspend fun refreshPlaylists(){
+        Log.d(TAG, "Загружаем плейлисты из удалённого сервера")
         val remoteData = ArrayList(remote.fetchAll())
         val likeList = (remote.fetchLikelist() as dPlaylistResult.Success).YaPlaylist
         remoteData.add(likeList)
         val dif = diffPlaylists(_playlistMap.value, remoteData)
         if (dif.isNotEmpty()) {
-
-            _playlistMap.value = remoteData.associateBy { it.playlistUuid }
+            Log.d(TAG,"есть изменения в онлайн плейлистов: ${dif.added.size}, ${dif.changed.size}, ${dif.removed.size}")
+//            _playlistMap.value = remoteData.associateBy { it.playlistUuid }
 
             dif.forEachNew {
                 var playlist = _playlistMap.value[it]!!
@@ -89,20 +93,12 @@ class PlaylistRepository(
                     trackRepo.getTracks(playlist.tracks.map { it.trackId })
                 }
                 cache.put(playlist)
-                local.save(playlist)
+                local.insert(playlist)
                 _playlistMap.value = _playlistMap.value + (playlist.playlistUuid to playlist)
-//                GlobalScope.launch {
-//                    trackRepo.getTracks(playlist.tracks.map { it.trackId }).forEach { qTrack ->
-//                        val mutex = trackLocks.computeIfAbsent(qTrack.id) { Mutex() }
-//                        mutex.withLock {
-//                            qTrack.playlists = qTrack.playlists + playlist.playlistUuid
-//                        }
-//                    }
-//                }
             }
             dif.removed.forEach {
                 cache.remove(it)
-                local.remove(it)
+                local.delete(it)
                 _playlistMap.value = _playlistMap.value - it
             }
         }
@@ -128,7 +124,7 @@ class PlaylistRepository(
         if (plResult is dPlaylistResult.Success) {
             if (playlist.revision != plResult.YaPlaylist.revision){
                 cache.put(plResult.YaPlaylist)
-                local.save(plResult.YaPlaylist)
+                local.insert(plResult.YaPlaylist)
                 _playlistMap.value = _playlistMap.value + (plUuid to plResult.YaPlaylist)
                 if (playlist.kind != LIKED_ID) {
                     trackRepo.putTracks(plResult.trackList)
@@ -145,7 +141,7 @@ class PlaylistRepository(
                             else
                                 trackRepo.getTracks(plResult.YaPlaylist.tracks.map { it.trackId })
                             cache.put(plResult.YaPlaylist)
-                            local.save(plResult.YaPlaylist)
+                            local.insert(plResult.YaPlaylist)
                             _playlistMap.value = _playlistMap.value + (plUuid to plResult.YaPlaylist)
                         }
                     }

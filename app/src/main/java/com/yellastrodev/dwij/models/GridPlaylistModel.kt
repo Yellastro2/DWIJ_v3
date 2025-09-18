@@ -1,5 +1,6 @@
 package com.yellastrodev.dwij.models
 
+import android.util.Log
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.viewModelScope
@@ -15,6 +16,8 @@ class GridPlaylistModel(
 	private val repo: PlaylistRepository,
 	private val coverRepo: CoverRepository
 ): ViewModel() {
+
+	val TAG = "GridPlaylistModel"
 
 	class Factory(
 		private val repo: PlaylistRepository,
@@ -48,6 +51,7 @@ class GridPlaylistModel(
 						compareBy<dYaPlaylist> { it.kind != "liked" }
 							.thenByDescending { it.kind.toIntOrNull() ?: Int.MIN_VALUE }
 					)))
+					Log.d(TAG, "не пустой список плейлистов подан в адаптер")
 				}
 			}
 		}

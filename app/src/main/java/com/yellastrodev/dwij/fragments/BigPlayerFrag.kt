@@ -205,9 +205,14 @@ class BigPlayerFrag() :
 			Log.d(TAG, "BigPlayer.onTrackFlow collect playlists=$fPlLists")
 			val filtered = fPlLists.filter { it.kind != LIKED_ID }
 			withContext(Dispatchers.Main) {
-				if (filtered.isNotEmpty())
+				if (filtered.isNotEmpty()) {
 					mvToPlaylist.visibility = View.GONE
-				mvPlListFlexbox.adapter = CustomAdapter(filtered)
+					mvPlListFlexbox.adapter = CustomAdapter(filtered)
+				}else {
+					mvToPlaylist.visibility = View.VISIBLE
+					mvPlListFlexbox.adapter = null
+				}
+
 			}
 		}
 	}

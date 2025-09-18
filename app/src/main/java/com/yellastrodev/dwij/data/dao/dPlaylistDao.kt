@@ -1,5 +1,6 @@
 package com.yellastrodev.dwij.data.dao
 
+import android.util.Log
 import androidx.room.Dao
 import androidx.room.Insert
 import androidx.room.OnConflictStrategy
@@ -10,6 +11,9 @@ import com.yellastrodev.dwij.data.entities.dYaPlaylist
 
 @Dao
 interface dPlaylistDao {
+
+    val TAG: String
+        get() = "dPlaylistDao"
 
 //    @Query("SELECT * FROM playlists WHERE playlistUuid = :id LIMIT 1")
 //    suspend fun getdPlaylistById(id: String): dYaPlaylist?
@@ -39,11 +43,11 @@ interface dPlaylistDao {
     suspend fun getTracksForPlaylist(id: String): List<dPlaylistTrack>
 
     @Insert(onConflict = OnConflictStrategy.REPLACE)
-    suspend fun insertPlaylistEntity(playlist: dYaPlaylist)
+    suspend fun insertPlaylistDump(playlist: dYaPlaylist)
 
     @Transaction
     suspend fun insert(playlist: dYaPlaylist) {
-        insertPlaylistEntity(playlist)
+        insertPlaylistDump(playlist)
         insertTracks(playlist.tracks.map { it.copy(playlistUuid = playlist.playlistUuid) })
     }
 
@@ -57,8 +61,10 @@ interface dPlaylistDao {
     @Transaction
     suspend fun getAlldPlaylists(): List<dYaPlaylist> {
         val playlists = getAlldPlaylistsDump()
+        Log.d(TAG, "getAlldPlaylists: $playlists")
         return playlists.map { pl ->
             pl.tracks = getTracksForPlaylist(pl.playlistUuid)
+            Log.d(TAG, "getAlldPlaylists.tracks: ${pl.tracks.size}")
             pl
         }
     }

@@ -105,7 +105,7 @@ class yApplication: Application() {
             remote = PlaylistRemoteSource(yamClient),
             scope = GlobalScope,
             trackRepo = trackRepository,
-            local = playlistLocalSource
+            local = db.dPlaylistDao()
 
         )
     }
@@ -118,7 +118,9 @@ class yApplication: Application() {
     }
 
     val playerRepo: PlayerRepository by lazy {
-        PlayerRepository(applicationContext, trackCacheRepo)
+        PlayerRepository(applicationContext, trackCacheRepo).apply {
+            bind()
+        }
     }
 
     val coverRepository: CoverRepository by lazy {
@@ -135,7 +137,6 @@ class yApplication: Application() {
     @OptIn(DelicateCoroutinesApi::class)
     override fun onCreate() {
         super.onCreate()
-        playerRepo.bind()
 
 
     }

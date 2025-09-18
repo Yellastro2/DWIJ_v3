@@ -43,7 +43,9 @@ class TrackRepository(
         }
 
         if (updated.isNotEmpty()) {
-            _tracks.value = updated
+            Log.d(TAG, "putTracks( updateSize=${updated.size})")
+            _tracks.value = _tracks.value + updated
+            Log.d(TAG, "putTracks(valueSize=${_tracks.value.size})")
 
             GlobalScope.launch(Dispatchers.IO) {
                 local.saveAll(trackList)
