@@ -302,6 +302,12 @@ class YamApiClient(
 		fRes.getJSONObject("result")
 	}
 
+	/**
+	 * Удаляет трек из плейлиста
+	 * @param playlistKind идентификатор плейлиста
+	 * @param revision ревизия плейлиста
+	 * @param trackNumber позиция трека в плейлисте, буквально его indexOf()
+	 */
 	suspend fun removeTrack(playlistKind: Int, revision: Int, trackNumber: Int): Boolean {
 
 		val fDif = Differenc().addDelete(trackNumber, trackNumber+1)

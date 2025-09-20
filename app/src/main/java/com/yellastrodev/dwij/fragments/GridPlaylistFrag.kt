@@ -7,6 +7,7 @@ import android.view.View
 import androidx.appcompat.app.AlertDialog
 import androidx.fragment.app.Fragment
 import androidx.fragment.app.viewModels
+import androidx.lifecycle.lifecycleScope
 import androidx.lifecycle.viewModelScope
 import androidx.navigation.fragment.findNavController
 import androidx.recyclerview.widget.GridLayoutManager
@@ -52,6 +53,7 @@ class GridPlaylistFrag() : Fragment(R.layout.frag_grid_playlist) {
 	private val model: GridPlaylistModel by viewModels {
 		GridPlaylistModel.Factory(
 			repo = (requireActivity().application as yApplication).playlistRepository,
+			trackRepo = (requireActivity().application as yApplication).trackRepository,
 			coverRepo = (requireActivity().application as yApplication).coverRepository
 		)
 	}
@@ -73,7 +75,9 @@ class GridPlaylistFrag() : Fragment(R.layout.frag_grid_playlist) {
 			val fTrackId = requireArguments().getString(ACTION_DATA)
 
 			if(fAction == ACTION_ADDTRACK && fTrackId != null){
-				model.adapter.pickedTrack = model.getTrack(fTrackId)
+				lifecycleScope.launch {
+					model.adapter.pickedTrack = model.getTrack(fTrackId)
+				}
 				view.findViewById<View>(R.id.fr_list_pllist_title).visibility = View.VISIBLE
 				mOnItemClick = {
 							fPl: dYaPlaylist ->

@@ -37,7 +37,7 @@ class GridPlaylistModel(
 
 
 	val adapter: GridPlaylistAdapter by lazy {
-		GridPlaylistAdapter { coverUrl ->
+		GridPlaylistAdapter(this) { coverUrl ->
 			coverRepo.getCover(coverUrl, CoverSize.`100x100`) // suspend функция
 		}
 			.apply {
@@ -68,8 +68,13 @@ class GridPlaylistModel(
 		playlistRepo.addTrackToPlaylist(playlist, trackId)
 	}
 
-	fun getTrack(trackId: String): dYaTrack? {
-		return trackRepo.tracks.value[trackId]
+	suspend fun getTrack(trackId: String): dYaTrack? {
+		return trackRepo.getTrack(trackId)
 
+	}
+
+	suspend fun removeTrackFromPlaylist(playlist: dYaPlaylist, track: dYaTrack): Boolean {
+		playlistRepo.removeTrackFromPlaylist(playlist, track)
+		return true
 	}
 }

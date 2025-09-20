@@ -16,10 +16,12 @@ import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.lifecycleScope
 import androidx.lifecycle.repeatOnLifecycle
+import com.google.android.material.snackbar.Snackbar
 import com.yellastrodev.dwij.R
 import com.yellastrodev.dwij.activities.MainActivity
 import com.yellastrodev.dwij.data.entities.dYaTrack
 import com.yellastrodev.dwij.models.PlayerModel
+import com.yellastrodev.dwij.service.PlayerEvent
 import com.yellastrodev.dwij.yApplication
 import com.yellastrodev.yandexmusiclib.entities.CoverSize
 import kotlinx.coroutines.Dispatchers
@@ -91,11 +93,17 @@ open class PlayerAbs() : Fragment() {
 		}
 
 		viewLifecycleOwner.lifecycleScope.launch() {
+			var lastTrackId = ""
 			viewLifecycleOwner.repeatOnLifecycle(Lifecycle.State.STARTED) {
 				playerModel.track.collect { track ->
-					Log.d(TAG, "collect track=$track")
 					if (track != null) {
+						Log.d(TAG, "collect track=$track")
 						onTrackFlow(track)
+
+						if (lastTrackId == track.id)
+							return@collect
+
+						lastTrackId = track.id
 						withContext(Dispatchers.Main) {
 							mvTitle.text = track.title
 							mvArtist.text = track.artists.joinToString(", ") { it.name }
@@ -140,6 +148,18 @@ open class PlayerAbs() : Fragment() {
 				}
 			}
 		}
+
+		lifecycleScope.launchWhenStarted {
+			playerModel.playerEvent.collect { event ->
+				when (event) {
+					is PlayerEvent.ShowError -> {
+						Snackbar.make(view, event.message, Snackbar.LENGTH_SHORT).show()
+					}
+				}
+			}
+		}
+
+
 		mvRandom?.setOnClickListener { v -> setRandom(v) }
 //
 //

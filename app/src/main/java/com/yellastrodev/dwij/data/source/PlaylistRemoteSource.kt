@@ -1,5 +1,6 @@
 package com.yellastrodev.dwij.data.source
 
+import android.util.Log
 import com.yellastrodev.dwij.data.entities.dYaLikeTracklist
 import com.yellastrodev.dwij.data.entities.dYaPlaylist
 import com.yellastrodev.dwij.data.entities.dYaTrack
@@ -27,7 +28,13 @@ class PlaylistRemoteSource(private val client: YamApiClient) {
     }
 
     suspend fun addTrackToPlaylist(playlist: dYaPlaylist, track: dYaTrack) {
+        Log.d("PlaylistRemoteSource", "addTrackToPlaylist: ${track.id}, albums = ${track.albums.size}")
         client.addTrack(playlist.kind.toInt(), playlist.revision, track.id, track.albums[0].id.toString())
+    }
+
+    suspend fun removeTrackFromPlaylist(playlist: dYaPlaylist, trackNumber: Int) {
+        Log.d("PlaylistRemoteSource", "removeTrackFromPlaylist: plId: ${playlist.kind}, trackNumber: $trackNumber")
+        client.removeTrack(playlist.kind.toInt(), playlist.revision, trackNumber)
     }
 }
 

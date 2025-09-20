@@ -14,6 +14,7 @@ import com.google.android.material.snackbar.Snackbar
 import com.yellastrodev.dwij.R
 import com.yellastrodev.dwij.data.entities.dYaPlaylist
 import com.yellastrodev.dwij.data.entities.dYaTrack
+import com.yellastrodev.dwij.models.GridPlaylistModel
 import com.yellastrodev.dwij.utils.DurationFormat.Companion.formatDuration
 import com.yellastrodev.dwij.utils.PlaylistsDiff
 import com.yellastrodev.yandexmusiclib.CONSTANTS.Companion.LIKED_ID
@@ -26,6 +27,7 @@ import kotlinx.coroutines.withContext
 import kotlin.random.Random
 
 class GridPlaylistAdapter(
+	private val model: GridPlaylistModel,
 	private val loadCover: suspend (dYaPlaylist) -> Bitmap
 ) :
 RecyclerView.Adapter<GridPlaylistAdapter.ViewHolder>() {
@@ -34,6 +36,10 @@ RecyclerView.Adapter<GridPlaylistAdapter.ViewHolder>() {
 	var onClick: (dYaPlaylist)-> Unit = {}
 
 	var pickedTrack: dYaTrack? = null
+	set(value) {
+		field = value
+		notifyDataSetChanged()
+	}
 
 	var onCreatePlClick: () -> Unit = {}
 
@@ -190,7 +196,7 @@ RecyclerView.Adapter<GridPlaylistAdapter.ViewHolder>() {
 		if (f_end_num>4 || f_end_num == 0) f_end_lettr = "ов"
 		else if (f_end_num>1) f_end_lettr = "а"
 		viewHolder.vTitle.text = mList[position].title
-		viewHolder.vAutor.text = "$f_size трек$f_end_lettr - $fDurStr"
+		viewHolder.vAutor.text = "$f_size трек$f_end_lettr\n$fDurStr"
 
 
 		val f_name_patrn = "back1_1"
@@ -207,7 +213,7 @@ RecyclerView.Adapter<GridPlaylistAdapter.ViewHolder>() {
 			return@setOnLongClickListener true
 		}
 
-		if(pickedTrack != null && pickedTrack!!.playlists.contains(mList[position].playlistUuid)){
+		if( pickedTrack != null && pickedTrack!!.playlists.contains(mList[position].playlistUuid)){
 			viewHolder.vTitle.setBackgroundColor(0xD0080E75.toInt())
 			viewHolder.itemView.setOnClickListener {
 				val builder: AlertDialog.Builder = AlertDialog.Builder(viewHolder.itemView.context)
@@ -217,11 +223,11 @@ RecyclerView.Adapter<GridPlaylistAdapter.ViewHolder>() {
 					.setPositiveButton("Yes,remove") { fD, o ->
 						fD.dismiss()
 						CoroutineScope(Dispatchers.IO).launch {
-							model.addTrackToPlaylist(fPl,fTrackId)
-							val fRes = (mList[position] as dYaPlaylist).removeTrack(
-								yMediaStore.store(viewHolder.itemView.context),
-								mTrack!!
-							)
+							val fRes = model.removeTrackFromPlaylist(mList[position],pickedTrack!!)
+//							val fRes = (mList[position] as dYaPlaylist).removeTrack(
+//								yMediaStore.store(viewHolder.itemView.context),
+//								mTrack!!
+//							)
                             withContext(Dispatchers.Main) {
                                 if (fRes) {
                                     notifyItemChanged(position)
@@ -243,7 +249,7 @@ RecyclerView.Adapter<GridPlaylistAdapter.ViewHolder>() {
 
 				val dialog: AlertDialog = builder.create()
 				dialog.show()
-				Snackbar.make(viewHolder.itemView.rootView.findViewById(R.id.content),
+				Snackbar.make(viewHolder.itemView.rootView.findViewById(android.R.id.content),
 					"Track already in", Snackbar.LENGTH_SHORT).show()}
 		}else {
 			viewHolder.vTitle.setBackgroundColor(0x7AD5A54F.toInt())
@@ -251,7 +257,7 @@ RecyclerView.Adapter<GridPlaylistAdapter.ViewHolder>() {
 				Log.d("DWIJ_TIMING", "click on playlist item")
 				onClick(mList[position])
 			}
-//		}
+		}
 
 	}
 

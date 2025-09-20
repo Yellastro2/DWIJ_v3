@@ -98,7 +98,7 @@ class yPushMediaAdapterobject(
     private suspend fun getCurrentTrackCoverBitmap(trackId: String): Bitmap? {
 
         Log.d(TAG, "getCurrentTrackCoverBitmap: trackId=$trackId")
-        val track = trackId?.let { playerService.trackRepo.tracks.value[it] } ?: return null
+        val track = trackId?.let { playerService.trackRepo.getTrack(it) } ?: return null
         Log.d(TAG, "Track found in repo: $track")
         return playerService.coverRepo.getCover(track, CoverSize.`100x100`).also {
             Log.d(TAG, "Bitmap loaded for trackId=$trackId, size=${it.width}x${it.height}")

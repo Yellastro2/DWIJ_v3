@@ -103,6 +103,23 @@ interface dTrackDao {
         }
         return tracks
     }
+
+    @Query("SELECT * FROM tracks WHERE id IN (:ids)")
+    suspend fun getTracksDump(ids: List<String>): List<dYaTrack>
+
+    @Transaction
+    suspend fun getTracks(ids: List<String>): List<dYaTrack> {
+        if (ids.isEmpty()) return emptyList()
+
+        val tracks = getTracksDump(ids)
+        tracks.forEach { track ->
+            track.artists = getArtistsForTrack(track.id)
+            track.albums = getAlbumsForTrack(track.id)
+            track.playlists = getPlaylistsForTrack(track.id)
+        }
+        return tracks
+    }
+
     suspend fun insertAll(tracks: List<dYaTrack>) {
         tracks.forEach { insert(it) }
     }

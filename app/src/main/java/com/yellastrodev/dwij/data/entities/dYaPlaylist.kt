@@ -48,14 +48,14 @@ fun YaPlaylist.toEntity(): dYaPlaylist {
           isPremiere = isPremiere,
           durationMs = durationMs,
           ogImageUri = ogImageUri,
-          backgroundImageUrl = backgroundImageUrl,
-//          tracks = tracks
+          backgroundImageUrl = backgroundImageUrl
      )
-     // Заполняем @Ignore-поле вручную
+     // Заполняем @Ignore-поле вручную. сохраняем порядок элементов в переменную position
      entity.tracks = tracks.map { trackShort ->
           dPlaylistTrack(
                playlistUuid = playlistUuid,
-               trackId = trackShort.id
+               trackId = trackShort.id,
+               position = tracks.indexOf(trackShort)
           )
      }
      return entity
@@ -76,5 +76,6 @@ fun YaPlaylist.toEntity(): dYaPlaylist {
 )
 data class dPlaylistTrack(
      val playlistUuid: String,
-     val trackId: String
+     val trackId: String,
+     val position: Int? = null
 )

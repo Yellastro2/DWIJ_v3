@@ -25,6 +25,7 @@ import kotlinx.coroutines.sync.withLock
 import java.util.concurrent.ConcurrentHashMap
 import android.util.Log
 import com.yellastrodev.dwij.data.dao.dPlaylistDao
+import com.yellastrodev.dwij.data.entities.dYaTrack
 
 class PlaylistRepository(
     private val local: dPlaylistDao,
@@ -81,8 +82,8 @@ class PlaylistRepository(
             Log.d(TAG,"есть изменения в онлайн плейлистов: ${dif.added.size}, ${dif.changed.size}, ${dif.removed.size}")
 //            _playlistMap.value = remoteData.associateBy { it.playlistUuid }
 
-            dif.forEachNew {
-                var playlist = _playlistMap.value[it]!!
+            dif.forEachNew { uuid ->
+                var playlist = remoteData.find { it.playlistUuid ==  uuid}!!
                 if (playlist.kind != LIKED_ID) {
                     val plResult = remote.fetch(playlist.kind.toInt())
                     if (plResult is dPlaylistResult.Success) {
@@ -115,6 +116,8 @@ class PlaylistRepository(
             .filterNotNull()               // пропускаем null
             .distinctUntilChanged()        // опционально, чтобы не пушить одинаковое
 
+    // TODO . а еще порядок треков
+    //  в плейлисте разьебан, а для удаления надо знать точный
     suspend fun refreshPlaylist(plUuid: String) {
         val playlist = _playlistMap.value[plUuid]!!
         val plResult = if (playlist.kind != LIKED_ID) {
@@ -151,9 +154,19 @@ class PlaylistRepository(
     }
 
     suspend fun addTrackToPlaylist(playlist: dYaPlaylist, trackId: String) {
-        val track = trackRepo.tracks.value[trackId]!!
+        val track = trackRepo.getTrack(trackId)
         remote.addTrackToPlaylist(playlist, track)
         refreshPlaylist(playlist.playlistUuid)
+        trackRepo.refreshTrackLocaly(trackId)
 
+    }
+
+    suspend fun removeTrackFromPlaylist(playlist: dYaPlaylist, track: dYaTrack) {
+        refreshPlaylist(playlist.playlistUuid)
+        val playlistedTrack = playlist.tracks.find { it.trackId == track.id }!!
+
+        remote.removeTrackFromPlaylist(playlist, playlist.tracks.indexOf(playlistedTrack))
+        refreshPlaylist(playlist.playlistUuid)
+        trackRepo.refreshTrackLocaly(track.id)
     }
 }

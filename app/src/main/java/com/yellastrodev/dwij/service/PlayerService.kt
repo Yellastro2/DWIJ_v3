@@ -33,7 +33,9 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.GlobalScope
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.SharedFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.launch
 
@@ -62,6 +64,9 @@ class PlayerService : Service() {
     /** Горячие стримы состояния плеера для UI или наблюдения */
     private val _state = MutableStateFlow(PlayerState())
     val state: StateFlow<PlayerState> = _state
+
+    private val _events = MutableSharedFlow<PlayerEvent>()
+    val events: SharedFlow<PlayerEvent> = _events
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
         return super.onStartCommand(intent, flags, startId)
@@ -145,6 +150,15 @@ class PlayerService : Service() {
 
         // Слушаем изменения состояния воспроизведения
         player.addListener(object : Player.Listener {
+            override fun onMediaItemTransition(mediaItem: MediaItem?, reason: Int) {
+                if (reason == Player.MEDIA_ITEM_TRANSITION_REASON_AUTO) {
+                    Log.d(TAG, "Автопереход на следующий трек: $mediaItem")
+                    _state.value = _state.value.copy(
+                        currentIndex = player.currentMediaItemIndex
+                    )
+                }
+            }
+
             override fun onPlaybackStateChanged(playbackState: Int) {
                 _state.value = _state.value.copy(
                     isPlaying = player.isPlaying,
@@ -166,6 +180,9 @@ class PlayerService : Service() {
 
             override fun onPlayerError(error: PlaybackException) {
                 Log.e(TAG, "Ошибка проигрывания: ${error.message}")
+                GlobalScope.launch {
+                    _events.emit(PlayerEvent.ShowError("Ошибка воспроизведения"))
+                }
                 player.seekToNext() // просто перескакиваем
             }
 
@@ -338,3 +355,9 @@ data class PlayerState(
     val duration: Long = 0,
     val isShuffle: Boolean = false
 )
+
+
+sealed class PlayerEvent {
+    data class ShowError(val message: String) : PlayerEvent()
+    // можно добавить другие события: SkipNext, SkipPrev и т.д.
+}

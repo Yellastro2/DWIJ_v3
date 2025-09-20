@@ -16,7 +16,10 @@ import com.yellastrodev.dwij.data.repo.TrackRepository
 import com.yellastrodev.dwij.data.entities.dYaTrack
 import com.yellastrodev.dwij.data.repo.PlaylistRepository
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 
 class PlayerModel(
@@ -45,6 +48,22 @@ class PlayerModel(
             throw IllegalArgumentException("Unknown ViewModel class")
         }
     }
+
+    /**
+     * Flow для UI с полным объектом Track
+     * Подписан на трек из плеера: получает переключения между треками проигрывания,
+     * Также подписан на данные трека из репозитория. Чтобы ловить изменения плейлистов трека
+     */
+    val track: StateFlow<dYaTrack?> =
+        combine(playerRepo.currentTrack, trackRepo.tracks) { trackId, tracksMap ->
+            if (trackId != null) {
+                tracksMap[trackId] // всегда актуальный объект из репо
+            } else {
+                null
+            }
+        }
+            .stateIn(viewModelScope, SharingStarted.Eagerly, null)
+
 
     suspend fun nextTrack() {
         playerRepo.skipNext()
@@ -104,28 +123,30 @@ class PlayerModel(
 
 
 
-    // Flow для UI с полным объектом Track
-    private val _track = MutableStateFlow<dYaTrack?>(null)
-    val track: StateFlow<dYaTrack?> = _track
+//    // Flow для UI с полным объектом Track
+//    private val _track = MutableStateFlow<dYaTrack?>(null)
+//    val track: StateFlow<dYaTrack?> = _track
 
     val playerState = playerRepo.state
     val playTitle = playerRepo.playTitle
 
-    init {
-        // Подписка на изменения ID трека из репо
-        viewModelScope.launch {
-            playerRepo.currentTrack.collect { trackId ->
-                if (trackId != null) {
-                    val trackObj = trackRepo.tracks.value[trackId]
-                    _track.value = trackObj
-                    Log.d(TAG, "trackId=$trackId, trackObj=$trackObj")
-                } else {
-                    _track.value = null
-                    Log.d(TAG, "trackId=null")
-                }
-            }
-        }
-    }
+    val playerEvent = playerRepo.events
+
+//    init {
+//        // Подписка на изменения ID трека из репо
+//        viewModelScope.launch {
+//            playerRepo.currentTrack.collect { trackId ->
+//                if (trackId != null) {
+//                    val trackObj = trackRepo.getTrack(trackId)
+//                    _track.value = trackObj
+//                    Log.d(TAG, "trackId=$trackId, trackObj=$trackObj")
+//                } else {
+//                    _track.value = null
+//                    Log.d(TAG, "trackId=null")
+//                }
+//            }
+//        }
+//    }
 
 
 

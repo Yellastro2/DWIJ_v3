@@ -62,7 +62,7 @@ class yApplication: Application() {
             dTrackAlbumCrossRef::class,
             dTrackArtistCrossRef::class
                    ],
-        version = 2
+        version = 3
     )
 //    @TypeConverters(StringListConverter::class) // если у тебя есть поля List<String>
     abstract class AppDatabase : RoomDatabase() {
@@ -70,13 +70,15 @@ class yApplication: Application() {
         abstract fun dTrackDao(): dTrackDao
     }
 
-    val trackLocalSource by lazy {
-        TrackLocalSource(db.dTrackDao())
-    }
+//    val trackLocalSource by lazy {
+//        TrackLocalSource(db.dTrackDao())
+//    }
 
     val trackRepository: TrackRepository by lazy {
-        TrackRepository(TrackRemoteSource(yamClient),
-            trackLocalSource)
+        TrackRepository(
+            TrackRemoteSource(yamClient),
+            db.dTrackDao()
+            )
     }
 
     val db by lazy {

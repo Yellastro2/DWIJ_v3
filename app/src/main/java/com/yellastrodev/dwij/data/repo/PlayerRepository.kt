@@ -14,10 +14,13 @@ import androidx.media3.common.MediaMetadata
 import androidx.media3.common.util.UnstableApi
 import com.yellastrodev.dwij.TRACK_ID
 import com.yellastrodev.dwij.data.entities.dYaTrack
+import com.yellastrodev.dwij.service.PlayerEvent
 import com.yellastrodev.dwij.service.PlayerService
 import com.yellastrodev.dwij.service.PlayerState
 import kotlinx.coroutines.GlobalScope
+import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.SharedFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.onEach
 import kotlinx.coroutines.flow.launchIn
@@ -42,6 +45,9 @@ class PlayerRepository(
     private val _currentTrack = MutableStateFlow<String?>(null)
     val currentTrack: StateFlow<String?> = _currentTrack
 
+    private val _events = MutableSharedFlow<PlayerEvent>()
+    val events: SharedFlow<PlayerEvent> = _events
+
     private val serviceConnection = object : ServiceConnection {
         override fun onServiceConnected(name: ComponentName?, binder: IBinder?) {
             service = (binder as PlayerService.PlayerBinder).getService()
@@ -54,6 +60,11 @@ class PlayerRepository(
                 _state.value = playerState
             }
                 ?.launchIn(GlobalScope) // лучше передать свой scope
+            service?.events
+                ?.onEach { event ->
+                    _events.emit(event) // пробрасываем в репозиторий
+                }
+                ?.launchIn(GlobalScope) // лучше свой scope
         }
 
 

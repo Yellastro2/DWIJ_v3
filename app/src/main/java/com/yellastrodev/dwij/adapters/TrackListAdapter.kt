@@ -37,9 +37,64 @@ class TrackListAdapter(
     @SuppressLint("NotifyDataSetChanged")
     fun setList(allTracks: ArrayList<dYaTrack>) {
         Log.d("TrackListAdapter", "setList: ${allTracks.size}")
-        mListOfObj = allTracks
+        val diff = diffTracks(mListOfObj, allTracks)
+//        mListOfObj = allTracks
+//        mInitJob = null
+//        notifyDataSetChanged()
+    }
+
+    /**
+     * проверяет изменения в списках, включая позиции каждого трека.
+     * читает их только по .id, игнорирует остальные поля и изменения самих обьектов
+     */
+    private fun diffTracks(
+        oldTracks: ArrayList<dYaTrack>,
+        newTracks: ArrayList<dYaTrack>
+    ) {
+        val oldMap = oldTracks.associateBy { it.id }
+        val newMap = newTracks.associateBy { it.id }
+        val removed = oldTracks.filter { !newMap.containsKey(it.id) }
+        val added = newTracks.filter { !oldMap.containsKey(it.id) }
+
+        val oldIndexMap = oldTracks.mapIndexed { index, track -> track.id to index }.toMap()
+        val newIndexMap = newTracks.mapIndexed { index, track -> track.id to index }.toMap()
+
+        // Перемещённые: есть в обоих списках, но индекс изменился
+        val moved = mutableListOf<Triple<dYaTrack, Int, Int>>() // track, oldIndex, newIndex
+        for (track in newTracks) {
+            val oldIndex = oldIndexMap[track.id]
+            val newIndex = newIndexMap[track.id]
+            if (oldIndex != null && newIndex != null && oldIndex != newIndex) {
+                moved.add(Triple(track, oldIndex, newIndex))
+            }
+        }
+
+// --- Применяем изменения к адаптеру ---
+        // Удаляем с конца, чтобы индексы не сдвигались
+        removed.mapNotNull { oldIndexMap[it.id] }
+            .sortedDescending()
+            .forEach { idx ->
+//                mListOfObj.removeAt(idx)
+                notifyItemRemoved(idx)
+            }
+
+        // Добавляем
+        added.forEach { track ->
+            val idx = newIndexMap[track.id]!!
+//            mListOfObj.add(idx, track)
+            notifyItemInserted(idx)
+        }
+
+        // Перемещаем
+        moved.forEach { ( _,oldIdx, newIdx) ->
+            notifyItemMoved(oldIdx, newIdx)
+            // сам список тоже нужно переставить
+//            val item = mListOfObj.removeAt(oldIdx)
+//            mListOfObj.add(newIdx, item)
+        }
+
         mInitJob = null
-        notifyDataSetChanged()
+        mListOfObj = newTracks
     }
 
     fun addToList(fTracks: Collection<dYaTrack>) {
