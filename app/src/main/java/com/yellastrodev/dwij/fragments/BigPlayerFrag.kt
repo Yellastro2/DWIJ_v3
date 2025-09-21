@@ -33,6 +33,7 @@ import com.google.android.flexbox.FlexWrap
 import com.google.android.flexbox.FlexboxLayoutManager
 import com.google.android.flexbox.JustifyContent
 import com.yellastrodev.dwij.activities.MainActivity
+import com.yellastrodev.dwij.service.PlayerState
 
 class BigPlayerFrag() :
 	PlayerAbs()
@@ -48,6 +49,7 @@ class BigPlayerFrag() :
 	lateinit var mvAlbum: TextView
 	lateinit var mvLike: ImageView
 	lateinit var mvRestrict: TextView
+	lateinit var mvRepeatBtn: ImageView
 
 //	var mTrack: iTrack? = null
 
@@ -108,22 +110,15 @@ class BigPlayerFrag() :
 //			(activity as MainActivity).mNavController.navigate(R.id.action_bigPlayerFrag_to_trackListFrag)
 //		}
 
-		val fvRepeat = view.findViewById<ImageView>(R.id.fr_player_cycle)
-		fvRepeat.setOnClickListener {
-//			mPlayer?.let {
-//				mPlayer?.isRepeat = !mPlayer?.isRepeat!!
-//				if (mPlayer?.isRepeat!!)
-//					fvRepeat.setBackgroundColor(Color.GREEN)
-//				else
-//					fvRepeat.background = null
-//			}
 
+		mvRandom?.setOnClickListener { v -> setRandom(v) }
+
+		mvRepeatBtn = view.findViewById<ImageView>(R.id.fr_player_cycle)
+		mvRepeatBtn.setOnClickListener {
+			setRotate(it)
 		}
 
-//		if (mPlayer?.isRepeat!!)
-//			fvRepeat.setBackgroundColor(Color.GREEN)
-//		else
-//			fvRepeat.background = null
+		setRotateBtn(false)
 
 
 
@@ -169,6 +164,52 @@ class BigPlayerFrag() :
 	}
 
 
+	var nowShuffle = false
+
+	fun setRandomBtn(isShuffle: Boolean){
+//		if (mPlayer == null) return
+		nowShuffle = isShuffle
+		if (isShuffle) {
+			mvRandom?.setImageResource(R.drawable.random_on)
+		} else{
+			mvRandom?.setImageResource(R.drawable.random)
+
+		}
+	}
+
+	fun setRandom(fV: View){
+		playerModel.shuffle()
+	}
+
+
+	var nowRepeat = false
+
+	fun setRotateBtn(isRepeat: Boolean){
+		if (isRepeat)
+			mvRepeatBtn.setBackgroundColor(Color.GREEN)
+				else
+			mvRepeatBtn.background = null
+		nowRepeat = isRepeat
+	}
+
+	fun setRotate(fV: View){
+		playerModel.rotate()
+//			mPlayer?.let {
+//				mPlayer?.isRepeat = !mPlayer?.isRepeat!!
+//				if (mPlayer?.isRepeat!!)
+//					fvRepeat.setBackgroundColor(Color.GREEN)
+//				else
+//					fvRepeat.background = null
+//			}
+	}
+
+
+	override fun onPlayerStateFlow(state: PlayerState) {
+		if (state.isShuffle != nowShuffle)
+			setRandomBtn(state.isShuffle)
+		if (state.isRepeatAll != nowRepeat)
+			setRotateBtn(state.isRepeatAll)
+	}
 
 	override suspend fun onTrackFlow(track: dYaTrack){
 		setLikedState()

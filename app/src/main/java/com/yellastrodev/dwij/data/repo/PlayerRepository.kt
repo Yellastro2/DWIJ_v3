@@ -6,11 +6,13 @@ import android.content.Intent
 import android.content.ServiceConnection
 import android.os.Bundle
 import android.os.IBinder
+import android.preference.PreferenceManager
 import android.util.Log
 import androidx.annotation.OptIn
 import androidx.core.content.ContextCompat
 import androidx.media3.common.MediaItem
 import androidx.media3.common.MediaMetadata
+import androidx.media3.common.Player
 import androidx.media3.common.util.UnstableApi
 import com.yellastrodev.dwij.TRACK_ID
 import com.yellastrodev.dwij.data.entities.dYaTrack
@@ -34,6 +36,13 @@ class PlayerRepository(
 
     private var service: PlayerService? = null
 
+    private val prefs by lazy {
+        PreferenceManager.getDefaultSharedPreferences(context)
+    }
+
+    // это пошлый дубликат стейта из PlayerService, но подругому я не придумал потому что здесь в репо
+    // мне надо сравнивать их currentIndex что бы менять есличо _currentTrack,
+    // а PlayerService.state еще и не сразу доступен
     private val _state = MutableStateFlow(PlayerState())
     val state: StateFlow<PlayerState> = _state
 
@@ -51,6 +60,7 @@ class PlayerRepository(
     private val serviceConnection = object : ServiceConnection {
         override fun onServiceConnected(name: ComponentName?, binder: IBinder?) {
             service = (binder as PlayerService.PlayerBinder).getService()
+            applySavedModes()
             // Подписываемся на state сервиса
             service?.state?.onEach { playerState ->
                 if (playerState.currentIndex != _state.value.currentIndex) {
@@ -185,6 +195,29 @@ class PlayerRepository(
     }
 
     fun shuffle() {
-        service?.shuffle()
+        service?.player?.let { player ->
+            val newValue = !player.shuffleModeEnabled
+            player.shuffleModeEnabled = newValue
+            prefs.edit().putBoolean("shuffle_mode", newValue).apply()
+        }
     }
+
+    fun rotate() {
+        service?.player?.let { player ->
+            val newMode = when (player.repeatMode) {
+                Player.REPEAT_MODE_ALL -> Player.REPEAT_MODE_OFF
+                else -> Player.REPEAT_MODE_ALL
+            }
+            player.repeatMode = newMode
+            prefs.edit().putInt("repeat_mode", newMode).apply()
+        }
+    }
+
+    fun applySavedModes() {
+        service?.player?.let { player ->
+            player.shuffleModeEnabled = prefs.getBoolean("shuffle_mode", false)
+            player.repeatMode = prefs.getInt("repeat_mode", Player.REPEAT_MODE_OFF)
+        }
+    }
+
 }

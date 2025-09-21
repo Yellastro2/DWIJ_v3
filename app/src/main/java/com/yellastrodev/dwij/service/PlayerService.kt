@@ -44,7 +44,7 @@ private const val TAG = "PlayerService"
 @UnstableApi
 class PlayerService : Service() {
 
-    private lateinit var player: ExoPlayer
+    lateinit var player: ExoPlayer
     private val binder = PlayerBinder()
 
     // Репозитории для треков и обложек
@@ -189,6 +189,13 @@ class PlayerService : Service() {
             override fun onShuffleModeEnabledChanged(shuffleModeEnabled: Boolean) {
                 _state.value = _state.value.copy(isShuffle = shuffleModeEnabled)
                 Log.d(TAG, "ShuffleModeChanged: $shuffleModeEnabled")
+            }
+
+            override fun onRepeatModeChanged(repeatMode: Int) {
+                _state.value = _state.value.copy(
+                    isRepeatAll = (repeatMode == Player.REPEAT_MODE_ALL)
+                )
+                Log.d(TAG, "RepeatModeChanged: $repeatMode")
             }
 
 
@@ -344,9 +351,9 @@ class PlayerService : Service() {
         player.seekTo(lng)
     }
 
-    fun shuffle() {
-        player.shuffleModeEnabled = !player.shuffleModeEnabled
-    }
+//    fun shuffle() {
+//        player.shuffleModeEnabled = !player.shuffleModeEnabled
+//    }
 
 
 }
@@ -356,7 +363,8 @@ data class PlayerState(
     val currentIndex: Int = 0,
     val currentPosition: Long = 0,
     val duration: Long = 0,
-    val isShuffle: Boolean = false
+    val isShuffle: Boolean = false,
+    val isRepeatAll: Boolean = false
 )
 
 

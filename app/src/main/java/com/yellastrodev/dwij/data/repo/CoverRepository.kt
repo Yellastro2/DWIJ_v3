@@ -51,7 +51,7 @@ class CoverRepository(
     @OptIn(DelicateCoroutinesApi::class)
     suspend fun getCover(track: dYaTrack, size: CoverSize = CoverSize.`200x200`): Bitmap {
 
-        track.ogImageUri?. let {
+        track.getCoverUriAny()?. let {
             return getCover(keyForSize(track.id, size), it, size)
         }?: return BitmapFactory.decodeResource(context.resources, R.drawable.icon)
 

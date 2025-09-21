@@ -86,6 +86,11 @@ class PlayerModel(
         playerRepo.shuffle()
     }
 
+
+    fun rotate() {
+        playerRepo.rotate()
+    }
+
     private val colorIds = listOf(
 //				R.color.colorAccent,
         R.color.colorAccent2,
@@ -128,6 +133,7 @@ class PlayerModel(
             playlistRepo.likeTrack(id, isTrackLiked())
         }
     }
+
 
     companion object {
         const val TAG = "PlayerModel"

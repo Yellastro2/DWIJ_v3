@@ -22,6 +22,7 @@ import com.yellastrodev.dwij.activities.MainActivity
 import com.yellastrodev.dwij.data.entities.dYaTrack
 import com.yellastrodev.dwij.models.PlayerModel
 import com.yellastrodev.dwij.service.PlayerEvent
+import com.yellastrodev.dwij.service.PlayerState
 import com.yellastrodev.dwij.yApplication
 import com.yellastrodev.yandexmusiclib.entities.CoverSize
 import kotlinx.coroutines.Dispatchers
@@ -92,6 +93,7 @@ open class PlayerAbs() : Fragment() {
 			playerModel.playAudio()
 		}
 
+		// слушаем стейт плеера на смену трека итп
 		viewLifecycleOwner.lifecycleScope.launch() {
 			var lastTrackId = ""
 			viewLifecycleOwner.repeatOnLifecycle(Lifecycle.State.STARTED) {
@@ -134,18 +136,16 @@ open class PlayerAbs() : Fragment() {
 			}
 		}
 
+		// Слушаем стейт плеера на предмент прогрессбара, играет\пауза итп
 		viewLifecycleOwner.lifecycleScope.launch() {
 			var isPlaying = false
-
 			viewLifecycleOwner.repeatOnLifecycle(Lifecycle.State.STARTED) {
 				playerModel.playerState.collect {
-
+					onPlayerStateFlow(it)
 					if (it.isPlaying != isPlaying) {
 						if (it.isPlaying) setPlay() else setPause()
 						isPlaying = it.isPlaying
 					}
-					if (it.isShuffle != nowShuffle)
-						setRandomBtn(it.isShuffle)
 //					val progress = if (it.currentPosition > 0) it.duration / it.currentPosition else 0L
 					mvSeekBar?.progress = it.currentPosition.toInt()
 					mvSeekBar?.max = it.duration.toInt()
@@ -166,7 +166,6 @@ open class PlayerAbs() : Fragment() {
 		}
 
 
-		mvRandom?.setOnClickListener { v -> setRandom(v) }
 //
 //
 //		if(mPlayer != null && mPlayer!!.mList.size>0) {
@@ -184,6 +183,10 @@ open class PlayerAbs() : Fragment() {
 ////				"Media mPlayer not initialized", Snackbar.LENGTH_LONG
 ////			).show()
 //		}
+
+	}
+
+	open fun onPlayerStateFlow(state: PlayerState) {
 
 	}
 
@@ -206,26 +209,8 @@ open class PlayerAbs() : Fragment() {
 	}
 
 
-	var nowShuffle = false
 
-	fun setRandomBtn(isShuffle: Boolean){
-//		if (mPlayer == null) return
-		nowShuffle = isShuffle
-		if (isShuffle) {
-			mvRandom?.setImageResource(R.drawable.random_on)
-		} else{
-			mvRandom?.setImageResource(R.drawable.random)
 
-		}
-	}
-
-	fun setRandom(fV: View){
-//		val f_mode = mPlayer?.setRandomMode() ?: false
-		playerModel.shuffle()
-//		val f_msg = if (f_mode) "enable" else "disable"
-//		val snack = Snackbar.make(fV,"Random mode $f_msg",Snackbar.LENGTH_SHORT)
-//		snack.show()
-	}
 	lateinit var mTrackId: String
 //	open fun setTrack(fTrack: iTrack, fTrackList: iTrackList?){
 //		mTrackId = fTrack.mId

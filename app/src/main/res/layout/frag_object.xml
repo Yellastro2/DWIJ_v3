@@ -15,7 +15,7 @@
 
     <com.google.android.material.appbar.CollapsingToolbarLayout
         android:layout_width="match_parent"
-        android:layout_height="300dp"
+        android:layout_height="400dp"
         android:minHeight="?attr/actionBarSize"
         app:layout_scrollFlags="scroll|exitUntilCollapsed"
         app:contentScrim="?attr/colorPrimary"
@@ -62,15 +62,6 @@
             app:layout_constraintStart_toStartOf="parent"
             app:layout_constraintTop_toBottomOf="@+id/fr_object_title" />
 
-        <ImageView
-            android:id="@+id/fr_object_setting"
-            android:layout_width="wrap_content"
-            android:layout_height="wrap_content"
-            android:layout_marginTop="16dp"
-            android:layout_marginEnd="16dp"
-            android:src="@drawable/settings"
-            app:layout_constraintEnd_toEndOf="parent"
-            app:layout_constraintTop_toTopOf="parent" />
 
         <LinearLayout
             android:id="@+id/linearLayout2"
@@ -84,10 +75,10 @@
             app:layout_constraintTop_toBottomOf="@+id/fr_object_title2">
 
             <Button
-                android:id="@+id/button3"
+                android:id="@+id/fr_object_share"
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
-                android:text="Button" />
+                android:text="share" />
 
             <Button
                 android:id="@+id/fr_object_play"
@@ -102,16 +93,6 @@
                 android:text="Wave" />
         </LinearLayout>
 
-
-        <ImageView
-            android:id="@+id/fr_object_share"
-            android:layout_width="wrap_content"
-            android:layout_height="wrap_content"
-            android:layout_marginTop="24dp"
-            android:layout_marginEnd="16dp"
-            android:src="@android:drawable/ic_menu_share"
-            app:layout_constraintEnd_toEndOf="parent"
-            app:layout_constraintTop_toBottomOf="@+id/fr_object_setting" />
 
 
     </androidx.constraintlayout.widget.ConstraintLayout>

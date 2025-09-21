@@ -20,6 +20,7 @@ import com.yellastrodev.dwij.R
 import com.yellastrodev.dwij.TYPE
 import com.yellastrodev.dwij.VALUE
 import com.yellastrodev.dwij.models.TracklistModel
+import com.yellastrodev.dwij.utils.LangFormats.Companion.getNumericPostfix
 import com.yellastrodev.dwij.yApplication
 import com.yellastrodev.yandexmusiclib.entities.CoverSize
 import kotlinx.coroutines.Dispatchers
@@ -135,7 +136,9 @@ class ObjectFrag : Fragment(R.layout.frag_object) {
                                 }
                                 view.findViewById<TextView>(R.id.fr_object_title).text = playlist.title
                                 view.findViewById<TextView>(R.id.fr_object_title_colaps).text = playlist.title
-                                view.findViewById<TextView>(R.id.fr_object_title2).text = playlist.description ?: ""
+                                view.findViewById<TextView>(R.id.fr_object_title2).text =
+                                    "${playlist.trackCount} трек${getNumericPostfix(playlist.trackCount)}"
+//                                view.findViewById<TextView>(R.id.fr_object_title2).text = playlist.description ?: ""
                             }
                         }
                     }
@@ -239,14 +242,13 @@ class ObjectFrag : Fragment(R.layout.frag_object) {
     }
 
     private fun onPlayBtn() {
-//        val fMain = requireActivity() as MainActivity
-//
-//        lifecycleScope.launch(Dispatchers.Default) {
-//            if (mViewModel.mDataObject is YaPlaylist)
-//                fMain.setTrack(0,mViewModel.mDataObject as YaPlaylist)
-//            if (mViewModel.mDataObject is YaTrack)
-//                fMain.setTrack(0, YaSingleTrackList(mViewModel.mDataObject as YaTrack))
-//        }
+        Log.d("DWIJ_TIMING", "ObjectFrag onPlayBtn")
+        findNavController().navigate(
+            R.id.action_objectFrag_to_bigPlayerFrag
+        )
+        lifecycleScope.launch {
+            model.onTrackClicked(0)
+        }
 
     }
 

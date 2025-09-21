@@ -41,6 +41,7 @@ class dYaTrack(
 //    val contentWarning: String? = null
 ) {
 
+    fun getCoverUriAny() = ogImageUri ?: coverUri
 
     @Ignore
     var artists: List<dYaArtist> = emptyList()

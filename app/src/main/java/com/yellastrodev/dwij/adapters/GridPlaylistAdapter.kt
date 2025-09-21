@@ -16,6 +16,7 @@ import com.yellastrodev.dwij.data.entities.dYaPlaylist
 import com.yellastrodev.dwij.data.entities.dYaTrack
 import com.yellastrodev.dwij.models.GridPlaylistModel
 import com.yellastrodev.dwij.utils.DurationFormat.Companion.formatDuration
+import com.yellastrodev.dwij.utils.LangFormats.Companion.getNumericPostfix
 import com.yellastrodev.dwij.utils.PlaylistsDiff
 import com.yellastrodev.yandexmusiclib.CONSTANTS.Companion.LIKED_ID
 import kotlinx.coroutines.CancellationException
@@ -175,13 +176,13 @@ RecyclerView.Adapter<GridPlaylistAdapter.ViewHolder>() {
 		val f_dur = mList[position].durationMs ?: 0
 		val fDurStr = formatDuration(f_dur)
 
-		var f_end_lettr = ""
-		val f_end_num = (f_size -
-				Math.round((f_size/10).toDouble())).toInt()
-		if (f_end_num>4 || f_end_num == 0) f_end_lettr = "ов"
-		else if (f_end_num>1) f_end_lettr = "а"
+//		var f_end_lettr = ""
+//		val f_end_num = (f_size -
+//				Math.round((f_size/10).toDouble())).toInt()
+//		if (f_end_num>4 || f_end_num == 0) f_end_lettr = "ов"
+//		else if (f_end_num>1) f_end_lettr = "а"
 		viewHolder.vTitle.text = mList[position].title
-		viewHolder.vAutor.text = "$f_size трек$f_end_lettr\n$fDurStr"
+		viewHolder.vAutor.text = "$f_size трек${getNumericPostfix(f_size)}\n$fDurStr"
 
 
 		val f_name_patrn = "back1_1"
