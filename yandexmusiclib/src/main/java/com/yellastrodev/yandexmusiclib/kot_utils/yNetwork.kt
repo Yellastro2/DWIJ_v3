@@ -1,6 +1,7 @@
 package com.yellastrodev.yandexmusiclib.kot_utils
 
 import android.util.Log
+import com.yellastrodev.yandexmusiclib.entities.CoverSize
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.withContext
@@ -172,11 +173,10 @@ class yNetwork {
         suspend fun getCoverStream(
             token: String,
             fAdrPart: String,
-            fSize: Int
+            fSize: CoverSize
         ): NetStreamResult {
             return withContext(Dispatchers.IO) {
-                val fSizeStr = "${fSize}x$fSize"
-                val fAdrPart2 = fAdrPart.replace("%%", fSizeStr)
+                val fAdrPart2 = fAdrPart.replace("%%", fSize.toString())
                 val fAdr = "https://$fAdrPart2"
 
                 println("[getCoverStream] Start request")

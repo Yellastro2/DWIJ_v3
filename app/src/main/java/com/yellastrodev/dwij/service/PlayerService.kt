@@ -327,9 +327,12 @@ class PlayerService : Service() {
         val channel = NotificationChannel(
             "player_channel",
             "D W I J player",
-            NotificationManager.IMPORTANCE_HIGH
+            NotificationManager.IMPORTANCE_LOW
         ).apply {
             description = "Media playback controls"
+            setSound(null, null)       // отключить звук
+            enableVibration(false)     // отключить вибрацию
+            setShowBadge(false)        // не показывать бейдж
         }
 
         val manager = getSystemService(NotificationManager::class.java)

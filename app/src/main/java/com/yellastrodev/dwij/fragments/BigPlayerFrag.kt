@@ -2,7 +2,6 @@ package com.yellastrodev.dwij.fragments
 
 import android.annotation.SuppressLint
 import android.graphics.Color
-import android.graphics.drawable.GradientDrawable
 import android.os.Bundle
 import android.os.Handler
 import android.util.DisplayMetrics
@@ -16,24 +15,18 @@ import android.widget.ImageView
 import android.widget.SeekBar
 import android.widget.TextView
 import androidx.constraintlayout.widget.ConstraintLayout
-import androidx.fragment.app.viewModels
-import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.lifecycleScope
-import androidx.lifecycle.repeatOnLifecycle
 import androidx.recyclerview.widget.RecyclerView
 import com.yellastrodev.dwij.R
 import com.yellastrodev.dwij.data.entities.dYaPlaylist
 import com.yellastrodev.dwij.data.entities.dYaTrack
 import com.yellastrodev.dwij.models.PlayerModel
-import com.yellastrodev.dwij.yApplication
 import com.yellastrodev.yandexmusiclib.CONSTANTS.Companion.LIKED_ID
 import com.yellastrodev.yandexmusiclib.entities.CoverSize
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.take
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
-import kotlin.getValue
-import androidx.core.content.ContextCompat
 import com.google.android.flexbox.AlignItems
 import com.google.android.flexbox.FlexDirection
 import com.google.android.flexbox.FlexWrap
@@ -98,47 +91,17 @@ class BigPlayerFrag() :
 		super.onViewCreated(view, savedInstanceState)
 
 		mvTitle.setOnClickListener { openTrackInfo() }
-		var doubleClick = false
+
 
 		mvLike.alpha = 0.0F
 		mvAlbum.alpha = 0.0F
 
 		showPreviewLike()
 
-		var isLike = false
+
 
 		mvCover.setOnClickListener {
-			val fAnims = showPreviewLike()
-
-			if (doubleClick!!) {
-//				val fStore = yMediaStore.store(requireContext())
-//				mModel.viewModelScope.launch(Dispatchers.IO){
-//					fStore.likeTrack(mTrackId)
-//                    withContext(Dispatchers.Main) {
-//                        setLikedState(fStore)
-//                    }
-//				}
-				isLike = !isLike
-				fAnims.forEach { it.cancel() }
-				mvAlbum.animate()
-					.alpha(0.0F)
-					.setDuration(300)
-				var fFirstDur = 300
-				var fSecDur = 200
-				if (isLike){
-					fFirstDur = 100
-					fSecDur = 400
-				}
-				val fSecondAnim = mvLike.animate()
-					.alpha(1F)
-					.setDuration(fFirstDur.toLong())
-					.withEndAction { mvLike.animate()
-						.alpha(0.0F)
-						.setDuration(fSecDur.toLong())
-					}
-			}else
-				doubleClick = true
-			Handler().postDelayed({ doubleClick = false }, 500)
+			onLikeClick()
 		}
 
 //		view.findViewById<View>(R.id.fr_bg_player_btn_close).setOnClickListener {
@@ -205,7 +168,10 @@ class BigPlayerFrag() :
 		view.post { Log.d("TIMING", "BigPlayerFrag first frame drawn") }
 	}
 
+
+
 	override suspend fun onTrackFlow(track: dYaTrack){
+		setLikedState()
 		playerModel.playlistRepo.getPlaylistsByKeys(track.playlists)
 			.take(1) // забираем только один результат
 			.collect { fPlLists ->
@@ -253,60 +219,65 @@ class BigPlayerFrag() :
 
 
 
-//	fun setLikedState(fStore: yMediaStore){
-//		val fisLiked = fStore.isTrackLiked(mTrackId)
-//		if (fisLiked != isLiked){
-//			if (fisLiked)
-//				mvLike.drawable.setTint(Color.parseColor(COLOR_PINK))
-//			else
-//				mvLike.drawable.setTint(Color.parseColor("#FFFFFF"))
-//		}
-//		isLiked = fisLiked
-//	}
+	fun setLikedState(){
+		val fisLiked = playerModel.isTrackLiked()
+		if (fisLiked != isLiked){
+			if (fisLiked)
+				mvLike.drawable.setTint(resources.getColor(R.color.pink))
+			else
+				mvLike.drawable.setTint(Color.parseColor("#FFFFFF"))
+		}
+		isLiked = fisLiked
+	}
+
+	var doubleClick = false
+	var isLikeAnimaton = false
+	private fun onLikeClick() {
+		val fAnims = showPreviewLike()
+
+		if (doubleClick!!) {
+			lifecycleScope.launch {
+				playerModel.likeTrack()
+				withContext(Dispatchers.Main) {
+					setLikedState()
+				}
+			}
+//				val fStore = yMediaStore.store(requireContext())
+//				mModel.viewModelScope.launch(Dispatchers.IO){
+//					fStore.likeTrack(mTrackId)
+//                    withContext(Dispatchers.Main) {
+//                        setLikedState(fStore)
+//                    }
+//				}
+			isLikeAnimaton = !isLikeAnimaton
+			fAnims.forEach { it.cancel() }
+			mvAlbum.animate()
+				.alpha(0.0F)
+				.setDuration(300)
+			var fFirstDur = 300
+			var fSecDur = 200
+			if (isLikeAnimaton){
+				fFirstDur = 100
+				fSecDur = 400
+			}
+			val fSecondAnim = mvLike.animate()
+				.alpha(1F)
+				.setDuration(fFirstDur.toLong())
+				.withEndAction { mvLike.animate()
+					.alpha(0.0F)
+					.setDuration(fSecDur.toLong())
+				}
+		}else
+			doubleClick = true
+		Handler().postDelayed({ doubleClick = false }, 500)
+	}
 
 //	override fun setTrack(fTrack: iTrack, fTrackList: iTrackList?) {
-//
-//		super.setTrack(fTrack, fTrackList)
-//		mTrack = fTrack
-//		val fStore = yMediaStore.store(requireContext())
-//		if (fTrack is YaTrack){
-//			mvRestrict.visibility =  if (!fTrack.isAvaibale) View.VISIBLE else View.GONE
-//			lifecycleScope.launch(Dispatchers.Default){
-//				val fCashed = fStore.getTrack(fTrack.mId)
-//				if (fCashed != fTrack) {
-//                    withContext(Dispatchers.Main) {
-//                        fTrack.mPlaylists = fCashed.mPlaylists
-//                        setPlaylists(fTrack, fStore)
-//                    }
-//
-//				}
-//			}
-//		}
-//
 //
 //
 //
 //		setLikedState(fStore)
 //
-//
-//		setPlaylists(fTrack,fStore)
-//		mvAlbum.text = ""
-//		fTrack.mAlbums.forEach {
-//			mvAlbum.text = if (mvAlbum.text == "") it else "${mvAlbum.text}, $it"   }
-//
-//		val fFirstAnimAlbum = mvAlbum.animate()
-//			.alpha(sPrevieAlpha)
-//			.setDuration(1200)
-//			.withEndAction { mvAlbum.animate()
-//				.alpha(0.0F)
-//				.setDuration(500)
-//			}
-//
-//
-//		if (fTrackList != null) {
-//			mvMainTitle.text = fTrackList.getTitle()
-//		}
-//	}
 
 
 	fun showPreviewLike(): List<ViewPropertyAnimator> {
@@ -328,17 +299,6 @@ class BigPlayerFrag() :
 
 		return listOf(fFirstAnim,fFirstAnimAlbum)
 	}
-//
-//	private fun updPlList(fPlLists: ArrayList<iPlaylist>) {
-//		if(fPlLists.size>0){
-//			mvPlListFlexbox.adapter = CustomAdapter(fPlLists,
-//				activity as MainActivity
-//			)
-//			mvToPlaylist.visibility = View.GONE
-//		}else{
-//			mvToPlaylist.visibility = View.VISIBLE
-//		}
-//	}
 
 	class CustomAdapter(
 		private val dataSet: List<dYaPlaylist>,

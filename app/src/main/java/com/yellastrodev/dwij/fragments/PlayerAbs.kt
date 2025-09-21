@@ -97,7 +97,7 @@ open class PlayerAbs() : Fragment() {
 			viewLifecycleOwner.repeatOnLifecycle(Lifecycle.State.STARTED) {
 				playerModel.track.collect { track ->
 					if (track != null) {
-						Log.d(TAG, "collect track=$track")
+						Log.d(TAG, "collect track=${track.id}")
 						onTrackFlow(track)
 
 						if (lastTrackId == track.id)
@@ -109,12 +109,18 @@ open class PlayerAbs() : Fragment() {
 							mvArtist.text = track.artists.joinToString(", ") { it.name }
 						}
 						viewLifecycleOwner.lifecycleScope.launch(Dispatchers.IO) {
-							val bitmap = playerModel.coverRepo.getCover(track, getCoverSize())
 
-							// Ставим в ImageView на главном потоке
-							withContext(Dispatchers.Main) {
-								mvCover.setImageBitmap(bitmap)
+							playerModel.coverRepo.getCoverFlow(track, getCoverSize()).collect {
+								withContext(Dispatchers.Main) {
+									mvCover.setImageBitmap(it)
+								}
 							}
+//							val bitmap = playerModel.coverRepo.getCover(track, getCoverSize())
+//
+//							// Ставим в ImageView на главном потоке
+//							withContext(Dispatchers.Main) {
+//								mvCover.setImageBitmap(bitmap)
+//							}
 						}
 						if (playerModel.playTitle.value != title) {
 							title = playerModel.playTitle.value

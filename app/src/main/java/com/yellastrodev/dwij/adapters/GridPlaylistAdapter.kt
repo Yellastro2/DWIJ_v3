@@ -48,7 +48,7 @@ RecyclerView.Adapter<GridPlaylistAdapter.ViewHolder>() {
 	var mScope: CoroutineScope? = null
 
 	private var mList: ArrayList<dYaPlaylist> = ArrayList()
-	fun setList(newList: ArrayList<dYaPlaylist>){
+	fun setList(newList: ArrayList<dYaPlaylist>, forced: List<Int> = emptyList()){
 
 
 		if (pickedTrack != null){
@@ -162,21 +162,6 @@ RecyclerView.Adapter<GridPlaylistAdapter.ViewHolder>() {
 
 
 		viewHolder.bind(mList[position])
-//		mScope?.launch(Dispatchers.IO) {
-//			try{
-//				val bitmap = loadCover(mList[position])
-////				val fRes = mList[position]
-////					.getImage(yMediaStore.store(viewHolder.vAutor.context))
-//                withContext(Dispatchers.Main) {
-//                    viewHolder.vImg.setImageBitmap(bitmap)
-//                }
-//			}catch (e: Exception){
-//				val fData = mList[position].title
-//				Log.w("DWIJ_DEBUG",Exception("${fData}\n\n" +
-//						"${e.stackTraceToString()}"))
-//			}
-//
-//		}
 
 //		if (mList[position].mId == PlaylistCreateItem.PLAY_CREATE_ITEM_ID){
 //			viewHolder.vTitle.text = "Создать плейлист"
@@ -213,7 +198,7 @@ RecyclerView.Adapter<GridPlaylistAdapter.ViewHolder>() {
 			return@setOnLongClickListener true
 		}
 
-		if( pickedTrack != null && pickedTrack!!.playlists.contains(mList[position].playlistUuid)){
+		if( pickedTrack != null && mList[position].tracks.any { it.trackId == pickedTrack!!.id }){
 			viewHolder.vTitle.setBackgroundColor(0xD0080E75.toInt())
 			viewHolder.itemView.setOnClickListener {
 				val builder: AlertDialog.Builder = AlertDialog.Builder(viewHolder.itemView.context)

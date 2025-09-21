@@ -59,42 +59,36 @@ class TrackListAdapter(
         val oldIndexMap = oldTracks.mapIndexed { index, track -> track.id to index }.toMap()
         val newIndexMap = newTracks.mapIndexed { index, track -> track.id to index }.toMap()
 
-        // Перемещённые: есть в обоих списках, но индекс изменился
-        val moved = mutableListOf<Triple<dYaTrack, Int, Int>>() // track, oldIndex, newIndex
-        for (track in newTracks) {
-            val oldIndex = oldIndexMap[track.id]
-            val newIndex = newIndexMap[track.id]
-            if (oldIndex != null && newIndex != null && oldIndex != newIndex) {
-                moved.add(Triple(track, oldIndex, newIndex))
-            }
-        }
-
-// --- Применяем изменения к адаптеру ---
-        // Удаляем с конца, чтобы индексы не сдвигались
+        // 1) удаляем (по убыванию индексов чтобы не ломать позиции)
         removed.mapNotNull { oldIndexMap[it.id] }
             .sortedDescending()
             .forEach { idx ->
-//                mListOfObj.removeAt(idx)
+                mListOfObj.removeAt(idx)
                 notifyItemRemoved(idx)
             }
 
-        // Добавляем
-        added.forEach { track ->
-            val idx = newIndexMap[track.id]!!
-//            mListOfObj.add(idx, track)
-            notifyItemInserted(idx)
+        // 2) добавляем (по возрастанию индексов)
+        val toAdd = added.map { track -> newIndexMap[track.id]!! to track }
+            .sortedBy { it.first }
+        toAdd.forEach { (idx, track) ->
+            val insertIdx = idx.coerceIn(0, mListOfObj.size)
+            mListOfObj.add(insertIdx, track)
+            notifyItemInserted(insertIdx)
         }
 
-        // Перемещаем
-        moved.forEach { ( _,oldIdx, newIdx) ->
-            notifyItemMoved(oldIdx, newIdx)
-            // сам список тоже нужно переставить
-//            val item = mListOfObj.removeAt(oldIdx)
-//            mListOfObj.add(newIdx, item)
+        // 3) выравниваем порядок: проходим по newTracks и двигаем элементы в нужные позиции
+        for (i in newTracks.indices) {
+            val id = newTracks[i].id
+            val curr = mListOfObj.indexOfFirst { it.id == id }
+            if (curr == -1) continue // вдруг не найдено (безопасно пропустить)
+            if (curr != i) {
+                val item = mListOfObj.removeAt(curr)
+                mListOfObj.add(i, item)
+                notifyItemMoved(curr, i)
+            }
         }
 
         mInitJob = null
-        mListOfObj = newTracks
     }
 
     fun addToList(fTracks: Collection<dYaTrack>) {

@@ -25,6 +25,7 @@ import kotlinx.coroutines.sync.withLock
 import java.util.concurrent.ConcurrentHashMap
 import android.util.Log
 import com.yellastrodev.dwij.data.dao.dPlaylistDao
+import com.yellastrodev.dwij.data.entities.dYaLikeTracklist
 import com.yellastrodev.dwij.data.entities.dYaTrack
 
 class PlaylistRepository(
@@ -66,11 +67,15 @@ class PlaylistRepository(
                 Log.d(TAG, "Загружено плейлистов из локальной БД: ${localData.size}")
             }
 
-            refreshPlaylists()
+            try {
+                refreshPlaylists()
+            }catch (e: Exception){
+                Log.e(TAG, "Ошибка обновления плейлистов", e)
+            }
         }
     }
 
-    val trackLocks = ConcurrentHashMap<String, Mutex>()
+//    val trackLocks = ConcurrentHashMap<String, Mutex>()
 
     suspend fun refreshPlaylists(){
         Log.d(TAG, "Загружаем плейлисты из удалённого сервера")
@@ -168,5 +173,15 @@ class PlaylistRepository(
         remote.removeTrackFromPlaylist(playlist, playlist.tracks.indexOf(playlistedTrack))
         refreshPlaylist(playlist.playlistUuid)
         trackRepo.refreshTrackLocaly(track.id)
+    }
+
+    fun getLikeList(): dYaPlaylist? {
+        return playlists.value.find { it.kind == dYaLikeTracklist.KIND_LIKED }
+    }
+
+    suspend fun likeTrack(trackId: String, likeOn: Boolean){
+        Log.d(TAG, "likeTrack( id: $trackId, $likeOn )")
+        remote.likeTrack(trackId, likeOn)
+        refreshPlaylist(getLikeList()!!.playlistUuid)
     }
 }

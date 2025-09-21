@@ -36,6 +36,14 @@ class PlaylistRemoteSource(private val client: YamApiClient) {
         Log.d("PlaylistRemoteSource", "removeTrackFromPlaylist: plId: ${playlist.kind}, trackNumber: $trackNumber")
         client.removeTrack(playlist.kind.toInt(), playlist.revision, trackNumber)
     }
+
+    suspend fun likeTrack(trackId: String, likeOn: Boolean){
+        client.likeAction(
+            "track",
+            trackId,
+            likeOn
+        )
+    }
 }
 
 sealed class dPlaylistResult {

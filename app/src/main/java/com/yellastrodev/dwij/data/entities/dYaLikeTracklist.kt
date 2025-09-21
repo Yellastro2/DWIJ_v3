@@ -30,6 +30,10 @@ class dYaLikeTracklist(
     backgroundImageUrl = "",
     description = "",
 ) {
+
+    companion object {
+        val KIND_LIKED = "liked"
+    }
 }
 
 fun YaLikeTracklist.toEntity(): dYaLikeTracklist {

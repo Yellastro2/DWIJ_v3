@@ -39,7 +39,16 @@ class TrackRepository(
 
     suspend fun refreshTrackLocaly(trackId: String) {
         val track = local.getTrack(trackId)!!
-        _tracks.value = _tracks.value + (trackId to track)
+        _tracks.update { current ->
+            current + (trackId to track)
+        }
+    }
+
+    suspend fun refreshTrackListLocaly(trackIds: List<String>) {
+        val tracks = local.getTracks(trackIds)
+        _tracks.update { current ->
+            current + tracks.associateBy { it.id }
+        }
     }
 
     suspend fun getTrack(trackId: String): dYaTrack {
@@ -49,21 +58,27 @@ class TrackRepository(
                     Log.d(TAG, "у трека локально нет альбома, скачиваем из удалённого")
                     val remoteTrack = remote.fetchTracks(listOf(trackId))[0]
                     local.insert(remoteTrack)
-                    _tracks.value = _tracks.value + (trackId to remoteTrack)
+                    _tracks.update { current ->
+                        current + (trackId to remoteTrack)
+                    }
                 }else
-                    _tracks.value = _tracks.value + (trackId to it)
+                    _tracks.update { current ->
+                        current + (trackId to it)
+                    }
 
             } ?: run {
                 val remoteTrack = remote.fetchTracks(listOf(trackId))[0]
-                _tracks.value = _tracks.value + (trackId to remoteTrack)
                 local.insert(remoteTrack)
+                refreshTrackLocaly(trackId)
             }
         }
         return _tracks.value[trackId]!!
     }
 
     suspend fun putTracks(trackList: List<dYaTrack>) {
-//        val updated = _tracks.value.toMutableMap()
+
+        local.insertAll(trackList)
+
         val updated = mutableMapOf<String, dYaTrack>()
         trackList.forEach { track ->
             if (!_tracks.value.containsKey(track.id)) {
@@ -73,15 +88,10 @@ class TrackRepository(
 
         if (updated.isNotEmpty()) {
             Log.d(TAG, "putTracks( updateSize=${updated.size})")
-//            _tracks.value = _tracks.value + updated
-            _tracks.update { current ->
-                current + updated
-            }
+            refreshTrackListLocaly(updated.keys.toList())
             Log.d(TAG, "putTracks(valueSize=${_tracks.value.size})")
 
-            GlobalScope.launch(Dispatchers.IO) {
-                local.insertAll(trackList)
-            }
+
         }
     }
 
@@ -90,6 +100,7 @@ class TrackRepository(
      * соответствующий переданному списку [shorts].
      */
     fun tracksFlow(shorts: List<dPlaylistTrack>): Flow<List<dYaTrack>> {
+        Log.d(TAG, "tracksFlow() size=${shorts.size}")
         val ids = shorts.map { it.trackId }
 
         return _tracks
@@ -134,6 +145,7 @@ class TrackRepository(
     }
 
     suspend fun loadTracks(trackIds: List<String>): List<dYaTrack> {
+        Log.d(TAG, "loadTracks(size=${trackIds.size})")
         val result = mutableListOf<dYaTrack>()
 
         // 1. Берём из локальной базы все, что есть
@@ -146,7 +158,9 @@ class TrackRepository(
                     Log.d(TAG, "у трека локально нет альбома, скачиваем из удалённого")
                     val remoteTrack = remote.fetchTracks(listOf(it.id))[0]
                     local.insert(remoteTrack)
-                    _tracks.value = _tracks.value + (it.id to remoteTrack)
+                    _tracks.update { current ->
+                            current + (it.id to remoteTrack)
+                        }
                 }
             }
         }

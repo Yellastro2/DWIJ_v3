@@ -1,6 +1,7 @@
 package com.yellastrodev.yandexmusiclib
 
 import android.util.Log
+import com.yellastrodev.yandexmusiclib.entities.CoverSize
 import com.yellastrodev.yandexmusiclib.entities.YaLikeTracklist
 import com.yellastrodev.yandexmusiclib.entities.YaPlaylist
 import com.yellastrodev.yandexmusiclib.entities.YaTrack
@@ -11,7 +12,6 @@ import com.yellastrodev.yandexmusiclib.yUtils.yUtils.Companion.getArray
 import kotlinx.serialization.json.Json
 import org.json.JSONArray
 import org.json.JSONObject
-import java.io.InputStream
 import java.time.Instant
 import java.time.ZoneId
 import java.time.format.DateTimeFormatter
@@ -280,7 +280,7 @@ class YamApiClient(
 		return f_json
 	}
 
-	suspend fun getCover(adressPart: String, size: Int): yNetwork.Companion.NetStreamResult {
+	suspend fun getCover(adressPart: String, size: CoverSize): yNetwork.Companion.NetStreamResult {
 		return yNetwork.getCoverStream(mToken, adressPart, size)
 	}
 

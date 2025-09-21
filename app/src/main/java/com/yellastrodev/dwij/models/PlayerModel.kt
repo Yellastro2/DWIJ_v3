@@ -10,6 +10,7 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.viewModelScope
 import com.yellastrodev.dwij.R
+import com.yellastrodev.dwij.data.entities.dYaLikeTracklist
 import com.yellastrodev.dwij.data.repo.CoverRepository
 import com.yellastrodev.dwij.data.repo.PlayerRepository
 import com.yellastrodev.dwij.data.repo.TrackRepository
@@ -117,8 +118,19 @@ class PlayerModel(
 
     }
 
+    fun isTrackLiked(): Boolean {
+        val likeList = playlistRepo.playlists.value.find { it.kind == dYaLikeTracklist.KIND_LIKED }
+        return likeList?.tracks?.any { it.trackId == track.value?.id} ?: false
+    }
+
+    suspend fun likeTrack() {
+        track.value?.id?. let { id ->
+            playlistRepo.likeTrack(id, isTrackLiked())
+        }
+    }
+
     companion object {
-        val TAG = "PlayerModel"
+        const val TAG = "PlayerModel"
     }
 
 
