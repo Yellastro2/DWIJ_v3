@@ -122,27 +122,37 @@ class YamApiClient(
 	 *
 	 * Все официальные клиенты выполняют запросы с `settings2 = true`.
 	 *
-	 * @param fStationId Идентификатор сессии станции (`radio_session_id`), полученный при создании сессии.
-	 * @param fPrevTrack ID предыдущего трека (первого в цепочке).
+	 * @param stationId Идентификатор сессии станции (`radio_session_id`), полученный при создании сессии.
+	 * @param previousTrackId ID предыдущего трека (первого в цепочке).
 	 * @param fPrevSecond Время воспроизведения предыдущего трека в секундах (не используется в текущей реализации, но может быть полезно для фидбека).
 	 * @param fNextTrack ID следующего трека (второго в цепочке, для отправки фидбека о старте).
 	 *
 	 * @return JSON‑ответ API с информацией о следующих треках или сдвиге цепочки.
+	 * содержит почти тот же жсон что и вызов wave(), только отсутствует radioSessionId,
+	 * а batchId имеет другое значение, и список треков совершенно новых 5 штук
 	 *
 	 * @throws yandex_music.exceptions.YandexMusicError В случае ошибки при выполнении запроса.
 	 */
 	suspend fun getWaveNextTrack(
-		fStationId: String,
-		fPrevTrack: String,
-		fPrevSecond: Int,
-		fNextTrack: String
+		stationId: String,
+		previousTrackId: String
 	): JSONObject {
-		val fUrl = "$BASE_URL/rotor/session/${fStationId}/tracks"
+		val fUrl = "$BASE_URL/rotor/session/${stationId}/tracks"
 		val fParams = JSONObject("{'settings2': 'True'}")
-		val fQue = JSONArray().apply { put(fPrevTrack) }
+		val fQue = JSONArray().apply { put(previousTrackId) }
 		fParams.put("queue", fQue)
 
 		return yNetwork.post(mToken, fUrl, fParams, contentType = "json")
+	}
+
+	suspend fun getWaveNextTracksObject(
+		stationId: String,
+		previousTrackId: String
+	): NextWaveResult {
+		val result = getWaveNextTrack(stationId, previousTrackId)
+		val sequence = result.getJSONObject("result").getJSONArray("sequence")
+		val wrappedTrackList = Json {ignoreUnknownKeys = true }.decodeFromString<List<YaTrackWrap>>(sequence.toString())
+		return NextWaveResult.Success(result.getJSONObject("result").getString("batchId"), wrappedTrackList.map { it.track })
 	}
 
 
@@ -160,8 +170,8 @@ class YamApiClient(
 
 	suspend fun rotorStationFBTrackFinished(fStationId: String,
                                             fTrack: String,
-                                            fBatch: String = "",
-                                            fSeconds: Float = 0.1f): JSONObject{
+											fSeconds: Float = 0.1f,
+                                            fBatch: String = ""): JSONObject{
 
 //		val fSeconds: Float = 0.1f
 		return feedback(fStationId,FeedbackType.TRACK_FINISHED,fTrack=fTrack,fSeconds=fSeconds,  fBatch = fBatch)
@@ -439,6 +449,18 @@ class YamApiClient(
 			val wave: YaWave,
 			val trackList: List<YaTrack>) : WaveResult()
 		sealed class Error : WaveResult() {
+			object netError : Error()
+			object NoInternet : Error()
+			object AccessDenied : Error()
+			data class Unknown(val throwable: Throwable) : Error()
+		}
+	}
+
+	sealed class NextWaveResult {
+		data class Success(
+			val newBatch: String,
+			val trackList: List<YaTrack>) : NextWaveResult()
+		sealed class Error : NextWaveResult() {
 			object netError : Error()
 			object NoInternet : Error()
 			object AccessDenied : Error()

@@ -232,6 +232,17 @@ class PlayerService : Service() {
         player.play()
     }
 
+    fun addTrack(track: MediaItem) {
+        Log.d(TAG, "addTrack called: track=${track.toString()}")
+        player.addMediaItem(track)
+    }
+
+
+    fun addTracks(items: List<MediaItem>) {
+        Log.d(TAG, "addTracks called: tracks=${items.size}")
+        player.addMediaItems(items)
+    }
+
     /**
      * Воспроизвести конкретный трек из текущего списка загруженного в плеер.
      */
@@ -350,6 +361,7 @@ class PlayerService : Service() {
     fun seekTo(lng: Long) {
         player.seekTo(lng)
     }
+
 
 //    fun shuffle() {
 //        player.shuffleModeEnabled = !player.shuffleModeEnabled

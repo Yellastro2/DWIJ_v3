@@ -145,7 +145,8 @@ class yApplication: Application() {
     val waveRepository: WaveRepository by lazy {
         WaveRepository(
             waveRemoteSourse,
-            trackRepository
+            trackRepository,
+            playerRepo
         )
     }
 

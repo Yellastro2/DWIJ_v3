@@ -41,7 +41,6 @@ open class PlayerAbs() : Fragment() {
 	lateinit var mvTitle: TextView
 	lateinit var mvCover: ImageView
 	lateinit var mvPlay: ImageButton
-	var mvRandom: ImageButton? = null
 	lateinit var mvNext: ImageButton
 	lateinit var mvPrev: ImageButton
 	var mvMainTitle: TextView? = null
@@ -131,6 +130,8 @@ open class PlayerAbs() : Fragment() {
 							}
 						}
 
+
+
 					}
 				}
 			}
@@ -164,6 +165,8 @@ open class PlayerAbs() : Fragment() {
 				}
 			}
 		}
+
+
 
 
 //

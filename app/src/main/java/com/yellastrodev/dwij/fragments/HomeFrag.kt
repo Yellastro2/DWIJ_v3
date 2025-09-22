@@ -57,14 +57,10 @@ class HomeFrag: Fragment(R.layout.frag_home) {
 //			showProgress()
 			lifecycleScope.launch(Dispatchers.IO){
 				val waveList =
-					(requireActivity().application as yApplication).waveRepository.getWave()
+					(requireActivity().application as yApplication).waveRepository.playWave()
 //				TODO (requireActivity().application as yApplication).playerRepo.shuffleOff()
 
 				withContext(Dispatchers.Main) {
-					(requireActivity().application as yApplication).playerRepo.playQueue(
-						waveList,
-						0,
-						"wave")
 					try {
 //						finishProgress()
 						findNavController().navigate(R.id.bigPlayerFrag)

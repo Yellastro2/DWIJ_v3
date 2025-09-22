@@ -15,10 +15,13 @@ import androidx.media3.common.MediaMetadata
 import androidx.media3.common.Player
 import androidx.media3.common.util.UnstableApi
 import com.yellastrodev.dwij.TRACK_ID
+import com.yellastrodev.dwij.data.entities.dTracklist
 import com.yellastrodev.dwij.data.entities.dYaTrack
+import com.yellastrodev.dwij.data.entities.dYaWave
 import com.yellastrodev.dwij.service.PlayerEvent
 import com.yellastrodev.dwij.service.PlayerService
 import com.yellastrodev.dwij.service.PlayerState
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.GlobalScope
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -26,6 +29,7 @@ import kotlinx.coroutines.flow.SharedFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.onEach
 import kotlinx.coroutines.flow.launchIn
+import kotlinx.coroutines.withContext
 
 @OptIn(UnstableApi::class)
 class PlayerRepository(
@@ -94,7 +98,7 @@ class PlayerRepository(
         context.unbindService(serviceConnection)
     }
 
-    var tracksAndUrls: Map<String,dYaTrack> = mapOf()
+//    var tracksAndUrls: Map<String,dYaTrack> = mapOf()
     var relativeIndex = 0
 
     /**
@@ -104,24 +108,26 @@ class PlayerRepository(
     suspend fun playQueue(
         tracks: List<dYaTrack>,
         startIndex: Int = 0,
-        title: String = "noTitle"
+        tracklist: dTracklist
     ) {
         Log.d(TAG,"set playQueue()")
 
-        if (tracks[startIndex].id == _currentTrack.value && _playTitle.value == title)
+        if (tracks[startIndex].id == _currentTrack.value && _playTitle.value == tracklist.getDTitle())
             return
 
-        if (playTitle.value == title){
+        if (playTitle.value == tracklist.getDTitle()){
             _currentTrack.value = tracks[startIndex].id
             relativeIndex = startIndex
             service?.playTrack(startIndex)
             return
         }
+        // сюда доходит логика ток если треклист сменился.
+        blockShuffle(tracklist.getType() == dYaWave.YA_WAVE)
 
-        tracksAndUrls = tracks.associate { track -> track.id to track  }
+//        tracksAndUrls = tracks.associate { track -> track.id to track  }
         currentTrackList = tracks.map { track -> track.id }
         _currentTrack.value = tracks[startIndex].id
-        _playTitle.value = title
+        _playTitle.value = tracklist.getDTitle()
 
         relativeIndex = startIndex
 
@@ -144,40 +150,46 @@ class PlayerRepository(
         Log.d(TAG, "playQueue ready: startIndex=$startIndex, tracks=${tracks.size}")
 
         service?.playQueue(mediaItems, startIndex)
+    }
+
+//    var isShuffleBlock = false
+    private val _isShuffleBlock = MutableStateFlow(false)
+    val isShuffleBlock: StateFlow<Boolean> = _isShuffleBlock
+    private fun blockShuffle(isWave: Boolean) {
+        if (isShuffleBlock.value != isWave) {
+            _isShuffleBlock.value = isWave
+            if (isWave) {
+                service?.player?.shuffleModeEnabled = false
+                service?.player?.repeatMode = Player.REPEAT_MODE_OFF
+            } else {
+                applySavedModes()
+            }
+        }
+    }
 
 
-//        // Абсолютные индексы соседей
-//        val prevIndex = startIndex - 1
-//        val nextIndex = startIndex + 1
-//
-//        // 1️⃣ Загружаем текущий трек синхронно
-//        val currentTrack = tracks[startIndex]
-//        val currentUri = trackCacheRepo.getOrDownload(currentTrack.id)
-//        val currentItem = MediaItem.Builder()
-//            .setUri(currentUri)
-//            .setMediaMetadata(
-//                MediaMetadata.Builder()
-//                    .setExtras(Bundle().apply { putString(TRACK_ID, currentTrack.id) })
-//                    .setTitle(currentTrack.title ?: "Unknown title")
-//                    .setArtist(currentTrack.artists.joinToString(", ") { it.name } ?: "Unknown artist")
-//                    .build()
-//            )
-//            .build()
-//
-//        // Отправляем в сервис сразу для воспроизведения
-//        service?.playTrack(currentItem)
-//
-//        // 2️⃣ Подгружаем соседние треки асинхронно
-//        GlobalScope.launch {
-//            if (prevIndex >= 0) {
-//                val prevTrack = tracks[prevIndex]
-//                trackCacheRepo.getOrDownload(prevTrack.id) // просто кешируем
-//            }
-//            if (nextIndex < tracks.size) {
-//                val nextTrack = tracks[nextIndex]
-//                trackCacheRepo.getOrDownload(nextTrack.id) // просто кешируем
-//            }
-//        }
+    suspend fun addTracks(tracks: List<dYaTrack>) {
+        Log.d(TAG, "addTracks: ${tracks.size}")
+//        tracksAndUrls = tracks.associate { track -> track.id to track  }
+        currentTrackList = currentTrackList + tracks.map { track -> track.id }
+
+        val mediaItems = tracks.map { track ->
+            MediaItem.Builder()
+                .setMediaId(track.id) // без URI — фабрика подставит на лету
+                .setUri("ya://${track.id}") // фейковый URI
+                .setMediaMetadata(
+                    MediaMetadata.Builder()
+                        .setExtras(Bundle().apply { putString(TRACK_ID, track.id) })
+                        .setTitle(track.title ?: "Unknown title")
+                        .setArtist(track.artists.joinToString(", ") { it.name } ?: "Unknown artist")
+                        .build()
+                )
+                .build()
+        }
+
+        withContext(Dispatchers.Main) {
+            service?.addTracks(mediaItems)
+        }
     }
 
     fun pause() = service?.pause()
@@ -219,5 +231,6 @@ class PlayerRepository(
             player.repeatMode = prefs.getInt("repeat_mode", Player.REPEAT_MODE_OFF)
         }
     }
+
 
 }

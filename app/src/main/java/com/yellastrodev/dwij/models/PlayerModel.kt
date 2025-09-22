@@ -147,6 +147,7 @@ class PlayerModel(
 
     val playerState = playerRepo.state
     val playTitle = playerRepo.playTitle
+    val shuffleBlock = playerRepo.isShuffleBlock
 
     val playerEvent = playerRepo.events
 

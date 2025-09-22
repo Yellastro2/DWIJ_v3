@@ -5,7 +5,7 @@ import kotlinx.serialization.Serializable
 @Serializable
 class YaWave(
     val radioSessionId: String,
-    val batchId: String
+    var batchId: String
 ) {
     var tracks: List<TrackShort> = listOf()
 }

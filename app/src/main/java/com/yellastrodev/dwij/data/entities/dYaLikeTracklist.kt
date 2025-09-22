@@ -3,7 +3,6 @@ package com.yellastrodev.dwij.data.entities
 import androidx.room.Entity
 import com.yellastrodev.yandexmusiclib.CONSTANTS.Companion.LIKED_ID
 import com.yellastrodev.yandexmusiclib.entities.YaLikeTracklist
-import com.yellastrodev.yandexmusiclib.entities.YaPlaylist
 
 
 @Entity
@@ -29,11 +28,15 @@ class dYaLikeTracklist(
     ogImageUri = "",
     backgroundImageUrl = "",
     description = "",
-) {
+), dTracklist {
 
     companion object {
-        val KIND_LIKED = "liked"
+        const val KIND_LIKED = "liked"
     }
+
+    override fun getDTitle(): String = title
+
+    override fun getType(): String = KIND_LIKED
 }
 
 fun YaLikeTracklist.toEntity(): dYaLikeTracklist {

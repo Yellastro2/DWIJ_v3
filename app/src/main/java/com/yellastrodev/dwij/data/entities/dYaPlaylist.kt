@@ -26,10 +26,17 @@ open class dYaPlaylist(
      val backgroundImageUrl: String?,
 //     val tracks: List<TrackShort> = emptyList(),
      // при желании можно добавить cover, coverWithoutText, playCounter и т.д.
-){
+): dTracklist{
+
+     companion object {
+          const val YA_PLAYLIST = "ya_playlist"
+     }
 
      @Ignore
      var tracks: List<dPlaylistTrack> = emptyList()
+     override fun getDTitle(): String = title
+
+     override fun getType(): String = YA_PLAYLIST
 }
 
 fun YaPlaylist.toEntity(): dYaPlaylist {

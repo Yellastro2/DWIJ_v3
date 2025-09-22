@@ -121,7 +121,7 @@ class TracklistModel(
             playerRepo.playQueue(
                 trackList as List<dYaTrack>,
                 index,
-                playlist.value?.title ?: "noPlTitle")
+                playlist.value!!)
         }
     }
 

@@ -11,11 +11,14 @@ import android.view.View
 import android.view.ViewGroup
 import android.view.ViewPropertyAnimator
 import android.widget.Button
+import android.widget.ImageButton
 import android.widget.ImageView
 import android.widget.SeekBar
 import android.widget.TextView
 import androidx.constraintlayout.widget.ConstraintLayout
+import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.lifecycleScope
+import androidx.lifecycle.repeatOnLifecycle
 import androidx.recyclerview.widget.RecyclerView
 import com.yellastrodev.dwij.R
 import com.yellastrodev.dwij.data.entities.dYaPlaylist
@@ -50,6 +53,7 @@ class BigPlayerFrag() :
 	lateinit var mvLike: ImageView
 	lateinit var mvRestrict: TextView
 	lateinit var mvRepeatBtn: ImageView
+	lateinit var mvRandom: ImageButton
 
 //	var mTrack: iTrack? = null
 
@@ -157,6 +161,20 @@ class BigPlayerFrag() :
 //		if (mTrack != null){
 //			setTrack(mTrack!!,null)
 //		}
+
+		viewLifecycleOwner.lifecycleScope.launch() {
+			var lastBlocState = false
+			viewLifecycleOwner.repeatOnLifecycle(Lifecycle.State.STARTED) {
+				playerModel.shuffleBlock.collect { isBlocked ->
+					if (lastBlocState != isBlocked){
+						val newMode = if (isBlocked) View.GONE else View.VISIBLE
+						mvRandom.visibility = newMode
+						mvRepeatBtn.visibility = newMode
+						lastBlocState = isBlocked
+					}
+				}
+			}
+		}
 
 
 		Log.d("DWIJ_TIMING", "BigPlayerFrag onViewCreated")
