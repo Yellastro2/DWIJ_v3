@@ -2,10 +2,13 @@ package com.yellastrodev.yandexmusiclib
 
 import android.util.Log
 import com.yellastrodev.yandexmusiclib.entities.CoverSize
+import com.yellastrodev.yandexmusiclib.entities.TrackShort
 import com.yellastrodev.yandexmusiclib.entities.YaLikeTracklist
 import com.yellastrodev.yandexmusiclib.entities.YaPlaylist
 import com.yellastrodev.yandexmusiclib.entities.YaTrack
 import com.yellastrodev.yandexmusiclib.entities.YaTrackList
+import com.yellastrodev.yandexmusiclib.entities.YaTrackWrap
+import com.yellastrodev.yandexmusiclib.entities.YaWave
 import com.yellastrodev.yandexmusiclib.kot_utils.yNetwork
 import com.yellastrodev.yandexmusiclib.yUtils.Differenc
 import com.yellastrodev.yandexmusiclib.yUtils.yUtils.Companion.getArray
@@ -375,6 +378,35 @@ class YamApiClient(
 	 * @return JSON‑ответ API с информацией о новой сессии и стартовыми треками.
 	 *         В случае ошибки возвращается пустой `JSONObject`.
 	 *
+	 * {
+	 *   "invocationInfo" : {
+	 *     "req-id" : "1758505016812273-6234761934293997876",
+	 *     "hostname" : "music-web-default-production-music-18.klg.yp-c.yandex.net",
+	 *     "exec-duration-millis" : 405
+	 *   },
+	 *   "result" : {
+	 *     "radioSessionId" : "dzDQ-9Wp9VC3RACZJ67-R765",
+	 *     "sequence" : [ {
+	 *       "track" : fulltrack
+	 *         },
+	 *       ],
+	 *     "batchId" : "1758505016812273-6234761934293997876.ZJMj",
+	 *     "pumpkin" : false,
+	 *     "descriptionSeed" : {
+	 *       "value" : "onyourwave",
+	 *       "tag" : "onyourwave",
+	 *       "type" : "user"
+	 *     },
+	 *     "acceptedSeeds" : [ {
+	 *       "value" : "onyourwave",
+	 *       "tag" : "onyourwave",
+	 *       "type" : "user"
+	 *     } ],
+	 *     "terminated" : false
+	 *   }
+	 * }
+	 *
+	 *
 	 * @throws yandex_music.exceptions.YandexMusicError В случае ошибки при выполнении запроса.
 	 */
 	suspend fun wave(fTag: String): JSONObject {
@@ -389,6 +421,28 @@ class YamApiClient(
 		} catch (e: Exception) {
 			e.printStackTrace()
 			JSONObject("")
+		}
+	}
+
+
+	suspend fun getWavetObj(fTag: String): WaveResult {
+		val result = wave(fTag)
+		val sequence = result.getJSONObject("result").getJSONArray("sequence")
+		val wrappedTrackList = Json {ignoreUnknownKeys = true }.decodeFromString<List<YaTrackWrap>>(sequence.toString())
+		val wave: YaWave = Json {ignoreUnknownKeys = true }.decodeFromString(result.getJSONObject("result").toString())
+		wave.tracks = wrappedTrackList.map { TrackShort(it.track.id) }
+		return WaveResult.Success(wave, wrappedTrackList.map { it.track })
+	}
+
+	sealed class WaveResult {
+		data class Success(
+			val wave: YaWave,
+			val trackList: List<YaTrack>) : WaveResult()
+		sealed class Error : WaveResult() {
+			object netError : Error()
+			object NoInternet : Error()
+			object AccessDenied : Error()
+			data class Unknown(val throwable: Throwable) : Error()
 		}
 	}
 

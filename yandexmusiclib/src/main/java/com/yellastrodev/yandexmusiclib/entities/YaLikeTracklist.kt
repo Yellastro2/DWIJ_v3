@@ -1,6 +1,5 @@
 package com.yellastrodev.yandexmusiclib.entities
 
-import com.yellastrodev.yandexmusiclib.CONSTANTS.Companion.LIKED_ID
 import kotlinx.serialization.Serializable
 
 @Serializable

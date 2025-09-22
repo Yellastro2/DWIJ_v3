@@ -28,6 +28,8 @@ import com.yellastrodev.dwij.data.entities.dYaAlbum
 import com.yellastrodev.dwij.data.entities.dYaArtist
 import com.yellastrodev.dwij.data.entities.dYaPlaylist
 import com.yellastrodev.dwij.data.entities.dYaTrack
+import com.yellastrodev.dwij.data.repo.WaveRepository
+import com.yellastrodev.dwij.data.source.WaveRemoteSourse
 import com.yellastrodev.yandexmusiclib.YamApiClient
 import com.yellastrodev.yandexmusiclib.kot_utils.yNetwork.Companion.NetResult
 import com.yellastrodev.yandexmusiclib.yAccount
@@ -134,6 +136,17 @@ class yApplication: Application() {
             applicationContext,
             yamClient,
             dir)
+    }
+
+    val waveRemoteSourse: WaveRemoteSourse by lazy {
+        WaveRemoteSourse(yamClient)
+    }
+
+    val waveRepository: WaveRepository by lazy {
+        WaveRepository(
+            waveRemoteSourse,
+            trackRepository
+        )
     }
 
     @OptIn(DelicateCoroutinesApi::class)

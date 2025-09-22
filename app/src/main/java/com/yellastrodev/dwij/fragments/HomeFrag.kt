@@ -4,14 +4,24 @@ import android.annotation.SuppressLint
 import android.app.AlertDialog
 import android.os.Bundle
 import android.preference.PreferenceManager
+import android.util.Log
 import android.view.View
 import android.widget.AutoCompleteTextView
 import android.widget.ImageButton
 import androidx.fragment.app.Fragment
+import androidx.lifecycle.lifecycleScope
+import androidx.navigation.fragment.findNavController
 import com.yellastrodev.dwij.DWIJ_ACC_TOKEN
 import com.yellastrodev.dwij.R
 import com.yellastrodev.dwij.YA_TOKEN
 import com.yellastrodev.dwij.activities.MainActivity
+import com.yellastrodev.dwij.data.entities.dYaTrack
+import com.yellastrodev.dwij.data.repo.WaveRepository
+import com.yellastrodev.dwij.data.source.WaveRemoteSourse
+import com.yellastrodev.dwij.yApplication
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 
 class HomeFrag: Fragment(R.layout.frag_home) {
 
@@ -44,8 +54,24 @@ class HomeFrag: Fragment(R.layout.frag_home) {
 		val mvSearch = view.findViewById<AutoCompleteTextView>(R.id.fr_home_search)
 
 		view.findViewById<View>(R.id.fr_home_wave).setOnClickListener {
-			showProgress()
-//			GlobalScope.launch(Dispatchers.IO){
+//			showProgress()
+			lifecycleScope.launch(Dispatchers.IO){
+				val waveList =
+					(requireActivity().application as yApplication).waveRepository.getWave()
+//				TODO (requireActivity().application as yApplication).playerRepo.shuffleOff()
+
+				withContext(Dispatchers.Main) {
+					(requireActivity().application as yApplication).playerRepo.playQueue(
+						waveList,
+						0,
+						"wave")
+					try {
+//						finishProgress()
+						findNavController().navigate(R.id.bigPlayerFrag)
+					}catch (e: Exception){
+						Log.e("DWIJ_TAG", "onWaveClick.finishProgress: ", e)
+					}
+				}
 //				val fWave = yMediaStore.store(requireContext().applicationContext).getWave()
 //                withContext(Dispatchers.Main) {
 //                    finishProgress()
@@ -53,7 +79,7 @@ class HomeFrag: Fragment(R.layout.frag_home) {
 //                        (activity as MainActivity).playWave(fWave)
 //                    }
 //                }
-//			}
+			}
 		}
 
 		view.findViewById<View>(R.id.fr_home_acc).setOnClickListener {
