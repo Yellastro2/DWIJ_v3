@@ -90,7 +90,7 @@ class PlayerService : Service() {
         // Минимальное уведомление пока плеер готовится
         val notification = NotificationCompat.Builder(this, "player_channel")
             .setContentTitle("Загрузка плеера…")
-            .setSmallIcon(R.drawable.logo)
+            .setSmallIcon(R.drawable.logo2)
             .setContentIntent(contentIntent)
             .build()
 

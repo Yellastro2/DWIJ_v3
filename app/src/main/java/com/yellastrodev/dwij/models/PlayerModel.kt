@@ -109,7 +109,7 @@ class PlayerModel(
 
         val randomColorId = colorIds.random()
         val randomColor = ContextCompat.getColor(context, randomColorId) // ← получаем сам цвет
-        val alpha = (0.5f * 255).toInt() // 50% прозрачности, можно менять
+        val alpha = (1f * 255).toInt() // 50% прозрачности, можно менять
 
         val background = ContextCompat.getDrawable(context, R.drawable.background_item_roundrect)!!.mutate()
         (background as? GradientDrawable)?.setColor(

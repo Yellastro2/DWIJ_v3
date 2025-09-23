@@ -15,7 +15,7 @@
         app:layout_constraintBottom_toBottomOf="parent"
         app:layout_constraintStart_toStartOf="parent"
         app:layout_constraintTop_toTopOf="parent"
-        app:srcCompat="@drawable/icon" />
+        app:srcCompat="@drawable/logo2" />
 
     <LinearLayout
         android:id="@+id/linearLayout3"
@@ -31,8 +31,10 @@
             android:id="@+id/fr_lil_pl_prev"
             style="@style/ImgBtnNoBkg"
             android:layout_width="50dp"
+            android:scaleType="centerCrop"
+            android:padding="10dp"
             android:layout_height="50dp"
-            app:srcCompat="@drawable/previous" />
+            app:srcCompat="@drawable/ic_back" />
 
         <ImageButton
             android:id="@+id/fr_lil_pl_play"
@@ -41,14 +43,16 @@
             android:layout_height="50dp"
             android:layout_marginEnd="3dp"
             android:scaleType="fitXY"
-            app:srcCompat="@drawable/play" />
+            app:srcCompat="@drawable/ic_play" />
 
         <ImageButton
             android:id="@+id/fr_lil_pl_next"
             style="@style/ImgBtnNoBkg"
             android:layout_width="50dp"
             android:layout_height="50dp"
-            app:srcCompat="@drawable/next" />
+            android:scaleType="centerCrop"
+            android:padding="10dp"
+            app:srcCompat="@drawable/ic_next" />
     </LinearLayout>
 
     <LinearLayout

@@ -283,11 +283,11 @@ open class PlayerAbs() : Fragment() {
 	}
 
 	fun setPause() {
-		mvPlay.setImageResource(R.drawable.play)
+		mvPlay.setImageResource(R.drawable.ic_play)
 	}
 
 	fun setPlay() {
-		mvPlay.setImageResource(R.drawable.stop)
+		mvPlay.setImageResource(R.drawable.ic_pause)
 	}
 
 	var mDialog: AlertDialog? = null

@@ -11,6 +11,7 @@ import com.yellastrodev.dwij.data.repo.PlaylistRepository
 import com.yellastrodev.dwij.data.repo.TrackRepository
 import com.yellastrodev.dwij.data.entities.dYaPlaylist
 import com.yellastrodev.dwij.data.entities.dYaTrack
+import com.yellastrodev.dwij.data.repo.WaveRepository
 import com.yellastrodev.yandexmusiclib.entities.CoverSize
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -24,7 +25,8 @@ class TracklistModel(
     private val playlistRepo: PlaylistRepository,
     val coverRepo: CoverRepository,
     private val trackRepo: TrackRepository,
-    private val playerRepo: PlayerRepository
+    private val playerRepo: PlayerRepository,
+    private val waveRepository: WaveRepository
 ) : ViewModel() {
 
     companion object {
@@ -38,14 +40,15 @@ class TracklistModel(
         private val repo: PlaylistRepository,
         private val coverRepo: CoverRepository,
         private val trackRepo: TrackRepository,
-        private val playerRepo: PlayerRepository
+        private val playerRepo: PlayerRepository,
+        private val waveRepo: WaveRepository
     ) : ViewModelProvider.Factory
     {
         @Suppress("UNCHECKED_CAST")
         override fun <T : ViewModel> create(modelClass: Class<T>): T {
             if (modelClass.isAssignableFrom(TracklistModel::class.java)) {
                 Log.d(TAG, "Создаём экземпляр TracklistModel через Factory")
-                return TracklistModel(repo, coverRepo, trackRepo, playerRepo) as T
+                return TracklistModel(repo, coverRepo, trackRepo, playerRepo, waveRepo) as T
             }
             throw IllegalArgumentException("Unknown ViewModel class")
         }
@@ -127,5 +130,9 @@ class TracklistModel(
 
     fun resetOpenPlayerScreen() {
         _openPlayerScreen.value = false
+    }
+
+    suspend fun playWave() {
+        waveRepository.playWave(_playlist.value)
     }
 }

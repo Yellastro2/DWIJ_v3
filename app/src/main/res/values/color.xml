@@ -1,20 +1,25 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <color name="colorPrimary">#9AE3A0</color>
-    <color name="colorPrimaryDark">#7fb983</color>
+    <color name="colorPrimary">#00bbeb</color>
+    <color name="colorPrimaryDark">#009DC5</color>
+    <color name="colorPrimaryAlpha">#50009DC5</color>
+    <color name="colorPrimaryAlpha2">#CC00bbeb</color>
 
-    <color name="colorAccent">#e39add</color>
+    <color name="colorAccent">#ff00bf</color>
     <color name="colorAccentDark">#b97fb4</color>
 
-    <color name="background">#9AB9E3</color>
+    <color name="background">#293fc0</color>
 
     <color name="colorPrimary2">#9259D3</color>
     <color name="colorPrimaryDark2">#7547AA</color>
-    <color name="colorAccent2">#B7CC5D</color>
+    <color name="colorAccent2">#ffe513</color>
     <color name="colorAccent3">#F44336</color> <!-- красный -->
     <color name="colorAccent4">#2196F3</color> <!-- синий -->
     <color name="colorAccent5">#4CAF50</color> <!-- зелёный -->
     <color name="colorAccent6">#FF9800</color> <!-- оранжевый -->
+
+    <color name="colorAccentYellowAlpha">#80FF6E00</color>
+    <color name="colorAccentAlpha">#60ff00bf</color>
 
     <color name="purple_200">#FFBB86FC</color>
     <color name="purple_500">#FF6200EE</color>

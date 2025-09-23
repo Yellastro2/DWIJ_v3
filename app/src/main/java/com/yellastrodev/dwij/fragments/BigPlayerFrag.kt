@@ -190,7 +190,7 @@ class BigPlayerFrag() :
 		if (isShuffle) {
 			mvRandom?.setImageResource(R.drawable.random_on)
 		} else{
-			mvRandom?.setImageResource(R.drawable.random)
+			mvRandom?.setImageResource(R.drawable.ic_shuffle)
 
 		}
 	}

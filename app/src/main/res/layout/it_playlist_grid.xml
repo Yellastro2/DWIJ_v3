@@ -21,9 +21,10 @@
         android:layout_width="wrap_content"
         android:layout_height="wrap_content"
         android:layout_marginTop="16dp"
-        android:background="#7AD5A54F"
+        android:background="@color/colorPrimaryAlpha2"
         android:paddingHorizontal="8dp"
         android:text="TextView"
+        android:textColor="@color/white"
         android:textAppearance="@style/TextAppearance.AppCompat.Large"
         android:textSize="20sp"
         android:textStyle="bold"
@@ -31,11 +32,13 @@
         app:layout_constraintTop_toTopOf="@+id/it_pl_grid_img" />
 
     <TextView
+        android:background="@color/colorAccentAlpha"
         android:id="@+id/it_pl_grid_body"
         android:layout_width="wrap_content"
         android:layout_height="wrap_content"
-        android:layout_marginStart="8dp"
+        android:paddingStart="8dp"
         android:layout_marginTop="8dp"
+        android:textColor="@color/white"
         android:text="TextView"
         app:layout_constraintStart_toStartOf="parent"
         app:layout_constraintTop_toBottomOf="@+id/it_pl_grid_title" />

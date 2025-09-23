@@ -18,7 +18,7 @@
         android:layout_height="400dp"
         android:minHeight="?attr/actionBarSize"
         app:layout_scrollFlags="scroll|exitUntilCollapsed"
-        app:contentScrim="?attr/colorPrimary"
+        app:contentScrim="@color/colorAccent"
         app:titleEnabled="false">
 
     <androidx.constraintlayout.widget.ConstraintLayout
@@ -36,7 +36,7 @@
             android:layout_width="200dp"
             android:layout_height="200dp"
             android:layout_marginTop="24dp"
-            android:src="@drawable/logo_lil"
+            android:src="@drawable/logo2"
             app:layout_constraintEnd_toEndOf="parent"
             app:layout_constraintStart_toStartOf="parent"
             app:layout_constraintTop_toTopOf="parent" />
@@ -45,7 +45,9 @@
             android:id="@+id/fr_object_title"
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
-            android:layout_marginTop="24dp"
+            android:layout_marginTop="18dp"
+            android:textStyle="bold"
+            android:textSize="32sp"
             android:text="TextView"
             android:textAppearance="@style/TextAppearance.AppCompat.Large"
             app:layout_constraintEnd_toEndOf="parent"
@@ -56,7 +58,7 @@
             android:id="@+id/fr_object_title2"
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
-            android:layout_marginTop="24dp"
+            android:layout_marginTop="18dp"
             android:text="TextView"
             app:layout_constraintEnd_toEndOf="parent"
             app:layout_constraintStart_toStartOf="parent"
@@ -75,18 +77,21 @@
             app:layout_constraintTop_toBottomOf="@+id/fr_object_title2">
 
             <Button
+                style="@style/homeScreenCards"
                 android:id="@+id/fr_object_share"
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
                 android:text="share" />
 
             <Button
+                style="@style/homeScreenCards"
                 android:id="@+id/fr_object_play"
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
                 android:text="Play" />
 
             <Button
+                style="@style/homeScreenCards"
                 android:id="@+id/fr_object_wave_btn"
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"

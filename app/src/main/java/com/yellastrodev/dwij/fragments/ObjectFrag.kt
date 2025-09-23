@@ -37,6 +37,8 @@ class ObjectFrag : Fragment(R.layout.frag_object) {
         fun newInstance() = ObjectFrag()
     }
 
+    val TAG = "ObjectFrag"
+
     lateinit var mvTitle2: TextView
 
 //    lateinit var mMain: MainActivity
@@ -48,7 +50,8 @@ class ObjectFrag : Fragment(R.layout.frag_object) {
             repo = (requireActivity().application as yApplication).playlistRepository,
             coverRepo = (requireActivity().application as yApplication).coverRepository,
             trackRepo = (requireActivity().application as yApplication).trackRepository,
-            playerRepo = (requireActivity().application as yApplication).playerRepo
+            playerRepo = (requireActivity().application as yApplication).playerRepo,
+            waveRepo = (requireActivity().application as yApplication).waveRepository
         )
     }
 
@@ -228,6 +231,11 @@ class ObjectFrag : Fragment(R.layout.frag_object) {
     }
 
     private fun onWaveBtn() {
+        Log.d(TAG, " onWaveBtn")
+        lifecycleScope.launch {
+            model.playWave()
+        }
+        findNavController().navigate(R.id.bigPlayerFrag)
 //        val fMain = requireActivity() as MainActivity
 //        GlobalScope.launch(Dispatchers.IO){
 //

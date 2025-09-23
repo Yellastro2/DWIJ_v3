@@ -37,7 +37,7 @@ class CoverRepository(
                 }
             }
             else -> {
-                return BitmapFactory.decodeResource(context.resources, R.drawable.icon)
+                return BitmapFactory.decodeResource(context.resources, R.drawable.logo2)
             }
         }
 //        return stream.use {
@@ -53,7 +53,7 @@ class CoverRepository(
 
         track.getCoverUriAny()?. let {
             return getCover(keyForSize(track.id, size), it, size)
-        }?: return BitmapFactory.decodeResource(context.resources, R.drawable.icon)
+        }?: return BitmapFactory.decodeResource(context.resources, R.drawable.logo2)
 
     }
 
@@ -107,7 +107,7 @@ class CoverRepository(
                     bitmap.compress(Bitmap.CompressFormat.JPEG, 100, out)
                 }
             }
-        } ?: emit(BitmapFactory.decodeResource(context.resources, R.drawable.icon))
+        } ?: emit(BitmapFactory.decodeResource(context.resources, R.drawable.logo2))
     }
 
     private fun findSmallerCachedVersion(trackId: String, size: CoverSize): Bitmap? {
