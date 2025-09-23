@@ -122,8 +122,9 @@ class yApplication: Application() {
     }
 
     val playerRepo: PlayerRepository by lazy {
-        PlayerRepository(applicationContext, trackCacheRepo).apply {
+        PlayerRepository(applicationContext).apply {
             bind()
+
         }
     }
 
@@ -150,10 +151,11 @@ class yApplication: Application() {
         )
     }
 
+
     @OptIn(DelicateCoroutinesApi::class)
     override fun onCreate() {
         super.onCreate()
-
+        playerRepo.waveRepository = this@yApplication.waveRepository
 
     }
 

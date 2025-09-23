@@ -15,9 +15,6 @@ import com.yellastrodev.dwij.DWIJ_ACC_TOKEN
 import com.yellastrodev.dwij.R
 import com.yellastrodev.dwij.YA_TOKEN
 import com.yellastrodev.dwij.activities.MainActivity
-import com.yellastrodev.dwij.data.entities.dYaTrack
-import com.yellastrodev.dwij.data.repo.WaveRepository
-import com.yellastrodev.dwij.data.source.WaveRemoteSourse
 import com.yellastrodev.dwij.yApplication
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
@@ -58,7 +55,6 @@ class HomeFrag: Fragment(R.layout.frag_home) {
 			lifecycleScope.launch(Dispatchers.IO){
 				val waveList =
 					(requireActivity().application as yApplication).waveRepository.playWave()
-//				TODO (requireActivity().application as yApplication).playerRepo.shuffleOff()
 
 				withContext(Dispatchers.Main) {
 					try {

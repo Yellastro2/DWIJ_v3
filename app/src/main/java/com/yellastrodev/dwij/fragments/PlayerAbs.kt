@@ -11,22 +11,17 @@ import android.widget.ImageView
 import android.widget.SeekBar
 import android.widget.TextView
 import androidx.fragment.app.Fragment
-import androidx.fragment.app.viewModels
 import androidx.lifecycle.Lifecycle
-import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.lifecycleScope
 import androidx.lifecycle.repeatOnLifecycle
 import com.google.android.material.snackbar.Snackbar
 import com.yellastrodev.dwij.R
 import com.yellastrodev.dwij.activities.MainActivity
 import com.yellastrodev.dwij.data.entities.dYaTrack
-import com.yellastrodev.dwij.models.PlayerModel
 import com.yellastrodev.dwij.service.PlayerEvent
 import com.yellastrodev.dwij.service.PlayerState
-import com.yellastrodev.dwij.yApplication
 import com.yellastrodev.yandexmusiclib.entities.CoverSize
 import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.GlobalScope
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import kotlin.getValue
@@ -123,12 +118,15 @@ open class PlayerAbs() : Fragment() {
 //								mvCover.setImageBitmap(bitmap)
 //							}
 						}
-						if (playerModel.playTitle.value != title) {
-							title = playerModel.playTitle.value
-							withContext(Dispatchers.Main) {
-								mvMainTitle?.text = title
+						playerModel.playdTracklist.value?.let{ dtracklist ->
+							if (dtracklist.getDTitle() != title) {
+								title = dtracklist.getDTitle()
+								withContext(Dispatchers.Main) {
+									mvMainTitle?.text = title
+								}
 							}
 						}
+
 
 
 
@@ -162,6 +160,8 @@ open class PlayerAbs() : Fragment() {
 					is PlayerEvent.ShowError -> {
 						Snackbar.make(view, event.message, Snackbar.LENGTH_SHORT).show()
 					}
+
+					is PlayerEvent.TrackListEnd -> TODO()
 				}
 			}
 		}

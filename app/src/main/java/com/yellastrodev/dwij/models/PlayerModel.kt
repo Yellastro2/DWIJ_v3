@@ -16,12 +16,10 @@ import com.yellastrodev.dwij.data.repo.PlayerRepository
 import com.yellastrodev.dwij.data.repo.TrackRepository
 import com.yellastrodev.dwij.data.entities.dYaTrack
 import com.yellastrodev.dwij.data.repo.PlaylistRepository
-import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.stateIn
-import kotlinx.coroutines.launch
 
 class PlayerModel(
     private val playerRepo: PlayerRepository,
@@ -146,7 +144,7 @@ class PlayerModel(
 //    val track: StateFlow<dYaTrack?> = _track
 
     val playerState = playerRepo.state
-    val playTitle = playerRepo.playTitle
+    val playdTracklist = playerRepo.dtracklist
     val shuffleBlock = playerRepo.isShuffleBlock
 
     val playerEvent = playerRepo.events

@@ -34,9 +34,12 @@ open class dYaPlaylist(
 
      @Ignore
      var tracks: List<dPlaylistTrack> = emptyList()
+     override fun getdId(): String = playlistUuid
+
      override fun getDTitle(): String = title
 
      override fun getType(): String = YA_PLAYLIST
+     override fun getWaveId(): String = "playlist:${uid}_${kind}"
 }
 
 fun YaPlaylist.toEntity(): dYaPlaylist {

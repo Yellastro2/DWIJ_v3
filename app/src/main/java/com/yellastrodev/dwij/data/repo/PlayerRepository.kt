@@ -33,12 +33,13 @@ import kotlinx.coroutines.withContext
 
 @OptIn(UnstableApi::class)
 class PlayerRepository(
-    private val context: Context,
-    private val trackCacheRepo: TrackCacheRepository
+    private val context: Context
 ) {
     val TAG = "PlayerRepository"
 
     private var service: PlayerService? = null
+
+    lateinit var waveRepository: WaveRepository
 
     private val prefs by lazy {
         PreferenceManager.getDefaultSharedPreferences(context)
@@ -50,8 +51,8 @@ class PlayerRepository(
     private val _state = MutableStateFlow(PlayerState())
     val state: StateFlow<PlayerState> = _state
 
-    private val _playTitle = MutableStateFlow("")
-    val playTitle: StateFlow<String> = _playTitle
+    private val _dtracklist = MutableStateFlow(null as dTracklist?)
+    val dtracklist: StateFlow<dTracklist?> = _dtracklist
 
     var currentTrackList: List<String> = listOf()
 
@@ -76,7 +77,10 @@ class PlayerRepository(
                 ?.launchIn(GlobalScope) // лучше передать свой scope
             service?.events
                 ?.onEach { event ->
-                    _events.emit(event) // пробрасываем в репозиторий
+                    if (event is PlayerEvent.TrackListEnd){
+                        waveRepository.playWave(dtracklist.value!!)
+                    }else
+                        _events.emit(event) // пробрасываем в репозиторий
                 }
                 ?.launchIn(GlobalScope) // лучше свой scope
         }
@@ -112,10 +116,10 @@ class PlayerRepository(
     ) {
         Log.d(TAG,"set playQueue()")
 
-        if (tracks[startIndex].id == _currentTrack.value && _playTitle.value == tracklist.getDTitle())
+        if (tracks[startIndex].id == _currentTrack.value && dtracklist.value?.getdId() == tracklist.getdId())
             return
 
-        if (playTitle.value == tracklist.getDTitle()){
+        if (dtracklist.value?.getdId() == tracklist.getdId()){
             _currentTrack.value = tracks[startIndex].id
             relativeIndex = startIndex
             service?.playTrack(startIndex)
@@ -124,10 +128,9 @@ class PlayerRepository(
         // сюда доходит логика ток если треклист сменился.
         blockShuffle(tracklist.getType() == dYaWave.YA_WAVE)
 
-//        tracksAndUrls = tracks.associate { track -> track.id to track  }
         currentTrackList = tracks.map { track -> track.id }
         _currentTrack.value = tracks[startIndex].id
-        _playTitle.value = tracklist.getDTitle()
+        _dtracklist.value = tracklist
 
         relativeIndex = startIndex
 
@@ -195,7 +198,9 @@ class PlayerRepository(
     fun pause() = service?.pause()
     suspend fun skipNext() {
 //        loanNextTracks(1)
-        service?.skipNext()
+        withContext(Dispatchers.Main) {
+            service?.skipNext()
+        }
     }
     suspend fun skipPrev() {
 //        loanNextTracks(-1)

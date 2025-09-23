@@ -9,14 +9,19 @@ class dYaWave(
     var tracks: List<TrackShort> = listOf()
 ): dTracklist {
 
+    var title = "волна"
+
+    override fun getdId(): String = radioSessionId
+
     companion object{
         const val YA_WAVE = "ya_wave"
     }
 
 
-    override fun getDTitle(): String = "волна"
+    override fun getDTitle(): String = title
 
     override fun getType(): String = YA_WAVE
+    override fun getWaveId(): String = ""
 }
 
 fun YaWave.toEntity(): dYaWave {

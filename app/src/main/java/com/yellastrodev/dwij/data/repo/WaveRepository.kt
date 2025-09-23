@@ -1,9 +1,7 @@
 package com.yellastrodev.dwij.data.repo
 
 import android.util.Log
-import android.view.View
-import androidx.lifecycle.Lifecycle
-import androidx.lifecycle.repeatOnLifecycle
+import com.yellastrodev.dwij.data.entities.dTracklist
 import com.yellastrodev.dwij.data.entities.dYaTrack
 import com.yellastrodev.dwij.data.entities.dYaWave
 import com.yellastrodev.dwij.data.entities.toEntity
@@ -29,11 +27,17 @@ class WaveRepository(
 
     private var curentWave: dYaWave? = null
 
-    suspend fun getWave(): List<dYaTrack> {
-        val result = remote.getWave()
+    suspend fun getWave(dTracklist: dTracklist?): List<dYaTrack> {
+        val result = remote.getWave(dTracklist?.getWaveId() ?: "user:onyourwave")
         when(result){
             is YamApiClient.WaveResult.Success -> {
                 curentWave = result.wave.toEntity()
+                dTracklist?. let{
+                    curentWave!!.title =  "${it.getDTitle()} волна"
+                } ?: run {
+                    curentWave!!.title =  "Волна"
+
+                }
                 val trackList = result.trackList.map { it.toEntity() }
                 trackRepository.putTracks(trackList)
                 return trackList
@@ -50,8 +54,9 @@ class WaveRepository(
     // Храним job, чтобы можно было отменить снаружи
     private var observeJob: Job? = null
 
-    suspend fun playWave(){
-        val waveList = getWave()
+    suspend fun playWave(dtrackList: dTracklist? = null) {
+        Log.d(TAG, "playWave: ${dtrackList?.getWaveId()?: "own"}")
+        val waveList = getWave(dtrackList)
         withContext(Dispatchers.Main) {
             playerRepository.playQueue(
                 waveList,
@@ -153,22 +158,4 @@ class WaveRepository(
         observeJob = null
     }
 
-    private val bufferSize = 5
-    private val loadedTracks = mutableListOf<dYaTrack>()
-    private var hasMore = true
-
-
-    private suspend fun loadNextBatch() {
-        curentWave?.let{
-
-        }
-        val newTracks = getWave()
-        if (newTracks.isEmpty()) {
-            hasMore = false
-            return
-        }
-        loadedTracks.addAll(newTracks)
-//        val mediaItems = newTracks.map { track -> track.toMediaItem() }
-//        playerRepository.service?.player?.addMediaItems(mediaItems)
-    }
 }

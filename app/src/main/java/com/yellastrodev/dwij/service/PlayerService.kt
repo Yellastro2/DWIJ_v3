@@ -165,12 +165,21 @@ class PlayerService : Service() {
                     currentIndex = player.currentMediaItemIndex
                 )
                 if (playbackState == Player.STATE_ENDED) {
-                    GlobalScope.launch {
-                        playerRepo.skipNext()
-                    }
+                    if (player.currentMediaItemIndex == player.mediaItemCount - 1 &&
+                        player.repeatMode == Player.REPEAT_MODE_OFF
+                    ) {
+                        // Здесь точно закончился весь список, повтор выключен
+                        onPlaylistFinished()
+                    } else
+                        GlobalScope.launch {
+                            playerRepo.skipNext()
+                        }
                 }
                 Log.d(TAG, "PlaybackStateChanged: isPlaying=${player.isPlaying}, index=${player.currentMediaItemIndex}")
             }
+
+
+
             override fun onIsPlayingChanged(isPlaying: Boolean) {
                 _state.value = _state.value.copy(isPlaying = isPlaying)
 
@@ -284,6 +293,13 @@ class PlayerService : Service() {
     fun skipNext() = player.seekToNext().also { Log.d(TAG, "skipNext called") }
     fun skipPrev() = player.seekToPrevious().also { Log.d(TAG, "skipPrev called") }
 
+    private fun onPlaylistFinished() {
+        Log.d(TAG, "Playlist finished")
+        GlobalScope.launch {
+            _events.emit(PlayerEvent.TrackListEnd("Playlist finished"))
+        }
+    }
+
     override fun onBind(intent: Intent): IBinder {
         Log.d(TAG, "Service bound")
         return binder
@@ -382,5 +398,6 @@ data class PlayerState(
 
 sealed class PlayerEvent {
     data class ShowError(val message: String) : PlayerEvent()
+    data class TrackListEnd(val message: String) : PlayerEvent()
     // можно добавить другие события: SkipNext, SkipPrev и т.д.
 }

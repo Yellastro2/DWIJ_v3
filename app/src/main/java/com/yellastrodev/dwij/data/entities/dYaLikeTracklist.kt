@@ -29,6 +29,7 @@ class dYaLikeTracklist(
     backgroundImageUrl = "",
     description = "",
 ), dTracklist {
+    override fun getdId(): String = playlistUuid
 
     companion object {
         const val KIND_LIKED = "liked"
@@ -37,6 +38,7 @@ class dYaLikeTracklist(
     override fun getDTitle(): String = title
 
     override fun getType(): String = KIND_LIKED
+    override fun getWaveId(): String = "playlist:$playlistUuid"
 }
 
 fun YaLikeTracklist.toEntity(): dYaLikeTracklist {
