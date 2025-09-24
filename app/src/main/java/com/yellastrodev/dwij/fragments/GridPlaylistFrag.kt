@@ -4,6 +4,7 @@ import android.annotation.SuppressLint
 import android.os.Bundle
 import android.util.DisplayMetrics
 import android.view.View
+import android.widget.TextView
 import androidx.appcompat.app.AlertDialog
 import androidx.fragment.app.Fragment
 import androidx.fragment.app.viewModels
@@ -78,7 +79,7 @@ class GridPlaylistFrag() : Fragment(R.layout.frag_grid_playlist) {
 				lifecycleScope.launch {
 					model.adapter.pickedTrack = model.getTrack(fTrackId)
 				}
-				view.findViewById<View>(R.id.fr_list_pllist_title).visibility = View.VISIBLE
+				view.findViewById<TextView>(R.id.fr_list_pllist_title).text = "добавить в плейлист"
 				mOnItemClick = {
 							fPl: dYaPlaylist ->
 						GlobalScope.launch(Dispatchers.Default){

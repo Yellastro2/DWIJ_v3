@@ -25,7 +25,8 @@ class GridPlaylistModel(
 		private val repo: PlaylistRepository,
 		private val trackRepo: TrackRepository,
 		private val coverRepo: CoverRepository
-	) : ViewModelProvider.Factory {
+	) : ViewModelProvider.Factory
+	{
 		@Suppress("UNCHECKED_CAST")
 		override fun <T : ViewModel> create(modelClass: Class<T>): T {
 			if (modelClass.isAssignableFrom(GridPlaylistModel::class.java)) {

@@ -19,6 +19,7 @@ import com.google.android.material.appbar.AppBarLayout
 import com.yellastrodev.dwij.R
 import com.yellastrodev.dwij.TYPE
 import com.yellastrodev.dwij.VALUE
+import com.yellastrodev.dwij.data.entities.dYaPlaylist
 import com.yellastrodev.dwij.models.TracklistModel
 import com.yellastrodev.dwij.utils.LangFormats.Companion.getNumericPostfix
 import com.yellastrodev.dwij.yApplication
@@ -32,6 +33,7 @@ class ObjectFrag : Fragment(R.layout.frag_object) {
     companion object {
         val TRACK = "track"
         val PLAYLIST = "playlist"
+        val TRACKLIST = "tracklist"
         val ARTIST = "artist"
 
         fun newInstance() = ObjectFrag()
@@ -64,15 +66,15 @@ class ObjectFrag : Fragment(R.layout.frag_object) {
 
         if(arguments != null) {
             mType = requireArguments().getString(TYPE)!!
-            mValue = requireArguments().getString(VALUE)!!
+            mValue = requireArguments().getString(VALUE)?: ""
 
-            if (mType == PLAYLIST) {
+//            if (mType == PLAYLIST) {
 
                 lifecycleScope.launch(Dispatchers.IO) {
                     model.setType(mType, mValue)
 
                 }
-            }
+//            }
         }
 
 //        Log.d("DWIJ_TIMING", "ObjectFrag created")
@@ -115,20 +117,16 @@ class ObjectFrag : Fragment(R.layout.frag_object) {
 
 
         if(arguments != null) {
-//            mType = requireArguments().getString(TYPE)!!
-//            mValue = requireArguments().getString(VALUE)!!
 
+            if (mType == TRACKLIST){
+
+            }
             if (mType == PLAYLIST){
-
-//                lifecycleScope.launch(Dispatchers.IO) {
-//                    model.setType(mType, mValue)
-//
-//                }
-
                 viewLifecycleOwner.lifecycleScope.launch {
                     viewLifecycleOwner.repeatOnLifecycle(Lifecycle.State.STARTED) {
                         model.playlist.collect { playlist ->
                             if (playlist != null) {
+                                playlist as dYaPlaylist
                                 lifecycleScope.launch(Dispatchers.IO) {
                                     val bitmap = model.coverRepo.getCover(playlist, CoverSize.`200x200`)
 
@@ -147,47 +145,23 @@ class ObjectFrag : Fragment(R.layout.frag_object) {
                     }
                 }
 
-//                mViewModel.viewModelScope.launch(Dispatchers.Default) {
-//                    requireArguments().getString(KeyStore.USER)?.let {
-//                        mViewModel.mUser = it
-//                        mViewModel.mDataObject = yMediaStore.store(requireContext())
-//                            .getPlaylist(mViewModel.mValue, mViewModel.mUser!!)
-//                    }
-//                    if (mViewModel.mUser == null)
-//                        mViewModel.mDataObject = yMediaStore.store(requireContext())
-//                            .getYamPlaylist(mViewModel.mValue)
-//                    mViewModel.getAdapter(fMain)
-//                        .setList(mViewModel.mDataObject as iTrackList)
-//                    withContext(Dispatchers.Main) {
-//                        loadObject()
-//                    }
-//                }
-                view.findViewById<RecyclerView>(R.id.fr_obj_recycler)
-                    .adapter = model.adapter
-                model.adapter.onItemClicked = { pos ->
-                    Log.d("DWIJ_TIMING", "ObjectFrag onItemClick")
-                    findNavController().navigate(
-                        R.id.action_objectFrag_to_bigPlayerFrag
-                    )
-                    lifecycleScope.launch {
-                        model.onTrackClicked(pos)
-                    }
 
-                }
-                view.findViewById<RecyclerView>(R.id.fr_obj_recycler)
-                    .layoutManager = LinearLayoutManager(context)
 
             }
-//            else if (mViewModel.mType == TRACK){
-//                mViewModel.viewModelScope.launch(Dispatchers.Default) {
-//                    mViewModel.mDataObject = yMediaStore.store(requireContext())
-//                        .getTrack(mViewModel.mValue)
-//                    withContext(Dispatchers.Main) {
-//                        loadObject()
-//                    }
-//
-//                }
-//            }
+            view.findViewById<RecyclerView>(R.id.fr_obj_recycler)
+                .adapter = model.adapter
+            model.adapter.onItemClicked = { pos ->
+                Log.d("DWIJ_TIMING", "ObjectFrag onItemClick")
+                findNavController().navigate(
+                    R.id.action_objectFrag_to_bigPlayerFrag
+                )
+                lifecycleScope.launch {
+                    model.onTrackClicked(pos)
+                }
+
+            }
+            view.findViewById<RecyclerView>(R.id.fr_obj_recycler)
+                .layoutManager = LinearLayoutManager(context)
         }
 
         mvTitle2 = requireView().findViewById<TextView>(R.id.fr_object_title2)

@@ -60,7 +60,7 @@ class CoverRepository(
     @OptIn(DelicateCoroutinesApi::class)
     suspend fun getCover(playlist: dYaPlaylist, size: CoverSize = CoverSize.`200x200`): Bitmap {
 
-        val key = "playlist_" + playlist.playlistUuid
+        val key = "playlist_" + keyForSize(playlist.playlistUuid,size)
 
         return getCover(key, playlist.ogImageUri!!, size)
     }

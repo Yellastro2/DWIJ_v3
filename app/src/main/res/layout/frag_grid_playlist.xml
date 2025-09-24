@@ -24,10 +24,11 @@
 
         <TextView
             android:id="@+id/fr_list_pllist_title"
-            android:visibility="gone"
+            android:textColor="@color/white"
+            android:textSize="32sp"
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
-            android:text="добавить в плейлист"/>
+            android:text="Плейлисты"/>
 
 <!--        <Button-->
 <!--            android:id="@+id/fr_ls_plls_btn_sd"-->

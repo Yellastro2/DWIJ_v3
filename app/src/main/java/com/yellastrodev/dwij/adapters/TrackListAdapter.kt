@@ -8,6 +8,7 @@ import android.view.View
 import android.view.ViewGroup
 import android.widget.ImageView
 import android.widget.TextView
+import androidx.recyclerview.widget.DiffUtil
 import androidx.recyclerview.widget.RecyclerView
 import com.yellastrodev.dwij.R
 import com.yellastrodev.dwij.data.entities.dYaTrack
@@ -35,12 +36,34 @@ class TrackListAdapter(
 
 
     @SuppressLint("NotifyDataSetChanged")
-    fun setList(allTracks: ArrayList<dYaTrack>) {
+    fun setList(allTracks: List<dYaTrack>) {
         Log.d("TrackListAdapter", "setList: ${allTracks.size}")
-        val diff = diffTracks(mListOfObj, allTracks)
+//        val diff = diffTracks(mListOfObj, allTracks)
 //        mListOfObj = allTracks
 //        mInitJob = null
 //        notifyDataSetChanged()
+
+        val diffCallback = object : DiffUtil.Callback() {
+            override fun getOldListSize() = mListOfObj.size
+            override fun getNewListSize() = allTracks.size
+
+            override fun areItemsTheSame(oldItemPosition: Int, newItemPosition: Int): Boolean {
+                return mListOfObj[oldItemPosition].id == allTracks[newItemPosition].id
+            }
+
+            override fun areContentsTheSame(oldItemPosition: Int, newItemPosition: Int): Boolean {
+                // Т.к. ты писал, что игнорируешь изменения самих объектов
+                // и смотришь только на id — возвращаем true
+                return true
+            }
+        }
+
+        val diffResult = DiffUtil.calculateDiff(diffCallback)
+
+        mListOfObj.clear()
+        mListOfObj.addAll(allTracks)
+
+        diffResult.dispatchUpdatesTo(this)
     }
 
     /**
@@ -49,7 +72,7 @@ class TrackListAdapter(
      */
     private fun diffTracks(
         oldTracks: ArrayList<dYaTrack>,
-        newTracks: ArrayList<dYaTrack>
+        newTracks: List<dYaTrack>
     ) {
         val oldMap = oldTracks.associateBy { it.id }
         val newMap = newTracks.associateBy { it.id }
@@ -83,7 +106,7 @@ class TrackListAdapter(
             if (curr == -1) continue // вдруг не найдено (безопасно пропустить)
             if (curr != i) {
                 val item = mListOfObj.removeAt(curr)
-                mListOfObj.add(i, item)
+                mListOfObj.add(i.coerceAtMost(mListOfObj.size), item)
                 notifyItemMoved(curr, i)
             }
         }

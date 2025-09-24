@@ -13,6 +13,8 @@ import androidx.lifecycle.lifecycleScope
 import androidx.navigation.fragment.findNavController
 import com.yellastrodev.dwij.DWIJ_ACC_TOKEN
 import com.yellastrodev.dwij.R
+import com.yellastrodev.dwij.TYPE
+import com.yellastrodev.dwij.VALUE
 import com.yellastrodev.dwij.YA_TOKEN
 import com.yellastrodev.dwij.activities.MainActivity
 import com.yellastrodev.dwij.yApplication
@@ -34,10 +36,10 @@ class HomeFrag: Fragment(R.layout.frag_home) {
 		}
 
 		view.findViewById<View>(R.id.fr_home_tracks).setOnClickListener {
-			val fBndl = Bundle()
-//			fBndl.putString(TrackListFrag.TRACKLIST_TYPE,TrackListFrag.STORAGE_LIST)
-//			(activity as MainActivity).mNavController
-//				.navigate(R.id.action_homeFrag_to_trackListFrag,fBndl)
+			val bundle = Bundle().apply {
+				putString(TYPE, ObjectFrag.TRACKLIST)
+			}
+			findNavController().navigate(R.id.objectFrag,bundle)
 		}
 
 		view.findViewById<View>(R.id.fr_home_totalall_btn).setOnClickListener {
