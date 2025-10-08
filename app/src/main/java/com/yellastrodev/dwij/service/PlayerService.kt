@@ -10,6 +10,8 @@ import android.os.Binder
 import android.os.IBinder
 import android.util.Log
 import androidx.core.app.NotificationCompat
+import androidx.media3.common.AudioAttributes
+import androidx.media3.common.C
 import androidx.media3.common.MediaItem
 import androidx.media3.common.PlaybackException
 import androidx.media3.common.Player
@@ -19,6 +21,7 @@ import androidx.media3.exoplayer.ExoPlayer
 import androidx.media3.exoplayer.source.DefaultMediaSourceFactory
 import androidx.media3.ui.PlayerNotificationManager
 import androidx.media3.session.MediaSession
+import androidx.media3.session.MediaSessionService
 import com.yellastrodev.dwij.R
 import com.yellastrodev.dwij.activities.MainActivity
 import com.yellastrodev.dwij.data.repo.CoverRepository
@@ -38,11 +41,12 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharedFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.launch
+import java.lang.ref.WeakReference
 
 private const val TAG = "PlayerService"
 
 @UnstableApi
-class PlayerService : Service() {
+class PlayerService : MediaSessionService() {
 
     lateinit var player: ExoPlayer
     private val binder = PlayerBinder()
@@ -76,26 +80,26 @@ class PlayerService : Service() {
     override fun onCreate() {
         super.onCreate()
         Log.d(TAG, "onCreate called: создаем канал и плеер")
-        createChannel()
+//        createChannel()
 
-        val contentIntent: PendingIntent = PendingIntent.getActivity(
-            this@PlayerService,
-            0,
-            Intent(this, MainActivity::class.java).apply {
-                flags = Intent.FLAG_ACTIVITY_SINGLE_TOP or Intent.FLAG_ACTIVITY_CLEAR_TOP
-            },
-            PendingIntent.FLAG_IMMUTABLE
-        )
-
-        // Минимальное уведомление пока плеер готовится
-        val notification = NotificationCompat.Builder(this, "player_channel")
-            .setContentTitle("Загрузка плеера…")
-            .setSmallIcon(R.drawable.ic_logo_dance_monochrom)
-            .setContentIntent(contentIntent)
-            .build()
-
-        startForeground(NOTIFICATION_ID, notification)
-        Log.d(TAG, "Foreground запущен с временным уведомлением")
+//        val contentIntent: PendingIntent = PendingIntent.getActivity(
+//            this@PlayerService,
+//            0,
+//            Intent(this, MainActivity::class.java).apply {
+//                flags = Intent.FLAG_ACTIVITY_SINGLE_TOP or Intent.FLAG_ACTIVITY_CLEAR_TOP
+//            },
+//            PendingIntent.FLAG_IMMUTABLE
+//        )
+//
+//        // Минимальное уведомление пока плеер готовится
+//        val notification = NotificationCompat.Builder(this, "player_channel")
+//            .setContentTitle("Загрузка плеера…")
+//            .setSmallIcon(R.drawable.ic_logo_dance_monochrom)
+//            .setContentIntent(contentIntent)
+//            .build()
+//
+//        startForeground(NOTIFICATION_ID, notification)
+//        Log.d(TAG, "Foreground запущен с временным уведомлением")
 
         val dataSourceFactory = YaLazyDataSourceFactory(this, trackCacheRepo)
         val mediaSourceFactory = DefaultMediaSourceFactory(dataSourceFactory)
@@ -104,13 +108,22 @@ class PlayerService : Service() {
             .setMediaSourceFactory(mediaSourceFactory)
             .build()
 
-        startForegroundWithNotification()
+//        startForegroundWithNotification()
 
 //        player = ExoPlayer.Builder(this)
 //            .setLoadControl(loadControl)
 //            .setMediaSourceFactory(YaTrackMediaSourceFactory(trackCacheRepo))
 //            .build()
         Log.d(TAG, "ExoPlayer инициализирован")
+
+        player.setAudioAttributes(
+            AudioAttributes.Builder()
+                .setUsage(C.USAGE_MEDIA)
+                .setContentType(C.AUDIO_CONTENT_TYPE_MUSIC)
+                .build(),
+            true
+        )
+
 
         mediaSession = MediaSession.Builder(this, player)
             .setCallback(object : MediaSession.Callback {
@@ -133,9 +146,6 @@ class PlayerService : Service() {
                 }
             })
             .build()
-
-
-
 
         // Слушаем изменения состояния воспроизведения
         player.addListener(object : Player.Listener {
@@ -196,6 +206,16 @@ class PlayerService : Service() {
                 Log.d(TAG, "RepeatModeChanged: $repeatMode")
             }
         })
+
+
+
+
+        (application as? yApplication)?.playerServiceRef = WeakReference(this)
+    }
+
+    override fun onGetSession(controllerInfo: MediaSession.ControllerInfo): MediaSession? {
+        Log.d(TAG, "onGetSession called")
+        return mediaSession
     }
 
     private var progressJob: Job? = null
@@ -272,10 +292,10 @@ class PlayerService : Service() {
         }
     }
 
-    override fun onBind(intent: Intent): IBinder {
-        Log.d(TAG, "Service bound")
-        return binder
-    }
+//    override fun onBind(intent: Intent): IBinder {
+//        Log.d(TAG, "Service bound")
+//        return binder
+//    }
 
     inner class PlayerBinder : Binder() {
         fun getService(): PlayerService = this@PlayerService

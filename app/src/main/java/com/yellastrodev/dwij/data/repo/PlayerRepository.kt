@@ -21,14 +21,17 @@ import com.yellastrodev.dwij.data.entities.dYaWave
 import com.yellastrodev.dwij.service.PlayerEvent
 import com.yellastrodev.dwij.service.PlayerService
 import com.yellastrodev.dwij.service.PlayerState
+import com.yellastrodev.dwij.yApplication
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.GlobalScope
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharedFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.onEach
 import kotlinx.coroutines.flow.launchIn
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 
 @OptIn(UnstableApi::class)
@@ -38,6 +41,9 @@ class PlayerRepository(
     val TAG = "PlayerRepository"
 
     private var service: PlayerService? = null
+
+    private val playerService: PlayerService?
+        get() = (context.applicationContext as yApplication).playerServiceRef?.get()
 
     lateinit var waveRepository: WaveRepository
 
@@ -92,10 +98,42 @@ class PlayerRepository(
         }
     }
 
+    suspend fun waitForService(): PlayerService {
+        while (true) {
+            val service = (context.applicationContext as yApplication).playerServiceRef?.get()
+            if (service != null) return service
+            delay(100) // не заблокирует основной поток
+        }
+    }
+
     fun bind() {
         val intent = Intent(context, PlayerService::class.java)
         ContextCompat.startForegroundService(context, intent)
-        context.bindService(intent, serviceConnection, Context.BIND_AUTO_CREATE)
+//        context.bindService(intent, serviceConnection, Context.BIND_AUTO_CREATE)
+
+        GlobalScope.launch {
+            service = waitForService()
+            service?.let { service ->
+            service.state.onEach { playerState ->
+                if (playerState.currentIndex != _state.value.currentIndex) {
+                    _currentTrack.value = currentTrackList[playerState.currentIndex]
+                }
+                _state.value = playerState
+            }.launchIn(this)
+
+            service.events.onEach { event ->
+                if (event is PlayerEvent.TrackListEnd) {
+                    waveRepository.playWave(dtracklist.value!!)
+                } else {
+                    _events.emit(event)
+                }
+            }.launchIn(this)
+
+                withContext(Dispatchers.Main) {
+                    applySavedModes()
+                }
+            }
+        }
     }
 
     fun unbind() {

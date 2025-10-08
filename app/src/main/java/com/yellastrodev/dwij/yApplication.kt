@@ -5,6 +5,7 @@ import android.content.Context
 import android.preference.PreferenceManager
 import android.util.Log
 import android.util.LruCache
+import androidx.media3.common.util.UnstableApi
 import androidx.room.Database
 import androidx.room.Room
 import androidx.room.RoomDatabase
@@ -30,6 +31,7 @@ import com.yellastrodev.dwij.data.entities.dYaPlaylist
 import com.yellastrodev.dwij.data.entities.dYaTrack
 import com.yellastrodev.dwij.data.repo.WaveRepository
 import com.yellastrodev.dwij.data.source.WaveRemoteSourse
+import com.yellastrodev.dwij.service.PlayerService
 import com.yellastrodev.yandexmusiclib.YamApiClient
 import com.yellastrodev.yandexmusiclib.kot_utils.yNetwork.Companion.NetResult
 import com.yellastrodev.yandexmusiclib.yAccount
@@ -39,7 +41,9 @@ import kotlinx.coroutines.GlobalScope
 import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.withContext
 import java.io.File
+import java.lang.ref.WeakReference
 
+@UnstableApi
 class yApplication: Application() {
 
     val yamClient: YamApiClient by lazy {
@@ -75,6 +79,8 @@ class yApplication: Application() {
 //    val trackLocalSource by lazy {
 //        TrackLocalSource(db.dTrackDao())
 //    }
+
+    var playerServiceRef: WeakReference<PlayerService>? = null
 
     val trackRepository: TrackRepository by lazy {
         TrackRepository(
