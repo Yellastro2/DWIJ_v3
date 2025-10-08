@@ -13,9 +13,9 @@
         android:allowBackup="true"
         android:dataExtractionRules="@xml/data_extraction_rules"
         android:fullBackupContent="@xml/backup_rules"
-        android:icon="@drawable/logo2"
+        android:icon="@mipmap/ic_logo_dance"
         android:label="@string/app_name"
-        android:roundIcon="@drawable/logo2"
+        android:roundIcon="@mipmap/ic_logo_dance_round"
         android:supportsRtl="true"
         android:theme="@style/AppTheme"
         tools:targetApi="31" >

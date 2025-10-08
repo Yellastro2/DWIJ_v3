@@ -7,6 +7,7 @@ import android.util.Log
 import com.yellastrodev.dwij.R
 import com.yellastrodev.dwij.data.entities.dYaPlaylist
 import com.yellastrodev.dwij.data.entities.dYaTrack
+import com.yellastrodev.dwij.data.entities.iPlaylist
 import com.yellastrodev.yandexmusiclib.YamApiClient
 import com.yellastrodev.yandexmusiclib.kot_utils.yNetwork.Companion.NetStreamResult
 import com.yellastrodev.yandexmusiclib.entities.CoverSize
@@ -58,10 +59,18 @@ class CoverRepository(
     }
 
     @OptIn(DelicateCoroutinesApi::class)
+    suspend fun getCover(playlist: iPlaylist, size: CoverSize = CoverSize.`200x200`): Bitmap {
+        if (playlist is dYaPlaylist) {
+            val key = "playlist_" + keyForSize(playlist.playlistUuid,size)
+            return getCover(key, playlist.ogImageUri!!, size)
+        }
+        return BitmapFactory.decodeResource(context.resources, R.drawable.logo2)
+    }
+
+    @OptIn(DelicateCoroutinesApi::class)
     suspend fun getCover(playlist: dYaPlaylist, size: CoverSize = CoverSize.`200x200`): Bitmap {
 
         val key = "playlist_" + keyForSize(playlist.playlistUuid,size)
-
         return getCover(key, playlist.ogImageUri!!, size)
     }
 

@@ -5,6 +5,7 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.viewModelScope
 import com.yellastrodev.dwij.adapters.TrackListAdapter
+import com.yellastrodev.dwij.data.entities.dSimpleTracklist
 import com.yellastrodev.dwij.data.entities.dTracklist
 import com.yellastrodev.dwij.data.repo.CoverRepository
 import com.yellastrodev.dwij.data.repo.PlayerRepository
@@ -112,6 +113,7 @@ class TracklistModel(
                 }
                 .launchIn(viewModelScope) // подписка живёт пока жив ViewModel
         } else if (type == TRACKLIST) {
+            _playlist.value = dSimpleTracklist()
             val allTracksFlow: Flow<List<dYaTrack>> =
                 playlistRepo.playlists.flatMapLatest { playlistList ->
                     if (playlistList.isEmpty()) {
@@ -136,8 +138,9 @@ class TracklistModel(
                 }
                     .distinctUntilChanged()
             viewModelScope.launch  {
-                allTracksFlow.collect { trackList ->
-                    adapter.setList(trackList)
+                allTracksFlow.collect { flowedTrackList ->
+                    adapter.setList(flowedTrackList)
+                    trackList = ArrayList(flowedTrackList)
                 }
             }
 //            playlistRepo.playlists

@@ -119,6 +119,12 @@ class ObjectFrag : Fragment(R.layout.frag_object) {
         if(arguments != null) {
 
             if (mType == TRACKLIST){
+                view.findViewById<TextView>(R.id.fr_object_title).text = "Все треки"
+                view.findViewById<TextView>(R.id.fr_object_title_colaps).text = "Все треки"
+                view.findViewById<TextView>(R.id.fr_object_title2).text =
+                    "много треков"
+                view.findViewById<View>(R.id.fr_object_wave_btn).visibility = View.GONE
+                view.findViewById<View>(R.id.fr_object_share).visibility = View.GONE
 
             }
             if (mType == PLAYLIST){

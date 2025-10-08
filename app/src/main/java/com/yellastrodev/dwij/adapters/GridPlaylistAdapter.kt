@@ -12,8 +12,10 @@ import androidx.appcompat.app.AlertDialog
 import androidx.recyclerview.widget.RecyclerView
 import com.google.android.material.snackbar.Snackbar
 import com.yellastrodev.dwij.R
+import com.yellastrodev.dwij.data.entities.dPlaylistTrack
 import com.yellastrodev.dwij.data.entities.dYaPlaylist
 import com.yellastrodev.dwij.data.entities.dYaTrack
+import com.yellastrodev.dwij.data.entities.iPlaylist
 import com.yellastrodev.dwij.models.GridPlaylistModel
 import com.yellastrodev.dwij.utils.DurationFormat.Companion.formatDuration
 import com.yellastrodev.dwij.utils.LangFormats.Companion.getNumericPostfix
@@ -29,12 +31,12 @@ import kotlin.random.Random
 
 class GridPlaylistAdapter(
 	private val model: GridPlaylistModel,
-	private val loadCover: suspend (dYaPlaylist) -> Bitmap
+	private val loadCover: suspend (iPlaylist) -> Bitmap
 ) :
 RecyclerView.Adapter<GridPlaylistAdapter.ViewHolder>() {
 
 	var mGridSize = 3
-	var onClick: (dYaPlaylist)-> Unit = {}
+	var onClick: (iPlaylist)-> Unit = {}
 
 	var pickedTrack: dYaTrack? = null
 	set(value) {
@@ -44,22 +46,28 @@ RecyclerView.Adapter<GridPlaylistAdapter.ViewHolder>() {
 
 	var onCreatePlClick: () -> Unit = {}
 
-	var onLongItemClick: (dYaPlaylist) -> Unit = {}
+	var onLongItemClick: (iPlaylist) -> Unit = {}
 
 	var mScope: CoroutineScope? = null
 
-	private var mList: ArrayList<dYaPlaylist> = ArrayList()
-	fun setList(newList: ArrayList<dYaPlaylist>, forced: List<Int> = emptyList()){
+	private var mList: ArrayList<iPlaylist> = ArrayList()
+	fun setList(newList: ArrayList<iPlaylist>, forced: List<Int> = emptyList()){
 
 
 		if (pickedTrack != null){
 			newList.removeAll(
-				newList.filter { it.kind==LIKED_ID })
-		}
+				newList.filter {
+					if (it is dYaPlaylist)
+						it.kind==LIKED_ID
+					else
+						false
+				})
+		} else
+			newList.add(0, PlaylistCreateItem())
 
 		// Считаем дифф
 		val diff = PlaylistsDiff.diffPlaylists(
-			oldMap = mList.associateBy { it.playlistUuid },
+			oldMap = mList.associateBy { it.getdId() },
 			newList = newList
 		)
 
@@ -68,7 +76,7 @@ RecyclerView.Adapter<GridPlaylistAdapter.ViewHolder>() {
 		// --- Удаления ---
 		// Удаляем с конца, чтобы индексы не сдвигались
 		diff.removed
-			.mapNotNull { uuid -> mList.indexOfFirst { it.playlistUuid == uuid }.takeIf { it != -1 } }
+			.mapNotNull { uuid -> mList.indexOfFirst { it.getdId() == uuid }.takeIf { it != -1 } }
 			.sortedDescending()
 			.forEach { index ->
 				mList.removeAt(index)
@@ -77,7 +85,7 @@ RecyclerView.Adapter<GridPlaylistAdapter.ViewHolder>() {
 
 		// --- Добавления ---
 		diff.added.forEach { uuid ->
-			val indexInNew = newList.indexOfFirst { it.playlistUuid == uuid }
+			val indexInNew = newList.indexOfFirst { it.getdId() == uuid }
 			if (indexInNew != -1) {
 				mList.add(indexInNew, newList[indexInNew])
 				notifyItemInserted(indexInNew)
@@ -86,33 +94,18 @@ RecyclerView.Adapter<GridPlaylistAdapter.ViewHolder>() {
 
 		// --- Изменения ---
 		diff.changed.forEach { uuid ->
-			val indexInNew = newList.indexOfFirst { it.playlistUuid == uuid }
+			val indexInNew = newList.indexOfFirst { it.getdId() == uuid }
 			if (indexInNew != -1) {
 				mList[indexInNew] = newList[indexInNew]
 				notifyItemChanged(indexInNew)
 			}
 		}
 
-//		mList = ArrayList()
-////		mList.add(PlaylistCreateItem())
-//		mList.addAll(fList)
-//		notifyDataSetChanged()
 	}
-
-	fun getList() = mList
-
-	fun init() {
-//		mList.add(PlaylistCreateItem())
-	}
-
-//	fun setTrack(fTr: YaTrack){
-//		mTrack = fTr
-//		notifyDataSetChanged()
-//	}
 
 	class ViewHolder(
 		view: View,
-		private val loadCover: suspend (dYaPlaylist) -> Bitmap,
+		private val loadCover: suspend (iPlaylist) -> Bitmap,
 		val scope: CoroutineScope) : RecyclerView.ViewHolder(view) {
 		val vTitle: TextView
 		val vAutor: TextView
@@ -126,7 +119,7 @@ RecyclerView.Adapter<GridPlaylistAdapter.ViewHolder>() {
 			vImg = view.findViewById(R.id.it_pl_grid_img)
 		}
 
-		fun bind(playlist: dYaPlaylist) {
+		fun bind(playlist: iPlaylist) {
 			// Отменяем предыдущую загрузку для этого ViewHolder
 			coverJob?.cancel()
 
@@ -164,12 +157,12 @@ RecyclerView.Adapter<GridPlaylistAdapter.ViewHolder>() {
 
 		viewHolder.bind(mList[position])
 
-//		if (mList[position].mId == PlaylistCreateItem.PLAY_CREATE_ITEM_ID){
-//			viewHolder.vTitle.text = "Создать плейлист"
-//			viewHolder.vAutor.text = ""
-//			viewHolder.itemView.setOnClickListener { onCreatePlClick() }
-//			return
-//		}
+		if (mList[position].getdId() == PlaylistCreateItem.PLAY_CREATE_ITEM_ID){
+			viewHolder.vTitle.text = "Создать плейлист"
+			viewHolder.vAutor.text = ""
+			viewHolder.itemView.setOnClickListener { onCreatePlClick() }
+			return
+		}
 
 
 		val f_size = mList[position].trackCount
@@ -252,6 +245,24 @@ RecyclerView.Adapter<GridPlaylistAdapter.ViewHolder>() {
 		val fPos = mList.indexOf(fPlist)
 		mList.remove(fPlist)
 		notifyItemRemoved(fPos)
+	}
+
+	class PlaylistCreateItem(
+	) : iPlaylist{
+		companion object{
+			const val PLAY_CREATE_ITEM_ID = "playlist_create_item"
+		}
+
+
+		override val title: String = "Создать плейлист"
+		override val tracks: List<dPlaylistTrack> = emptyList()
+		override val revision: Int = 0
+		override val trackCount: Int = 0
+		override val durationMs: Int = 0
+
+		override fun getdId(): String = PLAY_CREATE_ITEM_ID
+
+
 	}
 
 }

@@ -12,28 +12,28 @@ open class dYaPlaylist(
      @PrimaryKey val playlistUuid: String,
      val uid: Int,
      val kind: String,
-     val title: String,
+     override val title: String,
      val description: String?,
-     val trackCount: Int,
-     val revision: Int,
+     override val trackCount: Int,
+     override val revision: Int,
      val snapshot: Int,
      val visibility: String,
      val collective: Boolean,
      val isBanner: Boolean,
      val isPremiere: Boolean,
-     val durationMs: Int?,
+     override val durationMs: Int?,
      val ogImageUri: String?,
      val backgroundImageUrl: String?,
 //     val tracks: List<TrackShort> = emptyList(),
      // при желании можно добавить cover, coverWithoutText, playCounter и т.д.
-): dTracklist{
+): dTracklist, iPlaylist{
 
      companion object {
           const val YA_PLAYLIST = "ya_playlist"
      }
 
      @Ignore
-     var tracks: List<dPlaylistTrack> = emptyList()
+     override var tracks: List<dPlaylistTrack> = emptyList()
      override fun getdId(): String = playlistUuid
 
      override fun getDTitle(): String = title

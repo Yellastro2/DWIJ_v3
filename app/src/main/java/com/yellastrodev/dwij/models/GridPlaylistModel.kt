@@ -7,6 +7,7 @@ import androidx.lifecycle.viewModelScope
 import com.yellastrodev.dwij.adapters.GridPlaylistAdapter
 import com.yellastrodev.dwij.data.entities.dYaPlaylist
 import com.yellastrodev.dwij.data.entities.dYaTrack
+import com.yellastrodev.dwij.data.entities.iPlaylist
 import com.yellastrodev.dwij.data.repo.CoverRepository
 import com.yellastrodev.dwij.data.repo.PlaylistRepository
 import com.yellastrodev.dwij.data.repo.TrackRepository
@@ -65,8 +66,9 @@ class GridPlaylistModel(
 		playlistRepo.refreshPlaylists()
 	}
 
-	suspend fun addTrackToPlaylist(playlist: dYaPlaylist, trackId: String) {
-		playlistRepo.addTrackToPlaylist(playlist, trackId)
+	suspend fun addTrackToPlaylist(playlist: iPlaylist, trackId: String) {
+        if (playlist is dYaPlaylist)
+            playlistRepo.addTrackToPlaylist(playlist, trackId)
 	}
 
 	suspend fun getTrack(trackId: String): dYaTrack? {
@@ -74,8 +76,9 @@ class GridPlaylistModel(
 
 	}
 
-	suspend fun removeTrackFromPlaylist(playlist: dYaPlaylist, track: dYaTrack): Boolean {
-		playlistRepo.removeTrackFromPlaylist(playlist, track)
+	suspend fun removeTrackFromPlaylist(playlist: iPlaylist, track: dYaTrack): Boolean {
+        if (playlist is dYaPlaylist)
+            playlistRepo.removeTrackFromPlaylist(playlist, track)
 		return true
 	}
 }

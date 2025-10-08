@@ -23,6 +23,7 @@ import com.yellastrodev.dwij.R
 import com.yellastrodev.dwij.TYPE
 import com.yellastrodev.dwij.VALUE
 import com.yellastrodev.dwij.data.entities.dYaPlaylist
+import com.yellastrodev.dwij.data.entities.iPlaylist
 import com.yellastrodev.dwij.models.GridPlaylistModel
 import com.yellastrodev.dwij.yApplication
 import kotlinx.coroutines.GlobalScope
@@ -40,11 +41,11 @@ class GridPlaylistFrag() : Fragment(R.layout.frag_grid_playlist) {
 
 	var mGridSize = 0
 
-	var mOnItemClick: (dYaPlaylist) -> Unit = {
-			playlist: dYaPlaylist ->
+	var mOnItemClick: (iPlaylist) -> Unit = {
+			playlist: iPlaylist ->
 		val bundle = Bundle().apply {
 			putString(TYPE, ObjectFrag.PLAYLIST)
-			putString(VALUE, playlist.playlistUuid)
+			putString(VALUE, playlist.getdId())
 		}
 		findNavController().navigate(R.id.action_gridPlaylistFrag_to_objectFrag,bundle)
 	}
@@ -81,7 +82,7 @@ class GridPlaylistFrag() : Fragment(R.layout.frag_grid_playlist) {
 				}
 				view.findViewById<TextView>(R.id.fr_list_pllist_title).text = "добавить в плейлист"
 				mOnItemClick = {
-							fPl: dYaPlaylist ->
+							fPl: iPlaylist ->
 						GlobalScope.launch(Dispatchers.Default){
 							model.addTrackToPlaylist(fPl,fTrackId)
                             withContext(Dispatchers.Main) {
@@ -148,9 +149,9 @@ class GridPlaylistFrag() : Fragment(R.layout.frag_grid_playlist) {
 
 //		view.findViewById<Button>(R.id.fr_ls_plls_btn_sd)
 //			.setOnClickListener { loadYaTracks() }
-//		view.findViewById<View>(R.id.fr_list_pllist_back).setOnClickListener {
-//			mMainActivity.mNavController.popBackStack()
-//		}
+		view.findViewById<View>(R.id.fr_list_pllist_back).setOnClickListener {
+			findNavController().popBackStack()
+		}
 
 //		view.findViewById<View>(R.id.fr_ls_plls_btn_create).setOnClickListener {
 //			(activity as MainActivity).openFrame(CreateListFrag())

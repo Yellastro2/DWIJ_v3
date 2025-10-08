@@ -45,6 +45,7 @@
             android:id="@+id/fr_object_title"
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
+            style="@style/elipsizeTextVIew"
             android:layout_marginTop="18dp"
             android:textStyle="bold"
             android:textSize="32sp"

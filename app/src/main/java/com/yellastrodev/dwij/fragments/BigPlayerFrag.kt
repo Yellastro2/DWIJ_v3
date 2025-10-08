@@ -188,7 +188,7 @@ class BigPlayerFrag() :
 //		if (mPlayer == null) return
 		nowShuffle = isShuffle
 		if (isShuffle) {
-			mvRandom?.setImageResource(R.drawable.random_on)
+			mvRandom?.setImageResource(R.drawable.ic_shuffle_select)
 		} else{
 			mvRandom?.setImageResource(R.drawable.ic_shuffle)
 
@@ -204,9 +204,9 @@ class BigPlayerFrag() :
 
 	fun setRotateBtn(isRepeat: Boolean){
 		if (isRepeat)
-			mvRepeatBtn.setBackgroundColor(Color.GREEN)
+			mvRepeatBtn.setImageResource(R.drawable.ic_repeat_select)
 				else
-			mvRepeatBtn.background = null
+			mvRepeatBtn.setImageResource(R.drawable.ic_repeat)
 		nowRepeat = isRepeat
 	}
 

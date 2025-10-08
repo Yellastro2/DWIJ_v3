@@ -35,34 +35,22 @@ class TrackListAdapter(
     var onItemClicked: (pos: Int) -> Unit = { pos ->}
 
 
-    @SuppressLint("NotifyDataSetChanged")
     fun setList(allTracks: List<dYaTrack>) {
         Log.d("TrackListAdapter", "setList: ${allTracks.size}")
-//        val diff = diffTracks(mListOfObj, allTracks)
-//        mListOfObj = allTracks
-//        mInitJob = null
-//        notifyDataSetChanged()
 
+        val oldList = mListOfObj.toList()
         val diffCallback = object : DiffUtil.Callback() {
-            override fun getOldListSize() = mListOfObj.size
+            override fun getOldListSize() = oldList.size
             override fun getNewListSize() = allTracks.size
-
-            override fun areItemsTheSame(oldItemPosition: Int, newItemPosition: Int): Boolean {
-                return mListOfObj[oldItemPosition].id == allTracks[newItemPosition].id
-            }
-
-            override fun areContentsTheSame(oldItemPosition: Int, newItemPosition: Int): Boolean {
-                // Т.к. ты писал, что игнорируешь изменения самих объектов
-                // и смотришь только на id — возвращаем true
-                return true
-            }
+            override fun areItemsTheSame(oldItemPosition: Int, newItemPosition: Int) =
+                oldList[oldItemPosition].id == allTracks[newItemPosition].id
+            override fun areContentsTheSame(oldItemPosition: Int, newItemPosition: Int) =
+                oldList[oldItemPosition] == allTracks[newItemPosition] // или твоя логика
         }
-
         val diffResult = DiffUtil.calculateDiff(diffCallback)
 
         mListOfObj.clear()
         mListOfObj.addAll(allTracks)
-
         diffResult.dispatchUpdatesTo(this)
     }
 

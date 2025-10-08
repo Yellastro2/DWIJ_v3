@@ -90,23 +90,12 @@ class PlayerService : Service() {
         // Минимальное уведомление пока плеер готовится
         val notification = NotificationCompat.Builder(this, "player_channel")
             .setContentTitle("Загрузка плеера…")
-            .setSmallIcon(R.drawable.logo2)
+            .setSmallIcon(R.drawable.ic_logo_dance_monochrom)
             .setContentIntent(contentIntent)
             .build()
 
         startForeground(NOTIFICATION_ID, notification)
         Log.d(TAG, "Foreground запущен с временным уведомлением")
-
-
-
-        val loadControl = DefaultLoadControl.Builder()
-            .setBufferDurationsMs(
-                5_000,   // minBufferMs
-                10_000,  // maxBufferMs
-                1_000,   // bufferForPlaybackMs
-                2_000    // bufferForPlaybackAfterRebufferMs
-            )
-            .build()
 
         val dataSourceFactory = YaLazyDataSourceFactory(this, trackCacheRepo)
         val mediaSourceFactory = DefaultMediaSourceFactory(dataSourceFactory)
@@ -206,13 +195,7 @@ class PlayerService : Service() {
                 )
                 Log.d(TAG, "RepeatModeChanged: $repeatMode")
             }
-
-
         })
-
-
-
-
     }
 
     private var progressJob: Job? = null
@@ -268,17 +251,6 @@ class PlayerService : Service() {
         }
     }
 
-    fun playTrack(track: MediaItem) {
-        Log.d(TAG, "playTrack called: track=$track")
-        player.clearMediaItems()
-        player.setMediaItem(track)
-
-        player.prepare()
-        player.play()
-    }
-
-
-
     /**
      * пауза если играет, иначе плей
      */
@@ -309,7 +281,7 @@ class PlayerService : Service() {
         fun getService(): PlayerService = this@PlayerService
     }
 
-    private lateinit var mediaSession: MediaSession
+    lateinit var mediaSession: MediaSession
     private lateinit var notificationManager: PlayerNotificationManager
     val NOTIFICATION_ID = 1525343
 

@@ -1,6 +1,7 @@
 package com.yellastrodev.dwij.utils
 
 import com.yellastrodev.dwij.data.entities.dYaPlaylist
+import com.yellastrodev.dwij.data.entities.iPlaylist
 
 class PlaylistsDiff {
     companion object {
@@ -18,10 +19,10 @@ class PlaylistsDiff {
         }
 
         fun diffPlaylists(
-            oldMap: Map<String, dYaPlaylist>,
-            newList: List<dYaPlaylist>
+            oldMap: Map<String, iPlaylist>,
+            newList: List<iPlaylist>
         ): PlaylistDiffResult {
-            val newMap = newList.associateBy { it.playlistUuid }
+            val newMap = newList.associateBy { it.getdId() }
 
             val added = mutableListOf<String>()
             val removed = mutableListOf<String>()
@@ -37,8 +38,10 @@ class PlaylistsDiff {
                     oldPl != null && newPl == null -> removed.add(uuid)
                     oldPl != null && newPl != null && oldPl.revision != newPl.revision -> changed.add(uuid)
                     // особый случай когда ревижны и всяхня остались теже, но у старой версии не прогруженны треки.
-                    (oldPl == null || oldPl.tracks.isEmpty()) && (newPl != null && newPl.tracks.isNotEmpty()) ->
-                            changed.add(uuid)
+                    (oldPl !is dYaPlaylist || oldPl.tracks.isEmpty()) &&
+                            (newPl is dYaPlaylist && newPl.tracks.isNotEmpty()) -> {
+                        changed.add(uuid)
+                    }
 
                 }
             }
