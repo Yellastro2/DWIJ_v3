@@ -5,23 +5,35 @@ import android.app.NotificationChannel
 import android.app.NotificationManager
 import android.app.PendingIntent
 import android.app.Service
+import android.content.ComponentName
+import android.content.Context
 import android.content.Intent
+import android.graphics.Bitmap
 import android.os.Binder
+import android.os.Bundle
 import android.os.IBinder
 import android.util.Log
 import androidx.core.app.NotificationCompat
+import androidx.core.content.ContextCompat
 import androidx.media3.common.AudioAttributes
 import androidx.media3.common.C
 import androidx.media3.common.MediaItem
+import androidx.media3.common.MediaMetadata
 import androidx.media3.common.PlaybackException
 import androidx.media3.common.Player
 import androidx.media3.common.util.UnstableApi
 import androidx.media3.exoplayer.DefaultLoadControl
 import androidx.media3.exoplayer.ExoPlayer
 import androidx.media3.exoplayer.source.DefaultMediaSourceFactory
+import androidx.media3.session.CommandButton
+import androidx.media3.session.DefaultMediaNotificationProvider
+import androidx.media3.session.MediaController
+import androidx.media3.session.MediaNotification
 import androidx.media3.ui.PlayerNotificationManager
 import androidx.media3.session.MediaSession
 import androidx.media3.session.MediaSessionService
+import androidx.media3.session.SessionToken
+import com.google.common.collect.ImmutableList
 import com.yellastrodev.dwij.R
 import com.yellastrodev.dwij.activities.MainActivity
 import com.yellastrodev.dwij.data.repo.CoverRepository
@@ -30,6 +42,7 @@ import com.yellastrodev.dwij.data.repo.TrackCacheRepository
 import com.yellastrodev.dwij.data.repo.TrackRepository
 import com.yellastrodev.dwij.data.source.YaLazyDataSourceFactory
 import com.yellastrodev.dwij.yApplication
+import com.yellastrodev.yandexmusiclib.entities.CoverSize
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.DelicateCoroutinesApi
 import kotlinx.coroutines.Dispatchers
@@ -41,6 +54,8 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharedFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
+import java.io.ByteArrayOutputStream
 import java.lang.ref.WeakReference
 
 private const val TAG = "PlayerService"
@@ -49,6 +64,8 @@ private const val TAG = "PlayerService"
 class PlayerService : MediaSessionService() {
 
     lateinit var player: ExoPlayer
+    lateinit var mediaSession: MediaSession
+    private var selfController: MediaController? = null
     private val binder = PlayerBinder()
 
     // Репозитории для треков и обложек
@@ -81,7 +98,7 @@ class PlayerService : MediaSessionService() {
         super.onCreate()
         Log.d(TAG, "onCreate called: создаем канал и плеер")
 //        createChannel()
-
+//
 //        val contentIntent: PendingIntent = PendingIntent.getActivity(
 //            this@PlayerService,
 //            0,
@@ -126,24 +143,25 @@ class PlayerService : MediaSessionService() {
 
 
         mediaSession = MediaSession.Builder(this, player)
-            .setCallback(object : MediaSession.Callback {
-                override fun onConnect(
-                    session: MediaSession,
-                    controller: MediaSession.ControllerInfo
-                ): MediaSession.ConnectionResult {
-                    val base = super.onConnect(session, controller)
-                    val customCommands = base.availableSessionCommands
-                    val customPlayerCommands = base.availablePlayerCommands
-                        .buildUpon()
-                        .add(Player.COMMAND_SEEK_TO_NEXT)
-                        .add(Player.COMMAND_SEEK_TO_PREVIOUS)
-                        .build()
 
-                    return MediaSession.ConnectionResult.accept(
-                        customCommands,
-                        customPlayerCommands
-                    )
-                }
+            .setCallback(object : MediaSession.Callback {
+//                override fun onConnect(
+//                    session: MediaSession,
+//                    controller: MediaSession.ControllerInfo
+//                ): MediaSession.ConnectionResult {
+//                    val base = super.onConnect(session, controller)
+//                    val customCommands = base.availableSessionCommands
+//                    val customPlayerCommands = base.availablePlayerCommands
+//                        .buildUpon()
+//                        .add(Player.COMMAND_SEEK_TO_NEXT)
+//                        .add(Player.COMMAND_SEEK_TO_PREVIOUS)
+//                        .build()
+//
+//                    return MediaSession.ConnectionResult.accept(
+//                        customCommands,
+//                        customPlayerCommands
+//                    )
+//                }
             })
             .build()
 
@@ -155,6 +173,46 @@ class PlayerService : MediaSessionService() {
                     _state.value = _state.value.copy(
                         currentIndex = player.currentMediaItemIndex
                     )
+                }
+                if (mediaItem == null) return
+                val trackId = mediaItem.mediaId
+                // грузим обложку из coverRepo
+                GlobalScope.launch(Dispatchers.IO) {
+
+                    val currentMetadata = mediaItem.mediaMetadata
+
+                    // Проверяем: если уже есть обложка, ничего не делаем
+                    if (currentMetadata.artworkData != null || currentMetadata.artworkUri != null) {
+                        Log.d(TAG, "У mediaItem уже есть обложка, пропускаем загрузку")
+                        return@launch
+                    }
+
+                    val track = trackId.let { trackRepo.getTrack(trackId) } ?: return@launch
+                    val bitmap = coverRepo.getCover(track, CoverSize.`400x400`) // твой метод
+                    if (bitmap != null) {
+                        val byteArray = ByteArrayOutputStream().apply {
+                            bitmap.compress(Bitmap.CompressFormat.JPEG, 90, this)
+                        }.toByteArray()
+
+                        val newMetadata = mediaItem.mediaMetadata.buildUpon()
+                            .setArtworkData(byteArray, MediaMetadata.PICTURE_TYPE_FRONT_COVER)
+                            .build()
+
+                        val newItem = mediaItem.buildUpon()
+                            .setMediaMetadata(newMetadata)
+                            .build()
+
+                        withContext(Dispatchers.Main) {
+                            // обновляем MediaSession метаданные
+//                            mediaSession.setMediaMetadata(newMetadata)
+
+                            // если хочешь, можно и в плеере заменить текущий item:
+                            val index = player.currentMediaItemIndex
+                            if (index != C.INDEX_UNSET) {
+                                player.replaceMediaItem(index, newItem)
+                            }
+                        }
+                    }
                 }
             }
 
@@ -207,8 +265,23 @@ class PlayerService : MediaSessionService() {
             }
         })
 
+        // костыль: создаём контроллер на свой же сервис
+        val sessionToken = SessionToken(this, ComponentName(this, PlayerService::class.java))
 
+        val controllerFuture = MediaController.Builder(this, sessionToken).buildAsync()
+        controllerFuture.addListener(
+            {
+                try {
+                    selfController = controllerFuture.get()
+                    Log.d(TAG, "Self MediaController создан")
+                } catch (e: Exception) {
+                    Log.e(TAG, "Ошибка при создании selfController", e)
+                }
+            },
+            ContextCompat.getMainExecutor(this)
+        )
 
+//        setMediaNotificationProvider(MyNotificationProvider(this))
 
         (application as? yApplication)?.playerServiceRef = WeakReference(this)
     }
@@ -236,12 +309,24 @@ class PlayerService : MediaSessionService() {
         progressJob?.cancel()
     }
 
+    private suspend fun waitForController(): MediaController {
+        while (selfController == null) {
+            delay(50)
+        }
+        return selfController!!
+    }
+
     /** Воспроизвести очередь треков с указанного индекса */
-    fun playQueue(tracks: List<MediaItem>, startIndex: Int = 0) {
+    suspend fun playQueue(tracks: List<MediaItem>, startIndex: Int = 0) {
         Log.d(TAG, "playQueue called: startIndex=$startIndex, tracks=${tracks.size}")
-        player.setMediaItems(tracks, startIndex, 0)
-        player.prepare()
-        player.play()
+//        player.setMediaItems(tracks, startIndex, 0)
+//        player.prepare()
+//        player.play()
+        val controller = waitForController() // ждём пока selfController != null
+
+        controller.setMediaItems(tracks, startIndex, 0)
+        controller.prepare()
+        controller.play()
     }
 
     fun addTrack(track: MediaItem) {
@@ -301,7 +386,6 @@ class PlayerService : MediaSessionService() {
         fun getService(): PlayerService = this@PlayerService
     }
 
-    lateinit var mediaSession: MediaSession
     private lateinit var notificationManager: PlayerNotificationManager
     val NOTIFICATION_ID = 1525343
 
@@ -376,6 +460,48 @@ class PlayerService : MediaSessionService() {
 //    }
 
 
+    class MyNotificationProvider(private val context: Context) : MediaNotification.Provider {
+
+        // создаём дефолтный провайдер внутри
+        private val defaultProvider = DefaultMediaNotificationProvider(context)
+
+        override fun createNotification(
+            mediaSession: MediaSession,
+            customLayout: ImmutableList<CommandButton>,
+            actionFactory: MediaNotification.ActionFactory,
+            onNotificationChangedCallback: MediaNotification.Provider.Callback
+        ): MediaNotification {
+            // получаем дефолтное уведомление
+            val defaultNotification = defaultProvider.createNotification(
+                mediaSession,
+                customLayout,
+                actionFactory,
+                onNotificationChangedCallback
+            )
+
+            val original = defaultNotification.notification
+
+            // клонируем готовое уведомление и меняем только smallIcon
+            val newNotification = NotificationCompat.Builder(context, original.channelId)
+                .setSmallIcon(R.drawable.ic_logo_dance_monochrom)
+                .setContentIntent(original.contentIntent)
+                .setCustomContentView(original.contentView)
+                .setCustomBigContentView(original.bigContentView)
+                .setCustomHeadsUpContentView(original.headsUpContentView)
+                .build()
+
+            return MediaNotification(defaultNotification.notificationId, newNotification)
+        }
+
+        override fun handleCustomCommand(
+            session: MediaSession,
+            action: String,
+            extras: Bundle
+        ): Boolean {
+            return false
+        }
+    }
+
 }
 
 data class PlayerState(
@@ -393,3 +519,5 @@ sealed class PlayerEvent {
     data class TrackListEnd(val message: String) : PlayerEvent()
     // можно добавить другие события: SkipNext, SkipPrev и т.д.
 }
+
+

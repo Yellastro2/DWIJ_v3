@@ -7,6 +7,8 @@
         <item name="android:statusBarColor">@color/colorAccent</item>
     </style>
 
+    <drawable name="media3_notification_small_icon">@drawable/ic_logo_dance_monochrom</drawable>
+
     <style name="ImgBtnNoBkg" parent="Widget.AppCompat.ImageButton">
         <item name="android:background">?android:attr/selectableItemBackground</item>
     </style>

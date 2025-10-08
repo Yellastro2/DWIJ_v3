@@ -106,20 +106,25 @@ class PlayerRepository(
         }
     }
 
-    fun bind() {
+    suspend fun bind() {
+        Log.d(TAG, "bind called")
         val intent = Intent(context, PlayerService::class.java)
-        ContextCompat.startForegroundService(context, intent)
+//        ContextCompat.startForegroundService(context, intent)
+        context.startService(intent)
 //        context.bindService(intent, serviceConnection, Context.BIND_AUTO_CREATE)
 
-        GlobalScope.launch {
+//        GlobalScope.launch {
+            Log.d(TAG, "waitForService called")
             service = waitForService()
+            Log.d(TAG, "waitForService returned")
             service?.let { service ->
+                Log.d(TAG, "waitForService returned ненулевой плеер, привязываем флоуы")
             service.state.onEach { playerState ->
                 if (playerState.currentIndex != _state.value.currentIndex) {
                     _currentTrack.value = currentTrackList[playerState.currentIndex]
                 }
                 _state.value = playerState
-            }.launchIn(this)
+            }.launchIn(GlobalScope)
 
             service.events.onEach { event ->
                 if (event is PlayerEvent.TrackListEnd) {
@@ -127,13 +132,13 @@ class PlayerRepository(
                 } else {
                     _events.emit(event)
                 }
-            }.launchIn(this)
+            }.launchIn(GlobalScope)
 
                 withContext(Dispatchers.Main) {
                     applySavedModes()
                 }
             }
-        }
+//        }
     }
 
     fun unbind() {
@@ -154,13 +159,22 @@ class PlayerRepository(
     ) {
         Log.d(TAG,"set playQueue()")
 
-        if (tracks[startIndex].id == _currentTrack.value && dtracklist.value?.getdId() == tracklist.getdId())
+        if (service == null){
+
+            Log.d(TAG,"playQueue() - плеер = нулл")
+            bind()
+        }
+
+        if (tracks[startIndex].id == _currentTrack.value && dtracklist.value?.getdId() == tracklist.getdId()) {
+            Log.d(TAG, "playQueue() - трек уже играет, выходим")
             return
+        }
 
         if (dtracklist.value?.getdId() == tracklist.getdId()){
             _currentTrack.value = tracks[startIndex].id
             relativeIndex = startIndex
             service?.playTrack(startIndex)
+            Log.d(TAG,"playQueue() - треклист уже играет, меняем номер трека")
             return
         }
         // сюда доходит логика ток если треклист сменился.

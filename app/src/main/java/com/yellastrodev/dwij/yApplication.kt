@@ -129,7 +129,7 @@ class yApplication: Application() {
 
     val playerRepo: PlayerRepository by lazy {
         PlayerRepository(applicationContext).apply {
-            bind()
+//            bind()
 
         }
     }
