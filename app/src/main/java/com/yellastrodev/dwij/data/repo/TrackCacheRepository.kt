@@ -5,7 +5,9 @@ import android.net.Uri
 import android.preference.PreferenceManager
 import android.util.Log
 import com.yellastrodev.dwij.CACHE_SIZE
+import com.yellastrodev.dwij.CacheManager
 import com.yellastrodev.dwij.DEFAULT_CACHE_SIZE
+import com.yellastrodev.dwij.DIR_TRACK_CACHE
 import com.yellastrodev.yandexmusiclib.kot_utils.yTrack.Companion.Mp3LinkResult
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.GlobalScope
@@ -18,15 +20,13 @@ import java.net.URL
 @Suppress("DEPRECATION")
 class TrackCacheRepository(
     val context: Context,
-    val trackRepo: TrackRepository
+    val trackRepo: TrackRepository,
+    private val cacheManager: CacheManager
 ) {
 
     private val prefs = PreferenceManager.getDefaultSharedPreferences(context)
 
-    private val maxCacheSizeBytes: Long
-        get() = prefs.getLong(CACHE_SIZE, DEFAULT_CACHE_SIZE)
-
-    private val cacheDir = File(context.cacheDir, "tracks").apply {
+    private val cacheDir = File(context.cacheDir, DIR_TRACK_CACHE).apply {
         if (!exists()) mkdirs()
     }
 
@@ -55,7 +55,7 @@ class TrackCacheRepository(
                     }
                 }
                 GlobalScope.launch(Dispatchers.IO) {
-                    ensureCacheWithinLimit()
+                    cacheManager.ensureWithinLimit()
                 }
             }else
                 Log.d("TrackCacheRepository", "Трек $trackId есть в кэше")
@@ -73,21 +73,4 @@ class TrackCacheRepository(
         cacheDir.mkdirs()
     }
 
-    private fun ensureCacheWithinLimit() {
-        val files = cacheDir.listFiles()?.filter { it.isFile } ?: return
-        var totalSize = files.sumOf { it.length() }
-        Log.d("TrackCacheRepository", "Кэш ${totalSize / 1024 / 1024}MB")
-
-        if (totalSize > maxCacheSizeBytes) {
-            Log.d("TrackCacheRepository", "Cache ${totalSize / 1024 / 1024}MB > limit ${maxCacheSizeBytes / 1024 / 1024}MB")
-            files.sortedBy { it.lastModified() }.forEach { f ->
-                if (totalSize <= maxCacheSizeBytes) return
-                val size = f.length()
-                if (f.delete()) {
-                    totalSize -= size
-                    Log.d("TrackCacheRepository", "Удалён ${f.name} (-${size / 1024}KB)")
-                }
-            }
-        }
-    }
 }

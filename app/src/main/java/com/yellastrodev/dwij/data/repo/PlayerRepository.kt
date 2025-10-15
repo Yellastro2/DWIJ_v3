@@ -171,11 +171,16 @@ class PlayerRepository(
         }
 
         if (dtracklist.value?.getdId() == tracklist.getdId()){
-            _currentTrack.value = tracks[startIndex].id
-            relativeIndex = startIndex
-            service?.playTrack(startIndex)
-            Log.d(TAG,"playQueue() - треклист уже играет, меняем номер трека")
-            return
+            Log.d(TAG,"playQueue() - треклист не изменился по айди")
+            val newIds = tracks.map { it.id }
+            if (currentTrackList.hashCode() == newIds.hashCode()) {
+                _currentTrack.value = tracks[startIndex].id
+                relativeIndex = startIndex
+                service?.playTrack(startIndex)
+                Log.d(TAG, "playQueue() - треклист уже играет, меняем номер трека")
+                return
+            }
+            Log.d(TAG,"playQueue() - треклист не изменился по айди, но треки изменились")
         }
         // сюда доходит логика ток если треклист сменился.
         blockShuffle(tracklist.getType() == dYaWave.YA_WAVE)
@@ -289,5 +294,7 @@ class PlayerRepository(
         }
     }
 
+    fun List<dYaTrack>.stableHash(): Int =
+        fold(1) { acc, track -> 31 * acc + track.id.hashCode() }
 
 }

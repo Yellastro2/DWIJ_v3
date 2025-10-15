@@ -7,6 +7,8 @@ val DWIJ_ACC_TOKEN = "dwij_acc_token"
 
 val CACHE_SIZE = "cache_size"
 val DEFAULT_CACHE_SIZE = 2_000_000_000L
+val DIR_TRACK_CACHE = "tracks"
+val DIR_COVER_CACHE = "covers"
 
 val TYPE = "type"
 val VALUE = "value"

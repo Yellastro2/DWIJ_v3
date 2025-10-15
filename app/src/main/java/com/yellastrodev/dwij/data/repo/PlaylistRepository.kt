@@ -167,12 +167,14 @@ class PlaylistRepository(
     }
 
     suspend fun removeTrackFromPlaylist(playlist: dYaPlaylist, track: dYaTrack) {
+        Log.d(TAG, "removeTrackFromPlaylist( playlist: ${playlist.title}, track: ${track.title} )")
         refreshPlaylist(playlist.playlistUuid)
         val playlistedTrack = playlist.tracks.find { it.trackId == track.id }!!
-
+        Log.d(TAG,"removeTrackFromPlaylist, playlistedTrack.position: ${playlistedTrack.position}")
         remote.removeTrackFromPlaylist(playlist, playlist.tracks.indexOf(playlistedTrack))
         refreshPlaylist(playlist.playlistUuid)
         trackRepo.refreshTrackLocaly(track.id)
+        Log.d(TAG, "Трек ${track.title} удалён из плейлиста ${playlist.title}")
     }
 
     fun getLikeList(): dYaPlaylist? {

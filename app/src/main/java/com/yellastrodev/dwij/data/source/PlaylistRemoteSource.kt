@@ -33,7 +33,7 @@ class PlaylistRemoteSource(private val client: YamApiClient) {
     }
 
     suspend fun removeTrackFromPlaylist(playlist: dYaPlaylist, trackNumber: Int) {
-        Log.d("PlaylistRemoteSource", "removeTrackFromPlaylist: plId: ${playlist.kind}, trackNumber: $trackNumber")
+        Log.d("PlaylistRemoteSource", "removeTrackFromPlaylist: plId: ${playlist.title}, trackNumber: $trackNumber")
         client.removeTrack(playlist.kind.toInt(), playlist.revision, trackNumber)
     }
 

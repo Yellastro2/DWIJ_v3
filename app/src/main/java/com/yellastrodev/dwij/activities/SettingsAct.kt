@@ -14,6 +14,7 @@ import android.widget.SeekBar
 import android.widget.TextView
 import android.widget.Toast
 import androidx.annotation.RequiresApi
+import androidx.media3.common.util.UnstableApi
 import com.google.android.material.snackbar.Snackbar
 import com.yellastrodev.dwij.CACHE_SIZE
 import com.yellastrodev.dwij.DEFAULT_CACHE_SIZE
@@ -21,6 +22,7 @@ import com.yellastrodev.dwij.R
 import com.yellastrodev.dwij.YA_ID
 import com.yellastrodev.dwij.YA_LOGIN
 import com.yellastrodev.dwij.YA_TOKEN
+import com.yellastrodev.dwij.yApplication
 import com.yellastrodev.yandexmusiclib.kot_utils.yAuth
 import com.yellastrodev.yandexmusiclib.kot_utils.yNetwork
 import com.yellastrodev.yandexmusiclib.yAccount
@@ -128,12 +130,11 @@ class SettingsAct: Activity() {
 			}
 		}
 
-		initCacheStoreSize()
 
 	}
 
-	@SuppressLint("SetTextI18n")
-    @RequiresApi(Build.VERSION_CODES.O)
+    @androidx.annotation.OptIn(UnstableApi::class)
+    @SuppressLint("SetTextI18n")
     fun initCacheStoreSize(){
 		val fvSeekBar = findViewById<SeekBar>(R.id.act_sett_store_progress)
 		val fvMin = findViewById<TextView>(R.id.act_sett_store_min)
@@ -157,9 +158,9 @@ class SettingsAct: Activity() {
 		val fCur = sharedPref.getLong(CACHE_SIZE, DEFAULT_CACHE_SIZE)
 		val fCurMb = (fCur / KILOBYTE / KILOBYTE ).toInt()
 		if (fCurMb > KILOBYTE)
-			fvCur.text = "${(fCurMb / KILOBYTE)}Gb"
+			fvCur.text = "${(fCurMb / KILOBYTE)}Gb $cacheSizeStr"
 		else
-			fvCur.text = "${fCurMb}Mb"
+			fvCur.text = "${fCurMb}Mb $cacheSizeStr"
 
 		fvSeekBar.progress = fCurMb
 
@@ -170,9 +171,9 @@ class SettingsAct: Activity() {
 			override fun onProgressChanged(seekBar: SeekBar, i: Int, b: Boolean) {
 				if (b) {
 					if(i<KILOBYTE){
-						fvCur.text = "${i}Mb"
+						fvCur.text = "${i}Mb $cacheSizeStr"
 					}else
-						fvCur.text = "${i/KILOBYTE}Gb"
+						fvCur.text = "${i/KILOBYTE}Gb $cacheSizeStr"
 					val dsds =5
 				}
 			}
@@ -193,7 +194,34 @@ class SettingsAct: Activity() {
 				val dsf =0
 			}
 		})
+	}
 
+	var cacheSizeStr = ""
+
+    @androidx.annotation.OptIn(UnstableApi::class)
+	override fun onResume() {
+		super.onResume()
+
+		val cacheSize = (application as yApplication).cacheManager.getTotalSize()
+		cacheSizeStr = "(занято ${formatSize(cacheSize)})"
+
+		initCacheStoreSize()
+	}
+
+	fun formatSize(bytes: Long): String {
+		if (bytes < 1024) return "$bytes B"
+
+		val units = arrayOf("KB", "MB", "GB", "TB")
+		var value = bytes.toDouble()
+		var unitIndex = -1
+
+		do {
+			value /= 1024.0
+			unitIndex++
+		} while (value >= 1024 && unitIndex < units.lastIndex)
+
+		// округляем до 1–2 знаков после запятой
+		return String.format("%.2f %s", value, units[unitIndex])
 	}
 
 	private fun setYaAuth(fLogin: String) {

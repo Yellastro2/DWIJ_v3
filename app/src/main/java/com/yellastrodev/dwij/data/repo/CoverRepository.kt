@@ -4,6 +4,9 @@ import android.content.Context
 import android.graphics.Bitmap
 import android.graphics.BitmapFactory
 import android.util.Log
+import com.yellastrodev.dwij.CacheManager
+import com.yellastrodev.dwij.DIR_COVER_CACHE
+import com.yellastrodev.dwij.DIR_TRACK_CACHE
 import com.yellastrodev.dwij.R
 import com.yellastrodev.dwij.data.entities.dYaPlaylist
 import com.yellastrodev.dwij.data.entities.dYaTrack
@@ -23,8 +26,13 @@ import java.io.File
 class CoverRepository(
     private val context: Context,
     private val fClient: YamApiClient,
-    private val cacheDir: File
+    private val cacheManager: CacheManager
+
 ) {
+
+    private val cacheDir = File(context.cacheDir, DIR_COVER_CACHE).apply {
+        if (!exists()) mkdirs()
+    }
 
     // in-memory cache
     private val memoryCache = mutableMapOf<String, Bitmap>()
@@ -167,6 +175,7 @@ class CoverRepository(
             file.outputStream().use { out ->
                 bitmap.compress(Bitmap.CompressFormat.JPEG, 100, out)
             }
+            cacheManager.ensureWithinLimit()
         }
         return bitmap
     }

@@ -6,4 +6,6 @@ interface dTracklist {
     fun getDTitle(): String
     fun getType(): String
     fun getWaveId(): String
+
+
 }

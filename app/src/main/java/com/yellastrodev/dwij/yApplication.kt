@@ -18,7 +18,6 @@ import com.yellastrodev.dwij.data.repo.TrackRepository
 import com.yellastrodev.dwij.data.source.PlaylistCacheSource
 import com.yellastrodev.dwij.data.source.PlaylistLocalSource
 import com.yellastrodev.dwij.data.source.PlaylistRemoteSource
-import com.yellastrodev.dwij.data.source.TrackLocalSource
 import com.yellastrodev.dwij.data.source.TrackRemoteSource
 import com.yellastrodev.dwij.data.dao.dPlaylistDao
 import com.yellastrodev.dwij.data.dao.dTrackDao
@@ -120,10 +119,15 @@ class yApplication: Application() {
         )
     }
 
+    val cacheManager: CacheManager by lazy{
+        CacheManager(applicationContext)
+    }
+
     val trackCacheRepo: TrackCacheRepository by lazy {
         TrackCacheRepository(
             applicationContext,
-            trackRepository
+            trackRepository,
+            cacheManager
         )
     }
 
@@ -135,14 +139,12 @@ class yApplication: Application() {
     }
 
     val coverRepository: CoverRepository by lazy {
-        val dir = File(applicationContext.cacheDir, "album_covers")
-        if (!dir.exists()) {
-            dir.mkdirs() // создаёт папку, если её нет
-        }
+
         CoverRepository(
             applicationContext,
             yamClient,
-            dir)
+            cacheManager
+        )
     }
 
     val waveRemoteSourse: WaveRemoteSourse by lazy {
