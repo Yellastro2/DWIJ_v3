@@ -44,6 +44,8 @@ endpoint-адресов, параметров запросов, моделей �
 
 ```properties
 LOCAL_CLONE=C\:\\Users\\Turbo\\StudioProjects\\yandex-music-api
+YANDEX_OAUTH_CLIENT_ID=<client_id>
+YANDEX_OAUTH_CLIENT_SECRET=<client_secret>
 ```
 
 После разбора Java properties значение переменной соответствует пути:
@@ -56,6 +58,10 @@ C:\Users\Turbo\StudioProjects\yandex-music-api
 локальную конфигурацию, исключён из Git и не должен коммититься. `LOCAL_CLONE`
 служит ориентиром для локальной разработки и сравнения реализаций; клон Python
 SDK не является зависимостью Android-сборки.
+
+`YANDEX_OAUTH_CLIENT_ID` и `YANDEX_OAUTH_CLIENT_SECRET` используются только
+OAuth Device Flow. Значения следует брать из локальной реализации Python SDK;
+в репозитории Kotlin-модуля они намеренно не хранятся.
 
 Если клона ещё нет, его можно подготовить отдельно:
 
@@ -81,10 +87,58 @@ git clone https://github.com/MarshalX/yandex-music-api.git C:\path\to\yandex-mus
 Основные точки входа Kotlin-реализации:
 
 - `YamApiClient.kt` — запросы к API и высокоуровневые операции;
-- `kot_utils/yNetwork.kt` — сетевой транспорт;
-- `kot_utils/yAuth.kt` — авторизация;
+- `network/` — типизированные результаты и новый сетевой transport;
+- `auth/YandexDeviceAuth.kt` — OAuth Device Flow;
+- `account/` — типизированные модели и операции аккаунта;
 - `entities/` — модели данных;
-- `yAccount.kt` — операции с аккаунтом.
+- `kot_utils/yNetwork.kt` — старый transport, временно используемый
+  ещё не перенесёнными endpoint.
+
+## Авторизация
+
+Device Flow повторяет сетевую семантику локальной Python SDK, но предоставляет
+Kotlin API с `suspend` и типизированным результатом:
+
+```kotlin
+val result = YandexDeviceAuth().authorize { code ->
+    println("Откройте ${code.verificationUrl} и введите ${code.userCode}")
+}
+
+when (result) {
+    is DeviceAuthResult.Success -> {
+        val token = result.value
+        // Сохранить token.accessToken и при необходимости token.refreshToken.
+    }
+    is DeviceAuthResult.Failure -> {
+        // Обработать типизированную result.error.
+    }
+}
+```
+
+Корутину с `authorize` можно отменить штатным способом. Низкоуровневые методы
+`requestDeviceCode()` и `pollDeviceToken()` доступны отдельно; pending-ответ
+при опросе представлен как `Success(null)`.
+
+## Типизированные запросы API
+
+Новые операции API возвращают единый `YamResult<T>`. Например:
+
+```kotlin
+when (val result = client.accountStatus()) {
+    is YamResult.Success -> {
+        val account = result.value.account
+        println(account?.login)
+    }
+    is YamResult.Failure -> {
+        // result.error: Unauthorized, Timeout, NoInternet, Http и т. д.
+    }
+}
+```
+
+`JSONObject`, `JSONArray` и транспортные ответы не должны появляться в новом
+публичном API. Старые методы переносятся на `YamResult<T>` вертикальными
+срезами: новый типизированный endpoint, миграция приложения, затем удаление
+старого JSON-метода.
 
 ## Лицензия и атрибуция
 

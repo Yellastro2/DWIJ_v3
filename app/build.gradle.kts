@@ -15,8 +15,6 @@ android {
         versionCode = 1
         versionName = "1.0"
 
-        manifestPlaceholders["YANDEX_CLIENT_ID"] = "yx23cabbbdc6cd418abb4b39c32c41195d"
-
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     }
 

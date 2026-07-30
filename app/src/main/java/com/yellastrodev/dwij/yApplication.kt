@@ -32,8 +32,8 @@ import com.yellastrodev.dwij.data.repo.WaveRepository
 import com.yellastrodev.dwij.data.source.WaveRemoteSourse
 import com.yellastrodev.dwij.service.PlayerService
 import com.yellastrodev.yandexmusiclib.YamApiClient
-import com.yellastrodev.yandexmusiclib.kot_utils.yNetwork.Companion.NetResult
-import com.yellastrodev.yandexmusiclib.yAccount
+import com.yellastrodev.yandexmusiclib.network.YamError
+import com.yellastrodev.yandexmusiclib.network.YamResult
 import kotlinx.coroutines.DelicateCoroutinesApi
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.GlobalScope
@@ -191,26 +191,38 @@ class yApplication: Application() {
             }
             var userId = sharedPref.getString(YA_ID, null)
             if (userId == null) {
-
-                var netResult = yAccount.showInformAccount(token)
-                Log.i("DWIJ_TAG", netResult.toString())
-                if (netResult is NetResult.Success){
-                    var f_res = netResult.json
-                        .getJSONObject("result")
-                        .getJSONObject("account")
-                        .getString("uid")
-                    with (sharedPref.edit()) {
-                        putString(YA_ID, f_res )
-                        apply()
+                val bootstrapClient = YamApiClient(token, "")
+                when (val statusResult = bootstrapClient.accountStatus()) {
+                    is YamResult.Success -> {
+                        val account = statusResult.value.account
+                        val resolvedUserId = account?.uid?.toString()
+                        if (resolvedUserId == null) {
+                            Log.e(
+                                "DWIJ_TAG",
+                                "[initYaM] В account/status отсутствует uid"
+                            )
+                            return ClientResult.Error(ClientResult.Reason.UNKNOWN)
+                        }
+                        with(sharedPref.edit()) {
+                            putString(YA_ID, resolvedUserId)
+                            account.login?.let { putString(YA_LOGIN, it) }
+                            apply()
+                        }
+                        userId = resolvedUserId
                     }
-                    userId = f_res
-                }else{
-                    Log.e("DWIJ_TAG", "Ошибка авторизации: ${netResult.toString()}")
-                    return ClientResult.Error(ClientResult.Reason.UNKNOWN)
+                    is YamResult.Failure -> {
+                        Log.e(
+                            "DWIJ_TAG",
+                            "[initYaM] Ошибка account/status: " +
+                                statusResult.error.safeName()
+                        )
+                        return ClientResult.Error(statusResult.error.toClientReason())
+                    }
                 }
-
             }
-            return ClientResult.Success(YamApiClient(token, userId))
+            val resolvedUserId = userId
+                ?: return ClientResult.Error(ClientResult.Reason.UNKNOWN)
+            return ClientResult.Success(YamApiClient(token, resolvedUserId))
         }?: run {
             withContext(Dispatchers.IO) {
                 MainActivity.LOG.info("no YandexMusic login")
@@ -218,5 +230,23 @@ class yApplication: Application() {
             return ClientResult.Error(ClientResult.Reason.NO_TOKEN)
         }
 
+    }
+
+    private fun YamError.toClientReason(): ClientResult.Reason = when (this) {
+        YamError.Unauthorized -> ClientResult.Reason.NO_TOKEN
+        YamError.NoInternet,
+        YamError.Timeout,
+        is YamError.Network -> ClientResult.Reason.NETWORK_ERROR
+        is YamError.Http,
+        is YamError.InvalidResponse -> ClientResult.Reason.UNKNOWN
+    }
+
+    private fun YamError.safeName(): String = when (this) {
+        YamError.Unauthorized -> "Unauthorized"
+        YamError.NoInternet -> "NoInternet"
+        YamError.Timeout -> "Timeout"
+        is YamError.Http -> "Http($statusCode)"
+        is YamError.InvalidResponse -> "InvalidResponse"
+        is YamError.Network -> "Network"
     }
 }

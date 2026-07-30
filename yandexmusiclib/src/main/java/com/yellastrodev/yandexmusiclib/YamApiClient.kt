@@ -1,6 +1,8 @@
 package com.yellastrodev.yandexmusiclib
 
 import android.util.Log
+import com.yellastrodev.yandexmusiclib.account.AccountApi
+import com.yellastrodev.yandexmusiclib.account.AccountStatus
 import com.yellastrodev.yandexmusiclib.entities.CoverSize
 import com.yellastrodev.yandexmusiclib.entities.TrackShort
 import com.yellastrodev.yandexmusiclib.entities.YaLikeTracklist
@@ -10,6 +12,8 @@ import com.yellastrodev.yandexmusiclib.entities.YaTrackList
 import com.yellastrodev.yandexmusiclib.entities.YaTrackWrap
 import com.yellastrodev.yandexmusiclib.entities.YaWave
 import com.yellastrodev.yandexmusiclib.kot_utils.yNetwork
+import com.yellastrodev.yandexmusiclib.network.YamHttpTransport
+import com.yellastrodev.yandexmusiclib.network.YamResult
 import com.yellastrodev.yandexmusiclib.yUtils.Differenc
 import com.yellastrodev.yandexmusiclib.yUtils.yUtils.Companion.getArray
 import kotlinx.serialization.json.Json
@@ -20,10 +24,35 @@ import java.time.ZoneId
 import java.time.format.DateTimeFormatter
 
 class YamApiClient(
-	val mToken: String,
-	val mUserID: String,
-	val mLogin: String = "",
-	val noAuthorize: Boolean = false) {
+	mToken: String,
+	mUserID: String,
+	mLogin: String = "",
+	noAuthorize: Boolean = false
+) {
+
+	@Volatile
+	var mToken: String = mToken
+		private set
+
+	@Volatile
+	var mUserID: String = mUserID
+		private set
+
+	@Volatile
+	var mLogin: String = mLogin
+		private set
+
+	@Volatile
+	var noAuthorize: Boolean = noAuthorize
+		private set
+
+	private val httpTransport by lazy {
+		YamHttpTransport(accessToken = { mToken })
+	}
+
+	private val accountApi by lazy {
+		AccountApi(httpTransport)
+	}
 
 //	val mapper = jacksonObjectMapper()
 
@@ -39,6 +68,33 @@ class YamApiClient(
 		val TYPE_ALBUM = "album"
 		val TAG = "yClient"
 	}
+
+	/**
+	 * Обновляет авторизацию существующего клиента, которым уже владеют репозитории приложения.
+	 */
+	fun updateAuthorization(token: String, userId: String, login: String = "") {
+		mToken = token
+		mUserID = userId
+		mLogin = login
+		noAuthorize = false
+		Log.i(TAG, "[updateAuthorization] Авторизация клиента обновлена")
+	}
+
+	/**
+	 * Очищает авторизацию без пересоздания графа репозиториев приложения.
+	 */
+	fun clearAuthorization() {
+		mToken = ""
+		mUserID = ""
+		mLogin = ""
+		noAuthorize = true
+		Log.i(TAG, "[clearAuthorization] Авторизация клиента очищена")
+	}
+
+	/**
+	 * Возвращает типизированный статус текущего аккаунта.
+	 */
+	suspend fun accountStatus(): YamResult<AccountStatus> = accountApi.status()
 
 	class FeedbackType{
 		companion object{

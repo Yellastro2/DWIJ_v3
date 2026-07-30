@@ -57,7 +57,7 @@ class yNetwork {
         ): JSONObject {
             return withContext(Dispatchers.IO) {
                 val fUrl = URL(url)
-                println("\nPOST to $url; token: $token\n")
+                println("\nPOST to $url\n")
 
                 (fUrl.openConnection() as HttpsURLConnection).run {
                     requestMethod = "POST"
@@ -141,7 +141,7 @@ class yNetwork {
         ): NetResult = withContext(Dispatchers.IO) {
             try {
                 val fUrl = URL(url)
-                println("\ngetWithHeaders, $url; token: $token\n")
+                println("\ngetWithHeaders, $url\n")
 
                 (fUrl.openConnection() as HttpURLConnection).run {
                     requestMethod = "GET"
@@ -181,8 +181,6 @@ class yNetwork {
 
                 println("[getCoverStream] Start request")
                 println("[getCoverStream] URL: $fAdr")
-                println("[getCoverStream] Token: ${token.take(4)}..")
-
                 val url = URL(fAdr)
                 try {
                     val conn = (url.openConnection() as HttpURLConnection).apply {
@@ -255,8 +253,6 @@ class yNetwork {
             var responseText = ""
 
             println("[GET] Request: $fAdr")
-            println("[GET] Token: ${token.take(4)}..")
-
             with(url.openConnection() as HttpURLConnection) {
                 requestMethod = "GET"
                 setRequestProperty("User-Agent", userAgent)
@@ -296,8 +292,6 @@ class yNetwork {
             var responseText = ""
 
             println("[GET-XML] Request: $fSome")
-            println("[GET-XML] Token: ${token.take(4)}..")
-
             with(url.openConnection() as HttpURLConnection) {
                 requestMethod = "GET"
                 setRequestProperty("User-Agent", userAgent)

@@ -10,7 +10,7 @@
 - Модуль `:yandexmusiclib` содержит клиент и модели интеграции с Яндекс Музыкой и Yandex ID.
 - Основной пакет приложения: `com.yellastrodev.dwij`.
 - Основной пакет библиотеки: `com.yellastrodev.yandexmusiclib`.
-- Связанные внешние системы: API Яндекс Музыки и Yandex Auth SDK.
+- Связанные внешние системы: API Яндекс Музыки и OAuth Device Flow.
 - База знаний и референс поведения API для модуля: Python SDK `MarshalX/yandex-music-api`; путь к её локальному клону задаётся переменной `LOCAL_CLONE` в `yandexmusiclib/local.properties`.
 - Не переносить сюда правила, названия, ресурсы или документацию из других проектов без явной просьбы пользователя.
 

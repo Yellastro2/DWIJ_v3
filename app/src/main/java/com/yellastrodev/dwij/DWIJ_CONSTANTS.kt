@@ -1,6 +1,8 @@
 package com.yellastrodev.dwij
 
 val YA_TOKEN = "ya_token"
+val YA_REFRESH_TOKEN = "ya_refresh_token"
+val YA_TOKEN_EXPIRES_AT = "ya_token_expires_at"
 val YA_ID = "ya_id"
 val YA_LOGIN = "ya_login"
 val DWIJ_ACC_TOKEN = "dwij_acc_token"
