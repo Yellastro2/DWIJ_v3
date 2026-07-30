@@ -20,7 +20,7 @@ import com.yellastrodev.dwij.models.GridPlaylistModel
 import com.yellastrodev.dwij.utils.DurationFormat.Companion.formatDuration
 import com.yellastrodev.dwij.utils.LangFormats.Companion.getNumericPostfix
 import com.yellastrodev.dwij.utils.PlaylistsDiff
-import com.yellastrodev.yandexmusiclib.CONSTANTS.Companion.LIKED_ID
+import com.yellastrodev.dwij.data.entities.dYaLikeTracklist.Companion.KIND_LIKED
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -58,7 +58,7 @@ RecyclerView.Adapter<GridPlaylistAdapter.ViewHolder>() {
 			newList.removeAll(
 				newList.filter {
 					if (it is dYaPlaylist)
-						it.kind==LIKED_ID
+						it.kind == KIND_LIKED
 					else
 						false
 				})

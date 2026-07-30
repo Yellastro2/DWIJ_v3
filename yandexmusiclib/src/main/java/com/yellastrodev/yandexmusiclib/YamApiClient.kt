@@ -3,666 +3,242 @@ package com.yellastrodev.yandexmusiclib
 import android.util.Log
 import com.yellastrodev.yandexmusiclib.account.AccountApi
 import com.yellastrodev.yandexmusiclib.account.AccountStatus
+import com.yellastrodev.yandexmusiclib.covers.CoverApi
+import com.yellastrodev.yandexmusiclib.download.DownloadApi
+import com.yellastrodev.yandexmusiclib.download.DownloadInfo
 import com.yellastrodev.yandexmusiclib.entities.CoverSize
-import com.yellastrodev.yandexmusiclib.entities.TrackShort
 import com.yellastrodev.yandexmusiclib.entities.YaLikeTracklist
 import com.yellastrodev.yandexmusiclib.entities.YaPlaylist
 import com.yellastrodev.yandexmusiclib.entities.YaTrack
-import com.yellastrodev.yandexmusiclib.entities.YaTrackList
-import com.yellastrodev.yandexmusiclib.entities.YaTrackWrap
-import com.yellastrodev.yandexmusiclib.entities.YaWave
-import com.yellastrodev.yandexmusiclib.kot_utils.yNetwork
+import com.yellastrodev.yandexmusiclib.likes.LikeActionResult
+import com.yellastrodev.yandexmusiclib.likes.LikesApi
 import com.yellastrodev.yandexmusiclib.network.YamHttpTransport
 import com.yellastrodev.yandexmusiclib.network.YamResult
-import com.yellastrodev.yandexmusiclib.yUtils.Differenc
-import com.yellastrodev.yandexmusiclib.yUtils.yUtils.Companion.getArray
-import kotlinx.serialization.json.Json
-import org.json.JSONArray
-import org.json.JSONObject
-import java.time.Instant
-import java.time.ZoneId
-import java.time.format.DateTimeFormatter
+import com.yellastrodev.yandexmusiclib.playlists.PlaylistApi
+import com.yellastrodev.yandexmusiclib.playlists.PlaylistDetails
+import com.yellastrodev.yandexmusiclib.playlists.PlaylistVisibility
+import com.yellastrodev.yandexmusiclib.rotor.RotorApi
+import com.yellastrodev.yandexmusiclib.rotor.RotorBatch
+import com.yellastrodev.yandexmusiclib.rotor.RotorFeedbackType
+import com.yellastrodev.yandexmusiclib.tracks.TrackApi
 
+/**
+ * Корутино-ориентированный клиент API Яндекс Музыки для Android/Kotlin.
+ *
+ * Публичные сетевые операции возвращают [YamResult] и не отдают JSON наружу.
+ */
 class YamApiClient(
-	mToken: String,
-	mUserID: String,
-	mLogin: String = "",
-	noAuthorize: Boolean = false
+    accessToken: String,
+    userId: String,
+    login: String = ""
 ) {
-
-	@Volatile
-	var mToken: String = mToken
-		private set
-
-	@Volatile
-	var mUserID: String = mUserID
-		private set
-
-	@Volatile
-	var mLogin: String = mLogin
-		private set
-
-	@Volatile
-	var noAuthorize: Boolean = noAuthorize
-		private set
-
-	private val httpTransport by lazy {
-		YamHttpTransport(accessToken = { mToken })
-	}
-
-	private val accountApi by lazy {
-		AccountApi(httpTransport)
-	}
-
-//	val mapper = jacksonObjectMapper()
-
-	companion object {
-		val BASE_URL = "https://api.music.yandex.net"
-		val BASE_URL_2 = "https://api.music.yandex.ru"
-
-		val WEB_URL = "https://music.yandex.ru"
-
-		val TYPE_PLAYLIST = "playlist"
-		val TYPE_ARTIST = "artist"
-		val TYPE_TRACK = "track"
-		val TYPE_ALBUM = "album"
-		val TAG = "yClient"
-	}
-
-	/**
-	 * Обновляет авторизацию существующего клиента, которым уже владеют репозитории приложения.
-	 */
-	fun updateAuthorization(token: String, userId: String, login: String = "") {
-		mToken = token
-		mUserID = userId
-		mLogin = login
-		noAuthorize = false
-		Log.i(TAG, "[updateAuthorization] Авторизация клиента обновлена")
-	}
-
-	/**
-	 * Очищает авторизацию без пересоздания графа репозиториев приложения.
-	 */
-	fun clearAuthorization() {
-		mToken = ""
-		mUserID = ""
-		mLogin = ""
-		noAuthorize = true
-		Log.i(TAG, "[clearAuthorization] Авторизация клиента очищена")
-	}
-
-	/**
-	 * Возвращает типизированный статус текущего аккаунта.
-	 */
-	suspend fun accountStatus(): YamResult<AccountStatus> = accountApi.status()
-
-	class FeedbackType{
-		companion object{
-			val RADIO_STARTED = "radioStarted"
-			val TRACK_STARTED = "trackStarted"
-			val TRACK_FINISHED = "trackFinished"
-			val SKIP = "skip"
-		}
-	}
-
-	suspend fun createPlaylist(fName: String, fPublic: Boolean = true){
-		val url = "$BASE_URL/users/$mUserID/playlists/create"
-		val f_args = JSONObject()
-		f_args.put("title", fName)
-		var fP = "public"
-		if(!fPublic) fP = "private"
-		f_args.put("visibility", fP)
-
-		yNetwork.post(mToken,url,f_args)
-	}
-
-	/**
-	 * Выполняет действие с отметкой «Мне нравится» для указанного объекта.
-	 *
-	 * Поддерживаемые типы объектов:
-	 * - `track` — трек
-	 * - `artist` — исполнитель
-	 * - `playlist` — плейлист
-	 * - `album` — альбом
-	 *
-	 * Для плейлистов идентификатор указывается в формате `owner_id:playlist_id`,
-	 * где `playlist_id` — идентификатор плейлиста, а `owner_id` — уникальный идентификатор владельца.
-	 *
-	 * @param objectType Тип объекта (`track`, `artist`, `playlist`, `album`).
-	 * @param ids Уникальный идентификатор объекта или объектов. Может быть строкой с одним ID
-	 * либо списком ID, объединённых в строку.
-	 * @param remove Если `true`, снимает отметку «Мне нравится», иначе — устанавливает её. По умолчанию `false`.
-	 * @param userID Уникальный идентификатор пользователя. Если не указан, используется ID текущего пользователя.
-	 *
-	 * @return `true`, если запрос выполнен успешно, иначе `false`.
-	 *
-	 * @throws yandex_music.exceptions.YandexMusicError В случае ошибки при выполнении запроса.
-	 */
-	suspend fun likeAction(
-		objectType: String,
-		ids: String,
-		remove: Boolean = false,
-		userID: String = mUserID
-	): Boolean {
-		val action = if (remove) "remove" else "add-multiple"
-		val url = "${BASE_URL}/users/${userID}/likes/${objectType}s/${action}"
-
-		val fParams = JSONObject("{'${objectType}-ids': '$ids' }")
-		val result = yNetwork.post(mToken, url, fParams)
-
-		return if (objectType == "track") {
-			result.has("revision")
-		} else {
-			result.has("ok")
-		}
-	}
-
-
-	/**
-	 * Запрашивает следующий трек в потоке (радиостанции) Rotor API.
-	 *
-	 * Метод используется для продолжения воспроизведения в рамках сессии станции.
-	 * Станция задаётся в формате `<type>:<id>`, например: `track:1234`.
-	 *
-	 * Алгоритм продолжения цепочки треков:
-	 * 1. Передать ID трека, который был до этого (первый в цепочке).
-	 * 2. Отправить фидбек о завершении или пропуске предыдущего трека (`queue`).
-	 * 3. Отправить фидбек о начале следующего трека.
-	 * 4. Выполнить запрос получения треков — в ответе придут новые треки или произойдёт сдвиг цепочки на 1 элемент.
-	 *
-	 * Для работы станции необходимо:
-	 * - Создать сессию через `/rotor/session/new` и получить `radio_session_id` и `sequence`.
-	 * - Оповестить о начале работы станции через `/rotor/session/{radio_session_id}/feedback`.
-	 * - Оповестить об окончании трека через `/rotor/session/{radio_session_id}/feedback`.
-	 * - Получить новые треки через `/rotor/session/{radio_session_id}/tracks`.
-	 *
-	 * Все официальные клиенты выполняют запросы с `settings2 = true`.
-	 *
-	 * @param stationId Идентификатор сессии станции (`radio_session_id`), полученный при создании сессии.
-	 * @param previousTrackId ID предыдущего трека (первого в цепочке).
-	 * @param fPrevSecond Время воспроизведения предыдущего трека в секундах (не используется в текущей реализации, но может быть полезно для фидбека).
-	 * @param fNextTrack ID следующего трека (второго в цепочке, для отправки фидбека о старте).
-	 *
-	 * @return JSON‑ответ API с информацией о следующих треках или сдвиге цепочки.
-	 * содержит почти тот же жсон что и вызов wave(), только отсутствует radioSessionId,
-	 * а batchId имеет другое значение, и список треков совершенно новых 5 штук
-	 *
-	 * @throws yandex_music.exceptions.YandexMusicError В случае ошибки при выполнении запроса.
-	 */
-	suspend fun getWaveNextTrack(
-		stationId: String,
-		previousTrackId: String
-	): JSONObject {
-		val fUrl = "$BASE_URL/rotor/session/${stationId}/tracks"
-		val fParams = JSONObject("{'settings2': 'True'}")
-		val fQue = JSONArray().apply { put(previousTrackId) }
-		fParams.put("queue", fQue)
-
-		return yNetwork.post(mToken, fUrl, fParams, contentType = "json")
-	}
-
-	suspend fun getWaveNextTracksObject(
-		stationId: String,
-		previousTrackId: String
-	): NextWaveResult {
-		val result = getWaveNextTrack(stationId, previousTrackId)
-		val sequence = result.getJSONObject("result").getJSONArray("sequence")
-		val wrappedTrackList = Json {ignoreUnknownKeys = true }.decodeFromString<List<YaTrackWrap>>(sequence.toString())
-		return NextWaveResult.Success(result.getJSONObject("result").getString("batchId"), wrappedTrackList.map { it.track })
-	}
-
-
-	suspend fun rotorStationFBRadioStarted(fStationId: String,
-                                           fFrom: String,
-                                           fBatch: String = "",): JSONObject{
-		return feedback(fStationId,FeedbackType.RADIO_STARTED,fFrom=fFrom, fBatch = fBatch)
-	}
-
-	suspend fun rotorStationFBTrackStarted(fStationId: String,
-                                           fTrack: String,
-                                           fBatch: String = "",): JSONObject{
-		return feedback(fStationId,FeedbackType.TRACK_STARTED,fTrack=fTrack, fBatch = fBatch)
-	}
-
-	suspend fun rotorStationFBTrackFinished(fStationId: String,
-                                            fTrack: String,
-											fSeconds: Float = 0.1f,
-                                            fBatch: String = ""): JSONObject{
-
-//		val fSeconds: Float = 0.1f
-		return feedback(fStationId,FeedbackType.TRACK_FINISHED,fTrack=fTrack,fSeconds=fSeconds,  fBatch = fBatch)
-	}
-
-	suspend fun rotorStationFBSkip(fStationId: String,
-                                   fFrom: String,
-                                   fSeconds: Float,
-                                   fBatch: String = "",): JSONObject{
-		return feedback(fStationId,FeedbackType.SKIP,fFrom=fFrom,fSeconds=fSeconds,  fBatch = fBatch)
-	}
-
-	/**
-	 * Отправляет событие (фидбек) в сессию станции Rotor API.
-	 *
-	 * Примеры:
-	 * - `station`: `user:onyourwave`, `genre:allrock`
-	 * - `from`: `mobile-radio-user-123456789`
-	 *
-	 * Используется для уведомления сервера о действиях пользователя в рамках сессии станции:
-	 * - начале или окончании трека
-	 * - пропуске трека
-	 * - других событиях воспроизведения
-	 *
-	 * **Параметры:**
-	 * @param fStationId Идентификатор сессии станции (`radio_session_id`), полученный при создании сессии.
-	 * @param fType Тип отправляемого события (например, `trackStarted`, `trackFinished`, `skip` и т.д.).
-	 * @param fTrack (опционально) ID трека, к которому относится событие.
-	 * @param fFrom (опционально) Источник запуска станции (например, `mobile-radio-user-123456789`).
-	 * @param fSeconds (опционально) Количество секунд, проигранных до события.
-	 * @param fBatch (опционально) Уникальный идентификатор партии треков (`batch-id`), возвращается при получении треков.
-	 *
-	 * **Возвращает:**
-	 * JSON-ответ API с результатом обработки события.
-	 *
-	 * **Примечания:**
-	 * - `timestamp` формируется автоматически в формате `yyyy-MM-dd'T'HH:mm:ss.SSSSSSZZZZZ` по системному времени.
-	 * - Для корректной работы цепочки треков рекомендуется отправлять фидбек о завершении предыдущего трека
-	 *   и начале следующего перед запросом новых треков.
-	 *
-	 * @throws yandex_music.exceptions.YandexMusicError В случае ошибки при выполнении запроса.
-	 */
-	suspend fun feedback(
-		fStationId: String,
-		fType: String,
-		fTrack: String = "",
-		fFrom: String = "",
-		fSeconds: Float = 0f,
-		fBatch: String = ""
-	): JSONObject {
-		val fUrl = "$BASE_URL/rotor/session/${fStationId}/feedback"
-
-		val anotherTIME = DateTimeFormatter
-			.ofPattern("yyyy-MM-dd'T'HH:mm:ss.SSSSSSZZZZZ")
-			.withZone(ZoneId.systemDefault())
-			.format(Instant.now())
-
-		val fParams = JSONObject().apply {
-			put("type", fType)
-			put("timestamp", anotherTIME)
-			if (fTrack.isNotEmpty()) put("trackId", fTrack)
-			if (fSeconds != 0f) put("totalPlayedSeconds", fSeconds.toString())
-			if (fFrom.isNotEmpty()) put("from", fFrom)
-		}
-
-		val fJson = JSONObject().apply {
-			put("event", fParams)
-		}
-
-		val fData = JSONObject().apply {
-			if (fBatch.isNotEmpty()) put("batch-id", fBatch)
-		}
-
-		return yNetwork.post(mToken, fUrl, fJson, contentType = "json")
-	}
-
-	sealed class PlaylistResult {
-		data class Success(
-			val YaPlaylist: YaPlaylist,
-			val trackList: List<YaTrack>) : PlaylistResult()
-		sealed class Error : PlaylistResult() {
-			object netError : Error()
-			object NoInternet : Error()
-			object AccessDenied : Error()
-			data class Unknown(val throwable: Throwable) : Error()
-		}
-	}
-
-	suspend fun getPlaylistObj(kind: Int, user_id: String? = null): PlaylistResult {
-
-		val f_json = getPlaylistJSON(kind,user_id)
-
-		val trakWrapList = Json {ignoreUnknownKeys = true }.decodeFromString<YaTrackList>(f_json.toString())
-		val playlist: YaPlaylist = Json {ignoreUnknownKeys = true }.decodeFromString(f_json.toString())
-		return PlaylistResult.Success(playlist,unwrapTrackList(trakWrapList))
-	}
-
-	fun unwrapTrackList(trakWrapList: YaTrackList): List<YaTrack> {
-		return trakWrapList.tracks.map { it.track }
-	}
-
-    suspend fun getPlaylistJSON(kind: Int, user_id: String? = null): JSONObject {
-
-		var f_user_id =if (user_id == null) {
-			mUserID
-		} else {
-			user_id
-		}
-
-		val url = "$BASE_URL/users/$f_user_id/playlists/$kind"
-
-
-		val result = yNetwork.get(mToken, url)
-		Log.i("TAG_YAM", result.toString())
-
-		result.getJSONObject("result").getJSONArray("tracks")
-		val f_json = result.getJSONObject("result")
-
-		return f_json
-	}
-
-	suspend fun getCover(adressPart: String, size: CoverSize): yNetwork.Companion.NetStreamResult {
-		return yNetwork.getCoverStream(mToken, adressPart, size)
-	}
-
-
-	fun likePlaylist(fPlayList: YaPlaylist){
-//		TODO
-	}
-
-	suspend fun changePlaylist(fPlList: String, fDif: JSONArray, fRev: Int): JSONObject {
-		val url = "$BASE_URL/users/$mUserID/playlists/${fPlList}/change"
-		val fData =  JSONObject("{'kind': ${fPlList}, 'revision': $fRev, 'diff': $fDif}")
-		return yNetwork.post(mToken,url,fData)
-	}
-
-	suspend fun addTrack(playlistKind: Int, revision: Int, trackId: String, trackAlbum: String){
-//		TODO
-		val fDif = Differenc().addInsert(0, trackId, trackAlbum)
-		val fRes = changePlaylist(playlistKind.toString(), fDif.toJSON(), revision)
-		fRes.getJSONObject("result")
-	}
-
-	/**
-	 * Удаляет трек из плейлиста
-	 * @param playlistKind идентификатор плейлиста
-	 * @param revision ревизия плейлиста
-	 * @param trackNumber позиция трека в плейлисте, буквально его indexOf()
-	 */
-	suspend fun removeTrack(playlistKind: Int, revision: Int, trackNumber: Int): Boolean {
-
-		val fDif = Differenc().addDelete(trackNumber, trackNumber+1)
-		val fRes = changePlaylist(playlistKind.toString(), fDif.toJSON(), revision)
-		fRes.getJSONObject("result")
-
-		return true
-	}
-
-	suspend fun getRotorList(){
-		val fPath = "$BASE_URL/rotor/stations/list"
-		val fParam = JSONObject()
-		fParam.put("language","ru")
-
-		val result = yNetwork.get(mToken, fPath, fParam)
-		return
-	}
-
-	suspend fun getLikedTracklist(fUserP: String = ""): YaLikeTracklist {
-		val response = getLiked("track", fUserP)
-		val library = response.getJSONObject("result").getJSONObject("library")
-		val likeList: YaLikeTracklist = Json {ignoreUnknownKeys = true }.decodeFromString(library.toString())
-		return likeList
-	}
-
-	/**
-	 * Получает список объектов указанного типа, помеченных пользователем как «Мне нравится».
-	 *
-	 * Поддерживаемые типы объектов:
-	 * - `track` — трек
-	 * - `artist` — исполнитель
-	 * - `playlist` — плейлист
-	 * - `album` — альбом
-	 *
-	 * Если `fUserP` не указан, используется идентификатор текущего пользователя (`mUserID`).
-	 *
-	 * @param fType Тип объекта (`track`, `artist`, `playlist`, `album`).
-	 * @param fUserP (опционально) Идентификатор пользователя. Если пустая строка — берётся текущий пользователь.
-	 *
-	 * @return JSON‑ответ API с данными понравившихся объектов.
-	 *
-	 * @throws yandex_music.exceptions.YandexMusicError В случае ошибки при выполнении запроса.
-	 */
-    suspend fun getLiked(fType: String, fUserP: String = ""): JSONObject {
-		val fUser = if (fUserP.isEmpty()) mUserID else fUserP
-		val fUrl = "${BASE_URL}/users/${fUser}/likes/${fType}s"
-		return yNetwork.get(mToken, fUrl)
-	}
-
-
-	/**
-	 * Создаёт новую сессию станции Rotor API и возвращает стартовый набор треков.
-	 *
-	 * Станция задаётся через параметр `seed` в формате:
-	 * - `track:{trackId}` — станция, основанная на конкретном треке
-	 * - `user:onyourwave` — персональная станция «Моя волна»
-	 * - `genre:{genreId}` — станция по жанру
-	 * - `playlist:${login}_${playlist.kindId}` - волна по плейлисту. да, надо указать логин юзера чей плейлист
-	 *
-	 * В запросе всегда передаётся `includeTracksInResponse = true`, чтобы в ответе сразу пришли треки.
-	 *
-	 * @param fTag Идентификатор источника (seed) для запуска станции.
-	 *             Примеры: `"track:1234"`, `"user:onyourwave"`, `"genre:allrock"`.
-	 *
-	 * @return JSON‑ответ API с информацией о новой сессии и стартовыми треками.
-	 *         В случае ошибки возвращается пустой `JSONObject`.
-	 *
-	 * {
-	 *   "invocationInfo" : {
-	 *     "req-id" : "1758505016812273-6234761934293997876",
-	 *     "hostname" : "music-web-default-production-music-18.klg.yp-c.yandex.net",
-	 *     "exec-duration-millis" : 405
-	 *   },
-	 *   "result" : {
-	 *     "radioSessionId" : "dzDQ-9Wp9VC3RACZJ67-R765",
-	 *     "sequence" : [ {
-	 *       "track" : fulltrack
-	 *         },
-	 *       ],
-	 *     "batchId" : "1758505016812273-6234761934293997876.ZJMj",
-	 *     "pumpkin" : false,
-	 *     "descriptionSeed" : {
-	 *       "value" : "onyourwave",
-	 *       "tag" : "onyourwave",
-	 *       "type" : "user"
-	 *     },
-	 *     "acceptedSeeds" : [ {
-	 *       "value" : "onyourwave",
-	 *       "tag" : "onyourwave",
-	 *       "type" : "user"
-	 *     } ],
-	 *     "terminated" : false
-	 *   }
-	 * }
-	 *
-	 *
-	 * @throws yandex_music.exceptions.YandexMusicError В случае ошибки при выполнении запроса.
-	 */
-	suspend fun wave(fTag: String): JSONObject {
-		val fSess = "$BASE_URL/rotor/session/new"
-
-		val fJson = JSONObject(
-			"{'seeds': ['${fTag}'], 'includeTracksInResponse': 'true'}"
-		)
-
-		return try {
-			yNetwork.post(mToken, fSess, fJson, contentType = "json")
-		} catch (e: Exception) {
-			e.printStackTrace()
-			JSONObject("")
-		}
-	}
-
-
-	suspend fun getWavetObj(fTag: String): WaveResult {
-		val result = wave(fTag)
-		if (result.has("code") && result.getInt("code") != 200)
-			return WaveResult.Error.netError
-		val sequence = result.getJSONObject("result").getJSONArray("sequence")
-		val wrappedTrackList = Json {ignoreUnknownKeys = true }.decodeFromString<List<YaTrackWrap>>(sequence.toString())
-		val wave: YaWave = Json {ignoreUnknownKeys = true }.decodeFromString(result.getJSONObject("result").toString())
-		wave.tracks = wrappedTrackList.map { TrackShort(it.track.id) }
-		return WaveResult.Success(wave, wrappedTrackList.map { it.track })
-	}
-
-	sealed class WaveResult {
-		data class Success(
-			val wave: YaWave,
-			val trackList: List<YaTrack>) : WaveResult()
-		sealed class Error : WaveResult() {
-			object netError : Error()
-			object NoInternet : Error()
-			object AccessDenied : Error()
-			data class Unknown(val throwable: Throwable) : Error()
-		}
-	}
-
-	sealed class NextWaveResult {
-		data class Success(
-			val newBatch: String,
-			val trackList: List<YaTrack>) : NextWaveResult()
-		sealed class Error : NextWaveResult() {
-			object netError : Error()
-			object NoInternet : Error()
-			object AccessDenied : Error()
-			data class Unknown(val throwable: Throwable) : Error()
-		}
-	}
-
-
-	/**
-	 * Получает один или несколько объектов указанного типа из API.
-	 *
-	 * Поддерживаемые типы объектов:
-	 * - `playlist` — плейлист
-	 * - `artist` — исполнитель
-	 * - `track` — трек
-	 * - `album` — альбом
-	 *
-	 * **Особенности:**
-	 * - Для плейлистов идентификатор указывается в формате `owner_id:playlist_id`,
-	 *   где `playlist_id` — идентификатор плейлиста, а `owner_id` — уникальный идентификатор владельца.
-	 * - Метод возвращает сокращённую модель плейлиста для отображения больших списков.
-	 *   **Не** возвращает список треков внутри плейлиста.
-	 *   Чтобы получить плейлист с заполненным полем `tracks`, используйте
-	 *   `users_playlists` или `Playlist.fetch_tracks`.
-	 * - Для треков добавляется параметр `with-positions = true`, чтобы вернуть позиции треков (если поддерживается API).
-	 *
-	 * @param fType Тип объекта (`playlist`, `artist`, `track`, `album`).
-	 * @param fIds Массив идентификаторов объектов. Может содержать строки или числа.
-	 *
-	 * @return JSON‑ответ API с данными запрошенных объектов.
-	 *
-	 * @throws yandex_music.exceptions.YandexMusicError В случае ошибки при выполнении запроса.
-	 */
-	suspend fun getObjList(fType: String, fIds: JSONArray): JSONObject {
-		val fParams = JSONObject().apply {
-			put("${fType}-ids", fIds)
-			if (fType == TYPE_TRACK) {
-				put("with-positions", "True")
-			}
-		}
-
-		val fUrl = "$BASE_URL/${fType}s${if (fType == TYPE_PLAYLIST) "/list" else ""}"
-		return yNetwork.post(mToken, fUrl, fParams, true)
-	}
-
-
-
-	suspend fun getTracklist(trackIds: List<String>): List<YaTrack> {
-		val result = getObjList(TYPE_TRACK, JSONArray(trackIds))
-
-		val trackResult = ArrayList<YaTrack>()
-		val jsonTracks = result.getJSONArray("result")
-		for (qTrackJs in getArray<JSONObject>(jsonTracks)) {
-			val qObj: YaTrack = Json {ignoreUnknownKeys = true }.decodeFromString(qTrackJs.toString())
-			trackResult.add(qObj)
-		}
-		return trackResult
-	}
-
-
-	/**
-	 * Получает список плейлистов пользователя, каждый плейлист в режиме превью, отсутствуют данные треков
-	 *
-	 * 	"result": [{
-	 *         "owner": {
-	 *             "uid": 172****66,
-	 *             "login": "urlogin",
-	 *             "name": "Ivan",
-	 *             "sex": "male",
-	 *             "verified": false
-	 *         },
-	 *         "playlistUuid": "80987136-e**4-7**b-902c-06e22a451b1a",
-	 *         "available": true,
-	 *         "uid": 17****566,
-	 *         "kind": 1000,
-	 *         "title": "Новый плейлист",
-	 *         "revision": 4,
-	 *         "snapshot": 4,
-	 *         "trackCount": 3,
-	 *         "visibility": "public",
-	 *         "collective": false,
-	 *         "created": "2023-06-01T21:34:17+00:00",
-	 *         "modified": "2023-06-02T09:46:11+00:00",
-	 *         "isBanner": false,
-	 *         "isPremiere": false,
-	 *         "durationMs": 575940,
-	 *         "cover": {
-	 *             "type": "mosaic",
-	 *             "itemsUri": ["avatars.yandex.net/get-music-content/1781407/a49e1148.a.9976672-1/%%", "avatars.yandex.net/get-music-content/5503671/001702f9.a.21335470-1/%%"],
-	 *             "custom": false
-	 *         },
-	 *         "ogImage": "avatars.yandex.net/get-music-content/1781407/a49e1148.a.9976672-1/%%",
-	 *         "tags": [],
-	 *         "customWave": {
-	 *             "title": "Новый плейлист",
-	 *             "animationUrl": "https:music-custom-wave-media.s3.yandex.net/base.json",
-	 *             "position": "default",
-	 *             "header": "Моя волна по плейлисту"
-	 *         }
-	 *     }]
-	 *
-	 */
-	suspend fun getUserListPllistsJSON(user_id: String? = null): JSONArray {
-		var f_user_id = ""
-		if( user_id == null && mUserID != null) {
-			f_user_id = mUserID
-		} else if (user_id != null){
-			f_user_id = user_id
-		}
-
-		val url = "$BASE_URL/users/$f_user_id/playlists/list"
-
-		val result = yNetwork.get(mToken, url)
-		Log.i("TAG_YAM",result.toString())
-
-		return result.getJSONArray("result")
-	}
-
-	suspend fun getUserListPllists(user_id: String? = null): List<YaPlaylist> {
-		val playlistJson = getUserListPllistsJSON(user_id)
- 		val objectList = ArrayList<YaPlaylist>()
-		for (q_pllist in getArray<JSONObject>(playlistJson)) {
-			val qObj: YaPlaylist = Json {ignoreUnknownKeys = true }.decodeFromString(q_pllist.toString())
-			objectList.add(qObj)
-		}
-		return objectList
-	}
-
-
-
-	suspend fun removePlaylist(fKindId: String): Boolean {
-		val fUrl = "$BASE_URL/users/$mUserID/playlists/$fKindId/delete"
-		val fRes = yNetwork.post(mToken,fUrl)
-		return responseWrapper(fRes)
-	}
-
-	fun responseWrapper(fRes: JSONObject): Boolean {
-		try {
-			val fMsg = fRes.getString("result")
-			return fMsg == "ok"
-		}catch (e: Exception){
-			e.printStackTrace()
-			return false
-		}
-
-	}
+    @Volatile
+    private var accessToken: String = accessToken
+
+    @Volatile
+    var userId: String = userId
+        private set
+
+    @Volatile
+    var login: String = login
+        private set
+
+    private val httpTransport by lazy {
+        YamHttpTransport(accessToken = { accessToken })
+    }
+    private val accountApi by lazy { AccountApi(httpTransport) }
+    private val likesApi by lazy { LikesApi(httpTransport) }
+    private val playlistApi by lazy { PlaylistApi(httpTransport) }
+    private val trackApi by lazy { TrackApi(httpTransport) }
+    private val rotorApi by lazy { RotorApi(httpTransport) }
+    private val downloadApi by lazy {
+        DownloadApi(httpTransport, httpTransport)
+    }
+    private val coverApi by lazy { CoverApi(httpTransport) }
+
+    fun updateAuthorization(
+        token: String,
+        userId: String,
+        login: String = ""
+    ) {
+        accessToken = token
+        this.userId = userId
+        this.login = login
+        Log.i(TAG, "[updateAuthorization] Авторизация клиента обновлена")
+    }
+
+    fun clearAuthorization() {
+        accessToken = ""
+        userId = ""
+        login = ""
+        Log.i(TAG, "[clearAuthorization] Авторизация клиента очищена")
+    }
+
+    suspend fun accountStatus(): YamResult<AccountStatus> =
+        accountApi.status()
+
+    suspend fun setTrackLiked(
+        trackId: String,
+        liked: Boolean,
+        userId: String = this.userId
+    ): YamResult<LikeActionResult> = likesApi.setTrackLiked(
+        userId = userId,
+        trackId = trackId,
+        liked = liked
+    )
+
+    suspend fun likedTracks(
+        ifModifiedSinceRevision: Int = 0,
+        userId: String = this.userId
+    ): YamResult<YaLikeTracklist> = likesApi.likedTracks(
+        userId = userId,
+        ifModifiedSinceRevision = ifModifiedSinceRevision
+    )
+
+    suspend fun playlist(
+        kind: Int,
+        userId: String = this.userId
+    ): YamResult<PlaylistDetails> =
+        playlistApi.playlist(userId, kind.toString())
+
+    suspend fun playlists(
+        userId: String = this.userId
+    ): YamResult<List<YaPlaylist>> = playlistApi.playlists(userId)
+
+    suspend fun createPlaylist(
+        title: String,
+        isPublic: Boolean = true,
+        userId: String = this.userId
+    ): YamResult<YaPlaylist> = playlistApi.create(
+        userId = userId,
+        title = title,
+        visibility = if (isPublic) {
+            PlaylistVisibility.PUBLIC
+        } else {
+            PlaylistVisibility.PRIVATE
+        }
+    )
+
+    suspend fun deletePlaylist(
+        kind: String,
+        userId: String = this.userId
+    ): YamResult<Unit> = playlistApi.delete(userId, kind)
+
+    suspend fun addTrack(
+        playlistKind: Int,
+        revision: Int,
+        trackId: String,
+        trackAlbum: String,
+        at: Int = 0,
+        userId: String = this.userId
+    ): YamResult<YaPlaylist> = playlistApi.insertTrack(
+        userId = userId,
+        kind = playlistKind.toString(),
+        revision = revision,
+        trackId = trackId,
+        albumId = trackAlbum,
+        at = at
+    )
+
+    suspend fun removeTrack(
+        playlistKind: Int,
+        revision: Int,
+        trackNumber: Int,
+        userId: String = this.userId
+    ): YamResult<YaPlaylist> = playlistApi.deleteTrack(
+        userId = userId,
+        kind = playlistKind.toString(),
+        revision = revision,
+        fromIndex = trackNumber,
+        toIndex = trackNumber + 1
+    )
+
+    suspend fun tracks(
+        trackIds: List<String>,
+        withPositions: Boolean = true
+    ): YamResult<List<YaTrack>> =
+        trackApi.tracks(trackIds, withPositions)
+
+    suspend fun startWave(station: String): YamResult<RotorBatch> =
+        rotorApi.tracks(station = station)
+
+    suspend fun nextWaveTracks(
+        station: String,
+        previousTrackId: String
+    ): YamResult<RotorBatch> = rotorApi.tracks(
+        station = station,
+        queue = previousTrackId
+    )
+
+    suspend fun sendWaveStarted(
+        station: String,
+        batchId: String? = null,
+        from: String = "mobile-radio-user-$userId"
+    ): YamResult<Unit> = rotorApi.feedback(
+        station = station,
+        type = RotorFeedbackType.RADIO_STARTED,
+        from = from,
+        batchId = batchId
+    )
+
+    suspend fun sendWaveTrackStarted(
+        station: String,
+        trackId: String,
+        batchId: String? = null
+    ): YamResult<Unit> = rotorApi.feedback(
+        station = station,
+        type = RotorFeedbackType.TRACK_STARTED,
+        trackId = trackId,
+        batchId = batchId
+    )
+
+    suspend fun sendWaveTrackFinished(
+        station: String,
+        trackId: String,
+        totalPlayedSeconds: Float,
+        batchId: String? = null
+    ): YamResult<Unit> = rotorApi.feedback(
+        station = station,
+        type = RotorFeedbackType.TRACK_FINISHED,
+        trackId = trackId,
+        totalPlayedSeconds = totalPlayedSeconds,
+        batchId = batchId
+    )
+
+    suspend fun sendWaveTrackSkipped(
+        station: String,
+        trackId: String,
+        totalPlayedSeconds: Float,
+        batchId: String? = null
+    ): YamResult<Unit> = rotorApi.feedback(
+        station = station,
+        type = RotorFeedbackType.SKIP,
+        trackId = trackId,
+        totalPlayedSeconds = totalPlayedSeconds,
+        batchId = batchId
+    )
+
+    suspend fun trackDownloadInfo(
+        trackId: String
+    ): YamResult<List<DownloadInfo>> =
+        downloadApi.downloadInfo(trackId)
+
+    suspend fun trackDownloadUrl(
+        trackId: String
+    ): YamResult<String> =
+        downloadApi.directDownloadUrl(trackId)
+
+    suspend fun trackDownloadBytes(
+        trackId: String
+    ): YamResult<ByteArray> =
+        downloadApi.downloadBytes(trackId)
+
+    suspend fun coverBytes(
+        uri: String,
+        size: CoverSize
+    ): YamResult<ByteArray> = coverApi.bytes(uri, size)
+
+    private companion object {
+        const val TAG = "YamApiClient"
+    }
 }

@@ -8,14 +8,13 @@ import com.yellastrodev.dwij.CACHE_SIZE
 import com.yellastrodev.dwij.CacheManager
 import com.yellastrodev.dwij.DEFAULT_CACHE_SIZE
 import com.yellastrodev.dwij.DIR_TRACK_CACHE
-import com.yellastrodev.yandexmusiclib.kot_utils.yTrack.Companion.Mp3LinkResult
+import com.yellastrodev.yandexmusiclib.network.YamResult
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.GlobalScope
 import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import java.io.File
-import java.net.URL
 
 @Suppress("DEPRECATION")
 class TrackCacheRepository(
@@ -43,15 +42,18 @@ class TrackCacheRepository(
             val file = getLocalFile(trackId)
             if (!file.exists()) {
                 Log.d("TrackCacheRepository", "Трека $trackId нет в кэше, скачиваем")
-                val result = trackRepo.getTrackUrl(trackId)
+                val result = trackRepo.getTrackBytes(trackId)
                 when (result) {
-                    is Mp3LinkResult.Success -> {
-                        val bytes = URL(result.url).readBytes()
-                        file.writeBytes(bytes)
+                    is YamResult.Success -> {
+                        file.writeBytes(result.value)
+                        Log.d(
+                            "TrackCacheRepository",
+                            "Трек $trackId загружен: ${result.value.size} байт"
+                        )
                     }
-                    is Mp3LinkResult.Error -> {
-                        Log.e("TrackCacheRepository", "Ошибка при скачивании трека $trackId: ${result.cause}")
-                        throw Exception(result.cause.toString())
+                    is YamResult.Failure -> {
+                        Log.e("TrackCacheRepository", "Ошибка при скачивании трека $trackId: ${result.error}")
+                        throw Exception(result.error.toString())
                     }
                 }
                 GlobalScope.launch(Dispatchers.IO) {

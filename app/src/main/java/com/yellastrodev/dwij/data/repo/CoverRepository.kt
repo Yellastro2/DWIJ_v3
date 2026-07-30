@@ -12,8 +12,8 @@ import com.yellastrodev.dwij.data.entities.dYaPlaylist
 import com.yellastrodev.dwij.data.entities.dYaTrack
 import com.yellastrodev.dwij.data.entities.iPlaylist
 import com.yellastrodev.yandexmusiclib.YamApiClient
-import com.yellastrodev.yandexmusiclib.kot_utils.yNetwork.Companion.NetStreamResult
 import com.yellastrodev.yandexmusiclib.entities.CoverSize
+import com.yellastrodev.yandexmusiclib.network.YamResult
 import kotlinx.coroutines.DelicateCoroutinesApi
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.GlobalScope
@@ -38,12 +38,17 @@ class CoverRepository(
     private val memoryCache = mutableMapOf<String, Bitmap>()
 
     private suspend fun downloadCover(url: String, size: CoverSize): Bitmap{
-        val result = fClient.getCover(url, size)
+        val result = fClient.coverBytes(url, size)
         when(result){
-            is NetStreamResult.Success -> {
-                return result.stream.use {
-                    BitmapFactory.decodeStream(it)
-                }
+            is YamResult.Success -> {
+                return BitmapFactory.decodeByteArray(
+                    result.value,
+                    0,
+                    result.value.size
+                ) ?: BitmapFactory.decodeResource(
+                    context.resources,
+                    R.drawable.logo2
+                )
             }
             else -> {
                 return BitmapFactory.decodeResource(context.resources, R.drawable.logo2)

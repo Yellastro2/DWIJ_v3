@@ -4,6 +4,7 @@ import kotlinx.serialization.KSerializer
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.SerializationException
 import kotlinx.serialization.json.Json
+import kotlinx.serialization.json.JsonElement
 
 @Serializable
 private data class YamResponseEnvelope<T>(
@@ -32,6 +33,36 @@ internal object YamResponseDecoder {
                     IllegalArgumentException("В ответе отсутствует result")
                 )
             )
+    } catch (error: SerializationException) {
+        YamResult.Failure(YamError.InvalidResponse(error))
+    } catch (error: IllegalArgumentException) {
+        YamResult.Failure(YamError.InvalidResponse(error))
+    }
+
+    fun <T> decodeBody(
+        response: YamHttpResponse,
+        serializer: KSerializer<T>
+    ): YamResult<T> = try {
+        YamResult.Success(
+            json.decodeFromString(
+                deserializer = serializer,
+                string = response.body
+            )
+        )
+    } catch (error: SerializationException) {
+        YamResult.Failure(YamError.InvalidResponse(error))
+    } catch (error: IllegalArgumentException) {
+        YamResult.Failure(YamError.InvalidResponse(error))
+    }
+
+    fun decodeResultElement(response: YamHttpResponse): YamResult<JsonElement> =
+        decodeResult(response, JsonElement.serializer())
+
+    fun <T> decodeElement(
+        element: JsonElement,
+        serializer: KSerializer<T>
+    ): YamResult<T> = try {
+        YamResult.Success(json.decodeFromJsonElement(serializer, element))
     } catch (error: SerializationException) {
         YamResult.Failure(YamError.InvalidResponse(error))
     } catch (error: IllegalArgumentException) {

@@ -5,9 +5,9 @@ import com.yellastrodev.dwij.data.entities.dTracklist
 import com.yellastrodev.dwij.data.entities.dYaTrack
 import com.yellastrodev.dwij.data.entities.dYaWave
 import com.yellastrodev.dwij.data.entities.toEntity
-import com.yellastrodev.dwij.data.source.WaveRemoteSourse
-import com.yellastrodev.yandexmusiclib.YamApiClient
+import com.yellastrodev.dwij.data.source.WaveRemoteSource
 import com.yellastrodev.yandexmusiclib.entities.TrackShort
+import com.yellastrodev.yandexmusiclib.network.YamResult
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.GlobalScope
 import kotlinx.coroutines.Job
@@ -18,7 +18,7 @@ import kotlinx.coroutines.flow.onEach
 import kotlinx.coroutines.launch
 
 class WaveRepository(
-    val remote: WaveRemoteSourse,
+    val remote: WaveRemoteSource,
     val trackRepository: TrackRepository,
     val playerRepository: PlayerRepository
 ) {
@@ -30,23 +30,23 @@ class WaveRepository(
     suspend fun getWave(dTracklist: dTracklist?): List<dYaTrack> {
         val result = remote.getWave(dTracklist?.getWaveId() ?: "user:onyourwave")
         when(result){
-            is YamApiClient.WaveResult.Success -> {
-                curentWave = result.wave.toEntity()
+            is YamResult.Success -> {
+                curentWave = dYaWave(
+                    radioSessionId = result.value.station,
+                    batchId = result.value.batchId,
+                    tracks = result.value.tracks.map { TrackShort(it.id) }
+                )
                 dTracklist?. let{
                     curentWave!!.title =  "${it.getDTitle()} волна"
                 } ?: run {
                     curentWave!!.title =  "Волна"
 
                 }
-                val trackList = result.trackList.map { it.toEntity() }
+                val trackList = result.value.tracks.map { it.toEntity() }
                 trackRepository.putTracks(trackList)
                 return trackList
             }
 
-//            YamApiClient.WaveResult.Error.AccessDenied -> TODO()
-//            YamApiClient.WaveResult.Error.NoInternet -> TODO()
-//            is YamApiClient.WaveResult.Error.Unknown -> TODO()
-//            YamApiClient.WaveResult.Error.netError -> TODO()
             else -> {
                 // обработка всех остальных случаев
                 // например, логирование или возврат пустого списка
@@ -72,7 +72,7 @@ class WaveRepository(
                 curentWave!!)
         }
         curentWave?.let{
-            remote.sendWaveStarted(it, waveList.first().id)
+            remote.sendWaveStarted(it)
         }
 
         observePlayerState()
@@ -145,19 +145,19 @@ class WaveRepository(
         Log.d(TAG, "updateWave: $lastTrackId")
         val result = remote.getNextTracks(wave, lastTrackId)
         when(result){
-            is YamApiClient.NextWaveResult.Success -> {
-                val dTracks = result.trackList.map { tr -> tr.toEntity() }
+            is YamResult.Success -> {
+                val dTracks = result.value.tracks.map { tr -> tr.toEntity() }
                 trackRepository.putTracks(dTracks)
-                wave.batchId = result.newBatch
-                wave.tracks = wave.tracks + result.trackList.map { TrackShort(it.id) }
+                wave.batchId = result.value.batchId
+                wave.tracks = wave.tracks +
+                    result.value.tracks.map { TrackShort(it.id) }
                 playerRepository.addTracks(dTracks)
                 Log.d(TAG, "updateWave: ${wave.tracks.size}")
             }
 
-            YamApiClient.NextWaveResult.Error.AccessDenied -> TODO()
-            YamApiClient.NextWaveResult.Error.NoInternet -> TODO()
-            is YamApiClient.NextWaveResult.Error.Unknown -> TODO()
-            YamApiClient.NextWaveResult.Error.netError -> TODO()
+            is YamResult.Failure -> {
+                Log.e(TAG, "[updateWave] Новые треки не загружены: ${result.error}")
+            }
         }
     }
 

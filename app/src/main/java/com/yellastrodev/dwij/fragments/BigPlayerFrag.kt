@@ -24,7 +24,7 @@ import com.yellastrodev.dwij.R
 import com.yellastrodev.dwij.data.entities.dYaPlaylist
 import com.yellastrodev.dwij.data.entities.dYaTrack
 import com.yellastrodev.dwij.models.PlayerModel
-import com.yellastrodev.yandexmusiclib.CONSTANTS.Companion.LIKED_ID
+import com.yellastrodev.dwij.data.entities.dYaLikeTracklist.Companion.KIND_LIKED
 import com.yellastrodev.yandexmusiclib.entities.CoverSize
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.take
@@ -235,7 +235,7 @@ class BigPlayerFrag() :
 			.take(1) // забираем только один результат
 			.collect { fPlLists ->
 			Log.d(TAG, "BigPlayer.onTrackFlow collect playlists=$fPlLists")
-			val filtered = fPlLists.filter { it.kind != LIKED_ID }
+			val filtered = fPlLists.filter { it.kind != KIND_LIKED }
 			withContext(Dispatchers.Main) {
 				if (filtered.isNotEmpty()) {
 					mvToPlaylist.visibility = View.GONE

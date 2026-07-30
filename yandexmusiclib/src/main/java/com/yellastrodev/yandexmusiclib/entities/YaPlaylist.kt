@@ -1,7 +1,6 @@
 package com.yellastrodev.yandexmusiclib.entities
 
 import com.yellastrodev.yandexmusiclib.yUtils.IntOrStringAsStringSerializer
-import org.json.JSONObject
 import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
 

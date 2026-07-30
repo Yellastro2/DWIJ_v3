@@ -1,7 +1,6 @@
 package com.yellastrodev.dwij.data.entities
 
 import androidx.room.Entity
-import com.yellastrodev.yandexmusiclib.CONSTANTS.Companion.LIKED_ID
 import com.yellastrodev.yandexmusiclib.entities.YaLikeTracklist
 
 
@@ -15,7 +14,7 @@ class dYaLikeTracklist(
 ) : dYaPlaylist(
     playlistUuid,
     uid = uid,
-    kind = LIKED_ID,
+    kind = KIND_LIKED,
     title = "liked tracks",
     trackCount = trackCount,
     durationMs = duration,

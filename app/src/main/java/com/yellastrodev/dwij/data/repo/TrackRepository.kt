@@ -5,7 +5,7 @@ import com.yellastrodev.dwij.data.dao.dTrackDao
 import com.yellastrodev.dwij.data.source.TrackRemoteSource
 import com.yellastrodev.dwij.data.entities.dPlaylistTrack
 import com.yellastrodev.dwij.data.entities.dYaTrack
-import com.yellastrodev.yandexmusiclib.kot_utils.yTrack
+import com.yellastrodev.yandexmusiclib.network.YamResult
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.GlobalScope
 import kotlinx.coroutines.flow.Flow
@@ -184,7 +184,7 @@ class TrackRepository(
         return result
     }
 
-    suspend fun getTrackUrl(trackId: String): yTrack.Companion.Mp3LinkResult {
+    suspend fun getTrackBytes(trackId: String): YamResult<ByteArray> {
         val track = _tracks.value[trackId]!!
         return remote.fetch(track)
     }

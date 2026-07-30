@@ -128,7 +128,8 @@ class PlayerModel(
 
     suspend fun likeTrack() {
         track.value?.id?. let { id ->
-            playlistRepo.likeTrack(id, isTrackLiked())
+            val shouldBeLiked = !isTrackLiked()
+            playlistRepo.setTrackLiked(id, shouldBeLiked)
         }
     }
 

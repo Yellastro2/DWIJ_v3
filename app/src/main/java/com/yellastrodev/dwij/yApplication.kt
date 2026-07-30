@@ -29,7 +29,7 @@ import com.yellastrodev.dwij.data.entities.dYaArtist
 import com.yellastrodev.dwij.data.entities.dYaPlaylist
 import com.yellastrodev.dwij.data.entities.dYaTrack
 import com.yellastrodev.dwij.data.repo.WaveRepository
-import com.yellastrodev.dwij.data.source.WaveRemoteSourse
+import com.yellastrodev.dwij.data.source.WaveRemoteSource
 import com.yellastrodev.dwij.service.PlayerService
 import com.yellastrodev.yandexmusiclib.YamApiClient
 import com.yellastrodev.yandexmusiclib.network.YamError
@@ -49,7 +49,7 @@ class yApplication: Application() {
         runBlocking(Dispatchers.IO) {
             val result = initYaM(applicationContext)
             when (result) {
-                is ClientResult.Error -> YamApiClient("","",noAuthorize = true)
+                is ClientResult.Error -> YamApiClient("", "")
                 is ClientResult.Success -> result.client
             }
         }
@@ -147,13 +147,13 @@ class yApplication: Application() {
         )
     }
 
-    val waveRemoteSourse: WaveRemoteSourse by lazy {
-        WaveRemoteSourse(yamClient)
+    val waveRemoteSource: WaveRemoteSource by lazy {
+        WaveRemoteSource(yamClient)
     }
 
     val waveRepository: WaveRepository by lazy {
         WaveRepository(
-            waveRemoteSourse,
+            waveRemoteSource,
             trackRepository,
             playerRepo
         )

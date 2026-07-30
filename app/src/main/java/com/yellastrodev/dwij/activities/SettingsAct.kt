@@ -210,8 +210,8 @@ class SettingsAct: AppCompatActivity() {
 	private suspend fun saveToken(token: OAuthToken): AccountSaveResult {
 		val status = when (
 			val result = YamApiClient(
-				mToken = token.accessToken,
-				mUserID = ""
+				accessToken = token.accessToken,
+				userId = ""
 			).accountStatus()
 		) {
 			is YamResult.Success -> result.value

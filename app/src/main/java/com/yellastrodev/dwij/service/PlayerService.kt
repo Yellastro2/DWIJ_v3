@@ -245,7 +245,11 @@ class PlayerService : MediaSessionService() {
             }
 
             override fun onPlayerError(error: PlaybackException) {
-                Log.e(TAG, "Ошибка проигрывания: ${error.message}")
+                Log.e(
+                    TAG,
+                    "[onPlayerError] Ошибка проигрывания, code=${error.errorCode}",
+                    error
+                )
                 GlobalScope.launch {
                     _events.emit(PlayerEvent.ShowError("Ошибка воспроизведения"))
                 }

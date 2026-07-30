@@ -90,9 +90,9 @@ git clone https://github.com/MarshalX/yandex-music-api.git C:\path\to\yandex-mus
 - `network/` — типизированные результаты и новый сетевой transport;
 - `auth/YandexDeviceAuth.kt` — OAuth Device Flow;
 - `account/` — типизированные модели и операции аккаунта;
+- `likes/`, `playlists/`, `tracks/`, `rotor/` — типизированные API-срезы;
+- `download/` и `covers/` — ссылки воспроизведения и бинарный контент;
 - `entities/` — модели данных;
-- `kot_utils/yNetwork.kt` — старый transport, временно используемый
-  ещё не перенесёнными endpoint.
 
 ## Авторизация
 
@@ -135,10 +135,28 @@ when (val result = client.accountStatus()) {
 }
 ```
 
-`JSONObject`, `JSONArray` и транспортные ответы не должны появляться в новом
-публичном API. Старые методы переносятся на `YamResult<T>` вертикальными
-срезами: новый типизированный endpoint, миграция приложения, затем удаление
-старого JSON-метода.
+Операции лайков также типизированы:
+
+```kotlin
+val update = client.setTrackLiked(trackId = trackId, liked = true)
+val likedTracks = client.likedTracks()
+```
+
+Остальные основные срезы используют тот же контракт:
+
+```kotlin
+val playlists = client.playlists()
+val playlist = client.playlist(kind = 1000)
+val tracks = client.tracks(listOf("123", "456"))
+
+val wave = client.startWave("user:onyourwave")
+val directUrl = client.trackDownloadUrl("123")
+val cover = client.coverBytes(coverUri, CoverSize.`400x400`)
+```
+
+`JSONObject`, `JSONArray` и транспортные ответы не появляются в публичном API.
+Сетевые операции возвращают `YamResult<T>`, а транспорт отдельно обрабатывает
+JSON API и бинарный контент.
 
 ## Лицензия и атрибуция
 

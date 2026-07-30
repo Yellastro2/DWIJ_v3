@@ -44,6 +44,13 @@ internal fun interface YamTransport {
     suspend fun execute(request: YamHttpRequest): YamResult<YamHttpResponse>
 }
 
+internal fun interface YamContentTransport {
+    suspend fun retrieve(
+        url: String,
+        requiresAuthorization: Boolean
+    ): YamResult<ByteArray>
+}
+
 internal interface YamNetworkLogger {
     fun requestStarted(method: YamHttpMethod, path: String)
     fun requestFinished(method: YamHttpMethod, path: String, statusCode: Int, elapsedMs: Long)
@@ -80,7 +87,7 @@ internal class YamHttpTransport(
     private val connectTimeoutMillis: Int = 10_000,
     private val readTimeoutMillis: Int = 15_000,
     private val logger: YamNetworkLogger = AndroidYamNetworkLogger
-) : YamTransport {
+) : YamTransport, YamContentTransport {
 
     override suspend fun execute(
         request: YamHttpRequest
@@ -137,6 +144,71 @@ internal class YamHttpTransport(
         }
     }
 
+    override suspend fun retrieve(
+        url: String,
+        requiresAuthorization: Boolean
+    ): YamResult<ByteArray> = withContext(Dispatchers.IO) {
+        val token = accessToken()
+        if (requiresAuthorization && token.isBlank()) {
+            return@withContext YamResult.Failure(YamError.Unauthorized)
+        }
+
+        val logPath = "/external-content"
+        val startedAt = System.nanoTime()
+        logger.requestStarted(YamHttpMethod.GET, logPath)
+        try {
+            val connection = URL(url).openConnection() as HttpURLConnection
+            try {
+                connection.requestMethod = YamHttpMethod.GET.name
+                connection.connectTimeout = connectTimeoutMillis
+                connection.readTimeout = readTimeoutMillis
+                connection.setRequestProperty("Accept", "*/*")
+                connection.setRequestProperty("User-Agent", USER_AGENT)
+                if (requiresAuthorization) {
+                    connection.setRequestProperty("Authorization", "OAuth $token")
+                }
+
+                val statusCode = connection.responseCode
+                val elapsedMs =
+                    (System.nanoTime() - startedAt) / NANOS_IN_MILLISECOND
+                logger.requestFinished(
+                    YamHttpMethod.GET,
+                    logPath,
+                    statusCode,
+                    elapsedMs
+                )
+                if (statusCode in 200..299) {
+                    YamResult.Success(connection.inputStream.use { it.readBytes() })
+                } else {
+                    val errorBody = connection.errorStream
+                        ?.bufferedReader(StandardCharsets.UTF_8)
+                        ?.use { it.readText() }
+                        .orEmpty()
+                    YamResult.Failure(mapHttpError(statusCode, errorBody))
+                }
+            } finally {
+                connection.disconnect()
+            }
+        } catch (error: CancellationException) {
+            throw error
+        } catch (error: SocketTimeoutException) {
+            logger.requestFailed(YamHttpMethod.GET, logPath, error)
+            YamResult.Failure(YamError.Timeout)
+        } catch (error: UnknownHostException) {
+            logger.requestFailed(YamHttpMethod.GET, logPath, error)
+            YamResult.Failure(YamError.NoInternet)
+        } catch (error: ConnectException) {
+            logger.requestFailed(YamHttpMethod.GET, logPath, error)
+            YamResult.Failure(YamError.NoInternet)
+        } catch (error: IOException) {
+            logger.requestFailed(YamHttpMethod.GET, logPath, error)
+            YamResult.Failure(YamError.Network(error))
+        } catch (error: Exception) {
+            logger.requestFailed(YamHttpMethod.GET, logPath, error)
+            YamResult.Failure(YamError.Network(error))
+        }
+    }
+
     private fun openConnection(request: YamHttpRequest): HttpURLConnection {
         val normalizedPath = if (request.path.startsWith("/")) {
             request.path
@@ -173,7 +245,7 @@ internal class YamHttpTransport(
                 connection.doOutput = true
                 connection.setRequestProperty(
                     "Content-Type",
-                    "application/x-www-form-urlencoded; charset=UTF-8"
+                    "application/x-www-form-urlencoded"
                 )
             }
             is YamHttpBody.Json -> {
@@ -239,8 +311,9 @@ internal class YamHttpTransport(
             }.getOrNull() ?: runCatching {
                 errorElement?.jsonObject?.get("name")?.jsonPrimitive?.contentOrNull
             }.getOrNull()
-            val description = root["error_description"]?.jsonPrimitive?.contentOrNull
-                ?: root["message"]?.jsonPrimitive?.contentOrNull
+        val description = root["errorDescription"]?.jsonPrimitive?.contentOrNull
+            ?: root["error_description"]?.jsonPrimitive?.contentOrNull
+            ?: root["message"]?.jsonPrimitive?.contentOrNull
                 ?: runCatching {
                     errorElement?.jsonObject?.get("message")?.jsonPrimitive?.contentOrNull
                 }.getOrNull()
