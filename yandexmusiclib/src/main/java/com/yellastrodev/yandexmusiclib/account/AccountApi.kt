@@ -20,7 +20,7 @@ internal class AccountApi(
         ) {
             is YamResult.Success -> YamResponseDecoder.decodeResult(
                 response = response.value,
-                resultDeserializer = AccountStatus.serializer()
+                resultSerializer = AccountStatus.serializer()
             )
             is YamResult.Failure -> response
         }

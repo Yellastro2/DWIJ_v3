@@ -1,6 +1,6 @@
 package com.yellastrodev.yandexmusiclib.network
 
-import kotlinx.serialization.DeserializationStrategy
+import kotlinx.serialization.KSerializer
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.SerializationException
 import kotlinx.serialization.json.Json
@@ -18,11 +18,13 @@ internal object YamResponseDecoder {
 
     fun <T> decodeResult(
         response: YamHttpResponse,
-        resultDeserializer: DeserializationStrategy<T>
+        resultSerializer: KSerializer<T>
     ): YamResult<T> = try {
-        val envelope = json.decodeFromString(
-            YamResponseEnvelope.serializer(resultDeserializer),
-            response.body
+        val envelopeSerializer: KSerializer<YamResponseEnvelope<T>> =
+            YamResponseEnvelope.serializer(resultSerializer)
+        val envelope: YamResponseEnvelope<T> = json.decodeFromString(
+            deserializer = envelopeSerializer,
+            string = response.body
         )
         envelope.result?.let { YamResult.Success(it) }
             ?: YamResult.Failure(
