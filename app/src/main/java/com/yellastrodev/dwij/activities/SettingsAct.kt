@@ -14,6 +14,7 @@ import android.widget.SeekBar
 import android.widget.TextView
 import android.widget.Toast
 import androidx.annotation.RequiresApi
+import androidx.appcompat.app.AppCompatActivity
 import androidx.media3.common.util.UnstableApi
 import com.google.android.material.snackbar.Snackbar
 import com.yellastrodev.dwij.CACHE_SIZE
@@ -33,15 +34,11 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 
 
-class SettingsAct: Activity() {
+class SettingsAct: AppCompatActivity() {
 
 	companion object{
 
-		lateinit var mYaAuth: yAuth
-		fun authYa(fAct: Activity){
-			mYaAuth = yAuth(fAct)
-			mYaAuth.login()
-		}
+
 
 		@OptIn(DelicateCoroutinesApi::class)
 		fun saveToken(fToken: String, fAct: Activity, param: (String) -> Unit = {}){
@@ -82,11 +79,17 @@ class SettingsAct: Activity() {
 			}
 		}
 
-		fun onYamResult(resultCode: Int, data: Intent?, fAct: Activity, param: (String) -> Unit = {}): String {
-			val fToken = mYaAuth.onResult(resultCode,data)
-			saveToken(fToken,fAct,param)
-			return fToken
-		}
+//		fun onYamResult(resultCode: Int, data: Intent?, fAct: Activity, param: (String) -> Unit = {}): String {
+//			val fToken = mYaAuth.onResult(resultCode,data)
+//			saveToken(fToken,fAct,param)
+//			return fToken
+//		}
+	}
+
+	lateinit var mYaAuth: yAuth
+
+	fun authYa(fAct: AppCompatActivity){
+		mYaAuth.login()
 	}
 
 	lateinit var vYaLoginText: TextView
@@ -97,10 +100,11 @@ class SettingsAct: Activity() {
 
 
 
-	@RequiresApi(Build.VERSION_CODES.O)
     override fun onCreate(savedInstanceState: Bundle?) {
 		super.onCreate(savedInstanceState)
 		setContentView(R.layout.lay_settings)
+
+		mYaAuth = yAuth(this, { it -> saveToken(it,this, { it -> setYaAuth(it) }) })
 
 		sharedPref = PreferenceManager.getDefaultSharedPreferences(this)
 
@@ -239,14 +243,14 @@ class SettingsAct: Activity() {
 	}
 
 
-override fun onActivityResult(requestCode: Int, resultCode: Int, data: Intent?) {
-	yAuth.REQUEST_LOGIN_SDK
-	if (requestCode == yAuth.REQUEST_LOGIN_SDK) {
-		onYamResult(resultCode,data,this) { it -> setYaAuth(it) }
-
-	} else {
-		super.onActivityResult(requestCode, resultCode, data)
-	}
-}
+//	override fun onActivityResult(requestCode: Int, resultCode: Int, data: Intent?) {
+//		yAuth.REQUEST_LOGIN_SDK
+//		if (requestCode == yAuth.REQUEST_LOGIN_SDK) {
+//			onYamResult(resultCode,data,this) { it -> setYaAuth(it) }
+//
+//		} else {
+//			super.onActivityResult(requestCode, resultCode, data)
+//		}
+//	}
 
 }

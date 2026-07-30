@@ -43,12 +43,18 @@ class WaveRepository(
                 return trackList
             }
 
-            YamApiClient.WaveResult.Error.AccessDenied -> TODO()
-            YamApiClient.WaveResult.Error.NoInternet -> TODO()
-            is YamApiClient.WaveResult.Error.Unknown -> TODO()
-            YamApiClient.WaveResult.Error.netError -> TODO()
+//            YamApiClient.WaveResult.Error.AccessDenied -> TODO()
+//            YamApiClient.WaveResult.Error.NoInternet -> TODO()
+//            is YamApiClient.WaveResult.Error.Unknown -> TODO()
+//            YamApiClient.WaveResult.Error.netError -> TODO()
+            else -> {
+                // обработка всех остальных случаев
+                // например, логирование или возврат пустого списка
+                ArrayList<dYaTrack>()
+            }
         }
 
+        return ArrayList<dYaTrack>()
     }
 
     // Храним job, чтобы можно было отменить снаружи
@@ -57,6 +63,8 @@ class WaveRepository(
     suspend fun playWave(dtrackList: dTracklist? = null) {
         Log.d(TAG, "playWave: ${dtrackList?.getWaveId()?: "own"}")
         val waveList = getWave(dtrackList)
+        if (waveList.isEmpty())
+            return
         withContext(Dispatchers.Main) {
             playerRepository.playQueue(
                 waveList,

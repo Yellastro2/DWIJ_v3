@@ -21,7 +21,8 @@ class yAccount {
             JSONException::class
         )
         suspend fun showInformAccount(fToken: String): yNetwork.Companion.NetResult {
-            if (fToken == "") throw NoTokenFoundException()
+            if (fToken == "")
+                return yNetwork.Companion.NetResult.Error.AccessDenied
             val urlToRequest = "/account/status"
 
             //String f_testUrl = "https://api.music.yandex.net/";

@@ -437,6 +437,8 @@ class YamApiClient(
 
 	suspend fun getWavetObj(fTag: String): WaveResult {
 		val result = wave(fTag)
+		if (result.has("code") && result.getInt("code") != 200)
+			return WaveResult.Error.netError
 		val sequence = result.getJSONObject("result").getJSONArray("sequence")
 		val wrappedTrackList = Json {ignoreUnknownKeys = true }.decodeFromString<List<YaTrackWrap>>(sequence.toString())
 		val wave: YaWave = Json {ignoreUnknownKeys = true }.decodeFromString(result.getJSONObject("result").toString())

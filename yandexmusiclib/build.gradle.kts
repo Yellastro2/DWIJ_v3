@@ -37,7 +37,7 @@ dependencies {
 
     implementation ("org.json:json:20230227")
     implementation ("commons-codec:commons-codec:1.15")
-    implementation ("com.yandex.android:authsdk:2.5.1")
+    implementation ("com.yandex.android:authsdk:3.1.3")
 	implementation("androidx.annotation:annotation-jvm:1.7.1")
 
     implementation("org.jetbrains.kotlinx:kotlinx-coroutines-core:1.8.1")

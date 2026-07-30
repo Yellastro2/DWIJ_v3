@@ -183,6 +183,12 @@ class yApplication: Application() {
         val sharedPref = PreferenceManager.getDefaultSharedPreferences(context)
 
         sharedPref.getString(YA_TOKEN, null)?.let { token ->
+            if (token.isEmpty()){
+                withContext(Dispatchers.IO) {
+                    MainActivity.LOG.info("no YandexMusic login")
+                }
+                return ClientResult.Error(ClientResult.Reason.NO_TOKEN)
+            }
             var userId = sharedPref.getString(YA_ID, null)
             if (userId == null) {
 
