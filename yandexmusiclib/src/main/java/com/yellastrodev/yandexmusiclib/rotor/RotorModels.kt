@@ -2,6 +2,7 @@ package com.yellastrodev.yandexmusiclib.rotor
 
 import com.yellastrodev.yandexmusiclib.entities.YaTrack
 import com.yellastrodev.yandexmusiclib.entities.YaTrackWrap
+import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
 
 /**
@@ -25,3 +26,24 @@ internal data class RotorTracksPayload(
     val batchId: String,
     val sequence: List<YaTrackWrap> = emptyList()
 )
+
+@Serializable
+internal data class RotorStationResultPayload(
+    val station: RotorStationPayload
+)
+
+@Serializable
+internal data class RotorStationPayload(
+    val id: RotorStationIdPayload,
+    @SerialName("idForFrom")
+    val idForFrom: String
+)
+
+@Serializable
+internal data class RotorStationIdPayload(
+    val type: String,
+    val tag: String
+) {
+    val value: String
+        get() = "$type:$tag"
+}

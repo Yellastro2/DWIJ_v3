@@ -7,7 +7,12 @@ import com.yellastrodev.yandexmusiclib.network.YamHttpRequest
 import com.yellastrodev.yandexmusiclib.network.YamResponseDecoder
 import com.yellastrodev.yandexmusiclib.network.YamResult
 import com.yellastrodev.yandexmusiclib.network.YamTransport
+import kotlinx.serialization.ExperimentalSerializationApi
+import kotlinx.serialization.builtins.ListSerializer
 import kotlinx.serialization.builtins.serializer
+import kotlinx.serialization.json.JsonUnquotedLiteral
+import kotlinx.serialization.json.buildJsonObject
+import kotlinx.serialization.json.put
 import java.math.BigDecimal
 
 internal class RotorApi(
@@ -59,6 +64,48 @@ internal class RotorApi(
         }
     }
 
+    suspend fun feedbackSource(
+        station: String,
+        language: String = "ru"
+    ): YamResult<String> {
+        if (station.isBlank() || language.isBlank()) {
+            return invalidArguments("station и language не должны быть пустыми")
+        }
+        return when (
+            val response = transport.execute(
+                YamHttpRequest(
+                    method = YamHttpMethod.GET,
+                    path = "/rotor/stations/list",
+                    query = mapOf("language" to language)
+                )
+            )
+        ) {
+            is YamResult.Success -> when (
+                val decoded = YamResponseDecoder.decodeResult(
+                    response.value,
+                    ListSerializer(RotorStationResultPayload.serializer())
+                )
+            ) {
+                is YamResult.Success -> {
+                    val source = decoded.value
+                        .firstOrNull { it.station.id.value == station }
+                        ?.station
+                        ?.idForFrom
+                    if (source.isNullOrBlank()) {
+                        invalidArguments(
+                            "Для станции $station отсутствует idForFrom"
+                        )
+                    } else {
+                        YamResult.Success(source)
+                    }
+                }
+                is YamResult.Failure -> decoded
+            }
+            is YamResult.Failure -> response
+        }
+    }
+
+    @OptIn(ExperimentalSerializationApi::class)
     suspend fun feedback(
         station: String,
         type: RotorFeedbackType,
@@ -82,22 +129,44 @@ internal class RotorApi(
             return invalidArguments("timestamp должен быть конечным числом")
         }
 
-        val fields = buildMap {
+        val body = buildJsonObject {
             put("type", type.apiValue)
-            put("timestamp", timestamp.toPlainDecimal())
+            put(
+                "timestamp",
+                JsonUnquotedLiteral(timestamp.toPlainDecimal())
+            )
             trackId?.let { put("trackId", it) }
             from?.let { put("from", it) }
             totalPlayedSeconds
                 ?.takeIf { it != 0f }
-                ?.let { put("totalPlayedSeconds", it.toString()) }
+                ?.let { put("totalPlayedSeconds", it) }
         }
+        val feedbackBody = YamHttpBody.Json(body.toString())
+        val firstResult = sendFeedback(station, feedbackBody, batchId)
+        return if (
+            batchId != null &&
+            firstResult.isRejectedBatchCondition()
+        ) {
+            sendFeedback(station, feedbackBody, batchId = null)
+        } else {
+            firstResult
+        }
+    }
+
+    private suspend fun sendFeedback(
+        station: String,
+        body: YamHttpBody.Json,
+        batchId: String?
+    ): YamResult<Unit> {
         return when (
             val response = transport.execute(
                 YamHttpRequest(
                     method = YamHttpMethod.POST,
                     path = "/rotor/station/$station/feedback",
-                    query = batchId?.let { mapOf("batch-id" to it) }.orEmpty(),
-                    body = YamHttpBody.Form(fields)
+                    query = batchId
+                        ?.let { mapOf("batch-id" to it) }
+                        .orEmpty(),
+                    body = body
                 )
             )
         ) {
@@ -124,6 +193,16 @@ internal class RotorApi(
         }
     }
 
+    private fun YamResult<Unit>.isRejectedBatchCondition(): Boolean {
+        val httpError = (this as? YamResult.Failure)
+            ?.error as? YamError.Http
+        return httpError?.statusCode == 400 &&
+            httpError.code.equals(
+                BATCH_CONDITION_ERROR,
+                ignoreCase = true
+            )
+    }
+
     private fun invalidArguments(message: String): YamResult.Failure =
         YamResult.Failure(
             YamError.InvalidResponse(
@@ -138,5 +217,6 @@ internal class RotorApi(
 
     private companion object {
         const val MILLIS_IN_SECOND = 1_000.0
+        const val BATCH_CONDITION_ERROR = "condition is not met"
     }
 }

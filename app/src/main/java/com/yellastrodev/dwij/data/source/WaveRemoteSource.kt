@@ -24,7 +24,12 @@ class WaveRemoteSource(private val client: YamApiClient) {
             trackId = trackId,
             batchId = wave.batchId
         )
-        logFeedback("sendTrackStarted", "trackId=$trackId", result)
+        logFeedback(
+            function = "sendTrackStarted",
+            type = "trackStarted",
+            context = "trackId=$trackId",
+            result = result
+        )
         return result
     }
 
@@ -39,7 +44,12 @@ class WaveRemoteSource(private val client: YamApiClient) {
             totalPlayedSeconds = position.toFloat(),
             batchId = wave.batchId
         )
-        logFeedback("sendTrackSkip", "trackId=$trackId, position=$position", result)
+        logFeedback(
+            function = "sendTrackSkip",
+            type = "skip",
+            context = "trackId=$trackId, position=$position",
+            result = result
+        )
         return result
     }
 
@@ -55,9 +65,10 @@ class WaveRemoteSource(private val client: YamApiClient) {
             batchId = wave.batchId
         )
         logFeedback(
-            "sendTrackFinished",
-            "trackId=$trackId, position=$position",
-            result
+            function = "sendTrackFinished",
+            type = "trackFinished",
+            context = "trackId=$trackId, position=$position",
+            result = result
         )
         return result
     }
@@ -67,7 +78,12 @@ class WaveRemoteSource(private val client: YamApiClient) {
             station = wave.radioSessionId,
             batchId = wave.batchId
         )
-        logFeedback("sendWaveStarted", "station=${wave.radioSessionId}", result)
+        logFeedback(
+            function = "sendWaveStarted",
+            type = "radioStarted",
+            context = "station=${wave.radioSessionId}",
+            result = result
+        )
         return result
     }
 
@@ -83,17 +99,19 @@ class WaveRemoteSource(private val client: YamApiClient) {
 
     private fun logFeedback(
         function: String,
+        type: String,
         context: String,
         result: YamResult<Unit>
     ) {
         when (result) {
             is YamResult.Success -> Log.d(
                 TAG,
-                "[$function] Фидбек успешно отправлен: $context"
+                "[$function] Фидбек type=$type успешно отправлен: $context"
             )
             is YamResult.Failure -> Log.e(
                 TAG,
-                "[$function] Фидбек не отправлен: $context, error=${result.error}"
+                "[$function] Фидбек type=$type не отправлен: " +
+                    "$context, error=${result.error}"
             )
         }
     }

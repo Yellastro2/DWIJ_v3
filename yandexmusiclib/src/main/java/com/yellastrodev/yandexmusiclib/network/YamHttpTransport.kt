@@ -252,7 +252,7 @@ internal class YamHttpTransport(
                 connection.doOutput = true
                 connection.setRequestProperty(
                     "Content-Type",
-                    "application/json; charset=UTF-8"
+                    "application/json"
                 )
             }
             null -> Unit

@@ -46,7 +46,40 @@ class RotorApiTest {
     }
 
     @Test
-    fun feedbackUsesFormAndBatchQuery() = runBlocking {
+    fun feedbackSourceUsesStationIdForFrom() = runBlocking {
+        val transport = FakeTransport(
+            YamResult.Success(
+                YamHttpResponse(
+                    200,
+                    """
+                    {
+                      "result":[{
+                        "station":{
+                          "id":{"type":"user","tag":"onyourwave"},
+                          "idForFrom":"user-123",
+                          "name":"Моя волна"
+                        },
+                        "settings":{}
+                      }]
+                    }
+                    """.trimIndent()
+                )
+            )
+        )
+
+        val result = RotorApi(transport)
+            .feedbackSource("user:onyourwave")
+
+        assertEquals(YamResult.Success("user-123"), result)
+        assertEquals("/rotor/stations/list", transport.lastRequest?.path)
+        assertEquals(
+            mapOf("language" to "ru"),
+            transport.lastRequest?.query
+        )
+    }
+
+    @Test
+    fun feedbackUsesJsonAndBatchQuery() = runBlocking {
         val transport = FakeTransport(
             YamResult.Success(YamHttpResponse(200, """{"result":"ok"}"""))
         )
@@ -68,13 +101,8 @@ class RotorApiTest {
             transport.lastRequest?.query
         )
         assertEquals(
-            YamHttpBody.Form(
-                mapOf(
-                    "type" to "trackFinished",
-                    "timestamp" to "123.5",
-                    "trackId" to "10",
-                    "totalPlayedSeconds" to "42.0"
-                )
+            YamHttpBody.Json(
+                """{"type":"trackFinished","timestamp":123.5,"trackId":"10","totalPlayedSeconds":42.0}"""
             ),
             transport.lastRequest?.body
         )
@@ -96,12 +124,13 @@ class RotorApiTest {
             batchId = "batch-1"
         )
 
-        val body = transport.lastRequest?.body as YamHttpBody.Form
-        assertEquals("1785425833.541", body.fields["timestamp"])
+        val body = transport.lastRequest?.body as YamHttpBody.Json
+        assertTrue(body.value.contains("\"timestamp\":1785425833.541"))
+        assertTrue(!body.value.contains("E9"))
     }
 
     @Test
-    fun radioStartedUsesPythonCompatibleFromField() = runBlocking {
+    fun radioStartedIncludesProvidedFromField() = runBlocking {
         val transport = FakeTransport(
             YamResult.Success(YamHttpResponse(200, """{"result":"ok"}"""))
         )
@@ -112,15 +141,49 @@ class RotorApiTest {
         ).feedback(
             station = "user:onyourwave",
             type = RotorFeedbackType.RADIO_STARTED,
-            from = "mobile-radio-user-123",
+            from = "user-123",
             batchId = "batch-1"
         )
 
         assertEquals(YamResult.Success(Unit), result)
-        val body = transport.lastRequest?.body as YamHttpBody.Form
-        assertEquals("mobile-radio-user-123", body.fields["from"])
-        assertEquals(null, body.fields["trackId"])
+        val body = transport.lastRequest?.body as YamHttpBody.Json
+        assertTrue(body.value.contains("\"from\":\"user-123\""))
+        assertTrue(!body.value.contains("\"trackId\""))
     }
+
+    @Test
+    fun feedbackRetriesWithoutBatchWhenBatchConditionIsRejected() =
+        runBlocking {
+            val transport = FakeTransport(
+                YamResult.Failure(
+                    YamError.Http(
+                        statusCode = 400,
+                        code = "condition is not met"
+                    )
+                ),
+                YamResult.Success(
+                    YamHttpResponse(200, """{"result":"ok"}""")
+                )
+            )
+
+            val result = RotorApi(
+                transport = transport,
+                timestampSeconds = { 123.5 }
+            ).feedback(
+                station = "user:onyourwave",
+                type = RotorFeedbackType.TRACK_STARTED,
+                trackId = "10",
+                batchId = "batch-1"
+            )
+
+            assertEquals(YamResult.Success(Unit), result)
+            assertEquals(2, transport.requests.size)
+            assertEquals(
+                mapOf("batch-id" to "batch-1"),
+                transport.requests.first().query
+            )
+            assertTrue(transport.requests.last().query.isEmpty())
+        }
 
     @Test
     fun blankStationFailsWithoutRequest() = runBlocking {
@@ -157,14 +220,22 @@ class RotorApiTest {
         )
 
     private class FakeTransport(
-        private val result: YamResult<YamHttpResponse>
+        vararg results: YamResult<YamHttpResponse>
     ) : YamTransport {
-        var lastRequest: YamHttpRequest? = null
+        private val results = results.toList()
+        private var resultIndex = 0
+        val requests = mutableListOf<YamHttpRequest>()
+        val lastRequest: YamHttpRequest?
+            get() = requests.lastOrNull()
 
         override suspend fun execute(
             request: YamHttpRequest
         ): YamResult<YamHttpResponse> {
-            lastRequest = request
+            requests += request
+            val result = results.getOrElse(resultIndex) {
+                results.last()
+            }
+            resultIndex += 1
             return result
         }
     }

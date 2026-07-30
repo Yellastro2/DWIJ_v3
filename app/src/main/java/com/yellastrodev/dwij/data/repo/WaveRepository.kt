@@ -36,6 +36,7 @@ class WaveRepository(
                     batchId = result.value.batchId,
                     tracks = result.value.tracks.map { TrackShort(it.id) }
                 )
+                curentWave?.let { remote.sendWaveStarted(it) }
                 dTracklist?. let{
                     curentWave!!.title =  "${it.getDTitle()} волна"
                 } ?: run {
@@ -71,10 +72,6 @@ class WaveRepository(
                 0,
                 curentWave!!)
         }
-        curentWave?.let{
-            remote.sendWaveStarted(it)
-        }
-
         observePlayerState()
         GlobalScope.launch {
             playerRepository.isShuffleBlock
@@ -101,6 +98,10 @@ class WaveRepository(
                 // обновляем позицию для текущего трека
                 if (currentId == lastTrackId) {
                     lastTrackPosSec = (state.currentPosition / 1000).toInt()
+                    val durationSeconds = (state.duration / 1000).toInt()
+                    if (durationSeconds > 0) {
+                        lastTrackDuration = durationSeconds
+                    }
                 }
 
                 // трек сменился
@@ -122,9 +123,10 @@ class WaveRepository(
         Log.d(TAG, "onTrackStarted: $trackId")
         curentWave?.let{
             remote.sendTrackStarted(it, trackId)
-            //если позиция трека trackId в wave.tracks последняя
-            if (it.tracks.last().id == trackId)
+            // Следующую пачку запрашиваем при старте последнего трека очереди.
+            if (it.tracks.lastOrNull()?.id == trackId) {
                 updateWave(it, trackId)
+            }
         }
     }
 

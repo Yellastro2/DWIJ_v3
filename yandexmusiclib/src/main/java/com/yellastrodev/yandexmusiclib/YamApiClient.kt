@@ -173,13 +173,33 @@ class YamApiClient(
     suspend fun sendWaveStarted(
         station: String,
         batchId: String? = null,
-        from: String = "mobile-radio-user-$userId"
-    ): YamResult<Unit> = rotorApi.feedback(
-        station = station,
-        type = RotorFeedbackType.RADIO_STARTED,
-        from = from,
-        batchId = batchId
-    )
+        from: String? = null
+    ): YamResult<Unit> {
+        val resolvedSource = from ?: when (
+            val sourceResult = rotorApi.feedbackSource(station)
+        ) {
+            is YamResult.Success -> sourceResult.value
+            is YamResult.Failure -> fallbackFeedbackSource(station)
+        }
+        return rotorApi.feedback(
+            station = station,
+            type = RotorFeedbackType.RADIO_STARTED,
+            from = resolvedSource,
+            batchId = batchId
+        )
+    }
+
+    /**
+     * Повторяет выбор `station.id_for_from` из radio-примера Python SDK.
+     */
+    private fun fallbackFeedbackSource(station: String): String {
+        val stationType = station.substringBefore(':')
+        return if (stationType == USER_STATION_TYPE) {
+            "$USER_STATION_TYPE-$userId"
+        } else {
+            stationType
+        }
+    }
 
     suspend fun sendWaveTrackStarted(
         station: String,
@@ -240,5 +260,6 @@ class YamApiClient(
 
     private companion object {
         const val TAG = "YamApiClient"
+        const val USER_STATION_TYPE = "user"
     }
 }
