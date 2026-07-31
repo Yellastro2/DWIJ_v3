@@ -16,8 +16,15 @@ import androidx.media3.common.Player
 import androidx.media3.common.util.UnstableApi
 import com.yellastrodev.dwij.TRACK_ID
 import com.yellastrodev.dwij.data.entities.dTracklist
+import com.yellastrodev.dwij.data.entities.dYaPlaylist
 import com.yellastrodev.dwij.data.entities.dYaTrack
 import com.yellastrodev.dwij.data.entities.dYaWave
+import com.yellastrodev.dwij.service.DEFAULT_PLAY_AUDIO_SOURCE
+import com.yellastrodev.dwij.service.PLAY_AUDIO_ALBUM_ID
+import com.yellastrodev.dwij.service.PLAY_AUDIO_DURATION_MS
+import com.yellastrodev.dwij.service.PLAY_AUDIO_ITEM_ID
+import com.yellastrodev.dwij.service.PLAY_AUDIO_PLAYLIST_ID
+import com.yellastrodev.dwij.service.PLAY_AUDIO_SOURCE
 import com.yellastrodev.dwij.service.PlayerEvent
 import com.yellastrodev.dwij.service.PlayerService
 import com.yellastrodev.dwij.service.PlayerState
@@ -33,6 +40,7 @@ import kotlinx.coroutines.flow.onEach
 import kotlinx.coroutines.flow.launchIn
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
+import java.util.UUID
 
 @OptIn(UnstableApi::class)
 class PlayerRepository(
@@ -194,17 +202,7 @@ class PlayerRepository(
         Log.d(TAG, "playQueue called: startIndex=$startIndex, tracks=${tracks.size}")
 
         val mediaItems = tracks.map { track ->
-            MediaItem.Builder()
-                .setMediaId(track.id) // без URI — фабрика подставит на лету
-                .setUri("ya://${track.id}") // фейковый URI
-                .setMediaMetadata(
-                    MediaMetadata.Builder()
-                        .setExtras(Bundle().apply { putString(TRACK_ID, track.id) })
-                        .setTitle(track.title ?: "Unknown title")
-                        .setArtist(track.artists.joinToString(", ") { it.name } ?: "Unknown artist")
-                        .build()
-                )
-                .build()
+            track.toMediaItem(tracklist)
         }
 
         Log.d(TAG, "playQueue ready: startIndex=$startIndex, tracks=${tracks.size}")
@@ -234,17 +232,7 @@ class PlayerRepository(
         currentTrackList = currentTrackList + tracks.map { track -> track.id }
 
         val mediaItems = tracks.map { track ->
-            MediaItem.Builder()
-                .setMediaId(track.id) // без URI — фабрика подставит на лету
-                .setUri("ya://${track.id}") // фейковый URI
-                .setMediaMetadata(
-                    MediaMetadata.Builder()
-                        .setExtras(Bundle().apply { putString(TRACK_ID, track.id) })
-                        .setTitle(track.title ?: "Unknown title")
-                        .setArtist(track.artists.joinToString(", ") { it.name } ?: "Unknown artist")
-                        .build()
-                )
-                .build()
+            track.toMediaItem(_dtracklist.value)
         }
 
         withContext(Dispatchers.Main) {
@@ -296,5 +284,34 @@ class PlayerRepository(
 
     fun List<dYaTrack>.stableHash(): Int =
         fold(1) { acc, track -> 31 * acc + track.id.hashCode() }
+
+    /** Добавляет в MediaItem данные, необходимые паре запросов `/play-audio`. */
+    private fun dYaTrack.toMediaItem(tracklist: dTracklist?): MediaItem {
+        val extras = Bundle().apply {
+            putString(TRACK_ID, id)
+            putString(PLAY_AUDIO_ITEM_ID, UUID.randomUUID().toString())
+            albums.firstOrNull()?.id?.let {
+                putString(PLAY_AUDIO_ALBUM_ID, it.toString())
+            }
+            durationMs?.let {
+                putLong(PLAY_AUDIO_DURATION_MS, it.toLong())
+            }
+            (tracklist as? dYaPlaylist)?.playlistUuid?.let {
+                putString(PLAY_AUDIO_PLAYLIST_ID, it)
+            }
+            putString(PLAY_AUDIO_SOURCE, DEFAULT_PLAY_AUDIO_SOURCE)
+        }
+        return MediaItem.Builder()
+            .setMediaId(id)
+            .setUri("ya://$id")
+            .setMediaMetadata(
+                MediaMetadata.Builder()
+                    .setExtras(extras)
+                    .setTitle(title)
+                    .setArtist(artists.joinToString(", ") { it.name })
+                    .build()
+            )
+            .build()
+    }
 
 }

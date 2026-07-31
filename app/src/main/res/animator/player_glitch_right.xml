@@ -1,0 +1,20 @@
+<?xml version="1.0" encoding="utf-8"?>
+<objectAnimator xmlns:android="http://schemas.android.com/apk/res/android"
+    android:duration="3200"
+    android:repeatCount="infinite"
+    android:repeatMode="restart">
+    <propertyValuesHolder
+        android:propertyName="translateX"
+        android:valueType="floatType">
+        <keyframe android:fraction="0" android:value="0" />
+        <keyframe android:fraction="0.70" android:value="0" />
+        <keyframe android:fraction="0.72" android:value="5" />
+        <keyframe android:fraction="0.74" android:value="-2" />
+        <keyframe android:fraction="0.76" android:value="3" />
+        <keyframe android:fraction="0.78" android:value="0" />
+        <keyframe android:fraction="0.90" android:value="0" />
+        <keyframe android:fraction="0.92" android:value="2" />
+        <keyframe android:fraction="0.94" android:value="0" />
+        <keyframe android:fraction="1" android:value="0" />
+    </propertyValuesHolder>
+</objectAnimator>

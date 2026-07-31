@@ -154,6 +154,25 @@ val directUrl = client.trackDownloadUrl("123")
 val cover = client.coverBytes(coverUri, CoverSize.`400x400`)
 ```
 
+Универсальная телеметрия прослушивания отправляется через `/play-audio`:
+
+```kotlin
+val started = client.playAudio(
+    PlayAudioRequest(
+        trackId = "123",
+        albumId = "456",
+        source = "dwij-android",
+        playId = playId,
+        endPositionSeconds = durationSeconds
+    )
+)
+```
+
+При завершении или прерывании воспроизведения отправляется второй запрос с тем
+же `playId`, фактическими `totalPlayedSeconds` и `endPositionSeconds`.
+`playlistId` указывается только при воспроизведении из плейлиста. Для радио
+`play-audio` дополняет, но не заменяет специализированные rotor feedback.
+
 `JSONObject`, `JSONArray` и транспортные ответы не появляются в публичном API.
 Сетевые операции возвращают `YamResult<T>`, а транспорт отдельно обрабатывает
 JSON API и бинарный контент.

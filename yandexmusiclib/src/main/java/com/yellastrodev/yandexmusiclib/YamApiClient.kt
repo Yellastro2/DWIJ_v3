@@ -21,6 +21,7 @@ import com.yellastrodev.yandexmusiclib.rotor.RotorApi
 import com.yellastrodev.yandexmusiclib.rotor.RotorBatch
 import com.yellastrodev.yandexmusiclib.rotor.RotorFeedbackType
 import com.yellastrodev.yandexmusiclib.tracks.TrackApi
+import com.yellastrodev.yandexmusiclib.tracks.PlayAudioRequest
 
 /**
  * Корутино-ориентированный клиент API Яндекс Музыки для Android/Kotlin.
@@ -158,6 +159,18 @@ class YamApiClient(
         withPositions: Boolean = true
     ): YamResult<List<YaTrack>> =
         trackApi.tracks(trackIds, withPositions)
+
+    /**
+     * Отправляет универсальную телеметрию прослушивания трека.
+     * Для волны вызывается параллельно специализированным rotor feedback.
+     */
+    suspend fun playAudio(
+        request: PlayAudioRequest
+    ): YamResult<Unit> = trackApi.playAudio(
+        request.copy(
+            uid = request.uid ?: userId.toLongOrNull()
+        )
+    )
 
     suspend fun startWave(station: String): YamResult<RotorBatch> =
         rotorApi.tracks(station = station)

@@ -18,6 +18,7 @@ import com.yellastrodev.dwij.data.repo.TrackRepository
 import com.yellastrodev.dwij.data.source.PlaylistCacheSource
 import com.yellastrodev.dwij.data.source.PlaylistLocalSource
 import com.yellastrodev.dwij.data.source.PlaylistRemoteSource
+import com.yellastrodev.dwij.data.source.PlaybackRemoteSource
 import com.yellastrodev.dwij.data.source.TrackRemoteSource
 import com.yellastrodev.dwij.data.dao.dPlaylistDao
 import com.yellastrodev.dwij.data.dao.dTrackDao
@@ -31,12 +32,15 @@ import com.yellastrodev.dwij.data.entities.dYaTrack
 import com.yellastrodev.dwij.data.repo.WaveRepository
 import com.yellastrodev.dwij.data.source.WaveRemoteSource
 import com.yellastrodev.dwij.service.PlayerService
+import com.yellastrodev.dwij.service.PlaybackFeedbackTracker
 import com.yellastrodev.yandexmusiclib.YamApiClient
 import com.yellastrodev.yandexmusiclib.network.YamError
 import com.yellastrodev.yandexmusiclib.network.YamResult
 import kotlinx.coroutines.DelicateCoroutinesApi
+import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.GlobalScope
+import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.withContext
 import java.io.File
@@ -44,6 +48,8 @@ import java.lang.ref.WeakReference
 
 @UnstableApi
 class yApplication: Application() {
+
+    private val applicationScope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
 
     val yamClient: YamApiClient by lazy {
         runBlocking(Dispatchers.IO) {
@@ -149,6 +155,18 @@ class yApplication: Application() {
 
     val waveRemoteSource: WaveRemoteSource by lazy {
         WaveRemoteSource(yamClient)
+    }
+
+    private val playbackRemoteSource: PlaybackRemoteSource by lazy {
+        PlaybackRemoteSource(yamClient)
+    }
+
+    val playbackFeedbackTracker: PlaybackFeedbackTracker by lazy {
+        PlaybackFeedbackTracker(
+            remote = playbackRemoteSource,
+            scope = applicationScope,
+            isTrackCached = trackCacheRepo::isCached
+        )
     }
 
     val waveRepository: WaveRepository by lazy {

@@ -81,6 +81,9 @@ class PlayerService : MediaSessionService() {
     val trackCacheRepo: TrackCacheRepository by lazy {
         (application as yApplication).trackCacheRepo
     }
+    private val playbackFeedbackTracker: PlaybackFeedbackTracker by lazy {
+        (application as yApplication).playbackFeedbackTracker
+    }
 
     /** Горячие стримы состояния плеера для UI или наблюдения */
     private val _state = MutableStateFlow(PlayerState())
@@ -168,6 +171,13 @@ class PlayerService : MediaSessionService() {
         // Слушаем изменения состояния воспроизведения
         player.addListener(object : Player.Listener {
             override fun onMediaItemTransition(mediaItem: MediaItem?, reason: Int) {
+                playbackFeedbackTracker.onMediaItemTransition(
+                    mediaItem = mediaItem,
+                    reason = reason,
+                    isPlaying = player.isPlaying,
+                    currentPositionMs = player.currentPosition,
+                    durationMs = player.duration
+                )
                 if (reason == Player.MEDIA_ITEM_TRANSITION_REASON_AUTO) {
                     Log.d(TAG, "Автопереход на следующий трек: $mediaItem")
                     _state.value = _state.value.copy(
@@ -222,6 +232,11 @@ class PlayerService : MediaSessionService() {
                     currentIndex = player.currentMediaItemIndex
                 )
                 if (playbackState == Player.STATE_ENDED) {
+                    playbackFeedbackTracker.onPlaybackEnded(
+                        currentPositionMs = player.currentPosition,
+                        durationMs = player.duration,
+                        completed = true
+                    )
                     if (player.currentMediaItemIndex == player.mediaItemCount - 1 &&
                         player.repeatMode == Player.REPEAT_MODE_OFF
                     ) {
@@ -240,11 +255,23 @@ class PlayerService : MediaSessionService() {
             override fun onIsPlayingChanged(isPlaying: Boolean) {
                 _state.value = _state.value.copy(isPlaying = isPlaying)
 
+                playbackFeedbackTracker.onIsPlayingChanged(
+                    mediaItem = player.currentMediaItem,
+                    isPlaying = isPlaying,
+                    currentPositionMs = player.currentPosition,
+                    durationMs = player.duration
+                )
+
                 if (isPlaying) startProgressUpdates() else stopProgressUpdates()
                 Log.d(TAG, "onIsPlayingChanged: $isPlaying")
             }
 
             override fun onPlayerError(error: PlaybackException) {
+                playbackFeedbackTracker.onPlaybackEnded(
+                    currentPositionMs = player.currentPosition,
+                    durationMs = player.duration,
+                    completed = false
+                )
                 Log.e(
                     TAG,
                     "[onPlayerError] Ошибка проигрывания, code=${error.errorCode}",
@@ -304,6 +331,11 @@ class PlayerService : MediaSessionService() {
                 val pos = player.currentPosition
                 val dur = player.duration
                 _state.value = _state.value.copy(currentPosition = pos, duration = dur)
+                playbackFeedbackTracker.onProgress(
+                    trackId = player.currentMediaItem?.mediaId,
+                    currentPositionMs = pos,
+                    durationMs = dur
+                )
                 delay(500L) // обновляем каждые 500 мс
             }
         }
@@ -430,10 +462,17 @@ class PlayerService : MediaSessionService() {
     }
 
     override fun onDestroy() {
-        super.onDestroy()
-        Log.d(TAG, "Service destroyed")
+        if (::player.isInitialized) {
+            playbackFeedbackTracker.onPlaybackEnded(
+                currentPositionMs = player.currentPosition,
+                durationMs = player.duration,
+                completed = false
+            )
+        }
+        Log.d(TAG, "[onDestroy] Сервис плеера уничтожен")
         mediaSession.release()
         player.release()
+        super.onDestroy()
     }
 
     /** Создает канал уведомлений для плеера */
