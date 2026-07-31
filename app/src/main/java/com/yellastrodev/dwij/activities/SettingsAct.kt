@@ -15,6 +15,7 @@ import android.widget.Button
 import android.widget.SeekBar
 import android.widget.TextView
 import android.widget.Toast
+import androidx.activity.enableEdgeToEdge
 import androidx.appcompat.app.AlertDialog
 import androidx.appcompat.app.AppCompatActivity
 import androidx.media3.common.util.UnstableApi
@@ -63,9 +64,14 @@ class SettingsAct: AppCompatActivity() {
 
 
 
-    override fun onCreate(savedInstanceState: Bundle?) {
+	override fun onCreate(savedInstanceState: Bundle?) {
 		super.onCreate(savedInstanceState)
+		enableEdgeToEdge()
 		setContentView(R.layout.lay_settings)
+		applySystemBarInsets(
+			rootView = findViewById(R.id.settings_lay),
+			useDarkSystemBarIcons = true,
+		)
 
 		sharedPref = PreferenceManager.getDefaultSharedPreferences(this)
 

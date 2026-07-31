@@ -1,6 +1,14 @@
 package com.yellastrodev.dwij
 
+import androidx.compose.animation.core.animateFloat
+import androidx.compose.animation.core.spring
+import androidx.compose.animation.core.updateTransition
+import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.Image
+import androidx.compose.foundation.LocalIndication
+import androidx.compose.foundation.combinedClickable
+import androidx.compose.foundation.interaction.MutableInteractionSource
+import androidx.compose.foundation.interaction.collectIsPressedAsState
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxScope
 import androidx.compose.foundation.layout.BoxWithConstraints
@@ -11,7 +19,6 @@ import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.requiredSize
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.wrapContentSize
-import androidx.compose.material3.IconButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -21,10 +28,12 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clipToBounds
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.painter.Painter
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
@@ -50,8 +59,10 @@ private data class GlitchEvent(
  * Compose-кнопка плеера с бесконечной глитч-анимацией.
  *
  * Расписание скачков генерируется при создании Composition, повторяется раз в
- * минуту и заменяется новым при следующем открытии экрана.
+ * минуту и заменяется новым при следующем открытии экрана. Пока кнопка зажата,
+ * кольцо и Play независимо масштабируются одной синхронной Transition.
  */
+@OptIn(ExperimentalFoundationApi::class)
 @Composable
 fun PlayerIconButton(
     modifier: Modifier = Modifier,
@@ -61,6 +72,34 @@ fun PlayerIconButton(
     val glitchSequence = remember { generateGlitchSequence() }
     var groupAShift by remember { mutableFloatStateOf(0f) }
     var groupBShift by remember { mutableFloatStateOf(0f) }
+    val interactionSource = remember { MutableInteractionSource() }
+    val isPressed by interactionSource.collectIsPressedAsState()
+    val pressTransition = updateTransition(
+        targetState = isPressed,
+        label = "playerButtonPress",
+    )
+    val ringScale by pressTransition.animateFloat(
+        transitionSpec = {
+            spring(
+                dampingRatio = 0.72f,
+                stiffness = 380f,
+            )
+        },
+        label = "ringScale",
+    ) { pressed ->
+        if (pressed) 1.3f else 1f
+    }
+    val playScale by pressTransition.animateFloat(
+        transitionSpec = {
+            spring(
+                dampingRatio = 0.72f,
+                stiffness = 420f,
+            )
+        },
+        label = "playScale",
+    ) { pressed ->
+        if (pressed) 0.7f else 1f
+    }
 
     LaunchedEffect(glitchSequence) {
         while (true) {
@@ -79,45 +118,78 @@ fun PlayerIconButton(
         }
     }
 
-    IconButton(
-        modifier = modifier,
-        onClick = onClick,
+    BoxWithConstraints(
+        modifier = modifier.combinedClickable(
+            interactionSource = interactionSource,
+            indication = LocalIndication.current,
+            role = Role.Button,
+            onLongClick = {
+                // Наличие обработчика отделяет long-press от обычного onClick.
+            },
+            onClick = onClick,
+        ),
+        contentAlignment = Alignment.Center,
     ) {
-        BoxWithConstraints(
-            modifier = Modifier.fillMaxSize(),
-            contentAlignment = Alignment.Center,
-        ) {
-            val iconSize = minOf(maxWidth, maxHeight)
-            val playerIcon = painterResource(R.drawable.ic_player_compose)
-            val effectiveGroupAShift = if (showPreviewGlitch) 0.06f else groupAShift
-            val effectiveGroupBShift = if (showPreviewGlitch) -0.06f else groupBShift
-            val groupAShiftDp = iconSize * effectiveGroupAShift
-            val groupBShiftDp = iconSize * effectiveGroupBShift
+        val iconSize = minOf(maxWidth, maxHeight) * 0.8f
+        val iconTopOffset = (maxHeight - iconSize) / 2
+        val ringPainter = painterResource(R.drawable.ic_player_ring)
+        val playPainter = painterResource(R.drawable.ic_player_play)
+        val effectiveGroupAShift = when {
+            isPressed -> 0f
+            showPreviewGlitch -> 0.06f
+            else -> groupAShift
+        }
+        val effectiveGroupBShift = when {
+            isPressed -> 0f
+            showPreviewGlitch -> -0.06f
+            else -> groupBShift
+        }
+        val groupAShiftDp = iconSize * effectiveGroupAShift
+        val groupBShiftDp = iconSize * effectiveGroupBShift
 
-            Image(
-                painter = playerIcon,
-                contentDescription = stringResource(R.string.player_button_content_description),
-                contentScale = ContentScale.Fit,
-                modifier = Modifier.size(iconSize),
+        Image(
+            painter = ringPainter,
+            contentDescription = null,
+            contentScale = ContentScale.Fit,
+            modifier = Modifier
+                .size(iconSize)
+                .graphicsLayer {
+                    scaleX = ringScale
+                    scaleY = ringScale
+                },
+        )
+        Image(
+            painter = playPainter,
+            contentDescription = stringResource(R.string.player_button_content_description),
+            contentScale = ContentScale.Fit,
+            modifier = Modifier
+                .size(iconSize)
+                .graphicsLayer {
+                    scaleX = playScale
+                    scaleY = playScale
+                },
+        )
+        GROUP_A_STRIPE_OFFSETS.forEach { topOffsetFraction ->
+            PlayerGlitchStripe(
+                ringPainter = ringPainter,
+                playPainter = playPainter,
+                imageSize = iconSize,
+                imageTopOffset = iconTopOffset,
+                topOffset = iconTopOffset + iconSize * topOffsetFraction,
+                stripeHeight = 3.dp,
+                horizontalShift = groupAShiftDp,
             )
-            GROUP_A_STRIPE_OFFSETS.forEach { topOffsetFraction ->
-                PlayerGlitchStripe(
-                    painter = playerIcon,
-                    imageSize = iconSize,
-                    topOffset = iconSize * topOffsetFraction,
-                    stripeHeight = 3.dp,
-                    horizontalShift = groupAShiftDp,
-                )
-            }
-            GROUP_B_STRIPE_OFFSETS.forEach { topOffsetFraction ->
-                PlayerGlitchStripe(
-                    painter = playerIcon,
-                    imageSize = iconSize,
-                    topOffset = iconSize * topOffsetFraction,
-                    stripeHeight = 2.dp,
-                    horizontalShift = groupBShiftDp,
-                )
-            }
+        }
+        GROUP_B_STRIPE_OFFSETS.forEach { topOffsetFraction ->
+            PlayerGlitchStripe(
+                ringPainter = ringPainter,
+                playPainter = playPainter,
+                imageSize = iconSize,
+                imageTopOffset = iconTopOffset,
+                topOffset = iconTopOffset + iconSize * topOffsetFraction,
+                stripeHeight = 2.dp,
+                horizontalShift = groupBShiftDp,
+            )
         }
     }
 }
@@ -161,8 +233,10 @@ private fun generateGlitchSequence(random: Random = Random.Default): List<Glitch
 /** Рисует одну обрезанную глитч-полосу поверх основной иконки. */
 @Composable
 private fun BoxScope.PlayerGlitchStripe(
-    painter: Painter,
+    ringPainter: Painter,
+    playPainter: Painter,
     imageSize: Dp,
+    imageTopOffset: Dp,
     topOffset: Dp,
     stripeHeight: Dp,
     horizontalShift: Dp,
@@ -177,18 +251,26 @@ private fun BoxScope.PlayerGlitchStripe(
             .offset(y = topOffset)
             .clipToBounds(),
     ) {
+        val layerModifier = Modifier
+            .align(Alignment.TopCenter)
+            .wrapContentSize(
+                align = Alignment.TopCenter,
+                unbounded = true,
+            )
+            .offset(x = horizontalShift, y = imageTopOffset - topOffset)
+            .requiredSize(imageSize)
+
         Image(
-            painter = painter,
+            painter = ringPainter,
             contentDescription = null,
             contentScale = ContentScale.Fit,
-            modifier = Modifier
-                .align(Alignment.TopCenter)
-                .wrapContentSize(
-                    align = Alignment.TopCenter,
-                    unbounded = true,
-                )
-                .offset(x = horizontalShift, y = -topOffset)
-                .requiredSize(imageSize),
+            modifier = layerModifier,
+        )
+        Image(
+            painter = playPainter,
+            contentDescription = null,
+            contentScale = ContentScale.Fit,
+            modifier = layerModifier,
         )
     }
 }
