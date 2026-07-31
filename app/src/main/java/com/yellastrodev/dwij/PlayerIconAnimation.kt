@@ -1,11 +1,5 @@
 package com.yellastrodev.dwij
 
-import android.util.Log
-import androidx.compose.animation.core.animateFloat
-import androidx.compose.animation.core.infiniteRepeatable
-import androidx.compose.animation.core.LinearEasing
-import androidx.compose.animation.core.rememberInfiniteTransition
-import androidx.compose.animation.core.tween
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxScope
@@ -19,9 +13,11 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.wrapContentSize
 import androidx.compose.material3.IconButton
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.SideEffect
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clipToBounds
@@ -32,14 +28,29 @@ import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
+import kotlinx.coroutines.delay
+import kotlin.random.Random
 
-private const val PLAYER_ICON_ANIMATION_TAG = "PlayerIconAnimation"
+private const val GLITCH_CYCLE_DURATION_MILLIS = 60_000
+private const val GLITCH_SEQUENCE_END_MARGIN_MILLIS = 1_000
+private val GROUP_A_STRIPE_OFFSETS = listOf(0.12f, 0.29f, 0.46f, 0.63f, 0.80f)
+private val GROUP_B_STRIPE_OFFSETS = listOf(0.19f, 0.36f, 0.54f, 0.71f, 0.87f)
+
+/** Группа полос, которая получает конкретный скачок. */
+private enum class GlitchGroup { A, B }
+
+/** Один мгновенный переход группы полос в новую позицию внутри минутного цикла. */
+private data class GlitchEvent(
+    val atMillis: Int,
+    val group: GlitchGroup,
+    val shiftFraction: Float,
+)
 
 /**
  * Compose-кнопка плеера с бесконечной глитч-анимацией.
  *
- * Анимация задаётся через [rememberInfiniteTransition], поэтому не зависит от
- * AnimatedVectorDrawable и останавливается вместе с Composition.
+ * Расписание скачков генерируется при создании Composition, повторяется раз в
+ * минуту и заменяется новым при следующем открытии экрана.
  */
 @Composable
 fun PlayerIconButton(
@@ -47,18 +58,26 @@ fun PlayerIconButton(
     showPreviewGlitch: Boolean = false,
     onClick: () -> Unit,
 ) {
-    val glitchTransition = rememberInfiniteTransition(label = "playerGlitch")
-    val glitchPhase by glitchTransition.animateFloat(
-        initialValue = 0f,
-        targetValue = 1f,
-        animationSpec = infiniteRepeatable(
-            animation = tween(
-                durationMillis = 1600,
-                easing = LinearEasing,
-            ),
-        ),
-        label = "glitchPhase",
-    )
+    val glitchSequence = remember { generateGlitchSequence() }
+    var groupAShift by remember { mutableFloatStateOf(0f) }
+    var groupBShift by remember { mutableFloatStateOf(0f) }
+
+    LaunchedEffect(glitchSequence) {
+        while (true) {
+            var elapsedMillis = 0
+            glitchSequence.forEach { event ->
+                delay((event.atMillis - elapsedMillis).toLong())
+                when (event.group) {
+                    GlitchGroup.A -> groupAShift = event.shiftFraction
+                    GlitchGroup.B -> groupBShift = event.shiftFraction
+                }
+                elapsedMillis = event.atMillis
+            }
+            delay((GLITCH_CYCLE_DURATION_MILLIS - elapsedMillis).toLong())
+            groupAShift = 0f
+            groupBShift = 0f
+        }
+    }
 
     IconButton(
         modifier = modifier,
@@ -69,28 +88,11 @@ fun PlayerIconButton(
             contentAlignment = Alignment.Center,
         ) {
             val iconSize = minOf(maxWidth, maxHeight)
-            val playerIcon = painterResource(R.drawable.ic_player)
-            val animatedGlitchShift = calculateGlitchShift(glitchPhase)
-            val effectiveRightGlitchShift = if (showPreviewGlitch) 0.06f else animatedGlitchShift
-            val effectiveLeftGlitchShift = if (showPreviewGlitch) -0.06f else -animatedGlitchShift
-            val rightGlitchDp = iconSize * effectiveRightGlitchShift
-            val leftGlitchDp = iconSize * effectiveLeftGlitchShift
-            val lastLoggedShift = remember { floatArrayOf(Float.NaN) }
-
-            SideEffect {
-                if (lastLoggedShift[0] != effectiveRightGlitchShift) {
-                    Log.d(
-                        PLAYER_ICON_ANIMATION_TAG,
-                        "[PlayerIconButton] Сдвиг глитч-полос: " +
-                            "phase=$glitchPhase, " +
-                            "animationShift=$effectiveRightGlitchShift, " +
-                            "iconSize=${iconSize.value}dp, " +
-                            "верхняя/нижняя=${rightGlitchDp.value}dp, " +
-                            "центральная=${leftGlitchDp.value}dp"
-                    )
-                    lastLoggedShift[0] = effectiveRightGlitchShift
-                }
-            }
+            val playerIcon = painterResource(R.drawable.ic_player_compose)
+            val effectiveGroupAShift = if (showPreviewGlitch) 0.06f else groupAShift
+            val effectiveGroupBShift = if (showPreviewGlitch) -0.06f else groupBShift
+            val groupAShiftDp = iconSize * effectiveGroupAShift
+            val groupBShiftDp = iconSize * effectiveGroupBShift
 
             Image(
                 painter = playerIcon,
@@ -98,55 +100,62 @@ fun PlayerIconButton(
                 contentScale = ContentScale.Fit,
                 modifier = Modifier.size(iconSize),
             )
-            PlayerGlitchStripe(
-                painter = playerIcon,
-                imageSize = iconSize,
-                topOffset = iconSize * 0.14f,
-                stripeHeight = iconSize * 0.06f,
-                horizontalShift = rightGlitchDp,
-            )
-            PlayerGlitchStripe(
-                painter = playerIcon,
-                imageSize = iconSize,
-                topOffset = iconSize * 0.37f,
-                stripeHeight = iconSize * 0.07f,
-                horizontalShift = leftGlitchDp,
-            )
-            PlayerGlitchStripe(
-                painter = playerIcon,
-                imageSize = iconSize,
-                topOffset = iconSize * 0.64f,
-                stripeHeight = iconSize * 0.06f,
-                horizontalShift = rightGlitchDp,
-            )
+            GROUP_A_STRIPE_OFFSETS.forEach { topOffsetFraction ->
+                PlayerGlitchStripe(
+                    painter = playerIcon,
+                    imageSize = iconSize,
+                    topOffset = iconSize * topOffsetFraction,
+                    stripeHeight = 3.dp,
+                    horizontalShift = groupAShiftDp,
+                )
+            }
+            GROUP_B_STRIPE_OFFSETS.forEach { topOffsetFraction ->
+                PlayerGlitchStripe(
+                    painter = playerIcon,
+                    imageSize = iconSize,
+                    topOffset = iconSize * topOffsetFraction,
+                    stripeHeight = 2.dp,
+                    horizontalShift = groupBShiftDp,
+                )
+            }
         }
     }
 }
 
-/** Превращает равномерную фазу 0..1 в две короткие серии глитч-рывков. */
-private fun calculateGlitchShift(phase: Float): Float = when {
-    phase < 0.45f -> 0f
-    phase < 0.50f -> interpolate(phase, 0.45f, 0.50f, 0f, 0.06f)
-    phase < 0.54f -> interpolate(phase, 0.50f, 0.54f, 0.06f, -0.035f)
-    phase < 0.58f -> interpolate(phase, 0.54f, 0.58f, -0.035f, 0.045f)
-    phase < 0.63f -> interpolate(phase, 0.58f, 0.63f, 0.045f, 0f)
-    phase < 0.82f -> 0f
-    phase < 0.85f -> interpolate(phase, 0.82f, 0.85f, 0f, 0.03f)
-    phase < 0.88f -> interpolate(phase, 0.85f, 0.88f, 0.03f, -0.02f)
-    phase < 0.91f -> interpolate(phase, 0.88f, 0.91f, -0.02f, 0f)
-    else -> 0f
-}
+/** Создаёт случайные серии резких скачков, похожие на исходную пульсацию. */
+private fun generateGlitchSequence(random: Random = Random.Default): List<GlitchEvent> {
+    val events = mutableListOf<GlitchEvent>()
+    val latestEventMillis = GLITCH_CYCLE_DURATION_MILLIS - GLITCH_SEQUENCE_END_MARGIN_MILLIS
+    var cursorMillis = random.nextInt(from = 1_200, until = 3_500)
+    var group = if (random.nextBoolean()) GlitchGroup.A else GlitchGroup.B
 
-/** Линейно переводит текущую фазу участка в значение смещения. */
-private fun interpolate(
-    phase: Float,
-    phaseStart: Float,
-    phaseEnd: Float,
-    valueStart: Float,
-    valueEnd: Float,
-): Float {
-    val fraction = (phase - phaseStart) / (phaseEnd - phaseStart)
-    return valueStart + (valueEnd - valueStart) * fraction
+    while (cursorMillis < latestEventMillis) {
+        val stepCount = random.nextInt(from = 4, until = 7)
+        var direction = if (random.nextBoolean()) 1f else -1f
+
+        repeat(stepCount) {
+            if (cursorMillis < latestEventMillis) {
+                val amplitude = 0.025f + random.nextFloat() * 0.05f
+                events += GlitchEvent(
+                    atMillis = cursorMillis,
+                    group = group,
+                    shiftFraction = amplitude * direction,
+                )
+                cursorMillis += random.nextInt(from = 35, until = 75)
+                direction *= -1f
+            }
+        }
+
+        events += GlitchEvent(
+            atMillis = cursorMillis.coerceAtMost(latestEventMillis),
+            group = group,
+            shiftFraction = 0f,
+        )
+        cursorMillis += random.nextInt(from = 2_500, until = 6_000)
+        group = if (group == GlitchGroup.A) GlitchGroup.B else GlitchGroup.A
+    }
+
+    return events
 }
 
 /** Рисует одну обрезанную глитч-полосу поверх основной иконки. */
@@ -158,6 +167,8 @@ private fun BoxScope.PlayerGlitchStripe(
     stripeHeight: Dp,
     horizontalShift: Dp,
 ) {
+    if (horizontalShift == 0.dp) return
+
     Box(
         modifier = Modifier
             .fillMaxWidth()
