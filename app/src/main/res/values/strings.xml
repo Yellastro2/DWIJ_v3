@@ -19,4 +19,5 @@
     <string name="auth_error_response">Яндекс вернул некорректный ответ</string>
     <string name="auth_error_account">Токен получен, но данные аккаунта загрузить не удалось</string>
     <string name="title_placehold">некий ДвИж</string>
+    <string name="player_button_content_description">Открыть плеер</string>
 </resources>

@@ -20,10 +20,19 @@
         app:layout_constraintTop_toTopOf="parent"
         app:srcCompat="@drawable/ic_setting" />
 
+    <androidx.compose.ui.platform.ComposeView
+        android:id="@+id/fr_home_player"
+        android:layout_width="0dp"
+        android:layout_height="0dp"
+        app:layout_constraintDimensionRatio="1:1"
+        app:layout_constraintEnd_toEndOf="parent"
+        app:layout_constraintStart_toStartOf="parent"
+        app:layout_constraintTop_toTopOf="parent" />
+
     <GridLayout
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
-        app:layout_constraintTop_toBottomOf="@id/fr_home_settngs"
+        app:layout_constraintTop_toBottomOf="@id/fr_home_player"
         android:columnCount="2"
         android:rowCount="2"
         android:padding="8dp"

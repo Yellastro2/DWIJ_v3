@@ -17,8 +17,8 @@ fun buildConfigString(value: String): String =
     "\"${value.replace("\\", "\\\\").replace("\"", "\\\"")}\""
 
 java {
-    sourceCompatibility = JavaVersion.VERSION_1_8
-    targetCompatibility = JavaVersion.VERSION_1_8
+    sourceCompatibility = JavaVersion.VERSION_11
+    targetCompatibility = JavaVersion.VERSION_11
 }
 
 android {
@@ -26,7 +26,6 @@ android {
     compileSdk = 34
     defaultConfig {
         minSdk = 26
-        targetSdk = 34
         buildConfigField(
             "String",
             "YANDEX_OAUTH_CLIENT_ID",
@@ -43,6 +42,11 @@ android {
         buildConfig = true
     }
 
+    compileOptions {
+        sourceCompatibility = JavaVersion.VERSION_11
+        targetCompatibility = JavaVersion.VERSION_11
+    }
+
     packagingOptions {
         resources {
             excludes += "/META-INF/{AL2.0,LGPL2.1}"
@@ -51,7 +55,7 @@ android {
     }
 
     kotlinOptions {
-        jvmTarget = "1.8"
+        jvmTarget = "11"
     }
 }
 

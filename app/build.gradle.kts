@@ -7,7 +7,7 @@ plugins {
 
 android {
     namespace = "com.yellastrodev.dwij"
-    compileSdk = 35
+    compileSdk = 36
 
     defaultConfig {
         applicationId = "com.yellastrodev.dwij"

@@ -8,10 +8,17 @@ import android.util.Log
 import android.view.View
 import android.widget.AutoCompleteTextView
 import android.widget.ImageButton
+import androidx.annotation.OptIn
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.ComposeView
+import androidx.compose.ui.platform.ViewCompositionStrategy
+import androidx.compose.foundation.layout.fillMaxSize
 import androidx.fragment.app.Fragment
 import androidx.lifecycle.lifecycleScope
+import androidx.media3.common.util.UnstableApi
 import androidx.navigation.fragment.findNavController
 import com.yellastrodev.dwij.DWIJ_ACC_TOKEN
+import com.yellastrodev.dwij.PlayerIconButton
 import com.yellastrodev.dwij.R
 import com.yellastrodev.dwij.TYPE
 import com.yellastrodev.dwij.VALUE
@@ -25,10 +32,19 @@ import kotlinx.coroutines.withContext
 class HomeFrag: Fragment(R.layout.frag_home) {
 
 
-
-	@SuppressLint("CheckResult")
+    @OptIn(UnstableApi::class)
+    @SuppressLint("CheckResult")
 	override fun onViewCreated(view: View, savedInstanceState: Bundle?) {
 		super.onViewCreated(view, savedInstanceState)
+		view.findViewById<ComposeView>(R.id.fr_home_player).apply {
+			setViewCompositionStrategy(ViewCompositionStrategy.DisposeOnViewTreeLifecycleDestroyed)
+			setContent {
+				PlayerIconButton(modifier = Modifier.fillMaxSize()) {
+					findNavController().navigate(R.id.bigPlayerFrag)
+				}
+			}
+		}
+
 		view.findViewById<View>(R.id.fr_home_pllist).setOnClickListener {
 			(activity as MainActivity).mNavController.navigate(R.id.action_homeFrag_to_gridPlaylistFrag)
 
