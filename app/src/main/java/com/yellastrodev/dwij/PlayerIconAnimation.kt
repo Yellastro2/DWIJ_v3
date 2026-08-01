@@ -24,6 +24,7 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -67,6 +68,9 @@ private data class GlitchEvent(
 fun PlayerIconButton(
     modifier: Modifier = Modifier,
     showPreviewGlitch: Boolean = false,
+    expanded: Boolean = false,
+    onLongClick: () -> Unit = {},
+    onPressedChange: (Boolean) -> Unit = {},
     onClick: () -> Unit,
 ) {
     val glitchSequence = remember { generateGlitchSequence() }
@@ -74,8 +78,10 @@ fun PlayerIconButton(
     var groupBShift by remember { mutableFloatStateOf(0f) }
     val interactionSource = remember { MutableInteractionSource() }
     val isPressed by interactionSource.collectIsPressedAsState()
+    val currentOnPressedChange by rememberUpdatedState(onPressedChange)
+    val shouldExpand = isPressed || expanded
     val pressTransition = updateTransition(
-        targetState = isPressed,
+        targetState = shouldExpand,
         label = "playerButtonPress",
     )
     val ringScale by pressTransition.animateFloat(
@@ -101,6 +107,10 @@ fun PlayerIconButton(
         if (pressed) 0.7f else 1f
     }
 
+    LaunchedEffect(isPressed) {
+        currentOnPressedChange(isPressed)
+    }
+
     LaunchedEffect(glitchSequence) {
         while (true) {
             var elapsedMillis = 0
@@ -123,9 +133,7 @@ fun PlayerIconButton(
             interactionSource = interactionSource,
             indication = LocalIndication.current,
             role = Role.Button,
-            onLongClick = {
-                // Наличие обработчика отделяет long-press от обычного onClick.
-            },
+            onLongClick = onLongClick,
             onClick = onClick,
         ),
         contentAlignment = Alignment.Center,
@@ -135,12 +143,12 @@ fun PlayerIconButton(
         val ringPainter = painterResource(R.drawable.ic_player_ring)
         val playPainter = painterResource(R.drawable.ic_player_play)
         val effectiveGroupAShift = when {
-            isPressed -> 0f
+            shouldExpand -> 0f
             showPreviewGlitch -> 0.06f
             else -> groupAShift
         }
         val effectiveGroupBShift = when {
-            isPressed -> 0f
+            shouldExpand -> 0f
             showPreviewGlitch -> -0.06f
             else -> groupBShift
         }

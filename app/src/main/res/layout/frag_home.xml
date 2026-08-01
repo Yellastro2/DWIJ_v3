@@ -24,46 +24,10 @@
     <androidx.compose.ui.platform.ComposeView
         android:id="@+id/fr_home_player"
         android:layout_width="0dp"
-        android:layout_height="0dp"
-        app:layout_constraintDimensionRatio="1:1"
+        android:layout_height="wrap_content"
         app:layout_constraintEnd_toEndOf="parent"
         app:layout_constraintStart_toStartOf="parent"
         app:layout_constraintTop_toTopOf="parent" />
-
-    <GridLayout
-        android:layout_width="match_parent"
-        android:layout_height="wrap_content"
-        app:layout_constraintTop_toBottomOf="@id/fr_home_player"
-        android:columnCount="2"
-        android:rowCount="2"
-        android:padding="8dp"
-        >
-
-        <Button
-            style="@style/homeScreenCards"
-            android:background="@drawable/bg_card_calm"
-            android:id="@+id/fr_home_pllist"
-            android:text="ПлейЛисты"/>
-
-        <Button
-            style="@style/homeScreenCards"
-            android:background="@drawable/bg_card_drive"
-            android:id="@+id/fr_home_tracks"
-            android:text="ТРеки" />
-
-        <Button
-            style="@style/homeScreenCards"
-            android:background="@drawable/bg_card_focus"
-            android:id="@+id/fr_home_wave"
-            android:text="волна"/>
-
-        <Button
-            style="@style/homeScreenCards"
-            android:background="@drawable/bg_card_party"
-            android:id="@+id/fr_home_totalall_btn"
-            android:text="ВАЩЕ ВСЁ" />
-
-    </GridLayout>
 
 
 

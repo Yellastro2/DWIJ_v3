@@ -12,13 +12,13 @@ import androidx.annotation.OptIn
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.ComposeView
 import androidx.compose.ui.platform.ViewCompositionStrategy
-import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.fragment.app.Fragment
 import androidx.lifecycle.lifecycleScope
 import androidx.media3.common.util.UnstableApi
 import androidx.navigation.fragment.findNavController
 import com.yellastrodev.dwij.DWIJ_ACC_TOKEN
-import com.yellastrodev.dwij.PlayerIconButton
+import com.yellastrodev.dwij.HomeScreen
 import com.yellastrodev.dwij.R
 import com.yellastrodev.dwij.TYPE
 import com.yellastrodev.dwij.VALUE
@@ -39,27 +39,26 @@ class HomeFrag: Fragment(R.layout.frag_home) {
 		view.findViewById<ComposeView>(R.id.fr_home_player).apply {
 			setViewCompositionStrategy(ViewCompositionStrategy.DisposeOnViewTreeLifecycleDestroyed)
 			setContent {
-				PlayerIconButton(modifier = Modifier.fillMaxSize()) {
-					findNavController().navigate(R.id.bigPlayerFrag)
-				}
+				HomeScreen(
+					modifier = Modifier.fillMaxWidth(),
+					onPlayerClick = {
+						findNavController().navigate(R.id.bigPlayerFrag)
+					},
+					onPlaylistsClick = {
+						(activity as MainActivity).mNavController.navigate(
+							R.id.action_homeFrag_to_gridPlaylistFrag,
+						)
+					},
+					onTracksClick = {
+						val bundle = Bundle().apply {
+							putString(TYPE, ObjectFrag.TRACKLIST)
+						}
+						findNavController().navigate(R.id.objectFrag, bundle)
+					},
+					onWaveClick = ::playWave,
+					onAllTracksClick = ::openALLTracks,
+				)
 			}
-		}
-
-		view.findViewById<View>(R.id.fr_home_pllist).setOnClickListener {
-			(activity as MainActivity).mNavController.navigate(R.id.action_homeFrag_to_gridPlaylistFrag)
-
-
-		}
-
-		view.findViewById<View>(R.id.fr_home_tracks).setOnClickListener {
-			val bundle = Bundle().apply {
-				putString(TYPE, ObjectFrag.TRACKLIST)
-			}
-			findNavController().navigate(R.id.objectFrag,bundle)
-		}
-
-		view.findViewById<View>(R.id.fr_home_totalall_btn).setOnClickListener {
-			openALLTracks()
 		}
 
 		view.findViewById<ImageButton>(R.id.fr_home_settngs).setOnClickListener {
@@ -67,30 +66,6 @@ class HomeFrag: Fragment(R.layout.frag_home) {
 		}
 
 		val mvSearch = view.findViewById<AutoCompleteTextView>(R.id.fr_home_search)
-
-		view.findViewById<View>(R.id.fr_home_wave).setOnClickListener {
-//			showProgress()
-			lifecycleScope.launch(Dispatchers.IO){
-				val waveList =
-					(requireActivity().application as yApplication).waveRepository.playWave()
-
-				withContext(Dispatchers.Main) {
-					try {
-//						finishProgress()
-						findNavController().navigate(R.id.bigPlayerFrag)
-					}catch (e: Exception){
-						Log.e("DWIJ_TAG", "onWaveClick.finishProgress: ", e)
-					}
-				}
-//				val fWave = yMediaStore.store(requireContext().applicationContext).getWave()
-//                withContext(Dispatchers.Main) {
-//                    finishProgress()
-//                    if (fWave != null) {
-//                        (activity as MainActivity).playWave(fWave)
-//                    }
-//                }
-			}
-		}
 
 		view.findViewById<View>(R.id.fr_home_acc).setOnClickListener {
 			val sharedPref = PreferenceManager.getDefaultSharedPreferences(requireContext())
@@ -100,6 +75,33 @@ class HomeFrag: Fragment(R.layout.frag_home) {
 //				(activity as MainActivity).mNavController.navigate(R.id.loginFrag)
 //			else
 //				(activity as MainActivity).mNavController.navigate(R.id.accountFrag)
+		}
+	}
+
+	private fun playWave() {
+//		showProgress()
+		lifecycleScope.launch(Dispatchers.IO) {
+			(requireActivity().application as yApplication).waveRepository.playWave()
+
+			withContext(Dispatchers.Main) {
+				try {
+//					finishProgress()
+					findNavController().navigate(R.id.bigPlayerFrag)
+				} catch (e: Exception) {
+					Log.e(
+						"DWIJ_TAG",
+						"[playWave] Не удалось открыть плеер после запуска волны",
+						e,
+					)
+				}
+			}
+//			val fWave = yMediaStore.store(requireContext().applicationContext).getWave()
+//            withContext(Dispatchers.Main) {
+//                finishProgress()
+//                if (fWave != null) {
+//                    (activity as MainActivity).playWave(fWave)
+//                }
+//            }
 		}
 	}
 
