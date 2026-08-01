@@ -4,6 +4,7 @@
     xmlns:tools="http://schemas.android.com/tools"
     android:orientation="vertical"
     tools:context=".fragments.HomeFrag"
+    android:background="@color/black"
     android:layout_width="match_parent"
     android:layout_height="match_parent">
 
@@ -18,7 +19,7 @@
         android:scaleType="centerCrop"
         app:layout_constraintEnd_toEndOf="parent"
         app:layout_constraintTop_toTopOf="parent"
-        app:srcCompat="@drawable/ic_setting" />
+        app:srcCompat="@drawable/ic_settings" />
 
     <androidx.compose.ui.platform.ComposeView
         android:id="@+id/fr_home_player"
@@ -40,21 +41,25 @@
 
         <Button
             style="@style/homeScreenCards"
+            android:background="@drawable/bg_card_calm"
             android:id="@+id/fr_home_pllist"
             android:text="ПлейЛисты"/>
 
         <Button
             style="@style/homeScreenCards"
+            android:background="@drawable/bg_card_drive"
             android:id="@+id/fr_home_tracks"
             android:text="ТРеки" />
 
         <Button
             style="@style/homeScreenCards"
+            android:background="@drawable/bg_card_focus"
             android:id="@+id/fr_home_wave"
             android:text="волна"/>
 
         <Button
             style="@style/homeScreenCards"
+            android:background="@drawable/bg_card_party"
             android:id="@+id/fr_home_totalall_btn"
             android:text="ВАЩЕ ВСЁ" />
 
