@@ -2,6 +2,7 @@ package com.yellastrodev.dwij
 
 import androidx.annotation.DrawableRes
 import androidx.compose.foundation.Image
+import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -23,6 +24,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.res.colorResource
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.Role
@@ -35,8 +37,9 @@ import androidx.compose.material3.Text
 import kotlinx.coroutines.delay
 
 /**
- * Верхняя Compose-часть домашнего экрана: квадратная кнопка плеера и сетка
- * основных разделов, которая постепенно заменяет прежний XML GridLayout.
+ * Верхняя Compose-часть домашнего экрана на общем цвете фона приложения:
+ * квадратная кнопка плеера и сетка основных разделов, которая постепенно
+ * заменяет прежний XML GridLayout.
  */
 @Composable
 fun HomeScreen(
@@ -63,12 +66,28 @@ fun HomeScreen(
         }
     }
 
-    Column(modifier = modifier.fillMaxWidth()) {
+    Column(
+        modifier = modifier
+            .fillMaxWidth()
+            .background(colorResource(R.color.background)),
+    ) {
         Box(
             modifier = Modifier
                 .fillMaxWidth()
                 .aspectRatio(1f),
         ) {
+            PlayerIconButton(
+                modifier = Modifier.fillMaxSize(),
+                expanded = isRadialMenuVisible,
+                expandedAccentOuterRadiusFraction = HOME_RADIAL_MENU_OUTER_RADIUS_FRACTION,
+                onLongClick = {
+                    // Отделяет long-press от обычного клика.
+                },
+                onPressedChange = { isPressed ->
+                    isPlayerPressed = isPressed
+                },
+                onClick = onPlayerClick,
+            )
             RadialMenu(
                 items = radialMenuItems,
                 visible = isRadialMenuVisible,
@@ -79,18 +98,8 @@ fun HomeScreen(
                 onDismiss = {
                     isRadialMenuVisible = false
                 },
+                outerRadiusFraction = HOME_RADIAL_MENU_OUTER_RADIUS_FRACTION,
                 modifier = Modifier.fillMaxSize(),
-            )
-            PlayerIconButton(
-                modifier = Modifier.fillMaxSize(),
-                expanded = isRadialMenuVisible,
-                onLongClick = {
-                    // Отделяет long-press от обычного клика.
-                },
-                onPressedChange = { isPressed ->
-                    isPlayerPressed = isPressed
-                },
-                onClick = onPlayerClick,
             )
         }
         HomeMenuGrid(
@@ -102,7 +111,8 @@ fun HomeScreen(
     }
 }
 
-private const val RADIAL_MENU_START_DELAY_MILLIS = 10L
+private const val RADIAL_MENU_START_DELAY_MILLIS = 5L
+private const val HOME_RADIAL_MENU_OUTER_RADIUS_FRACTION = 0.49f
 
 @Composable
 private fun homeRadialMenuItems(): List<RadialMenuItem> {
@@ -124,7 +134,7 @@ private fun homeRadialMenuItems(): List<RadialMenuItem> {
         listOf(
             RadialMenuItem("road", roadTitle, Color(0xFFFF2D82)),
             RadialMenuItem("focus", focusTitle, Color(0xFF00BEFF)),
-            RadialMenuItem("calm", calmTitle, Color(0xFFB737FF)),
+//            RadialMenuItem("calm", calmTitle, Color(0xFFB737FF)),
             RadialMenuItem("favorite", favoriteTitle, Color(0xFFFF2D96)),
             RadialMenuItem("radio", radioTitle, Color(0xFF00E6DC)),
             RadialMenuItem("party", partyTitle, Color(0xFFFF9100)),
@@ -202,7 +212,6 @@ private fun HomeMenuCard(
                 role = Role.Button,
                 onClick = onClick,
             ),
-        contentAlignment = Alignment.Center,
     ) {
         Image(
             painter = painterResource(textureRes),
@@ -221,21 +230,23 @@ private fun HomeMenuCard(
             color = Color.White,
             fontSize = 14.sp,
             fontWeight = FontWeight.Medium,
-            textAlign = TextAlign.Center,
+            textAlign = TextAlign.End,
+            modifier = Modifier
+                .align(Alignment.TopEnd)
+                .padding(top = 12.dp, end = 14.dp),
         )
     }
 }
 
 @Preview(
     name = "Home screen",
-    showBackground = true,
-    backgroundColor = 0xFF000000,
     widthDp = 360,
     heightDp = 596,
 )
 @Composable
 private fun HomeScreenPreview() {
     HomeScreen(
+        modifier = Modifier.fillMaxSize(),
         onPlayerClick = {},
         onPlaylistsClick = {},
         onTracksClick = {},

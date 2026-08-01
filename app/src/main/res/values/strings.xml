@@ -20,10 +20,10 @@
     <string name="auth_error_account">Токен получен, но данные аккаунта загрузить не удалось</string>
     <string name="title_placehold">некий ДвИж</string>
     <string name="player_button_content_description">Открыть плеер</string>
-    <string name="home_playlists">ПЛЕЙЛИСТЫ</string>
-    <string name="home_tracks">ТРЕКИ</string>
-    <string name="home_wave">ВОЛНА</string>
-    <string name="home_all_tracks">ВАЩЕ ВСЁ</string>
+    <string name="home_playlists">Плейлисты</string>
+    <string name="home_tracks">Треки</string>
+    <string name="home_wave">Волна</string>
+    <string name="home_all_tracks">Ваще всё</string>
     <string name="radial_menu_road">В дорогу</string>
     <string name="radial_menu_focus">Фокус</string>
     <string name="radial_menu_calm">Спокойно</string>

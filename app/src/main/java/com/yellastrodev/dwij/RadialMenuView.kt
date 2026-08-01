@@ -56,7 +56,7 @@ fun RadialMenu(
     modifier: Modifier = Modifier,
     startAngle: Float = -90f,
     totalSweepAngle: Float = 360f,
-    gapAngle: Float = 3f,
+    gapAngle: Float = 0f,
     innerRadiusFraction: Float = 0.11f,
     outerRadiusFraction: Float = 0.49f,
 ) {

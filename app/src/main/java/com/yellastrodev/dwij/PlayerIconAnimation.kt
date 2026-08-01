@@ -6,6 +6,7 @@ import androidx.compose.animation.core.updateTransition
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.LocalIndication
+import androidx.compose.foundation.background
 import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.interaction.collectIsPressedAsState
@@ -32,6 +33,7 @@ import androidx.compose.ui.draw.clipToBounds
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.painter.Painter
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.res.colorResource
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.Role
@@ -43,6 +45,9 @@ import kotlin.random.Random
 
 private const val GLITCH_CYCLE_DURATION_MILLIS = 60_000
 private const val GLITCH_SEQUENCE_END_MARGIN_MILLIS = 1_000
+private const val PLAYER_ARTWORK_VIEWPORT_WIDTH = 355f
+private const val PLAYER_ACCENT_VISIBLE_RADIUS_X = 85.25f
+private const val PLAYER_ACCENT_VISIBLE_RADIUS_Y = 92.25f
 private val GROUP_A_STRIPE_OFFSETS = listOf(0.12f, 0.29f, 0.46f, 0.63f, 0.80f)
 private val GROUP_B_STRIPE_OFFSETS = listOf(0.19f, 0.36f, 0.54f, 0.71f, 0.87f)
 
@@ -61,7 +66,9 @@ private data class GlitchEvent(
  *
  * Расписание скачков генерируется при создании Composition, повторяется раз в
  * минуту и заменяется новым при следующем открытии экрана. Пока кнопка зажата,
- * кольцо и Play независимо масштабируются одной синхронной Transition.
+ * акцентное кольцо дорастает до переданного внешнего радиуса кругового меню,
+ * а Play уменьшается той же синхронной Transition. Фоновый слой использует
+ * общий с ними холст, но остаётся неподвижным.
  */
 @OptIn(ExperimentalFoundationApi::class)
 @Composable
@@ -69,6 +76,7 @@ fun PlayerIconButton(
     modifier: Modifier = Modifier,
     showPreviewGlitch: Boolean = false,
     expanded: Boolean = false,
+    expandedAccentOuterRadiusFraction: Float = 0.49f,
     onLongClick: () -> Unit = {},
     onPressedChange: (Boolean) -> Unit = {},
     onClick: () -> Unit,
@@ -80,20 +88,36 @@ fun PlayerIconButton(
     val isPressed by interactionSource.collectIsPressedAsState()
     val currentOnPressedChange by rememberUpdatedState(onPressedChange)
     val shouldExpand = isPressed || expanded
+    val safeExpandedRadiusFraction = expandedAccentOuterRadiusFraction.coerceIn(0f, 0.5f)
+    val expandedRingScaleX =
+        safeExpandedRadiusFraction * PLAYER_ARTWORK_VIEWPORT_WIDTH / PLAYER_ACCENT_VISIBLE_RADIUS_X
+    val expandedRingScaleY =
+        safeExpandedRadiusFraction * PLAYER_ARTWORK_VIEWPORT_WIDTH / PLAYER_ACCENT_VISIBLE_RADIUS_Y
     val pressTransition = updateTransition(
         targetState = shouldExpand,
         label = "playerButtonPress",
     )
-    val ringScale by pressTransition.animateFloat(
+    val ringScaleX by pressTransition.animateFloat(
         transitionSpec = {
             spring(
                 dampingRatio = 0.72f,
                 stiffness = 380f,
             )
         },
-        label = "ringScale",
+        label = "ringScaleX",
     ) { pressed ->
-        if (pressed) 1.3f else 1f
+        if (pressed) expandedRingScaleX else 1f
+    }
+    val ringScaleY by pressTransition.animateFloat(
+        transitionSpec = {
+            spring(
+                dampingRatio = 0.72f,
+                stiffness = 380f,
+            )
+        },
+        label = "ringScaleY",
+    ) { pressed ->
+        if (pressed) expandedRingScaleY else 1f
     }
     val playScale by pressTransition.animateFloat(
         transitionSpec = {
@@ -138,10 +162,13 @@ fun PlayerIconButton(
         ),
         contentAlignment = Alignment.Center,
     ) {
-        val iconSize = minOf(maxWidth, maxHeight) * 0.8f
-        val iconTopOffset = (maxHeight - iconSize) / 2
-        val ringPainter = painterResource(R.drawable.ic_player_ring)
-        val playPainter = painterResource(R.drawable.ic_player_play)
+        val artworkSize = minOf(maxWidth, maxHeight)
+        val artworkTopOffset = (maxHeight - artworkSize) / 2
+        val artworkContentHeight = artworkSize * (237f / 355f)
+        val artworkContentTopOffset = (maxHeight - artworkContentHeight) / 2
+        val backgroundPainter = painterResource(R.drawable.bg_player_glitch_v2)
+        val ringPainter = painterResource(R.drawable.ic_player_accent_v2)
+        val playPainter = painterResource(R.drawable.ic_player_play_v2)
         val effectiveGroupAShift = when {
             shouldExpand -> 0f
             showPreviewGlitch -> 0.06f
@@ -152,18 +179,25 @@ fun PlayerIconButton(
             showPreviewGlitch -> -0.06f
             else -> groupBShift
         }
-        val groupAShiftDp = iconSize * effectiveGroupAShift
-        val groupBShiftDp = iconSize * effectiveGroupBShift
+        val groupAShiftDp = artworkSize * effectiveGroupAShift
+        val groupBShiftDp = artworkSize * effectiveGroupBShift
+
+        Image(
+            painter = backgroundPainter,
+            contentDescription = null,
+            contentScale = ContentScale.Fit,
+            modifier = Modifier.size(artworkSize),
+        )
 
         Image(
             painter = ringPainter,
             contentDescription = null,
             contentScale = ContentScale.Fit,
             modifier = Modifier
-                .size(iconSize)
+                .size(artworkSize)
                 .graphicsLayer {
-                    scaleX = ringScale
-                    scaleY = ringScale
+                    scaleX = ringScaleX
+                    scaleY = ringScaleY
                 },
         )
         Image(
@@ -171,7 +205,7 @@ fun PlayerIconButton(
             contentDescription = stringResource(R.string.player_button_content_description),
             contentScale = ContentScale.Fit,
             modifier = Modifier
-                .size(iconSize)
+                .size(artworkSize)
                 .graphicsLayer {
                     scaleX = playScale
                     scaleY = playScale
@@ -181,9 +215,9 @@ fun PlayerIconButton(
             PlayerGlitchStripe(
                 ringPainter = ringPainter,
                 playPainter = playPainter,
-                imageSize = iconSize,
-                imageTopOffset = iconTopOffset,
-                topOffset = iconTopOffset + iconSize * topOffsetFraction,
+                imageSize = artworkSize,
+                imageTopOffset = artworkTopOffset,
+                topOffset = artworkContentTopOffset + artworkContentHeight * topOffsetFraction,
                 stripeHeight = 3.dp,
                 horizontalShift = groupAShiftDp,
             )
@@ -192,9 +226,9 @@ fun PlayerIconButton(
             PlayerGlitchStripe(
                 ringPainter = ringPainter,
                 playPainter = playPainter,
-                imageSize = iconSize,
-                imageTopOffset = iconTopOffset,
-                topOffset = iconTopOffset + iconSize * topOffsetFraction,
+                imageSize = artworkSize,
+                imageTopOffset = artworkTopOffset,
+                topOffset = artworkContentTopOffset + artworkContentHeight * topOffsetFraction,
                 stripeHeight = 2.dp,
                 horizontalShift = groupBShiftDp,
             )
@@ -284,19 +318,27 @@ private fun BoxScope.PlayerGlitchStripe(
 }
 
 /** Проигрывает анимацию кнопки в Android Studio Interactive Preview. */
-@Preview(name = "Animated — Interactive Mode", showBackground = true, backgroundColor = 0xFF000000)
+@Preview(name = "Animated — Interactive Mode")
 @Composable
 private fun PlayerIconButtonPreview() {
-    Box(modifier = Modifier.size(512.dp)) {
+    Box(
+        modifier = Modifier
+            .size(512.dp)
+            .background(colorResource(R.color.background)),
+    ) {
         PlayerIconButton(modifier = Modifier.fillMaxSize(), onClick = {})
     }
 }
 
 /** Показывает заметный глитч-кадр в обычном статическом Preview. */
-@Preview(name = "Static glitch frame", showBackground = true, backgroundColor = 0xFF000000)
+@Preview(name = "Static glitch frame")
 @Composable
 private fun PlayerIconButtonGlitchFramePreview() {
-    Box(modifier = Modifier.size(512.dp)) {
+    Box(
+        modifier = Modifier
+            .size(512.dp)
+            .background(colorResource(R.color.background)),
+    ) {
         PlayerIconButton(
             modifier = Modifier.fillMaxSize(),
             showPreviewGlitch = true,
