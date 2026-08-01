@@ -64,7 +64,7 @@ fun RadialMenu(
     items: List<RadialMenuItem>,
     visible: Boolean,
     onPrimaryClick: () -> Unit,
-    onMenuActivation: () -> Unit,
+    onVisualActivation: () -> Unit,
     onPressChange: (Boolean) -> Unit,
     onItemClick: (RadialMenuItem) -> Unit,
     onDismiss: () -> Unit,
@@ -90,7 +90,7 @@ fun RadialMenu(
     }
     var pressedIndex by remember { mutableIntStateOf(-1) }
     val currentOnPrimaryClick = rememberUpdatedState(onPrimaryClick)
-    val currentOnMenuActivation = rememberUpdatedState(onMenuActivation)
+    val currentOnVisualActivation = rememberUpdatedState(onVisualActivation)
     val currentOnPressChange = rememberUpdatedState(onPressChange)
     val currentOnItemClick = rememberUpdatedState(onItemClick)
     val currentOnDismiss = rememberUpdatedState(onDismiss)
@@ -139,6 +139,7 @@ fun RadialMenu(
 
             down.consume()
             currentOnPressChange.value(true)
+            currentOnVisualActivation.value()
             pressedIndex = -1
             var latestPosition = down.position
             var stayedInsideCenter = true
@@ -167,10 +168,14 @@ fun RadialMenu(
                 when (releasedBeforeLongPress) {
                     true -> {
                         if (stayedInsideCenter) currentOnPrimaryClick.value()
+                        currentOnDismiss.value()
                         return@awaitEachGesture
                     }
-                    false -> return@awaitEachGesture
-                    null -> currentOnMenuActivation.value()
+                    false -> {
+                        currentOnDismiss.value()
+                        return@awaitEachGesture
+                    }
+                    null -> Unit
                 }
 
                 pressedIndex = findRadialMenuItemAt(
@@ -370,7 +375,7 @@ private fun rememberRadialMenuExpansionProgress(visible: Boolean): Float {
     return progress
 }
 
-/** Проигрывает последовательность резких, неинтерполированных мерцаний. */
+/** Проигрывает последовательность мерцаний вперёд при входе и назад при выходе. */
 @Composable
 private fun rememberRadialMenuGlitchFrame(
     visible: Boolean,
@@ -379,20 +384,26 @@ private fun rememberRadialMenuGlitchFrame(
     var frameIndex by remember { mutableIntStateOf(-1) }
 
     LaunchedEffect(visible, frames) {
-        if (!visible) {
-            frameIndex = -1
-            return@LaunchedEffect
-        }
-
-        frames.forEachIndexed { index, frame ->
-            frameIndex = index
-            if (frame.holdMillis > 0L) {
-                delay(frame.holdMillis)
+        if (visible) {
+            frames.forEachIndexed { index, frame ->
+                frameIndex = index
+                if (frame.holdMillis > 0L) {
+                    delay(frame.holdMillis)
+                }
             }
+        } else if (frameIndex >= 0) {
+            for (index in frameIndex.coerceAtMost(frames.lastIndex) downTo 0) {
+                frameIndex = index
+                val holdMillis = frames[index].holdMillis
+                if (holdMillis > 0L) {
+                    delay(holdMillis)
+                }
+            }
+            frameIndex = -1
         }
     }
 
-    return if (visible && frameIndex >= 0) {
+    return if (frameIndex >= 0) {
         frames[frameIndex]
     } else {
         HIDDEN_RADIAL_MENU_GLITCH_FRAME

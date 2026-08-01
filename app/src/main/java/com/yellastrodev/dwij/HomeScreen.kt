@@ -101,7 +101,7 @@ fun HomeScreen(
                     onPrimaryClick = {
                         showActionSnackbar(playerActionMessage)
                     },
-                    onMenuActivation = {
+                    onVisualActivation = {
                         isRadialMenuVisible = true
                     },
                     onPressChange = { isPressed ->
