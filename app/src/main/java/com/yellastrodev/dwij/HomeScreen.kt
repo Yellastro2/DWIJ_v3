@@ -99,6 +99,7 @@ fun HomeScreen(
                     isRadialMenuVisible = false
                 },
                 outerRadiusFraction = HOME_RADIAL_MENU_OUTER_RADIUS_FRACTION,
+                animationStyle = RadialMenuAnimationStyle.GlitchFlicker,
                 modifier = Modifier.fillMaxSize(),
             )
         }
@@ -230,10 +231,10 @@ private fun HomeMenuCard(
             color = Color.White,
             fontSize = 14.sp,
             fontWeight = FontWeight.Medium,
-            textAlign = TextAlign.End,
+            textAlign = TextAlign.Start,
             modifier = Modifier
-                .align(Alignment.TopEnd)
-                .padding(top = 12.dp, end = 14.dp),
+                .align(Alignment.TopStart)
+                .padding(top = 12.dp, start = 14.dp),
         )
     }
 }

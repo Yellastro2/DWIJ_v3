@@ -1,0 +1,5 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <fraction name="card_bg_alpha2" >1%</fraction>
+    <item name="card_bg_alpha" type="fraction">1%</item>
+</resources>
