@@ -1,0 +1,21 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" width="152" height="56" viewBox="0 0 152 56">
+  <defs>
+    <linearGradient id="panel" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#0d1121" stop-opacity="0.98"/>
+      <stop offset="0.55" stop-color="#070a15" stop-opacity="0.98"/>
+      <stop offset="1" stop-color="#111426" stop-opacity="0.98"/>
+    </linearGradient>
+    <linearGradient id="border" x1="0" y1="0" x2="152" y2="56" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#ff168f" stop-opacity="0.48"/>
+      <stop offset="0.48" stop-color="#535a75" stop-opacity="0.72"/>
+      <stop offset="1" stop-color="#18dfff" stop-opacity="0.48"/>
+    </linearGradient>
+  </defs>
+  <rect x="2" y="3" width="148" height="50" rx="13" fill="url(#panel)" stroke="#02030a" stroke-width="3"/>
+  <rect x="3.5" y="4.5" width="145" height="47" rx="11.5" fill="none" stroke="url(#border)" stroke-width="1.2"/>
+  <path d="M12 4.5H48" stroke="#ff168f" stroke-width="1.2" stroke-opacity="0.36"/>
+  <path d="M104 51.5H139" stroke="#18dfff" stroke-width="1.1" stroke-opacity="0.34"/>
+  <path d="M5 17H15M7 20H11" stroke="#18dfff" stroke-width="1" stroke-opacity="0.38"/>
+  <path d="M137 36H148M141 39H146" stroke="#ff168f" stroke-width="1" stroke-opacity="0.36"/>
+</svg>

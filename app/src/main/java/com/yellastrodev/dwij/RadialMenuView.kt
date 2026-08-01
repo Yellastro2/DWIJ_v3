@@ -53,12 +53,21 @@ enum class RadialMenuAnimationStyle {
     Expand,
 }
 
+/** Результат ожидания между DOWN и подтверждением радиального жеста. */
+private enum class PendingRadialGestureResult {
+    EnteredItem,
+    ReleasedOnItem,
+    ReleasedWithoutItem,
+    PointerLost,
+}
+
 /**
  * Полностью Compose-версия кругового меню. По умолчанию сектора появляются
  * резкими глитч-мерцаниями; прежнее плавное выдвижение сохранено в режиме
  * [RadialMenuAnimationStyle.Expand]. Единый обработчик отличает быстрый клик
- * в центре от long-press, меняет выбранный сектор при протягивании и оставляет
- * центральную область без выбора. Радиусы задаются долей от меньшей стороны.
+ * в центре от радиального жеста, активируемого long-press или немедленным
+ * входом пальца в сектор, меняет выбор при протягивании и оставляет центр без
+ * выбора. Радиусы задаются долей от меньшей стороны.
  */
 @Composable
 fun RadialMenu(
@@ -147,11 +156,11 @@ fun RadialMenu(
             var stayedInsideCenter = true
 
             try {
-                val releasedBeforeLongPress = withTimeoutOrNull(longPressTimeoutMillis) {
+                val pendingResult = withTimeoutOrNull(longPressTimeoutMillis) {
                     while (true) {
                         val event = awaitPointerEvent()
                         val change = event.changes.firstOrNull { it.id == down.id }
-                            ?: return@withTimeoutOrNull false
+                            ?: return@withTimeoutOrNull PendingRadialGestureResult.PointerLost
                         latestPosition = change.position
                         val isStillInsideCenter = isInsideRadialCenter(
                             position = latestPosition,
@@ -162,21 +171,62 @@ fun RadialMenu(
                         if (!isStillInsideCenter) {
                             stayedInsideCenter = false
                         }
+                        val candidateIndex = findRadialMenuItemAt(
+                            position = latestPosition,
+                            width = size.width.toFloat(),
+                            height = size.height.toFloat(),
+                            itemCount = items.size,
+                            startAngle = startAngle,
+                            totalSweepAngle = safeTotalSweep,
+                            gapAngle = safeGap,
+                            innerRadiusFraction = safeInnerRadiusFraction,
+                            outerRadiusFraction = safeOuterRadiusFraction,
+                        )
                         change.consume()
-                        if (!change.pressed) return@withTimeoutOrNull true
+                        if (!change.pressed) {
+                            return@withTimeoutOrNull if (candidateIndex >= 0) {
+                                PendingRadialGestureResult.ReleasedOnItem
+                            } else {
+                                PendingRadialGestureResult.ReleasedWithoutItem
+                            }
+                        }
+                        if (candidateIndex >= 0) {
+                            pressedIndex = candidateIndex
+                            return@withTimeoutOrNull PendingRadialGestureResult.EnteredItem
+                        }
                     }
                 }
 
-                when (releasedBeforeLongPress) {
-                    true -> {
+                when (pendingResult) {
+                    PendingRadialGestureResult.ReleasedOnItem -> {
+                        val releasedIndex = findRadialMenuItemAt(
+                            position = latestPosition,
+                            width = size.width.toFloat(),
+                            height = size.height.toFloat(),
+                            itemCount = items.size,
+                            startAngle = startAngle,
+                            totalSweepAngle = safeTotalSweep,
+                            gapAngle = safeGap,
+                            innerRadiusFraction = safeInnerRadiusFraction,
+                            outerRadiusFraction = safeOuterRadiusFraction,
+                        )
+                        if (releasedIndex >= 0) {
+                            currentOnItemClick.value(items[releasedIndex])
+                        } else {
+                            currentOnDismiss.value()
+                        }
+                        return@awaitEachGesture
+                    }
+                    PendingRadialGestureResult.ReleasedWithoutItem -> {
                         if (stayedInsideCenter) currentOnPrimaryClick.value()
                         currentOnDismiss.value()
                         return@awaitEachGesture
                     }
-                    false -> {
+                    PendingRadialGestureResult.PointerLost -> {
                         currentOnDismiss.value()
                         return@awaitEachGesture
                     }
+                    PendingRadialGestureResult.EnteredItem,
                     null -> Unit
                 }
 

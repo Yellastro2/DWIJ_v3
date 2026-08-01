@@ -1,5 +1,6 @@
 package com.yellastrodev.dwij
 
+import android.annotation.SuppressLint
 import android.os.SystemClock
 import android.util.Log
 import androidx.annotation.DrawableRes
@@ -8,12 +9,16 @@ import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.LocalIndication
+import androidx.compose.foundation.gestures.animateScrollBy
+import androidx.compose.foundation.gestures.snapping.rememberSnapFlingBehavior
+import androidx.compose.foundation.gestures.scrollBy
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.interaction.PressInteraction
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
+import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
@@ -32,6 +37,9 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.lazy.grid.GridCells
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
+import androidx.compose.foundation.lazy.LazyRow
+import androidx.compose.foundation.lazy.itemsIndexed
+import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.SnackbarHost
@@ -41,6 +49,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.SideEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
@@ -60,6 +69,7 @@ import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.selected
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
@@ -67,12 +77,15 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
+import kotlin.math.abs
 import java.util.Locale
 
 /**
  * Полный Compose-интерфейс домашнего экрана: орбитальный и радиальный плеер,
- * сетка разделов, компактный плеер других вкладок и нижняя навигация.
+ * переключатель источников, сетка разделов, компактный плеер других вкладок
+ * и нижняя навигация.
  */
 @Composable
 fun HomeScreen(
@@ -226,7 +239,11 @@ fun HomeScreen(
                             items = radialMenuItems,
                             visible = isRadialMenuVisible,
                             onPrimaryClick = {
-                                onPlayerPlayPauseClick()
+                                if (player == null) {
+                                    onWaveClick()
+                                } else {
+                                    onPlayerPlayPauseClick()
+                                }
                             },
                             onVisualActivation = {
                                 isRadialMenuVisible = true
@@ -269,6 +286,7 @@ fun HomeScreen(
                             )
                         }
                     }
+                    HomeSourceSelector()
                     HomeMenuGrid(
                         onPlaylistsClick = onPlaylistsClick,
                         onTracksClick = onTracksClick,
@@ -451,6 +469,7 @@ private fun homeRadialMenuItems(): List<RadialMenuItem> {
 }
 
 /** Рисует орбитальные элементы управления под слоем радиального меню. */
+@SuppressLint("UnusedBoxWithConstraintsScope")
 @Composable
 private fun HomeOrbitalPlayerHud(
     player: HomeCompactPlayerUiState,
@@ -530,6 +549,7 @@ private fun HomeOrbitalPlayerHud(
 }
 
 /** Даёт элементам HUD кликабельность, не перекрывая ими открытое радиальное меню. */
+@SuppressLint("UnusedBoxWithConstraintsScope")
 @Composable
 private fun HomeOrbitalPlayerTouchTargets(
     onPreviousClick: () -> Unit,
@@ -578,6 +598,7 @@ private fun HomeOrbitalPlayerTouchTargets(
 }
 
 /** Карточка текущего трека, закреплённая непосредственно над нижней навигацией. */
+@SuppressLint("UnusedBoxWithConstraintsScope")
 @Composable
 fun HomeCompactPlayer(
     player: HomeCompactPlayerUiState,
@@ -700,6 +721,7 @@ fun HomeCompactPlayer(
 }
 
 /** Линейный прогресс с текущим и полным временем трека. */
+@SuppressLint("UnusedBoxWithConstraintsScope")
 @Composable
 private fun HomePlayerProgress(
     currentPositionMillis: Long,
@@ -749,6 +771,7 @@ private fun HomePlayerProgress(
 }
 
 /** Три пункта нижней навигации с переключением активной главной или поиска. */
+@SuppressLint("UnusedBoxWithConstraintsScope")
 @Composable
 private fun HomeBottomNavigation(
     selectedTab: HomeNavigationTab,
@@ -891,6 +914,186 @@ private fun HomeBottomNavigationItem(
 private fun formatPlayerTime(milliseconds: Long): String {
     val totalSeconds = milliseconds.coerceAtLeast(0L) / 1_000L
     return "${totalSeconds / 60}:${(totalSeconds % 60).toString().padStart(2, '0')}"
+}
+
+/** Один локальный вариант источника для горизонтального переключателя. */
+private data class HomeSourceOption(
+    val id: String,
+    val title: String,
+)
+
+/** Собирает локализованные заглушки источников музыки. */
+@Composable
+private fun homeSourceOptions(): List<HomeSourceOption> {
+    val local = stringResource(R.string.home_source_local)
+    val yandexMusic = stringResource(R.string.home_source_yandex_music)
+    val all = stringResource(R.string.home_source_all)
+    val road = stringResource(R.string.home_source_road)
+    return remember(local, yandexMusic, all, road) {
+        listOf(
+            HomeSourceOption("local", local),
+            HomeSourceOption("yandex", yandexMusic),
+            HomeSourceOption("all", all),
+            HomeSourceOption("road", road),
+        )
+    }
+}
+
+/**
+ * Горизонтальный переключатель источников: фиксирует ближайший пункт по центру
+ * после свайпа и коротко глитч-мерцает выбранной растровой рамкой.
+ */
+@Composable
+private fun HomeSourceSelector(modifier: Modifier = Modifier) {
+    val options = homeSourceOptions()
+    val defaultSelectedIndex = if (options.size > 1) 1 else 0
+    var selectedIndex by remember(options.size) {
+        mutableIntStateOf(defaultSelectedIndex)
+    }
+    var requestedIndex by remember { mutableStateOf<Int?>(null) }
+    var selectedFrameVisible by remember { mutableStateOf(true) }
+    val listState = rememberLazyListState()
+    val coroutineScope = rememberCoroutineScope()
+    val itemWidth = 152.dp
+
+    suspend fun centerItem(index: Int, animated: Boolean) {
+        var itemInfo = listState.layoutInfo.visibleItemsInfo
+            .firstOrNull { visibleItem -> visibleItem.index == index }
+        if (itemInfo == null) {
+            listState.scrollToItem(index)
+            itemInfo = listState.layoutInfo.visibleItemsInfo
+                .firstOrNull { visibleItem -> visibleItem.index == index }
+        }
+        val resolvedItem = itemInfo ?: return
+        val layoutInfo = listState.layoutInfo
+        val viewportCenter =
+            (layoutInfo.viewportStartOffset + layoutInfo.viewportEndOffset) / 2
+        val itemCenter = resolvedItem.offset + resolvedItem.size / 2
+        val scrollDistance = (itemCenter - viewportCenter).toFloat()
+        if (abs(scrollDistance) < 0.5f) return
+
+        if (animated) {
+            listState.animateScrollBy(scrollDistance)
+        } else {
+            listState.scrollBy(scrollDistance)
+        }
+    }
+
+    LaunchedEffect(selectedIndex) {
+        selectedFrameVisible = false
+        delay(18L)
+        selectedFrameVisible = true
+        delay(34L)
+        selectedFrameVisible = false
+        delay(18L)
+        selectedFrameVisible = true
+    }
+
+    val isScrollInProgress = listState.isScrollInProgress
+    LaunchedEffect(isScrollInProgress, options.size, requestedIndex) {
+        if (!isScrollInProgress && options.isNotEmpty()) {
+            requestedIndex?.let { targetIndex ->
+                selectedIndex = targetIndex.coerceIn(options.indices)
+                return@LaunchedEffect
+            }
+            val layoutInfo = listState.layoutInfo
+            val viewportCenter =
+                (layoutInfo.viewportStartOffset + layoutInfo.viewportEndOffset) / 2
+            val centeredItem = layoutInfo.visibleItemsInfo.minByOrNull { itemInfo ->
+                abs(itemInfo.offset + itemInfo.size / 2 - viewportCenter)
+            }
+            centeredItem?.index?.let { index ->
+                selectedIndex = index.coerceIn(options.indices)
+            }
+        }
+    }
+
+    BoxWithConstraints(
+        modifier = modifier
+            .fillMaxWidth()
+            .height(66.dp),
+    ) {
+        val sidePadding = ((maxWidth - itemWidth) / 2).coerceAtLeast(0.dp)
+
+        LaunchedEffect(options.size, maxWidth) {
+            if (options.isNotEmpty()) {
+                centerItem(
+                    index = selectedIndex.coerceIn(options.indices),
+                    animated = false,
+                )
+            }
+        }
+
+        LazyRow(
+            state = listState,
+            flingBehavior = rememberSnapFlingBehavior(listState),
+            horizontalArrangement = Arrangement.spacedBy(8.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            contentPadding = PaddingValues(horizontal = sidePadding),
+            modifier = Modifier.fillMaxSize(),
+        ) {
+            itemsIndexed(
+                items = options,
+                key = { _, option -> option.id },
+            ) { index, option ->
+                val isSelected = index == selectedIndex
+                Box(
+                    contentAlignment = Alignment.Center,
+                    modifier = Modifier
+                        .width(itemWidth)
+                        .height(56.dp)
+                        .semantics { selected = isSelected }
+                        .clickable(role = Role.Tab) {
+                            requestedIndex = index
+                            selectedIndex = index
+                            coroutineScope.launch {
+                                try {
+                                    centerItem(
+                                        index = index,
+                                        animated = true,
+                                    )
+                                } finally {
+                                    if (requestedIndex == index) {
+                                        selectedIndex = index
+                                        requestedIndex = null
+                                    }
+                                }
+                            }
+                        },
+                ) {
+                    Image(
+                        painter = painterResource(
+                            if (isSelected && selectedFrameVisible) {
+                                R.drawable.bg_home_source_chip_selected
+                            } else {
+                                R.drawable.bg_home_source_chip
+                            },
+                        ),
+                        contentDescription = null,
+                        contentScale = ContentScale.FillBounds,
+                        modifier = Modifier.fillMaxSize(),
+                    )
+                    Text(
+                        text = option.title,
+                        color = if (isSelected && selectedFrameVisible) {
+                            Color.White
+                        } else {
+                            Color(0xFFAAAFC0)
+                        },
+                        fontSize = 14.sp,
+                        fontWeight = if (isSelected) {
+                            FontWeight.SemiBold
+                        } else {
+                            FontWeight.Normal
+                        },
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
+                        modifier = Modifier.padding(horizontal = 14.dp),
+                    )
+                }
+            }
+        }
+    }
 }
 
 @Composable

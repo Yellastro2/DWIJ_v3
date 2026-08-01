@@ -1,0 +1,26 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" width="152" height="56" viewBox="0 0 152 56">
+  <defs>
+    <linearGradient id="panel" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#29102a" stop-opacity="0.98"/>
+      <stop offset="0.52" stop-color="#0d0919" stop-opacity="0.98"/>
+      <stop offset="1" stop-color="#151026" stop-opacity="0.98"/>
+    </linearGradient>
+    <linearGradient id="hotBorder" x1="0" y1="0" x2="152" y2="56" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#18dfff"/>
+      <stop offset="0.18" stop-color="#fffafc"/>
+      <stop offset="0.52" stop-color="#ff168f"/>
+      <stop offset="0.82" stop-color="#fffafc"/>
+      <stop offset="1" stop-color="#ff168f"/>
+    </linearGradient>
+  </defs>
+  <rect x="5" y="6" width="142" height="44" rx="11" fill="none" stroke="#ff168f" stroke-width="10" stroke-opacity="0.10"/>
+  <rect x="3.5" y="4.5" width="145" height="47" rx="12" fill="none" stroke="#ff168f" stroke-width="5" stroke-opacity="0.24"/>
+  <rect x="2" y="3" width="148" height="50" rx="13" fill="url(#panel)" stroke="#ff168f" stroke-width="3" stroke-opacity="0.78"/>
+  <rect x="3.5" y="4.5" width="145" height="47" rx="11.5" fill="none" stroke="url(#hotBorder)" stroke-width="1.7"/>
+  <path d="M8 5H54M14 8H36" stroke="#fffafc" stroke-width="1.2" stroke-opacity="0.82"/>
+  <path d="M93 51H145M112 48H139" stroke="#ff168f" stroke-width="1.4" stroke-opacity="0.90"/>
+  <path d="M4 18H18M7 21H13" stroke="#18dfff" stroke-width="1.6" stroke-opacity="0.92"/>
+  <path d="M134 34H150M140 38H147" stroke="#ff168f" stroke-width="1.8" stroke-opacity="0.94"/>
+  <path d="M23 2H66M82 54H121" stroke="#ff168f" stroke-width="1" stroke-opacity="0.64"/>
+</svg>

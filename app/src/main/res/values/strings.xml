@@ -25,6 +25,10 @@
     <string name="home_tracks">Треки</string>
     <string name="home_wave">Волна</string>
     <string name="home_all_tracks">Ваще всё</string>
+    <string name="home_source_local">Локальная</string>
+    <string name="home_source_yandex_music">Яндекс Музыка</string>
+    <string name="home_source_all">Всё сразу</string>
+    <string name="home_source_road">В дорогу</string>
     <string name="radial_menu_road">В дорогу</string>
     <string name="radial_menu_focus">Фокус</string>
     <string name="radial_menu_calm">Спокойно</string>
