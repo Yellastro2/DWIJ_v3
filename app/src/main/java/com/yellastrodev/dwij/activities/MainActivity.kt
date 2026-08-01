@@ -30,18 +30,14 @@ import androidx.appcompat.app.AppCompatActivity
 import androidx.core.app.ActivityCompat
 import androidx.core.content.ContextCompat
 import androidx.core.os.bundleOf
-import androidx.core.view.isVisible
 import androidx.fragment.app.Fragment
-import androidx.fragment.app.commit
 import androidx.fragment.app.viewModels
-import androidx.lifecycle.lifecycleScope
 import androidx.navigation.NavController
 import androidx.navigation.NavOptions
 import androidx.navigation.fragment.NavHostFragment
 import com.google.android.material.snackbar.Snackbar
 import com.yellastrodev.dwij.R
 import com.yellastrodev.dwij.data.repo.PlayerRepository
-import com.yellastrodev.dwij.fragments.LilPlayerFrag
 import com.yellastrodev.dwij.models.PlayerModel
 import com.yellastrodev.dwij.yApplication
 import kotlinx.coroutines.Dispatchers
@@ -94,24 +90,6 @@ class MainActivity : AppCompatActivity() {
             supportFragmentManager.findFragmentById(R.id.fragmentContainerView) as NavHostFragment
         mNavController = navHostFragment.navController
 
-        // Добавляем мини-плеер один раз
-        supportFragmentManager.commit {
-            replace(R.id.main_frag_bott, LilPlayerFrag())
-        }
-
-        // Подписка на навигацию
-        mNavController.addOnDestinationChangedListener { _, destination, _ ->
-            updateMiniPlayerVisibility(destination.id)
-        }
-
-        // Подписка на репо
-        lifecycleScope.launchWhenStarted {
-            playerRepo.currentTrack.collect {
-                updateMiniPlayerVisibility(mNavController.currentDestination?.id)
-            }
-        }
-
-
 //        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
 //            if (ContextCompat.checkSelfPermission(this, Manifest.permission.POST_NOTIFICATIONS)
 //                != PackageManager.PERMISSION_GRANTED
@@ -124,13 +102,6 @@ class MainActivity : AppCompatActivity() {
 //            }
 //        }
 
-    }
-
-    private fun updateMiniPlayerVisibility(currentDestinationId: Int?) {
-        val miniPlayerFragment = supportFragmentManager.findFragmentById(R.id.main_frag_bott)
-        val shouldShow = playerRepo.currentTrack.value != null &&
-                currentDestinationId != R.id.bigPlayerFrag
-        miniPlayerFragment?.view?.isVisible = shouldShow
     }
 
 }

@@ -20,6 +20,7 @@
     <string name="auth_error_account">Токен получен, но данные аккаунта загрузить не удалось</string>
     <string name="title_placehold">некий ДвИж</string>
     <string name="player_button_content_description">Открыть плеер</string>
+    <string name="settings_button_content_description">Открыть настройки</string>
     <string name="home_playlists">Плейлисты</string>
     <string name="home_tracks">Треки</string>
     <string name="home_wave">Волна</string>
@@ -32,4 +33,12 @@
     <string name="radial_menu_party">Вечеринка</string>
     <string name="home_radial_action_player">Плеер</string>
     <string name="home_radial_action_triggered">Сработал экшн %1$d: %2$s</string>
+    <string name="home_navigation_catalog">Каталог</string>
+    <string name="home_navigation_main">Главная</string>
+    <string name="home_navigation_search">Поиск</string>
+    <string name="home_search_unavailable">Экран поиска пока не подключён</string>
+    <string name="home_player_play_content_description">Продолжить воспроизведение</string>
+    <string name="home_player_pause_content_description">Поставить на паузу</string>
+    <string name="home_player_next_content_description">Следующий трек</string>
+    <string name="home_player_unknown_artist">Неизвестный исполнитель</string>
 </resources>

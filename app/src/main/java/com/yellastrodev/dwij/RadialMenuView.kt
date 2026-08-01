@@ -36,6 +36,7 @@ import kotlinx.coroutines.delay
 import kotlin.math.atan2
 import kotlin.math.cos
 import kotlin.math.min
+import kotlin.math.roundToLong
 import kotlin.math.sin
 import kotlin.random.Random
 
@@ -392,9 +393,14 @@ private fun rememberRadialMenuGlitchFrame(
                 }
             }
         } else if (frameIndex >= 0) {
-            for (index in frameIndex.coerceAtMost(frames.lastIndex) downTo 0) {
+            val startingIndex = frameIndex.coerceAtMost(frames.lastIndex)
+            for (index in startingIndex downTo 0) {
                 frameIndex = index
-                val holdMillis = frames[index].holdMillis
+                val holdMillis = if (index == startingIndex && frames[index].isStable) {
+                    0L
+                } else {
+                    frames[index].holdMillis
+                }
                 if (holdMillis > 0L) {
                     delay(holdMillis)
                 }
@@ -722,90 +728,112 @@ private val HIDDEN_RADIAL_MENU_GLITCH_FRAME = RadialMenuGlitchFrame(
     holdMillis = 0L,
 )
 
+/** Короткая запись одного редактируемого кадра: маска, яркость и длительность. */
+private fun glitchFrame(
+    visibleItemsMask: Int,
+    opacity: Float,
+    holdMillis: Long,
+): RadialMenuGlitchFrameSpec = RadialMenuGlitchFrameSpec(
+    visibleItemsMask = visibleItemsMask,
+    opacity = opacity,
+    holdMillis = holdMillis,
+)
+
 /** Создаёт используемый сейчас вручную настроенный ритм глитч-мерцаний. */
 private fun createFixedRadialMenuGlitchFrames(): List<RadialMenuGlitchFrame> =
-    createRadialMenuGlitchFrames(RADIAL_MENU_GLITCH_FIXED_HOLDS_MILLIS)
+    createRadialMenuGlitchFrames(RADIAL_MENU_GLITCH_FRAME_SPECS)
 
 /**
- * Сохранённый случайный вариант расписания. Минимумы удерживают читаемый ритм,
- * оставшиеся миллисекунды распределяются между бликами порциями по 5 мс.
+ * Сохранённый случайный вариант: меняет длительности на ±25%, после чего
+ * нормализует их так, чтобы общая длина последовательности не изменилась.
  */
 @Suppress("unused")
 private fun generateRandomRadialMenuGlitchFrames(
     random: Random = Random.Default,
 ): List<RadialMenuGlitchFrame> {
-    val extraHoldMillis = MutableList(RADIAL_MENU_GLITCH_MIN_HOLDS_MILLIS.size) { 0L }
-    val minimumDuration = RADIAL_MENU_GLITCH_MIN_HOLDS_MILLIS.sum()
-    var remainingDuration = RADIAL_MENU_GLITCH_DURATION_MILLIS - minimumDuration
+    val randomizedSpecs = RADIAL_MENU_GLITCH_FRAME_SPECS.map { spec ->
+        val multiplier = 0.75 + random.nextDouble() * 0.5
+        spec.copy(
+            holdMillis = (spec.holdMillis * multiplier)
+                .roundToLong()
+                .coerceAtLeast(1L),
+        )
+    }.toMutableList()
+    var durationDelta = RADIAL_MENU_GLITCH_DURATION_MILLIS -
+        randomizedSpecs.sumOf { spec -> spec.holdMillis }
 
-    while (remainingDuration >= RADIAL_MENU_GLITCH_RANDOM_QUANTUM_MILLIS) {
-        val frameIndex = random.nextInt(extraHoldMillis.size)
-        extraHoldMillis[frameIndex] += RADIAL_MENU_GLITCH_RANDOM_QUANTUM_MILLIS
-        remainingDuration -= RADIAL_MENU_GLITCH_RANDOM_QUANTUM_MILLIS
-    }
-    repeat(remainingDuration.toInt()) {
-        extraHoldMillis[random.nextInt(extraHoldMillis.size)] += 1L
+    while (durationDelta != 0L) {
+        val index = random.nextInt(randomizedSpecs.size)
+        val spec = randomizedSpecs[index]
+        when {
+            durationDelta > 0L -> {
+                randomizedSpecs[index] = spec.copy(holdMillis = spec.holdMillis + 1L)
+                durationDelta -= 1L
+            }
+            spec.holdMillis > 1L -> {
+                randomizedSpecs[index] = spec.copy(holdMillis = spec.holdMillis - 1L)
+                durationDelta += 1L
+            }
+        }
     }
 
-    val holdMillis = RADIAL_MENU_GLITCH_MIN_HOLDS_MILLIS.mapIndexed { index, minimum ->
-        minimum + extraHoldMillis[index]
-    }
-
-    return createRadialMenuGlitchFrames(holdMillis)
+    return createRadialMenuGlitchFrames(randomizedSpecs)
 }
 
-/** Собирает одинаковую геометрию бликов с переданным расписанием кадров. */
+/** Преобразует редактируемые тройки в рабочие кадры анимации. */
 private fun createRadialMenuGlitchFrames(
-    holdMillis: List<Long>,
+    specs: List<RadialMenuGlitchFrameSpec>,
 ): List<RadialMenuGlitchFrame> {
-    require(holdMillis.size == RADIAL_MENU_GLITCH_TRANSIENT_FRAME_COUNT)
-    require(holdMillis.sum() == RADIAL_MENU_GLITCH_DURATION_MILLIS)
-
-    return listOf(
+    require(specs.isNotEmpty())
+    return specs.mapIndexed { index, spec ->
+        require(spec.opacity in 0f..1f)
+        require(spec.holdMillis >= 0L)
         RadialMenuGlitchFrame(
-            visibleItemsMask = 0b010101,
-            opacity = 0.55f,
-            holdMillis = holdMillis[0],
-        ),
-        RadialMenuGlitchFrame(
-            visibleItemsMask = 0,
-            opacity = 0f,
-            holdMillis = holdMillis[1],
-        ),
-        RadialMenuGlitchFrame(
-            visibleItemsMask = 0b111011,
-            opacity = 0.88f,
-            holdMillis = holdMillis[2],
-        ),
-        RadialMenuGlitchFrame(
-            visibleItemsMask = 0b001101,
-            opacity = 0.36f,
-            holdMillis = holdMillis[3],
-        ),
-        RadialMenuGlitchFrame(
-            visibleItemsMask = ALL_RADIAL_MENU_ITEMS_MASK,
-            opacity = 1f,
-            holdMillis = holdMillis[4],
-        ),
-        RadialMenuGlitchFrame(
-            visibleItemsMask = 0b110111,
-            opacity = 0.58f,
-            holdMillis = holdMillis[5],
-        ),
-        RadialMenuGlitchFrame(
-            visibleItemsMask = ALL_RADIAL_MENU_ITEMS_MASK,
-            opacity = 1f,
-            holdMillis = 0L,
-            isStable = true,
-        ),
-    )
+            visibleItemsMask = spec.visibleItemsMask,
+            opacity = spec.opacity,
+            holdMillis = spec.holdMillis,
+            isStable = index == specs.lastIndex,
+        )
+    }
 }
 
-private const val RADIAL_MENU_GLITCH_DURATION_MILLIS = 500L
-private const val RADIAL_MENU_GLITCH_TRANSIENT_FRAME_COUNT = 6
-private const val RADIAL_MENU_GLITCH_RANDOM_QUANTUM_MILLIS = 5L
-private val RADIAL_MENU_GLITCH_FIXED_HOLDS_MILLIS = listOf(65L, 35L, 110L, 45L, 170L, 75L)
-private val RADIAL_MENU_GLITCH_MIN_HOLDS_MILLIS = listOf(45L, 20L, 50L, 25L, 60L, 30L)
+private data class RadialMenuGlitchFrameSpec(
+    val visibleItemsMask: Int,
+    val opacity: Float,
+    val holdMillis: Long,
+)
+
+private val RADIAL_MENU_GLITCH_FRAME_SPECS = listOf(
+    // Первая слабая попытка.
+    glitchFrame(0b000100, 0.30f, 20L),
+    glitchFrame(0b000000, 0.00f, 110L),
+
+    // Вторая, чуть увереннее.
+    glitchFrame(0b101001, 0.45f, 25L),
+    glitchFrame(0b000000, 0.00f, 90L),
+
+    // Первая полная, но тусклая вспышка.
+    glitchFrame(0b111111, 0.65f, 30L),
+    glitchFrame(0b000000, 0.00f, 100L),
+
+    // Секторы дёргаются вразнобой перед финалом.
+    glitchFrame(0b110110, 0.50f, 20L),
+    glitchFrame(0b011011, 0.60f, 20L),
+    glitchFrame(0b000000, 0.00f, 60L),
+
+    // Почти зажглась — и тут же короткий провал.
+    glitchFrame(0b111111, 0.90f, 40L),
+    glitchFrame(0b000000, 0.00f, 45L),
+
+    // Финальный быстрый разгон.
+    glitchFrame(0b111111, 0.75f, 25L),
+    glitchFrame(0b111111, 1.00f, 25L),
+
+    // Устойчиво включено.
+    glitchFrame(0b111111, 1.00f, 170L),
+)
+private val RADIAL_MENU_GLITCH_DURATION_MILLIS =
+    RADIAL_MENU_GLITCH_FRAME_SPECS.sumOf { spec -> spec.holdMillis }
 private const val RADIAL_MENU_ANIMATION_DURATION_MILLIS = 520
 private const val RADIAL_MENU_STAGGER_FRACTION = 0.055f
 private val RADIAL_MENU_EASING = CubicBezierEasing(0.18f, 0.8f, 0.2f, 1f)

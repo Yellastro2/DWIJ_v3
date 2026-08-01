@@ -7,17 +7,26 @@ import android.preference.PreferenceManager
 import android.util.Log
 import android.view.View
 import android.widget.AutoCompleteTextView
-import android.widget.ImageButton
 import androidx.annotation.OptIn
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.collectAsState
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.ImageBitmap
+import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.platform.ComposeView
 import androidx.compose.ui.platform.ViewCompositionStrategy
-import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.ui.res.stringResource
 import androidx.fragment.app.Fragment
 import androidx.lifecycle.lifecycleScope
 import androidx.media3.common.util.UnstableApi
 import androidx.navigation.fragment.findNavController
 import com.yellastrodev.dwij.DWIJ_ACC_TOKEN
+import com.yellastrodev.dwij.HomeCompactPlayerUiState
 import com.yellastrodev.dwij.HomeScreen
 import com.yellastrodev.dwij.R
 import com.yellastrodev.dwij.TYPE
@@ -26,21 +35,48 @@ import com.yellastrodev.dwij.YA_TOKEN
 import com.yellastrodev.dwij.activities.MainActivity
 import com.yellastrodev.dwij.yApplication
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.flow.flowOn
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
+import com.yellastrodev.yandexmusiclib.entities.CoverSize
 
 class HomeFrag: Fragment(R.layout.frag_home) {
 
 
     @OptIn(UnstableApi::class)
     @SuppressLint("CheckResult")
+	/** Связывает домашний Compose-экран с навигацией и состоянием общего плеера Activity. */
 	override fun onViewCreated(view: View, savedInstanceState: Bundle?) {
 		super.onViewCreated(view, savedInstanceState)
 		view.findViewById<ComposeView>(R.id.fr_home_player).apply {
 			setViewCompositionStrategy(ViewCompositionStrategy.DisposeOnViewTreeLifecycleDestroyed)
 			setContent {
+				val playerModel = (activity as MainActivity).playerModel
+				val track by playerModel.track.collectAsState()
+				val playerState by playerModel.playerState.collectAsState()
+				var cover by remember(track?.id) {
+					mutableStateOf<ImageBitmap?>(null)
+				}
+				val unknownArtist = stringResource(R.string.home_player_unknown_artist)
+
+				LaunchedEffect(track?.id) {
+					track?.let { currentTrack ->
+						playerModel.coverRepo
+							.getCoverFlow(currentTrack, CoverSize.`100x100`)
+							.flowOn(Dispatchers.IO)
+							.collect { bitmap ->
+								cover = bitmap.asImageBitmap()
+							}
+					}
+				}
+
 				HomeScreen(
-					modifier = Modifier.fillMaxWidth(),
+					modifier = Modifier.fillMaxSize(),
+					onSettingsClick = {
+						(activity as MainActivity).mNavController.navigate(
+							R.id.action_homeFrag_to_settingsAct,
+						)
+					},
 					onPlaylistsClick = {
 						(activity as MainActivity).mNavController.navigate(
 							R.id.action_homeFrag_to_gridPlaylistFrag,
@@ -54,12 +90,34 @@ class HomeFrag: Fragment(R.layout.frag_home) {
 					},
 					onWaveClick = ::playWave,
 					onAllTracksClick = ::openALLTracks,
+					onCatalogClick = {
+						(activity as MainActivity).mNavController.navigate(
+							R.id.action_homeFrag_to_gridPlaylistFrag,
+						)
+					},
+					onPlayerOpenClick = {
+						findNavController().navigate(R.id.bigPlayerFrag)
+					},
+					onPlayerPlayPauseClick = playerModel::playAudio,
+					onPlayerNextClick = {
+						viewLifecycleOwner.lifecycleScope.launch {
+							playerModel.nextTrack()
+						}
+					},
+					player = track?.let { currentTrack ->
+						HomeCompactPlayerUiState(
+							title = currentTrack.title,
+							artist = currentTrack.artists
+								.joinToString(", ") { artist -> artist.name }
+								.ifBlank { unknownArtist },
+							cover = cover,
+							isPlaying = playerState.isPlaying,
+							currentPositionMillis = playerState.currentPosition,
+							durationMillis = playerState.duration,
+						)
+					},
 				)
 			}
-		}
-
-		view.findViewById<ImageButton>(R.id.fr_home_settngs).setOnClickListener {
-			(activity as MainActivity).mNavController.navigate(R.id.action_homeFrag_to_settingsAct)
 		}
 
 		val mvSearch = view.findViewById<AutoCompleteTextView>(R.id.fr_home_search)
