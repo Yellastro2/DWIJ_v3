@@ -2,17 +2,11 @@ package com.yellastrodev.dwij.data.repo
 
 import android.content.Context
 import android.net.Uri
-import android.preference.PreferenceManager
 import android.util.Log
-import com.yellastrodev.dwij.CACHE_SIZE
 import com.yellastrodev.dwij.CacheManager
-import com.yellastrodev.dwij.DEFAULT_CACHE_SIZE
 import com.yellastrodev.dwij.DIR_TRACK_CACHE
-import com.yellastrodev.yandexmusiclib.network.YamResult
+import com.yellastrodev.dwij.data.DataResult
 import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.GlobalScope
-import kotlinx.coroutines.coroutineScope
-import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import java.io.File
 
@@ -22,8 +16,6 @@ class TrackCacheRepository(
     val trackRepo: TrackRepository,
     private val cacheManager: CacheManager
 ) {
-
-    private val prefs = PreferenceManager.getDefaultSharedPreferences(context)
 
     private val cacheDir = File(context.cacheDir, DIR_TRACK_CACHE).apply {
         if (!exists()) mkdirs()
@@ -44,21 +36,19 @@ class TrackCacheRepository(
                 Log.d("TrackCacheRepository", "Трека $trackId нет в кэше, скачиваем")
                 val result = trackRepo.getTrackBytes(trackId)
                 when (result) {
-                    is YamResult.Success -> {
+                    is DataResult.Success -> {
                         file.writeBytes(result.value)
                         Log.d(
                             "TrackCacheRepository",
                             "Трек $trackId загружен: ${result.value.size} байт"
                         )
                     }
-                    is YamResult.Failure -> {
+                    is DataResult.Failure -> {
                         Log.e("TrackCacheRepository", "Ошибка при скачивании трека $trackId: ${result.error}")
                         throw Exception(result.error.toString())
                     }
                 }
-                GlobalScope.launch(Dispatchers.IO) {
-                    cacheManager.ensureWithinLimit()
-                }
+                cacheManager.ensureWithinLimit()
             }else
                 Log.d("TrackCacheRepository", "Трек $trackId есть в кэше")
             Uri.fromFile(file)

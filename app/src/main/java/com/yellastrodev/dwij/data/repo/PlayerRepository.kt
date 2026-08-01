@@ -29,8 +29,8 @@ import com.yellastrodev.dwij.service.PlayerEvent
 import com.yellastrodev.dwij.service.PlayerService
 import com.yellastrodev.dwij.service.PlayerState
 import com.yellastrodev.dwij.yApplication
+import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.GlobalScope
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -44,7 +44,8 @@ import java.util.UUID
 
 @OptIn(UnstableApi::class)
 class PlayerRepository(
-    private val context: Context
+    private val context: Context,
+    private val scope: CoroutineScope
 ) {
     val TAG = "PlayerRepository"
 
@@ -88,7 +89,7 @@ class PlayerRepository(
                 }
                 _state.value = playerState
             }
-                ?.launchIn(GlobalScope) // лучше передать свой scope
+                ?.launchIn(scope)
             service?.events
                 ?.onEach { event ->
                     if (event is PlayerEvent.TrackListEnd){
@@ -96,7 +97,7 @@ class PlayerRepository(
                     }else
                         _events.emit(event) // пробрасываем в репозиторий
                 }
-                ?.launchIn(GlobalScope) // лучше свой scope
+                ?.launchIn(scope)
         }
 
 
@@ -121,7 +122,6 @@ class PlayerRepository(
         context.startService(intent)
 //        context.bindService(intent, serviceConnection, Context.BIND_AUTO_CREATE)
 
-//        GlobalScope.launch {
             Log.d(TAG, "waitForService called")
             service = waitForService()
             Log.d(TAG, "waitForService returned")
@@ -132,7 +132,7 @@ class PlayerRepository(
                     _currentTrack.value = currentTrackList[playerState.currentIndex]
                 }
                 _state.value = playerState
-            }.launchIn(GlobalScope)
+            }.launchIn(scope)
 
             service.events.onEach { event ->
                 if (event is PlayerEvent.TrackListEnd) {
@@ -140,13 +140,12 @@ class PlayerRepository(
                 } else {
                     _events.emit(event)
                 }
-            }.launchIn(GlobalScope)
+            }.launchIn(scope)
 
                 withContext(Dispatchers.Main) {
                     applySavedModes()
                 }
             }
-//        }
     }
 
     fun unbind() {
@@ -165,30 +164,42 @@ class PlayerRepository(
         startIndex: Int = 0,
         tracklist: dTracklist
     ) {
-        Log.d(TAG,"set playQueue()")
+        if (tracks.isEmpty() || startIndex !in tracks.indices) {
+            Log.w(
+                TAG,
+                "[playQueue] Некорректная очередь: size=${tracks.size}, " +
+                    "startIndex=$startIndex"
+            )
+            return
+        }
+        Log.d(TAG, "[playQueue] Подготовка очереди")
 
         if (service == null){
 
-            Log.d(TAG,"playQueue() - плеер = нулл")
+            Log.d(TAG, "[playQueue] Сервис плеера ещё не подключён")
             bind()
         }
 
         if (tracks[startIndex].id == _currentTrack.value && dtracklist.value?.getdId() == tracklist.getdId()) {
-            Log.d(TAG, "playQueue() - трек уже играет, выходим")
+            Log.d(TAG, "[playQueue] Выбранный трек уже играет")
             return
         }
 
         if (dtracklist.value?.getdId() == tracklist.getdId()){
-            Log.d(TAG,"playQueue() - треклист не изменился по айди")
+            Log.d(TAG, "[playQueue] Треклист не изменился")
             val newIds = tracks.map { it.id }
-            if (currentTrackList.hashCode() == newIds.hashCode()) {
+            if (currentTrackList == newIds) {
                 _currentTrack.value = tracks[startIndex].id
                 relativeIndex = startIndex
                 service?.playTrack(startIndex)
-                Log.d(TAG, "playQueue() - треклист уже играет, меняем номер трека")
+                Log.d(
+                    TAG,
+                    "[playQueue] Переключаем текущую очередь на index=$startIndex, " +
+                        "trackId=${tracks[startIndex].id}"
+                )
                 return
             }
-            Log.d(TAG,"playQueue() - треклист не изменился по айди, но треки изменились")
+            Log.d(TAG, "[playQueue] Состав текущего треклиста изменился")
         }
         // сюда доходит логика ток если треклист сменился.
         blockShuffle(tracklist.getType() == dYaWave.YA_WAVE)
@@ -199,13 +210,17 @@ class PlayerRepository(
 
         relativeIndex = startIndex
 
-        Log.d(TAG, "playQueue called: startIndex=$startIndex, tracks=${tracks.size}")
+        Log.d(
+            TAG,
+            "[playQueue] Формируем очередь: size=${tracks.size}, " +
+                "startIndex=$startIndex, trackId=${tracks[startIndex].id}"
+        )
 
         val mediaItems = tracks.map { track ->
             track.toMediaItem(tracklist)
         }
 
-        Log.d(TAG, "playQueue ready: startIndex=$startIndex, tracks=${tracks.size}")
+        Log.d(TAG, "[playQueue] Очередь готова, передаём в сервис")
 
         service?.playQueue(mediaItems, startIndex)
     }

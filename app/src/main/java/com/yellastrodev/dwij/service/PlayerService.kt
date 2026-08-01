@@ -36,6 +36,7 @@ import androidx.media3.session.SessionToken
 import com.google.common.collect.ImmutableList
 import com.yellastrodev.dwij.R
 import com.yellastrodev.dwij.activities.MainActivity
+import com.yellastrodev.dwij.data.DataResult
 import com.yellastrodev.dwij.data.repo.CoverRepository
 import com.yellastrodev.dwij.data.repo.PlayerRepository
 import com.yellastrodev.dwij.data.repo.TrackCacheRepository
@@ -44,10 +45,10 @@ import com.yellastrodev.dwij.data.source.YaLazyDataSourceFactory
 import com.yellastrodev.dwij.yApplication
 import com.yellastrodev.yandexmusiclib.entities.CoverSize
 import kotlinx.coroutines.CoroutineScope
-import kotlinx.coroutines.DelicateCoroutinesApi
 import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.GlobalScope
 import kotlinx.coroutines.Job
+import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.cancel
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -67,6 +68,7 @@ class PlayerService : MediaSessionService() {
     lateinit var mediaSession: MediaSession
     private var selfController: MediaController? = null
     private val binder = PlayerBinder()
+    internal val serviceScope = CoroutineScope(SupervisorJob() + Dispatchers.Main.immediate)
 
     // Репозитории для треков и обложек
     internal val coverRepo: CoverRepository by lazy {
@@ -187,7 +189,7 @@ class PlayerService : MediaSessionService() {
                 if (mediaItem == null) return
                 val trackId = mediaItem.mediaId
                 // грузим обложку из coverRepo
-                GlobalScope.launch(Dispatchers.IO) {
+                serviceScope.launch(Dispatchers.IO) {
 
                     val currentMetadata = mediaItem.mediaMetadata
 
@@ -197,7 +199,17 @@ class PlayerService : MediaSessionService() {
                         return@launch
                     }
 
-                    val track = trackId.let { trackRepo.getTrack(trackId) } ?: return@launch
+                    val track = when (val result = trackRepo.getTrack(trackId)) {
+                        is DataResult.Success -> result.value
+                        is DataResult.Failure -> {
+                            Log.w(
+                                TAG,
+                                "[onMediaItemTransition] Метаданные трека не загружены: " +
+                                    result.error
+                            )
+                            return@launch
+                        }
+                    }
                     val bitmap = coverRepo.getCover(track, CoverSize.`400x400`) // твой метод
                     if (bitmap != null) {
                         val byteArray = ByteArrayOutputStream().apply {
@@ -243,7 +255,7 @@ class PlayerService : MediaSessionService() {
                         // Здесь точно закончился весь список, повтор выключен
                         onPlaylistFinished()
                     } else
-                        GlobalScope.launch {
+                        serviceScope.launch {
                             playerRepo.skipNext()
                         }
                 }
@@ -277,7 +289,7 @@ class PlayerService : MediaSessionService() {
                     "[onPlayerError] Ошибка проигрывания, code=${error.errorCode}",
                     error
                 )
-                GlobalScope.launch {
+                serviceScope.launch {
                     _events.emit(PlayerEvent.ShowError("Ошибка воспроизведения"))
                 }
                 player.seekToNext() // просто перескакиваем
@@ -326,7 +338,7 @@ class PlayerService : MediaSessionService() {
 
     fun startProgressUpdates() {
         progressJob?.cancel()
-        progressJob = CoroutineScope(Dispatchers.Main).launch {
+        progressJob = serviceScope.launch {
             while (true) {
                 val pos = player.currentPosition
                 val dur = player.duration
@@ -408,7 +420,7 @@ class PlayerService : MediaSessionService() {
 
     private fun onPlaylistFinished() {
         Log.d(TAG, "Playlist finished")
-        GlobalScope.launch {
+        serviceScope.launch {
             _events.emit(PlayerEvent.TrackListEnd("Playlist finished"))
         }
     }
@@ -425,7 +437,6 @@ class PlayerService : MediaSessionService() {
     private lateinit var notificationManager: PlayerNotificationManager
     val NOTIFICATION_ID = 1525343
 
-    @OptIn(DelicateCoroutinesApi::class)
     private fun startForegroundWithNotification() {
         Log.d(TAG, "startForegroundWithNotification called")
 
@@ -470,6 +481,7 @@ class PlayerService : MediaSessionService() {
             )
         }
         Log.d(TAG, "[onDestroy] Сервис плеера уничтожен")
+        serviceScope.cancel()
         mediaSession.release()
         player.release()
         super.onDestroy()

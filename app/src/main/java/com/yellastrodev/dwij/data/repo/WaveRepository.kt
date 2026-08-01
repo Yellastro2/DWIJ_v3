@@ -8,8 +8,8 @@ import com.yellastrodev.dwij.data.entities.toEntity
 import com.yellastrodev.dwij.data.source.WaveRemoteSource
 import com.yellastrodev.yandexmusiclib.entities.TrackShort
 import com.yellastrodev.yandexmusiclib.network.YamResult
+import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.GlobalScope
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.withContext
@@ -20,7 +20,8 @@ import kotlinx.coroutines.launch
 class WaveRepository(
     val remote: WaveRemoteSource,
     val trackRepository: TrackRepository,
-    val playerRepository: PlayerRepository
+    val playerRepository: PlayerRepository,
+    private val scope: CoroutineScope
 ) {
 
     val TAG = "WaveRepository"
@@ -73,7 +74,7 @@ class WaveRepository(
                 curentWave!!)
         }
         observePlayerState()
-        GlobalScope.launch {
+        scope.launch {
             playerRepository.isShuffleBlock
                 .first { isBlocked -> !isBlocked } // ждём пока станет false
             stopObserving()
@@ -89,7 +90,7 @@ class WaveRepository(
      * слушает переключение треков, отправляет фидбеки в ремот о начале трека и конце\скипе трека
      */
     fun observePlayerState() {
-        // подписка на state — создаём ровно здесь
+        observeJob?.cancel()
         observeJob = playerRepository.state
             .onEach { state ->
 
@@ -116,7 +117,7 @@ class WaveRepository(
                 }
 
             }
-            .launchIn(GlobalScope) // или свой scope
+            .launchIn(scope)
     }
 
     private suspend fun onTrackStarted(trackId: String) {

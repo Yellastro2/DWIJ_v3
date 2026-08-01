@@ -41,10 +41,11 @@ class dYaLikeTracklist(
 }
 
 fun YaLikeTracklist.toEntity(): dYaLikeTracklist {
-    val tracks = tracks.map { trackShort ->
+    val tracks = tracks.mapIndexed { position, trackShort ->
         dPlaylistTrack(
             playlistUuid = playlistUuid,
-            trackId = trackShort.id
+            trackId = trackShort.id,
+            position = position
         )
     }
     val entity = dYaLikeTracklist(

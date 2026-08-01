@@ -41,9 +41,6 @@ class HomeFrag: Fragment(R.layout.frag_home) {
 			setContent {
 				HomeScreen(
 					modifier = Modifier.fillMaxWidth(),
-					onPlayerClick = {
-						findNavController().navigate(R.id.bigPlayerFrag)
-					},
 					onPlaylistsClick = {
 						(activity as MainActivity).mNavController.navigate(
 							R.id.action_homeFrag_to_gridPlaylistFrag,

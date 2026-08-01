@@ -135,7 +135,7 @@ interface dTrackDao {
     """)
     suspend fun getArtistsForTrack(trackId: String): List<dYaArtist>
 
-    @Query("SELECT playlistUuid FROM playlist_tracks WHERE trackId = :trackId")
+    @Query("SELECT DISTINCT playlistUuid FROM playlist_tracks WHERE trackId = :trackId")
     suspend fun getPlaylistsForTrack(trackId: String): List<String>
 
 

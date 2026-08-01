@@ -68,13 +68,7 @@ class ObjectFrag : Fragment(R.layout.frag_object) {
             mType = requireArguments().getString(TYPE)!!
             mValue = requireArguments().getString(VALUE)?: ""
 
-//            if (mType == PLAYLIST) {
-
-                lifecycleScope.launch(Dispatchers.IO) {
-                    model.setType(mType, mValue)
-
-                }
-//            }
+            model.setType(mType, mValue)
         }
 
 //        Log.d("DWIJ_TIMING", "ObjectFrag created")
@@ -154,20 +148,28 @@ class ObjectFrag : Fragment(R.layout.frag_object) {
 
 
             }
-            view.findViewById<RecyclerView>(R.id.fr_obj_recycler)
-                .adapter = model.adapter
-            model.adapter.onItemClicked = { pos ->
-                Log.d("DWIJ_TIMING", "ObjectFrag onItemClick")
-                findNavController().navigate(
-                    R.id.action_objectFrag_to_bigPlayerFrag
-                )
-                lifecycleScope.launch {
-                    model.onTrackClicked(pos)
+            val recyclerView = view.findViewById<RecyclerView>(R.id.fr_obj_recycler)
+            val layoutManager = LinearLayoutManager(context)
+            recyclerView.layoutManager = layoutManager
+            recyclerView.adapter = model.adapter
+            viewLifecycleOwner.lifecycleScope.launch {
+                viewLifecycleOwner.repeatOnLifecycle(Lifecycle.State.STARTED) {
+                    model.scrollResetEvents.collect {
+                        layoutManager.scrollToPositionWithOffset(0, 0)
+                    }
                 }
-
             }
-            view.findViewById<RecyclerView>(R.id.fr_obj_recycler)
-                .layoutManager = LinearLayoutManager(context)
+            model.adapter.onItemClicked = { position, track ->
+                Log.d(
+                    TAG,
+                    "[onItemClicked] position=$position, trackId=${track.id}"
+                )
+                if (model.onTrackClicked(position, track.id)) {
+                    findNavController().navigate(
+                        R.id.action_objectFrag_to_bigPlayerFrag
+                    )
+                }
+            }
         }
 
         mvTitle2 = requireView().findViewById<TextView>(R.id.fr_object_title2)
@@ -230,14 +232,12 @@ class ObjectFrag : Fragment(R.layout.frag_object) {
     }
 
     private fun onPlayBtn() {
-        Log.d("DWIJ_TIMING", "ObjectFrag onPlayBtn")
-        findNavController().navigate(
-            R.id.action_objectFrag_to_bigPlayerFrag
-        )
-        lifecycleScope.launch {
-            model.onTrackClicked(0)
+        Log.d(TAG, "[onPlayBtn] Запуск плейлиста с первого трека")
+        if (model.onTrackClicked(0)) {
+            findNavController().navigate(
+                R.id.action_objectFrag_to_bigPlayerFrag
+            )
         }
-
     }
 
     private fun loadObject() {

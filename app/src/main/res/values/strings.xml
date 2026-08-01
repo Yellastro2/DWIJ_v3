@@ -30,4 +30,6 @@
     <string name="radial_menu_favorite">Любимое</string>
     <string name="radial_menu_radio">Радио</string>
     <string name="radial_menu_party">Вечеринка</string>
+    <string name="home_radial_action_player">Плеер</string>
+    <string name="home_radial_action_triggered">Сработал экшн %1$d: %2$s</string>
 </resources>

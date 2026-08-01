@@ -61,11 +61,11 @@ fun YaPlaylist.toEntity(): dYaPlaylist {
           backgroundImageUrl = backgroundImageUrl
      )
      // Заполняем @Ignore-поле вручную. сохраняем порядок элементов в переменную position
-     entity.tracks = tracks.map { trackShort ->
+     entity.tracks = tracks.mapIndexed { position, trackShort ->
           dPlaylistTrack(
                playlistUuid = playlistUuid,
                trackId = trackShort.id,
-               position = tracks.indexOf(trackShort)
+               position = position
           )
      }
      return entity
@@ -73,7 +73,7 @@ fun YaPlaylist.toEntity(): dYaPlaylist {
 
 @Entity(
      tableName = "playlist_tracks",
-     primaryKeys = ["playlistUuid", "trackId"],
+     primaryKeys = ["playlistUuid", "position"],
      foreignKeys = [
           ForeignKey(
                entity = dYaPlaylist::class,
@@ -82,10 +82,10 @@ fun YaPlaylist.toEntity(): dYaPlaylist {
                onDelete = ForeignKey.CASCADE
           )
      ],
-     indices = [Index("playlistUuid")]
+     indices = [Index("playlistUuid"), Index("trackId")]
 )
 data class dPlaylistTrack(
      val playlistUuid: String,
      val trackId: String,
-     val position: Int? = null
+     val position: Int
 )

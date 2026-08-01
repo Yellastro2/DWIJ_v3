@@ -9,24 +9,19 @@ import androidx.appcompat.app.AlertDialog
 import androidx.fragment.app.Fragment
 import androidx.fragment.app.viewModels
 import androidx.lifecycle.lifecycleScope
-import androidx.lifecycle.viewModelScope
 import androidx.navigation.fragment.findNavController
 import androidx.recyclerview.widget.GridLayoutManager
 import androidx.recyclerview.widget.RecyclerView
 import androidx.swiperefreshlayout.widget.SwipeRefreshLayout
 import com.google.android.material.snackbar.Snackbar
-import kotlinx.coroutines.Deferred
-import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
-import kotlinx.coroutines.withContext
 import com.yellastrodev.dwij.R
 import com.yellastrodev.dwij.TYPE
 import com.yellastrodev.dwij.VALUE
-import com.yellastrodev.dwij.data.entities.dYaPlaylist
+import com.yellastrodev.dwij.data.DataResult
 import com.yellastrodev.dwij.data.entities.iPlaylist
 import com.yellastrodev.dwij.models.GridPlaylistModel
 import com.yellastrodev.dwij.yApplication
-import kotlinx.coroutines.GlobalScope
 
 class GridPlaylistFrag() : Fragment(R.layout.frag_grid_playlist) {
 
@@ -70,32 +65,41 @@ class GridPlaylistFrag() : Fragment(R.layout.frag_grid_playlist) {
 //		var height = displayMetrics.heightPixels
 		mGridSize = width /3
 
-		var fTrackLoadJob: Deferred<Unit>? = null
-
 		if(arguments != null){
 			val fAction = requireArguments().getString(PLAYLIST_ACTION)
 			val fTrackId = requireArguments().getString(ACTION_DATA)
 
 			if(fAction == ACTION_ADDTRACK && fTrackId != null){
-				lifecycleScope.launch {
-					model.adapter.pickedTrack = model.getTrack(fTrackId)
+				viewLifecycleOwner.lifecycleScope.launch {
+					when (val result = model.getTrack(fTrackId)) {
+						is DataResult.Success -> model.adapter.pickedTrack = result.value
+						is DataResult.Failure -> Snackbar.make(
+							view,
+							"Не удалось загрузить трек",
+							Snackbar.LENGTH_LONG
+						).show()
+					}
 				}
 				view.findViewById<TextView>(R.id.fr_list_pllist_title).text = "добавить в плейлист"
-				mOnItemClick = {
-							fPl: iPlaylist ->
-						GlobalScope.launch(Dispatchers.Default){
-							model.addTrackToPlaylist(fPl,fTrackId)
-                            withContext(Dispatchers.Main) {
-                                val snack = Snackbar.make(
-                                    view.rootView.findViewById(android.R.id.content),
-                                    "track added to playlist",
-                                    Snackbar.LENGTH_LONG
-                                )
-                                findNavController().popBackStack()
-                                snack.show()
-                            }
+				mOnItemClick = { fPl: iPlaylist ->
+					viewLifecycleOwner.lifecycleScope.launch {
+						when (model.addTrackToPlaylist(fPl, fTrackId)) {
+							is DataResult.Success -> {
+								Snackbar.make(
+									view,
+									"Трек добавлен в плейлист",
+									Snackbar.LENGTH_LONG
+								).show()
+								findNavController().popBackStack()
+							}
+							is DataResult.Failure -> Snackbar.make(
+								view,
+								"Не удалось добавить трек",
+								Snackbar.LENGTH_LONG
+							).show()
 						}
 					}
+				}
 			}
 		}else {
 			mPickedTrack = "-1"
@@ -127,10 +131,9 @@ class GridPlaylistFrag() : Fragment(R.layout.frag_grid_playlist) {
 		}
 
 		view.findViewById<SwipeRefreshLayout>(R.id.fr_ls_plls_swip).setOnRefreshListener {
-			model.viewModelScope.launch { model.refreshPlaylists()
-				withContext(Dispatchers.Main) {
-					view.findViewById<SwipeRefreshLayout>(R.id.fr_ls_plls_swip).isRefreshing = false
-				}
+			viewLifecycleOwner.lifecycleScope.launch {
+				model.refreshPlaylists()
+				view.findViewById<SwipeRefreshLayout>(R.id.fr_ls_plls_swip).isRefreshing = false
 			}
 		}
 

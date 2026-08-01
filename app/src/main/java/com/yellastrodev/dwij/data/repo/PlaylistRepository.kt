@@ -1,16 +1,19 @@
 package com.yellastrodev.dwij.data.repo
 
-import com.yellastrodev.dwij.data.source.PlaylistCacheSource
-import com.yellastrodev.dwij.data.source.PlaylistLocalSource
-//import com.yellastrodev.dwij.data.source.PlaylistLocalSource
-import com.yellastrodev.dwij.data.source.PlaylistRemoteSource
-import com.yellastrodev.dwij.data.source.dPlaylistResult
-import com.yellastrodev.dwij.data.entities.dYaPlaylist
-import com.yellastrodev.dwij.utils.PlaylistsDiff.Companion.diffPlaylists
+import android.util.Log
+import com.yellastrodev.dwij.data.DataError
+import com.yellastrodev.dwij.data.DataResult
+import com.yellastrodev.dwij.data.dao.dPlaylistDao
+import com.yellastrodev.dwij.data.entities.dYaLikeTracklist
 import com.yellastrodev.dwij.data.entities.dYaLikeTracklist.Companion.KIND_LIKED
+import com.yellastrodev.dwij.data.entities.dYaPlaylist
+import com.yellastrodev.dwij.data.entities.dYaTrack
+import com.yellastrodev.dwij.data.source.PlaylistCacheSource
+import com.yellastrodev.dwij.data.source.PlaylistRemoteSource
+import com.yellastrodev.dwij.data.source.PlaylistSnapshot
+import com.yellastrodev.dwij.utils.PlaylistsDiff.Companion.diffPlaylists
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
-import kotlinx.coroutines.GlobalScope
-import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
@@ -20,15 +23,6 @@ import kotlinx.coroutines.flow.filterNotNull
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
-import kotlinx.coroutines.sync.Mutex
-import kotlinx.coroutines.sync.withLock
-import java.util.concurrent.ConcurrentHashMap
-import android.util.Log
-import com.yellastrodev.dwij.data.dao.dPlaylistDao
-import com.yellastrodev.dwij.data.entities.dYaLikeTracklist
-import com.yellastrodev.dwij.data.entities.dYaTrack
-import com.yellastrodev.yandexmusiclib.likes.LikeActionResult
-import com.yellastrodev.yandexmusiclib.network.YamResult
 
 class PlaylistRepository(
     private val local: dPlaylistDao,
@@ -38,11 +32,6 @@ class PlaylistRepository(
     private val trackRepo: TrackRepository
 ) {
 
-    val TAG = "PlaylistRepository"
-
-    /**
-     * Мапа плейлистов, кэшированный в памяти, ключи это .playlistUuid
-     */
     private val _playlistMap = MutableStateFlow<Map<String, dYaPlaylist>>(emptyMap())
     val playlists: StateFlow<List<dYaPlaylist>> =
         _playlistMap.map { it.values.toList() }
@@ -50,163 +39,186 @@ class PlaylistRepository(
 
     init {
         scope.launch {
-
             val cached = cache.getAll()
             if (cached.isNotEmpty()) {
-                Log.d(TAG, "Используем кэш плейлистов, размер: ${cached.size}")
+                Log.d(TAG, "[init] Используем кеш плейлистов, размер=${cached.size}")
                 _playlistMap.value = cached.associateBy { it.playlistUuid }
-            }
-
-            else {
-                // 1️⃣ Загружаем из локальной БД
-                Log.d(TAG, "Загружаем плейлисты из локальной БД")
+            } else {
+                Log.d(TAG, "[init] Загружаем плейлисты из локальной БД")
                 val localData = local.getAlldPlaylists()
-                Log.d(TAG, "плейлисты загружены, сохраняем в кеш")
                 if (localData.isNotEmpty()) {
                     cache.putAll(localData)
                     _playlistMap.value = localData.associateBy { it.playlistUuid }
                 }
-                Log.d(TAG, "Загружено плейлистов из локальной БД: ${localData.size}")
+                Log.d(TAG, "[init] Из локальной БД загружено ${localData.size} плейлистов")
             }
 
             try {
                 refreshPlaylists()
-            }catch (e: Exception){
-                Log.e(TAG, "Ошибка обновления плейлистов", e)
+            } catch (error: CancellationException) {
+                throw error
+            } catch (error: Exception) {
+                Log.e(TAG, "[init] Ошибка обновления плейлистов", error)
             }
         }
     }
 
-//    val trackLocks = ConcurrentHashMap<String, Mutex>()
-
-    suspend fun refreshPlaylists(){
-        Log.d(TAG, "Загружаем плейлисты из удалённого сервера")
+    suspend fun refreshPlaylists(): DataResult<Unit> {
+        Log.d(TAG, "[refreshPlaylists] Загружаем плейлисты с сервера")
         val remoteData = when (val result = remote.fetchAll()) {
-            is YamResult.Success -> ArrayList(result.value)
-            is YamResult.Failure -> {
-                Log.e(
-                    TAG,
-                    "[refreshPlaylists] Список плейлистов не загружен: ${result.error}"
-                )
-                return
+            is DataResult.Success -> ArrayList(result.value)
+            is DataResult.Failure -> {
+                Log.e(TAG, "[refreshPlaylists] Список не загружен: ${result.error}")
+                return result
             }
         }
         when (val likeResult = remote.fetchLikelist()) {
-            is YamResult.Success -> remoteData.add(likeResult.value)
-            is YamResult.Failure -> {
-                getLikeList()?.let { remoteData.add(it) }
-                Log.w(
-                    TAG,
-                    "[refreshPlaylists] Список лайков не загружен: ${likeResult.error}"
-                )
+            is DataResult.Success -> remoteData.add(likeResult.value)
+            is DataResult.Failure -> {
+                getLikeList()?.let(remoteData::add)
+                Log.w(TAG, "[refreshPlaylists] Лайки не загружены: ${likeResult.error}")
             }
         }
-        val dif = diffPlaylists(_playlistMap.value, remoteData)
-        if (dif.isNotEmpty()) {
-            Log.d(TAG,"есть изменения в онлайн плейлистов: ${dif.added.size}, ${dif.changed.size}, ${dif.removed.size}")
-//            _playlistMap.value = remoteData.associateBy { it.playlistUuid }
 
-            dif.forEachNew { uuid ->
-                var playlist = remoteData.find { it.playlistUuid ==  uuid}!!
+        val diff = diffPlaylists(_playlistMap.value, remoteData)
+        if (diff.isNotEmpty()) {
+            Log.d(
+                TAG,
+                "[refreshPlaylists] Изменения: added=${diff.added.size}, " +
+                    "changed=${diff.changed.size}, removed=${diff.removed.size}"
+            )
+            for (uuid in diff.added + diff.changed) {
+                var playlist = remoteData.first { it.playlistUuid == uuid }
+                var snapshot: PlaylistSnapshot? = null
                 if (playlist.kind != KIND_LIKED) {
-                    val plResult = remote.fetch(playlist.kind.toInt())
-                    if (plResult is dPlaylistResult.Success) {
-                        playlist = plResult.YaPlaylist
-                        trackRepo.putTracks(plResult.trackList)
+                    val kind = playlist.kind.toIntOrNull()
+                        ?: return DataResult.Failure(
+                            DataError.InvalidData("Некорректный kind=${playlist.kind}")
+                        )
+                    when (val result = remote.fetch(kind)) {
+                        is DataResult.Success -> {
+                            snapshot = result.value
+                            playlist = result.value.playlist
+                        }
+                        is DataResult.Failure -> return result
                     }
-                }else {
-                    trackRepo.getTracks(playlist.tracks.map { it.trackId })
+                } else {
+                    when (val result = trackRepo.getTracks(
+                        playlist.tracks.map { it.trackId }
+                    )) {
+                        is DataResult.Success -> Unit
+                        is DataResult.Failure -> Log.w(
+                            TAG,
+                            "[refreshPlaylists] Треки лайков не загружены: ${result.error}"
+                        )
+                    }
                 }
-                cache.put(playlist)
-                local.insert(playlist)
-                _playlistMap.value = _playlistMap.value + (playlist.playlistUuid to playlist)
+                val saveResult = snapshot?.let { saveSnapshot(it) }
+                    ?: savePlaylist(playlist)
+                when (saveResult) {
+                    is DataResult.Success -> Unit
+                    is DataResult.Failure -> return saveResult
+                }
             }
-            dif.removed.forEach {
-                cache.remove(it)
-                local.delete(it)
-                _playlistMap.value = _playlistMap.value - it
+            diff.removed.forEach { uuid ->
+                when (val deleteResult = deletePlaylist(uuid)) {
+                    is DataResult.Success -> Unit
+                    is DataResult.Failure -> return deleteResult
+                }
             }
         }
+        return DataResult.Success(Unit)
     }
 
     fun getPlaylistsByKeys(keys: List<String>): Flow<List<dYaPlaylist>> =
-        _playlistMap.map { map ->
-            keys.mapNotNull { map[it] }
-        }
+        _playlistMap.map { map -> keys.mapNotNull(map::get) }
 
     fun playlistFlow(playlistUuid: String): Flow<dYaPlaylist> =
         _playlistMap
-            .map { it[playlistUuid] }      // достаём элемент по ключу
-            .filterNotNull()               // пропускаем null
-            .distinctUntilChanged()        // опционально, чтобы не пушить одинаковое
+            .map { it[playlistUuid] }
+            .filterNotNull()
+            .distinctUntilChanged()
 
-    // TODO . а еще порядок треков
-    //  в плейлисте разьебан, а для удаления надо знать точный
-    suspend fun refreshPlaylist(plUuid: String) {
-        val playlist = _playlistMap.value[plUuid] ?: run {
-            Log.w(TAG, "[refreshPlaylist] Плейлист $plUuid отсутствует в памяти")
-            return
-        }
+    suspend fun refreshPlaylist(plUuid: String): DataResult<Unit> {
+        val playlist = _playlistMap.value[plUuid]
+            ?: return DataResult.Failure(DataError.NotFound("playlist", plUuid))
         if (playlist.kind == KIND_LIKED) {
-            refreshLikedPlaylist()
-            return
+            return refreshLikedPlaylist()
         }
+        val kind = playlist.kind.toIntOrNull()
+            ?: return DataResult.Failure(
+                DataError.InvalidData("Некорректный kind=${playlist.kind}")
+            )
 
-        val plResult = remote.fetch(playlist.kind.toInt())
-        if (plResult is dPlaylistResult.Success) {
-            if (playlist.revision != plResult.YaPlaylist.revision){
-                cache.put(plResult.YaPlaylist)
-                local.insert(plResult.YaPlaylist)
-                _playlistMap.value = _playlistMap.value + (plUuid to plResult.YaPlaylist)
-                trackRepo.putTracks(plResult.trackList)
-            }else {
-                scope.launch {
-                    trackRepo.tracksFlow(plResult.YaPlaylist.tracks).collect { tracks ->
-                        if (tracks.size != playlist.tracks.size)
-                        {
-                            trackRepo.putTracks(plResult.trackList)
-                            cache.put(plResult.YaPlaylist)
-                            local.insert(plResult.YaPlaylist)
-                            _playlistMap.value = _playlistMap.value + (plUuid to plResult.YaPlaylist)
-                        }
-                    }
-                }
+        return when (val result = remote.fetch(kind)) {
+            is DataResult.Success -> {
+                val snapshot = result.value
+                saveSnapshot(snapshot)
             }
+            is DataResult.Failure -> result
         }
     }
 
-    suspend fun addTrackToPlaylist(playlist: dYaPlaylist, trackId: String) {
-        val track = trackRepo.getTrack(trackId)
-        remote.addTrackToPlaylist(playlist, track)
-        refreshPlaylist(playlist.playlistUuid)
-        trackRepo.refreshTrackLocaly(trackId)
-
-    }
-
-    suspend fun removeTrackFromPlaylist(playlist: dYaPlaylist, track: dYaTrack) {
-        Log.d(TAG, "removeTrackFromPlaylist( playlist: ${playlist.title}, track: ${track.title} )")
-        refreshPlaylist(playlist.playlistUuid)
-        val playlistedTrack = playlist.tracks.find { it.trackId == track.id }!!
-        Log.d(TAG,"removeTrackFromPlaylist, playlistedTrack.position: ${playlistedTrack.position}")
-        remote.removeTrackFromPlaylist(playlist, playlist.tracks.indexOf(playlistedTrack))
-        refreshPlaylist(playlist.playlistUuid)
-        trackRepo.refreshTrackLocaly(track.id)
-        Log.d(TAG, "Трек ${track.title} удалён из плейлиста ${playlist.title}")
-    }
-
-    fun getLikeList(): dYaPlaylist? {
-        return _playlistMap.value.values.find {
-            it.kind == dYaLikeTracklist.KIND_LIKED
+    suspend fun addTrackToPlaylist(
+        playlist: dYaPlaylist,
+        trackId: String
+    ): DataResult<Unit> {
+        val track = when (val result = trackRepo.getTrack(trackId)) {
+            is DataResult.Success -> result.value
+            is DataResult.Failure -> return result
+        }
+        return when (val result = remote.addTrackToPlaylist(playlist, track)) {
+            is DataResult.Success -> {
+                when (val saveResult = savePlaylist(result.value)) {
+                    is DataResult.Success -> Unit
+                    is DataResult.Failure -> return saveResult
+                }
+                trackRepo.refreshTrackLocaly(trackId)
+                Log.d(TAG, "[addTrackToPlaylist] Трек $trackId добавлен")
+                DataResult.Success(Unit)
+            }
+            is DataResult.Failure -> result
         }
     }
 
-    suspend fun setTrackLiked(
-        trackId: String,
-        liked: Boolean
-    ): YamResult<LikeActionResult> {
+    suspend fun removeTrackFromPlaylist(
+        playlist: dYaPlaylist,
+        track: dYaTrack
+    ): DataResult<Unit> {
+        val relation = playlist.tracks.firstOrNull { it.trackId == track.id }
+            ?: return DataResult.Failure(
+                DataError.NotFound("playlistTrack", "${playlist.playlistUuid}:${track.id}")
+            )
+        return when (
+            val result = remote.removeTrackFromPlaylist(
+                playlist = playlist,
+                trackNumber = relation.position
+            )
+        ) {
+            is DataResult.Success -> {
+                when (val saveResult = savePlaylist(result.value)) {
+                    is DataResult.Success -> Unit
+                    is DataResult.Failure -> return saveResult
+                }
+                trackRepo.refreshTrackLocaly(track.id)
+                Log.d(
+                    TAG,
+                    "[removeTrackFromPlaylist] Трек ${track.title} удалён " +
+                        "из ${playlist.title}"
+                )
+                DataResult.Success(Unit)
+            }
+            is DataResult.Failure -> result
+        }
+    }
+
+    fun getLikeList(): dYaPlaylist? =
+        _playlistMap.value.values.find { it.kind == KIND_LIKED }
+
+    suspend fun setTrackLiked(trackId: String, liked: Boolean): DataResult<Unit> {
         Log.d(TAG, "[setTrackLiked] trackId=$trackId, liked=$liked")
         val result = remote.setTrackLiked(trackId, liked)
-        if (result is YamResult.Success) {
+        if (result is DataResult.Success) {
             val likeList = getLikeList()
             if (likeList == null) {
                 refreshLikedPlaylist()
@@ -217,27 +229,76 @@ class PlaylistRepository(
         return result
     }
 
-    private suspend fun refreshLikedPlaylist() {
-        try {
+    private suspend fun refreshLikedPlaylist(): DataResult<Unit> {
+        return try {
             when (val result = remote.fetchLikelist()) {
-                is YamResult.Success -> {
+                is DataResult.Success -> {
                     val playlist = result.value
-                    trackRepo.getTracks(playlist.tracks.map { it.trackId })
-                    cache.put(playlist)
-                    local.insert(playlist)
-                    _playlistMap.value = _playlistMap.value +
-                        (playlist.playlistUuid to playlist)
+                    when (val tracksResult = trackRepo.getTracks(
+                        playlist.tracks.map { it.trackId }
+                    )) {
+                        is DataResult.Success -> Unit
+                        is DataResult.Failure -> return tracksResult
+                    }
+                    when (val saveResult = savePlaylist(playlist)) {
+                        is DataResult.Success -> Unit
+                        is DataResult.Failure -> return saveResult
+                    }
                     Log.d(TAG, "[refreshLikedPlaylist] Список лайков обновлён")
+                    DataResult.Success(Unit)
                 }
-                is YamResult.Failure -> {
-                    Log.e(
-                        TAG,
-                        "[refreshLikedPlaylist] Не удалось загрузить список лайков: ${result.error}"
-                    )
+                is DataResult.Failure -> {
+                    Log.e(TAG, "[refreshLikedPlaylist] Ошибка: ${result.error}")
+                    result
                 }
             }
+        } catch (error: CancellationException) {
+            throw error
         } catch (error: Exception) {
-            Log.e(TAG, "[refreshLikedPlaylist] Ошибка обновления списка лайков", error)
+            Log.e(TAG, "[refreshLikedPlaylist] Ошибка локального сохранения", error)
+            DataResult.Failure(DataError.Storage(error))
         }
+    }
+
+    private suspend fun saveSnapshot(snapshot: PlaylistSnapshot): DataResult<Unit> {
+        return try {
+            trackRepo.putTracks(snapshot.tracks)
+            savePlaylist(snapshot.playlist)
+        } catch (error: CancellationException) {
+            throw error
+        } catch (error: Exception) {
+            DataResult.Failure(DataError.Storage(error))
+        }
+    }
+
+    private suspend fun savePlaylist(playlist: dYaPlaylist): DataResult<Unit> {
+        return try {
+            cache.put(playlist)
+            local.insert(playlist)
+            _playlistMap.value = _playlistMap.value +
+                (playlist.playlistUuid to playlist)
+            DataResult.Success(Unit)
+        } catch (error: CancellationException) {
+            throw error
+        } catch (error: Exception) {
+            DataResult.Failure(DataError.Storage(error))
+        }
+    }
+
+    private suspend fun deletePlaylist(uuid: String): DataResult<Unit> {
+        return try {
+            cache.remove(uuid)
+            local.delete(uuid)
+            _playlistMap.value = _playlistMap.value - uuid
+            DataResult.Success(Unit)
+        } catch (error: CancellationException) {
+            throw error
+        } catch (error: Exception) {
+            DataResult.Failure(DataError.Storage(error))
+        }
+    }
+
+    private companion object {
+        const val TAG = "PlaylistRepository"
     }
 }

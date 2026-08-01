@@ -39,7 +39,10 @@ interface dPlaylistDao {
     @Query("SELECT * FROM playlists WHERE playlistUuid = :id LIMIT 1")
     suspend fun getPlaylistEntity(id: String): dYaPlaylist?
 
-    @Query("SELECT * FROM playlist_tracks WHERE playlistUuid = :id")
+    @Query(
+        "SELECT * FROM playlist_tracks " +
+            "WHERE playlistUuid = :id ORDER BY position ASC"
+    )
     suspend fun getTracksForPlaylist(id: String): List<dPlaylistTrack>
 
     @Insert(onConflict = OnConflictStrategy.REPLACE)

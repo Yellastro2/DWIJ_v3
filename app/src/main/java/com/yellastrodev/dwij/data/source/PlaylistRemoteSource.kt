@@ -1,67 +1,129 @@
 package com.yellastrodev.dwij.data.source
 
 import android.util.Log
+import com.yellastrodev.dwij.data.DataError
+import com.yellastrodev.dwij.data.DataResult
 import com.yellastrodev.dwij.data.entities.dYaLikeTracklist
 import com.yellastrodev.dwij.data.entities.dYaPlaylist
 import com.yellastrodev.dwij.data.entities.dYaTrack
 import com.yellastrodev.dwij.data.entities.toEntity
+import com.yellastrodev.dwij.data.toDataError
 import com.yellastrodev.yandexmusiclib.YamApiClient
-import com.yellastrodev.yandexmusiclib.likes.LikeActionResult
 import com.yellastrodev.yandexmusiclib.network.YamResult
 
 class PlaylistRemoteSource(private val client: YamApiClient) {
-    suspend fun fetch(kind: Int): dPlaylistResult {
+    suspend fun fetch(kind: Int): DataResult<PlaylistSnapshot> {
         return when (val result = client.playlist(kind)) {
-            is YamResult.Success -> dPlaylistResult.Success(
-                result.value.playlist.toEntity(),
-                result.value.tracks.map { it.toEntity() }
+            is YamResult.Success -> DataResult.Success(
+                PlaylistSnapshot(
+                    playlist = result.value.playlist.toEntity(),
+                    tracks = result.value.tracks.map { it.toEntity() }
+                )
             )
-            is YamResult.Failure -> dPlaylistResult.Error.Api(result.error)
+            is YamResult.Failure -> DataResult.Failure(
+                result.error.toDataError()
+            )
         }
     }
-    suspend fun fetchAll(): YamResult<List<dYaPlaylist>> =
+
+    suspend fun fetchAll(): DataResult<List<dYaPlaylist>> =
         when (val result = client.playlists()) {
-            is YamResult.Success -> YamResult.Success(
+            is YamResult.Success -> DataResult.Success(
                 result.value.map { it.toEntity() }
             )
-            is YamResult.Failure -> result
-        }
-    suspend fun fetchLikelist(): YamResult<dYaLikeTracklist> =
-        when (val result = client.likedTracks()) {
-            is YamResult.Success -> YamResult.Success(result.value.toEntity())
-            is YamResult.Failure -> result
+            is YamResult.Failure -> DataResult.Failure(
+                result.error.toDataError()
+            )
         }
 
-    suspend fun addTrackToPlaylist(playlist: dYaPlaylist, track: dYaTrack) {
-        Log.d("PlaylistRemoteSource", "addTrackToPlaylist: ${track.id}, albums = ${track.albums.size}")
-        client.addTrack(playlist.kind.toInt(), playlist.revision, track.id, track.albums[0].id.toString())
+    suspend fun fetchLikelist(): DataResult<dYaLikeTracklist> =
+        when (val result = client.likedTracks()) {
+            is YamResult.Success -> DataResult.Success(result.value.toEntity())
+            is YamResult.Failure -> DataResult.Failure(
+                result.error.toDataError()
+            )
+        }
+
+    suspend fun addTrackToPlaylist(
+        playlist: dYaPlaylist,
+        track: dYaTrack
+    ): DataResult<dYaPlaylist> {
+        val playlistKind = playlist.kind.toIntOrNull()
+            ?: return DataResult.Failure(
+                DataError.InvalidData("Некорректный kind=${playlist.kind}")
+            )
+        val albumId = track.albums.firstOrNull()?.id
+            ?: return DataResult.Failure(
+                DataError.InvalidData(
+                    "У трека ${track.id} отсутствует albumId"
+                )
+            )
+        Log.d(
+            TAG,
+            "[addTrackToPlaylist] trackId=${track.id}, albums=${track.albums.size}"
+        )
+        return when (
+            val result = client.addTrack(
+                playlistKind = playlistKind,
+                revision = playlist.revision,
+                trackId = track.id,
+                trackAlbum = albumId.toString()
+            )
+        ) {
+            is YamResult.Success -> DataResult.Success(result.value.toEntity())
+            is YamResult.Failure -> DataResult.Failure(
+                result.error.toDataError()
+            )
+        }
     }
 
-    suspend fun removeTrackFromPlaylist(playlist: dYaPlaylist, trackNumber: Int) {
-        Log.d("PlaylistRemoteSource", "removeTrackFromPlaylist: plId: ${playlist.title}, trackNumber: $trackNumber")
-        client.removeTrack(playlist.kind.toInt(), playlist.revision, trackNumber)
+    suspend fun removeTrackFromPlaylist(
+        playlist: dYaPlaylist,
+        trackNumber: Int
+    ): DataResult<dYaPlaylist> {
+        val playlistKind = playlist.kind.toIntOrNull()
+            ?: return DataResult.Failure(
+                DataError.InvalidData("Некорректный kind=${playlist.kind}")
+            )
+        Log.d(
+            TAG,
+            "[removeTrackFromPlaylist] playlist=${playlist.title}, position=$trackNumber"
+        )
+        return when (
+            val result = client.removeTrack(
+                playlistKind = playlistKind,
+                revision = playlist.revision,
+                trackNumber = trackNumber
+            )
+        ) {
+            is YamResult.Success -> DataResult.Success(result.value.toEntity())
+            is YamResult.Failure -> DataResult.Failure(
+                result.error.toDataError()
+            )
+        }
     }
 
     suspend fun setTrackLiked(
         trackId: String,
         liked: Boolean
-    ): YamResult<LikeActionResult> {
-        return client.setTrackLiked(
+    ): DataResult<Unit> {
+        return when (val result = client.setTrackLiked(
             trackId = trackId,
             liked = liked
-        )
+        )) {
+            is YamResult.Success -> DataResult.Success(Unit)
+            is YamResult.Failure -> DataResult.Failure(
+                result.error.toDataError()
+            )
+        }
+    }
+
+    private companion object {
+        const val TAG = "PlaylistRemoteSource"
     }
 }
 
-sealed class dPlaylistResult {
-    data class Success(
-        val YaPlaylist: dYaPlaylist,
-        val trackList: List<dYaTrack>) : dPlaylistResult()
-    sealed class Error : dPlaylistResult() {
-        object netError : Error()
-        object NoInternet : Error()
-        object AccessDenied : Error()
-        data class Api(val error: com.yellastrodev.yandexmusiclib.network.YamError) : Error()
-        data class Unknown(val throwable: Throwable) : Error()
-    }
-}
+data class PlaylistSnapshot(
+    val playlist: dYaPlaylist,
+    val tracks: List<dYaTrack>
+)

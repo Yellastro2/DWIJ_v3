@@ -66,9 +66,10 @@ private data class GlitchEvent(
  *
  * Расписание скачков генерируется при создании Composition, повторяется раз в
  * минуту и заменяется новым при следующем открытии экрана. Пока кнопка зажата,
- * акцентное кольцо дорастает до переданного внешнего радиуса кругового меню,
- * а Play уменьшается той же синхронной Transition. Фоновый слой использует
- * общий с ними холст, но остаётся неподвижным.
+ * при раскрытии меню акцентное кольцо дорастает до переданного внешнего радиуса,
+ * а Play уменьшается уже при первоначальном нажатии. Внешний обработчик может
+ * управлять pressed-состоянием, отключив встроенные жесты. Фоновый слой
+ * использует общий с остальными холст, но остаётся неподвижным.
  */
 @OptIn(ExperimentalFoundationApi::class)
 @Composable
@@ -76,6 +77,8 @@ fun PlayerIconButton(
     modifier: Modifier = Modifier,
     showPreviewGlitch: Boolean = false,
     expanded: Boolean = false,
+    pressed: Boolean = false,
+    gesturesEnabled: Boolean = true,
     expandedAccentOuterRadiusFraction: Float = 0.49f,
     onLongClick: () -> Unit = {},
     onPressedChange: (Boolean) -> Unit = {},
@@ -85,7 +88,8 @@ fun PlayerIconButton(
     var groupAShift by remember { mutableFloatStateOf(0f) }
     var groupBShift by remember { mutableFloatStateOf(0f) }
     val interactionSource = remember { MutableInteractionSource() }
-    val isPressed by interactionSource.collectIsPressedAsState()
+    val isInternallyPressed by interactionSource.collectIsPressedAsState()
+    val isPressed = if (gesturesEnabled) isInternallyPressed else pressed
     val currentOnPressedChange by rememberUpdatedState(onPressedChange)
     val shouldExpand = isPressed || expanded
     val safeExpandedRadiusFraction = expandedAccentOuterRadiusFraction.coerceIn(0f, 0.5f)
@@ -93,11 +97,15 @@ fun PlayerIconButton(
         safeExpandedRadiusFraction * PLAYER_ARTWORK_VIEWPORT_WIDTH / PLAYER_ACCENT_VISIBLE_RADIUS_X
     val expandedRingScaleY =
         safeExpandedRadiusFraction * PLAYER_ARTWORK_VIEWPORT_WIDTH / PLAYER_ACCENT_VISIBLE_RADIUS_Y
+    val ringTransition = updateTransition(
+        targetState = expanded,
+        label = "playerMenuExpansion",
+    )
     val pressTransition = updateTransition(
         targetState = shouldExpand,
         label = "playerButtonPress",
     )
-    val ringScaleX by pressTransition.animateFloat(
+    val ringScaleX by ringTransition.animateFloat(
         transitionSpec = {
             spring(
                 dampingRatio = 0.72f,
@@ -108,7 +116,7 @@ fun PlayerIconButton(
     ) { pressed ->
         if (pressed) expandedRingScaleX else 1f
     }
-    val ringScaleY by pressTransition.animateFloat(
+    val ringScaleY by ringTransition.animateFloat(
         transitionSpec = {
             spring(
                 dampingRatio = 0.72f,
@@ -152,14 +160,20 @@ fun PlayerIconButton(
         }
     }
 
-    BoxWithConstraints(
-        modifier = modifier.combinedClickable(
+    val gestureModifier = if (gesturesEnabled) {
+        Modifier.combinedClickable(
             interactionSource = interactionSource,
             indication = LocalIndication.current,
             role = Role.Button,
             onLongClick = onLongClick,
             onClick = onClick,
-        ),
+        )
+    } else {
+        Modifier
+    }
+
+    BoxWithConstraints(
+        modifier = modifier.then(gestureModifier),
         contentAlignment = Alignment.Center,
     ) {
         val artworkSize = minOf(maxWidth, maxHeight)

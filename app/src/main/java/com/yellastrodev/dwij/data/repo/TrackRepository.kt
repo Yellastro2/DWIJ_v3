@@ -1,24 +1,22 @@
 package com.yellastrodev.dwij.data.repo
 
 import android.util.Log
+import com.yellastrodev.dwij.data.DataError
+import com.yellastrodev.dwij.data.DataResult
 import com.yellastrodev.dwij.data.dao.dTrackDao
 import com.yellastrodev.dwij.data.source.TrackRemoteSource
 import com.yellastrodev.dwij.data.entities.dPlaylistTrack
 import com.yellastrodev.dwij.data.entities.dYaTrack
-import com.yellastrodev.yandexmusiclib.network.YamResult
-import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.GlobalScope
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.update
-import kotlinx.coroutines.launch
-import kotlinx.coroutines.flow.onEach
-import kotlin.collections.filterNot
-import kotlin.collections.map
-import kotlin.collections.mapNotNull
+import kotlinx.coroutines.flow.onStart
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
 
 
 class TrackRepository(
@@ -29,20 +27,22 @@ class TrackRepository(
     val TAG = "TrackRepository"
     private val _tracks = MutableStateFlow<Map<String, dYaTrack>>(emptyMap())
     val tracks: StateFlow<Map<String, dYaTrack>> = _tracks
+    private val loadMutex = Mutex()
 
-
-    init {
-//        GlobalScope.launch(Dispatchers.IO) {
-//            local.getAll().forEach { track ->
-//                _tracks.value = _tracks.value + (track.id to track)
-//            }
-//        }
-    }
-
-    suspend fun refreshTrackLocaly(trackId: String) {
-        val track = local.getTrack(trackId)!!
-        _tracks.update { current ->
-            current + (trackId to track)
+    suspend fun refreshTrackLocaly(trackId: String): DataResult<dYaTrack> {
+        return try {
+            val track = local.getTrack(trackId)
+                ?: return DataResult.Failure(
+                    DataError.NotFound("track", trackId)
+                )
+            _tracks.update { current ->
+                current + (trackId to track)
+            }
+            DataResult.Success(track)
+        } catch (error: CancellationException) {
+            throw error
+        } catch (error: Exception) {
+            DataResult.Failure(DataError.Storage(error))
         }
     }
 
@@ -53,28 +53,42 @@ class TrackRepository(
         }
     }
 
-    suspend fun getTrack(trackId: String): dYaTrack {
-        if (!_tracks.value.containsKey(trackId)) {
-            local.getTrack(trackId)?.let {
-                if (it.albums.size < 1){
-                    Log.d(TAG, "у трека локально нет альбома, скачиваем из удалённого")
-                    val remoteTrack = remote.fetchTracks(listOf(trackId))[0]
-                    local.insert(remoteTrack)
-                    _tracks.update { current ->
-                        current + (trackId to remoteTrack)
-                    }
-                }else
-                    _tracks.update { current ->
-                        current + (trackId to it)
-                    }
+    suspend fun getTrack(trackId: String): DataResult<dYaTrack> {
+        if (trackId.isBlank()) {
+            return DataResult.Failure(
+                DataError.InvalidData("trackId не должен быть пустым")
+            )
+        }
+        return loadMutex.withLock {
+            try {
+                _tracks.value[trackId]
+                    ?.takeIf { it.albums.isNotEmpty() }
+                    ?.let { return@withLock DataResult.Success(it) }
 
-            } ?: run {
-                val remoteTrack = remote.fetchTracks(listOf(trackId))[0]
-                local.insert(remoteTrack)
-                refreshTrackLocaly(trackId)
+                val localTrack = local.getTrack(trackId)
+                if (localTrack != null && localTrack.albums.isNotEmpty()) {
+                    _tracks.update { it + (trackId to localTrack) }
+                    return@withLock DataResult.Success(localTrack)
+                }
+
+                when (val result = remote.fetchTracks(listOf(trackId))) {
+                    is DataResult.Success -> {
+                        val remoteTrack = result.value.firstOrNull()
+                            ?: return@withLock DataResult.Failure(
+                                DataError.NotFound("track", trackId)
+                            )
+                        local.insert(remoteTrack)
+                        _tracks.update { it + (trackId to remoteTrack) }
+                        DataResult.Success(remoteTrack)
+                    }
+                    is DataResult.Failure -> result
+                }
+            } catch (error: CancellationException) {
+                throw error
+            } catch (error: Exception) {
+                DataResult.Failure(DataError.Storage(error))
             }
         }
-        return _tracks.value[trackId]!!
     }
 
     suspend fun putTracks(trackList: List<dYaTrack>) {
@@ -106,14 +120,13 @@ class TrackRepository(
         val ids = shorts.map { it.trackId }
 
         return _tracks
-            .onEach { cache ->
-                val missing = ids.filterNot { cache.containsKey(it) }
-                if (missing.isNotEmpty()) {
-                    Log.d(TAG, "tracksFlow: догружаем ${missing.size} трек(ов)")
-                    // Запускаем загрузку в фоне
-                    GlobalScope.launch(Dispatchers.IO) {
-                        loadTracks(missing)
-                    }
+            .onStart {
+                when (val result = loadTracks(ids)) {
+                    is DataResult.Success -> Unit
+                    is DataResult.Failure -> Log.e(
+                        TAG,
+                        "[tracksFlow] Треки не загружены: ${result.error}"
+                    )
                 }
             }
             .map { cache ->
@@ -126,67 +139,64 @@ class TrackRepository(
      * Собирает треки из текущего кеша треков в _tracks.value,
      * а недостающие в нем айдишки запрашивает в ремот
      */
-    suspend fun getTracks(trackIds: List<String>): List<dYaTrack> {
-        Log.d(TAG, "getTracks(size=${trackIds.size})")
-        val updated = ArrayList<dYaTrack>()
-        val missing = mutableListOf<String>()
-        trackIds.forEach { trackId ->
-            if (!_tracks.value.containsKey(trackId)) {
-                missing.add(trackId)
-            } else {
-                updated.add(_tracks.value[trackId]!!)
-            }
+    suspend fun getTracks(
+        trackIds: List<String>
+    ): DataResult<List<dYaTrack>> = loadTracks(trackIds)
+
+    suspend fun loadTracks(
+        trackIds: List<String>
+    ): DataResult<List<dYaTrack>> = loadMutex.withLock {
+        if (trackIds.isEmpty()) {
+            return@withLock DataResult.Success(emptyList())
         }
-        Log.d(TAG, "missing=${missing.size}, updated=${updated.size}")
-        if (missing.isNotEmpty()) {
-            val remoteList = loadTracks(missing)
-            updated.addAll(remoteList)
-
-        }
-        return updated
-    }
-
-    suspend fun loadTracks(trackIds: List<String>): List<dYaTrack> {
-        Log.d(TAG, "loadTracks(size=${trackIds.size})")
-        val result = mutableListOf<dYaTrack>()
-
-        // 1. Берём из локальной базы все, что есть
-        val localTracks = local.getTracks(trackIds)
-        if (localTracks.isNotEmpty()) {
-            _tracks.update { cache -> cache + localTracks.associateBy { it.id } }
-            result.addAll(localTracks)
-            localTracks.forEach {
-                if (it.albums.size < 1) {
-                    Log.d(TAG, "у трека локально нет альбома, скачиваем из удалённого")
-                    val remoteTrack = remote.fetchTracks(listOf(it.id))[0]
-                    local.insert(remoteTrack)
-                    _tracks.update { current ->
-                            current + (it.id to remoteTrack)
-                        }
+        try {
+            val requestedIds = trackIds.distinct()
+            val localTracks = local.getTracks(requestedIds)
+            if (localTracks.isNotEmpty()) {
+                _tracks.update {
+                    it + localTracks.associateBy(dYaTrack::id)
                 }
             }
+
+            val remoteIds = requestedIds.filter { id ->
+                val track = _tracks.value[id]
+                track == null || track.albums.isEmpty()
+            }
+            if (remoteIds.isNotEmpty()) {
+                Log.d(TAG, "[loadTracks] Догружаем ${remoteIds.size} треков")
+                when (val result = remote.fetchTracks(remoteIds)) {
+                    is DataResult.Success -> {
+                        local.insertAll(result.value)
+                        _tracks.update {
+                            it + result.value.associateBy(dYaTrack::id)
+                        }
+                    }
+                    is DataResult.Failure -> return@withLock result
+                }
+            }
+
+            val missingIds = requestedIds.filterNot(_tracks.value::containsKey)
+            if (missingIds.isNotEmpty()) {
+                return@withLock DataResult.Failure(
+                    DataError.NotFound(
+                        entity = "tracks",
+                        id = missingIds.joinToString(",")
+                    )
+                )
+            }
+            DataResult.Success(trackIds.mapNotNull(_tracks.value::get))
+        } catch (error: CancellationException) {
+            throw error
+        } catch (error: Exception) {
+            DataResult.Failure(DataError.Storage(error))
         }
-
-        // 2. Определяем, что ещё нужно догрузить
-        val missing = trackIds.filterNot { id -> _tracks.value.containsKey(id) }
-
-        // 2. Догружаем недостающие с удалённого
-        if (missing.isNotEmpty()) {
-            Log.d(TAG, "loadTracks(): missing=${missing.size}")
-            val remoteList = remote.fetchTracks(missing)
-            Log.d(TAG, "loadTracks(): remoteList=${remoteList.size}")
-
-            // Кладём в кэш и сохраняем локально
-            putTracks(remoteList)
-
-            result.addAll(remoteList)
-        }
-        return result
     }
 
-    suspend fun getTrackBytes(trackId: String): YamResult<ByteArray> {
-        val track = _tracks.value[trackId]!!
-        return remote.fetch(track)
+    suspend fun getTrackBytes(trackId: String): DataResult<ByteArray> {
+        return when (val result = getTrack(trackId)) {
+            is DataResult.Success -> remote.fetch(result.value)
+            is DataResult.Failure -> result
+        }
     }
     
 }

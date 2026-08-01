@@ -14,11 +14,14 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.grid.GridCells
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
+import androidx.compose.material3.SnackbarHost
+import androidx.compose.material3.SnackbarHostState
+import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -33,86 +36,105 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import androidx.compose.material3.Text
-import kotlinx.coroutines.delay
+import kotlinx.coroutines.launch
 
 /**
  * Верхняя Compose-часть домашнего экрана на общем цвете фона приложения:
- * квадратная кнопка плеера и сетка основных разделов, которая постепенно
- * заменяет прежний XML GridLayout.
+ * квадратная кнопка с управляемым протягиванием радиальным меню, временные
+ * Snackbar-экшены и сетка разделов, которая заменяет прежний XML GridLayout.
  */
 @Composable
 fun HomeScreen(
-    onPlayerClick: () -> Unit,
     onPlaylistsClick: () -> Unit,
     onTracksClick: () -> Unit,
     onWaveClick: () -> Unit,
     onAllTracksClick: () -> Unit,
-    onRadialMenuItemClick: (RadialMenuItem) -> Unit = {},
     modifier: Modifier = Modifier,
 ) {
     var isRadialMenuVisible by remember { mutableStateOf(false) }
     var isPlayerPressed by remember { mutableStateOf(false) }
     val radialMenuItems = homeRadialMenuItems()
+    val snackbarHostState = remember { SnackbarHostState() }
+    val coroutineScope = rememberCoroutineScope()
+    val playerActionMessage = stringResource(
+        R.string.home_radial_action_triggered,
+        1,
+        stringResource(R.string.home_radial_action_player),
+    )
+    val radialActionMessages = radialMenuItems.mapIndexed { index, item ->
+        item.id to stringResource(
+            R.string.home_radial_action_triggered,
+            index + 2,
+            item.title,
+        )
+    }.toMap()
 
-    LaunchedEffect(isPlayerPressed) {
-        if (isPlayerPressed) {
-            delay(RADIAL_MENU_START_DELAY_MILLIS)
-            if (isPlayerPressed) {
-                isRadialMenuVisible = true
-            }
-        } else {
-            isRadialMenuVisible = false
+    fun showActionSnackbar(message: String) {
+        coroutineScope.launch {
+            snackbarHostState.currentSnackbarData?.dismiss()
+            snackbarHostState.showSnackbar(message)
         }
     }
 
-    Column(
+    Box(
         modifier = modifier
             .fillMaxWidth()
             .background(colorResource(R.color.background)),
     ) {
-        Box(
-            modifier = Modifier
-                .fillMaxWidth()
-                .aspectRatio(1f),
-        ) {
-            PlayerIconButton(
-                modifier = Modifier.fillMaxSize(),
-                expanded = isRadialMenuVisible,
-                expandedAccentOuterRadiusFraction = HOME_RADIAL_MENU_OUTER_RADIUS_FRACTION,
-                onLongClick = {
-                    // Отделяет long-press от обычного клика.
-                },
-                onPressedChange = { isPressed ->
-                    isPlayerPressed = isPressed
-                },
-                onClick = onPlayerClick,
-            )
-            RadialMenu(
-                items = radialMenuItems,
-                visible = isRadialMenuVisible,
-                onItemClick = { item ->
-                    isRadialMenuVisible = false
-                    onRadialMenuItemClick(item)
-                },
-                onDismiss = {
-                    isRadialMenuVisible = false
-                },
-                outerRadiusFraction = HOME_RADIAL_MENU_OUTER_RADIUS_FRACTION,
-                animationStyle = RadialMenuAnimationStyle.GlitchFlicker,
-                modifier = Modifier.fillMaxSize(),
+        Column(modifier = Modifier.fillMaxWidth()) {
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .aspectRatio(1f),
+            ) {
+                PlayerIconButton(
+                    modifier = Modifier.fillMaxSize(),
+                    expanded = isRadialMenuVisible,
+                    pressed = isPlayerPressed,
+                    gesturesEnabled = false,
+                    expandedAccentOuterRadiusFraction = HOME_RADIAL_MENU_OUTER_RADIUS_FRACTION,
+                    onClick = {},
+                )
+                RadialMenu(
+                    items = radialMenuItems,
+                    visible = isRadialMenuVisible,
+                    onPrimaryClick = {
+                        showActionSnackbar(playerActionMessage)
+                    },
+                    onMenuActivation = {
+                        isRadialMenuVisible = true
+                    },
+                    onPressChange = { isPressed ->
+                        isPlayerPressed = isPressed
+                    },
+                    onItemClick = { item ->
+                        isRadialMenuVisible = false
+                        radialActionMessages[item.id]?.let(::showActionSnackbar)
+                    },
+                    onDismiss = {
+                        isRadialMenuVisible = false
+                    },
+                    outerRadiusFraction = HOME_RADIAL_MENU_OUTER_RADIUS_FRACTION,
+                    animationStyle = RadialMenuAnimationStyle.GlitchFlicker,
+                    modifier = Modifier.fillMaxSize(),
+                )
+            }
+            HomeMenuGrid(
+                onPlaylistsClick = onPlaylistsClick,
+                onTracksClick = onTracksClick,
+                onWaveClick = onWaveClick,
+                onAllTracksClick = onAllTracksClick,
             )
         }
-        HomeMenuGrid(
-            onPlaylistsClick = onPlaylistsClick,
-            onTracksClick = onTracksClick,
-            onWaveClick = onWaveClick,
-            onAllTracksClick = onAllTracksClick,
+        SnackbarHost(
+            hostState = snackbarHostState,
+            modifier = Modifier
+                .align(Alignment.BottomCenter)
+                .padding(horizontal = 16.dp, vertical = 12.dp),
         )
     }
 }
 
-private const val RADIAL_MENU_START_DELAY_MILLIS = 5L
 private const val HOME_RADIAL_MENU_OUTER_RADIUS_FRACTION = 0.49f
 
 @Composable
@@ -135,7 +157,7 @@ private fun homeRadialMenuItems(): List<RadialMenuItem> {
         listOf(
             RadialMenuItem("road", roadTitle, Color(0xFFFF2D82)),
             RadialMenuItem("focus", focusTitle, Color(0xFF00BEFF)),
-//            RadialMenuItem("calm", calmTitle, Color(0xFFB737FF)),
+            RadialMenuItem("calm", calmTitle, Color(0xFFB737FF)),
             RadialMenuItem("favorite", favoriteTitle, Color(0xFFFF2D96)),
             RadialMenuItem("radio", radioTitle, Color(0xFF00E6DC)),
             RadialMenuItem("party", partyTitle, Color(0xFFFF9100)),
@@ -248,7 +270,6 @@ private fun HomeMenuCard(
 private fun HomeScreenPreview() {
     HomeScreen(
         modifier = Modifier.fillMaxSize(),
-        onPlayerClick = {},
         onPlaylistsClick = {},
         onTracksClick = {},
         onWaveClick = {},

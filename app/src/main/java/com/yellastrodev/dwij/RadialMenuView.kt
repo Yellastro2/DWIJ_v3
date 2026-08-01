@@ -29,6 +29,7 @@ import androidx.compose.ui.graphics.drawscope.drawIntoCanvas
 import androidx.compose.ui.graphics.nativeCanvas
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.platform.LocalViewConfiguration
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import kotlinx.coroutines.delay
@@ -54,13 +55,17 @@ enum class RadialMenuAnimationStyle {
 /**
  * Полностью Compose-версия кругового меню. По умолчанию сектора появляются
  * резкими глитч-мерцаниями; прежнее плавное выдвижение сохранено в режиме
- * [RadialMenuAnimationStyle.Expand]. Меню поддерживает нажатие с протягиванием
- * пальца и закрывается после выбора. Радиусы задаются долей от меньшей стороны.
+ * [RadialMenuAnimationStyle.Expand]. Единый обработчик отличает быстрый клик
+ * в центре от long-press, меняет выбранный сектор при протягивании и оставляет
+ * центральную область без выбора. Радиусы задаются долей от меньшей стороны.
  */
 @Composable
 fun RadialMenu(
     items: List<RadialMenuItem>,
     visible: Boolean,
+    onPrimaryClick: () -> Unit,
+    onMenuActivation: () -> Unit,
+    onPressChange: (Boolean) -> Unit,
     onItemClick: (RadialMenuItem) -> Unit,
     onDismiss: () -> Unit,
     modifier: Modifier = Modifier,
@@ -71,7 +76,7 @@ fun RadialMenu(
     outerRadiusFraction: Float = 0.49f,
     animationStyle: RadialMenuAnimationStyle = RadialMenuAnimationStyle.GlitchFlicker,
 ) {
-    val glitchFrames = remember { generateRadialMenuGlitchFrames() }
+    val glitchFrames = remember { createFixedRadialMenuGlitchFrames() }
     val expansionProgress = rememberRadialMenuExpansionProgress(
         visible = visible && animationStyle == RadialMenuAnimationStyle.Expand,
     )
@@ -83,15 +88,14 @@ fun RadialMenu(
         RadialMenuAnimationStyle.GlitchFlicker -> glitchFrame.opacity > 0f
         RadialMenuAnimationStyle.Expand -> expansionProgress > 0f
     }
-    val isInputReady = when (animationStyle) {
-        RadialMenuAnimationStyle.GlitchFlicker -> glitchFrame.isStable
-        RadialMenuAnimationStyle.Expand -> expansionProgress >= RADIAL_MENU_INPUT_PROGRESS
-    }
     var pressedIndex by remember { mutableIntStateOf(-1) }
-    val currentInputReady = rememberUpdatedState(isInputReady)
+    val currentOnPrimaryClick = rememberUpdatedState(onPrimaryClick)
+    val currentOnMenuActivation = rememberUpdatedState(onMenuActivation)
+    val currentOnPressChange = rememberUpdatedState(onPressChange)
     val currentOnItemClick = rememberUpdatedState(onItemClick)
     val currentOnDismiss = rememberUpdatedState(onDismiss)
     val density = LocalDensity.current
+    val longPressTimeoutMillis = LocalViewConfiguration.current.longPressTimeoutMillis
     val contourWidth = with(density) { 1.4.dp.toPx() }
     val glowWidth = with(density) { 4.5.dp.toPx() }
     val glitchWidth = with(density) { 1.1.dp.toPx() }
@@ -112,29 +116,65 @@ fun RadialMenu(
         0.5f,
     )
 
-    val inputModifier = if (visible) {
-        Modifier.pointerInput(
-            items,
-            startAngle,
-            safeTotalSweep,
-            safeGap,
-            safeInnerRadiusFraction,
-            safeOuterRadiusFraction,
-        ) {
-            awaitEachGesture {
-                val down = awaitFirstDown(requireUnconsumed = false)
-                down.consume()
-                if (!currentInputReady.value) {
+    val inputModifier = Modifier.pointerInput(
+        items,
+        startAngle,
+        safeTotalSweep,
+        safeGap,
+        safeInnerRadiusFraction,
+        safeOuterRadiusFraction,
+        longPressTimeoutMillis,
+    ) {
+        awaitEachGesture {
+            val down = awaitFirstDown(requireUnconsumed = false)
+            val startedInsideCenter = isInsideRadialCenter(
+                position = down.position,
+                width = size.width.toFloat(),
+                height = size.height.toFloat(),
+                radiusFraction = safeInnerRadiusFraction,
+            )
+            if (!startedInsideCenter) {
+                return@awaitEachGesture
+            }
+
+            down.consume()
+            currentOnPressChange.value(true)
+            pressedIndex = -1
+            var latestPosition = down.position
+            var stayedInsideCenter = true
+
+            try {
+                val releasedBeforeLongPress = withTimeoutOrNull(longPressTimeoutMillis) {
                     while (true) {
                         val event = awaitPointerEvent()
-                        event.changes.forEach { change -> change.consume() }
-                        if (event.changes.none { change -> change.pressed }) break
+                        val change = event.changes.firstOrNull { it.id == down.id }
+                            ?: return@withTimeoutOrNull false
+                        latestPosition = change.position
+                        val isStillInsideCenter = isInsideRadialCenter(
+                            position = latestPosition,
+                            width = size.width.toFloat(),
+                            height = size.height.toFloat(),
+                            radiusFraction = safeInnerRadiusFraction,
+                        )
+                        if (!isStillInsideCenter) {
+                            stayedInsideCenter = false
+                        }
+                        change.consume()
+                        if (!change.pressed) return@withTimeoutOrNull true
                     }
-                    return@awaitEachGesture
                 }
 
-                var selectedIndex = findRadialMenuItemAt(
-                    position = down.position,
+                when (releasedBeforeLongPress) {
+                    true -> {
+                        if (stayedInsideCenter) currentOnPrimaryClick.value()
+                        return@awaitEachGesture
+                    }
+                    false -> return@awaitEachGesture
+                    null -> currentOnMenuActivation.value()
+                }
+
+                pressedIndex = findRadialMenuItemAt(
+                    position = latestPosition,
                     width = size.width.toFloat(),
                     height = size.height.toFloat(),
                     itemCount = items.size,
@@ -144,20 +184,14 @@ fun RadialMenu(
                     innerRadiusFraction = safeInnerRadiusFraction,
                     outerRadiusFraction = safeOuterRadiusFraction,
                 )
-                pressedIndex = selectedIndex
-                var releasedPosition: Offset? = null
 
+                var releasedPosition: Offset? = null
                 while (true) {
                     val event = awaitPointerEvent()
                     val change = event.changes.firstOrNull { it.id == down.id } ?: break
-                    if (!change.pressed) {
-                        releasedPosition = change.position
-                        change.consume()
-                        break
-                    }
-
-                    selectedIndex = findRadialMenuItemAt(
-                        position = change.position,
+                    latestPosition = change.position
+                    pressedIndex = findRadialMenuItemAt(
+                        position = latestPosition,
                         width = size.width.toFloat(),
                         height = size.height.toFloat(),
                         itemCount = items.size,
@@ -167,8 +201,11 @@ fun RadialMenu(
                         innerRadiusFraction = safeInnerRadiusFraction,
                         outerRadiusFraction = safeOuterRadiusFraction,
                     )
-                    pressedIndex = selectedIndex
                     change.consume()
+                    if (!change.pressed) {
+                        releasedPosition = latestPosition
+                        break
+                    }
                 }
 
                 val releasedIndex = releasedPosition?.let { position ->
@@ -185,16 +222,16 @@ fun RadialMenu(
                     )
                 } ?: -1
 
-                pressedIndex = -1
-                if (selectedIndex >= 0 && releasedIndex == selectedIndex) {
-                    currentOnItemClick.value(items[selectedIndex])
+                if (releasedIndex >= 0) {
+                    currentOnItemClick.value(items[releasedIndex])
                 } else {
                     currentOnDismiss.value()
                 }
+            } finally {
+                pressedIndex = -1
+                currentOnPressChange.value(false)
             }
         }
-    } else {
-        Modifier
     }
 
     Canvas(modifier = modifier.then(inputModifier)) {
@@ -228,7 +265,7 @@ fun RadialMenu(
             val outerRadius = itemAnimation.outerRadius
             val currentSweep = itemAnimation.sweepAngle
             val slotMiddle = startAngle + itemSlotAngle * (index + 0.5f)
-            val currentStart = slotMiddle - currentSweep / 2f + itemAnimation.angleOffset
+            val currentStart = slotMiddle - currentSweep / 2f
             val itemAlpha = itemAnimation.alpha
             val segmentColor = if (index == pressedIndex) {
                 item.color.lighten(0.24f)
@@ -246,17 +283,18 @@ fun RadialMenu(
                 x = outerRadius * cosDegrees(currentStart + currentSweep / 2f),
                 y = outerRadius * sinDegrees(currentStart + currentSweep / 2f),
             )
+            val segmentBrush = Brush.linearGradient(
+                colors = listOf(
+                    segmentColor.darken(0.72f).copy(alpha = 0.84f * itemAlpha),
+                    segmentColor.copy(alpha = 0.47f * itemAlpha),
+                ),
+                start = center,
+                end = gradientEnd,
+            )
 
             drawPath(
                 path = segmentPath,
-                brush = Brush.linearGradient(
-                    colors = listOf(
-                        segmentColor.darken(0.72f).copy(alpha = 0.84f * itemAlpha),
-                        segmentColor.copy(alpha = 0.47f * itemAlpha),
-                    ),
-                    start = center,
-                    end = gradientEnd,
-                ),
+                brush = segmentBrush,
             )
             drawPath(
                 path = segmentPath,
@@ -268,6 +306,17 @@ fun RadialMenu(
                 color = segmentColor.copy(alpha = 0.92f * itemAlpha),
                 style = Stroke(width = contourWidth),
             )
+            if (index == pressedIndex) {
+                drawPath(
+                    path = segmentPath,
+                    brush = segmentBrush,
+                )
+                drawPath(
+                    path = segmentPath,
+                    color = Color.White.copy(alpha = 0.34f * itemAlpha),
+                    style = Stroke(width = contourWidth * 1.6f),
+                )
+            }
 
             drawRadialMenuGlitches(
                 index = index,
@@ -354,7 +403,6 @@ private fun rememberRadialMenuGlitchFrame(
 private data class RadialMenuItemAnimation(
     val outerRadius: Float,
     val sweepAngle: Float,
-    val angleOffset: Float,
     val alpha: Float,
     val contentAlpha: Float,
 )
@@ -364,8 +412,6 @@ private data class RadialMenuGlitchFrame(
     val visibleItemsMask: Int,
     val opacity: Float,
     val holdMillis: Long,
-    val radiusScale: Float = 1f,
-    val angleOffset: Float = 0f,
     val isStable: Boolean = false,
 ) {
     fun isItemVisible(index: Int): Boolean =
@@ -392,12 +438,10 @@ private fun radialMenuGlitchItemAnimation(
         }
     }
     val alpha = (frame.opacity * itemOpacityFactor).coerceIn(0f, 1f)
-    val offsetDirection = if (index % 2 == 0) 1f else -1f
 
     return RadialMenuItemAnimation(
-        outerRadius = finalOuterRadius * frame.radiusScale,
+        outerRadius = finalOuterRadius,
         sweepAngle = finalVisibleSweep,
-        angleOffset = frame.angleOffset * offsetDirection,
         alpha = alpha,
         contentAlpha = alpha,
     )
@@ -438,7 +482,6 @@ private fun radialMenuExpandItemAnimation(
     return RadialMenuItemAnimation(
         outerRadius = outerRadius,
         sweepAngle = currentSweep,
-        angleOffset = 0f,
         alpha = 1f,
         contentAlpha = contentProgress,
     )
@@ -567,6 +610,19 @@ private fun buildRadialSegmentPath(
     close()
 }
 
+/** Проверяет центральную мёртвую зону, в которой сектор не выбирается. */
+private fun isInsideRadialCenter(
+    position: Offset,
+    width: Float,
+    height: Float,
+    radiusFraction: Float,
+): Boolean {
+    val center = Offset(width / 2f, height / 2f)
+    val delta = position - center
+    val radius = min(width, height) * radiusFraction
+    return delta.x * delta.x + delta.y * delta.y <= radius * radius
+}
+
 private fun findRadialMenuItemAt(
     position: Offset,
     width: Float,
@@ -655,12 +711,16 @@ private val HIDDEN_RADIAL_MENU_GLITCH_FRAME = RadialMenuGlitchFrame(
     holdMillis = 0L,
 )
 
+/** Создаёт используемый сейчас вручную настроенный ритм глитч-мерцаний. */
+private fun createFixedRadialMenuGlitchFrames(): List<RadialMenuGlitchFrame> =
+    createRadialMenuGlitchFrames(RADIAL_MENU_GLITCH_FIXED_HOLDS_MILLIS)
+
 /**
- * Создаёт новое расписание мерцаний с общей длительностью ровно
- * [RADIAL_MENU_GLITCH_DURATION_MILLIS]. Минимумы сохраняют читаемый ритм,
- * оставшееся время случайно распределяется порциями по 5 мс.
+ * Сохранённый случайный вариант расписания. Минимумы удерживают читаемый ритм,
+ * оставшиеся миллисекунды распределяются между бликами порциями по 5 мс.
  */
-private fun generateRadialMenuGlitchFrames(
+@Suppress("unused")
+private fun generateRandomRadialMenuGlitchFrames(
     random: Random = Random.Default,
 ): List<RadialMenuGlitchFrame> {
     val extraHoldMillis = MutableList(RADIAL_MENU_GLITCH_MIN_HOLDS_MILLIS.size) { 0L }
@@ -680,13 +740,21 @@ private fun generateRadialMenuGlitchFrames(
         minimum + extraHoldMillis[index]
     }
 
+    return createRadialMenuGlitchFrames(holdMillis)
+}
+
+/** Собирает одинаковую геометрию бликов с переданным расписанием кадров. */
+private fun createRadialMenuGlitchFrames(
+    holdMillis: List<Long>,
+): List<RadialMenuGlitchFrame> {
+    require(holdMillis.size == RADIAL_MENU_GLITCH_TRANSIENT_FRAME_COUNT)
+    require(holdMillis.sum() == RADIAL_MENU_GLITCH_DURATION_MILLIS)
+
     return listOf(
         RadialMenuGlitchFrame(
             visibleItemsMask = 0b010101,
             opacity = 0.55f,
             holdMillis = holdMillis[0],
-            radiusScale = 0.992f,
-            angleOffset = 1.4f,
         ),
         RadialMenuGlitchFrame(
             visibleItemsMask = 0,
@@ -697,15 +765,11 @@ private fun generateRadialMenuGlitchFrames(
             visibleItemsMask = 0b111011,
             opacity = 0.88f,
             holdMillis = holdMillis[2],
-            radiusScale = 1.008f,
-            angleOffset = -1.1f,
         ),
         RadialMenuGlitchFrame(
             visibleItemsMask = 0b001101,
             opacity = 0.36f,
             holdMillis = holdMillis[3],
-            radiusScale = 0.986f,
-            angleOffset = 1.8f,
         ),
         RadialMenuGlitchFrame(
             visibleItemsMask = ALL_RADIAL_MENU_ITEMS_MASK,
@@ -716,8 +780,6 @@ private fun generateRadialMenuGlitchFrames(
             visibleItemsMask = 0b110111,
             opacity = 0.58f,
             holdMillis = holdMillis[5],
-            radiusScale = 1.004f,
-            angleOffset = -0.7f,
         ),
         RadialMenuGlitchFrame(
             visibleItemsMask = ALL_RADIAL_MENU_ITEMS_MASK,
@@ -729,9 +791,10 @@ private fun generateRadialMenuGlitchFrames(
 }
 
 private const val RADIAL_MENU_GLITCH_DURATION_MILLIS = 500L
+private const val RADIAL_MENU_GLITCH_TRANSIENT_FRAME_COUNT = 6
 private const val RADIAL_MENU_GLITCH_RANDOM_QUANTUM_MILLIS = 5L
+private val RADIAL_MENU_GLITCH_FIXED_HOLDS_MILLIS = listOf(65L, 35L, 110L, 45L, 170L, 75L)
 private val RADIAL_MENU_GLITCH_MIN_HOLDS_MILLIS = listOf(45L, 20L, 50L, 25L, 60L, 30L)
 private const val RADIAL_MENU_ANIMATION_DURATION_MILLIS = 520
 private const val RADIAL_MENU_STAGGER_FRACTION = 0.055f
-private const val RADIAL_MENU_INPUT_PROGRESS = 0.85f
 private val RADIAL_MENU_EASING = CubicBezierEasing(0.18f, 0.8f, 0.2f, 1f)

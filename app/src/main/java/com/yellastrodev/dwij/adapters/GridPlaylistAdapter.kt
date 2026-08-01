@@ -12,6 +12,7 @@ import androidx.appcompat.app.AlertDialog
 import androidx.recyclerview.widget.RecyclerView
 import com.google.android.material.snackbar.Snackbar
 import com.yellastrodev.dwij.R
+import com.yellastrodev.dwij.data.DataResult
 import com.yellastrodev.dwij.data.entities.dPlaylistTrack
 import com.yellastrodev.dwij.data.entities.dYaPlaylist
 import com.yellastrodev.dwij.data.entities.dYaTrack
@@ -201,23 +202,23 @@ RecyclerView.Adapter<GridPlaylistAdapter.ViewHolder>() {
 					.setTitle("Удалить трек из плейлиста?")
 					.setPositiveButton("Yes,remove") { fD, o ->
 						fD.dismiss()
-						CoroutineScope(Dispatchers.IO).launch {
-							val fRes = model.removeTrackFromPlaylist(mList[position],pickedTrack!!)
+						mScope?.launch {
+							val result = model.removeTrackFromPlaylist(
+								mList[position],
+								pickedTrack!!
+							)
 //							val fRes = (mList[position] as dYaPlaylist).removeTrack(
 //								yMediaStore.store(viewHolder.itemView.context),
 //								mTrack!!
 //							)
-                            withContext(Dispatchers.Main) {
-                                if (fRes) {
-                                    notifyItemChanged(position)
-                                } else {
-                                    Snackbar.make(
-                                        viewHolder.itemView,
-                                       "error on remove", Snackbar.LENGTH_LONG
-                                    )
-                                        .show()
-                                }
-                            }
+							when (result) {
+								is DataResult.Success -> notifyItemChanged(position)
+								is DataResult.Failure -> Snackbar.make(
+									viewHolder.itemView,
+									"Не удалось удалить трек",
+									Snackbar.LENGTH_LONG
+								).show()
+							}
 
 
 						}

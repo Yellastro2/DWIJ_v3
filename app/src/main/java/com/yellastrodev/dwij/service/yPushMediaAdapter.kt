@@ -10,9 +10,9 @@ import androidx.media3.common.util.UnstableApi
 import androidx.media3.session.legacy.MediaMetadataCompat
 import androidx.media3.ui.PlayerNotificationManager
 import com.yellastrodev.dwij.activities.MainActivity
+import com.yellastrodev.dwij.data.DataResult
 import com.yellastrodev.yandexmusiclib.entities.CoverSize
 import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.GlobalScope
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
@@ -71,8 +71,9 @@ class yPushMediaAdapterobject(
 //            return it
 //        }
 
-        coverJob = GlobalScope.launch {
-            val bitmap = getCurrentTrackCoverBitmap(trackId!!)
+        if (trackId == null) return null
+        coverJob = playerService.serviceScope.launch(Dispatchers.IO) {
+            val bitmap = getCurrentTrackCoverBitmap(trackId)
             if (bitmap != null) {
                 withContext(Dispatchers.Main) {
                     Log.d(TAG, "onBitmap callback отправлен для trackId=$trackId")
@@ -115,7 +116,13 @@ class yPushMediaAdapterobject(
     private suspend fun getCurrentTrackCoverBitmap(trackId: String): Bitmap? {
 
         Log.d(TAG, "getCurrentTrackCoverBitmap: trackId=$trackId")
-        val track = trackId?.let { playerService.trackRepo.getTrack(it) } ?: return null
+        val track = when (val result = playerService.trackRepo.getTrack(trackId)) {
+            is DataResult.Success -> result.value
+            is DataResult.Failure -> {
+                Log.w(TAG, "[getCurrentTrackCoverBitmap] Трек не загружен: ${result.error}")
+                return null
+            }
+        }
         Log.d(TAG, "Track found in repo: $track")
         return playerService.coverRepo.getCover(track, CoverSize.`100x100`).also {
             Log.d(TAG, "Bitmap loaded for trackId=$trackId, size=${it.width}x${it.height}")

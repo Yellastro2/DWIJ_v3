@@ -9,6 +9,8 @@ import androidx.media3.common.util.UnstableApi
 import androidx.room.Database
 import androidx.room.Room
 import androidx.room.RoomDatabase
+import androidx.room.migration.Migration
+import androidx.sqlite.db.SupportSQLiteDatabase
 import com.yellastrodev.dwij.activities.MainActivity
 import com.yellastrodev.dwij.data.repo.CoverRepository
 import com.yellastrodev.dwij.data.repo.PlayerRepository
@@ -36,10 +38,8 @@ import com.yellastrodev.dwij.service.PlaybackFeedbackTracker
 import com.yellastrodev.yandexmusiclib.YamApiClient
 import com.yellastrodev.yandexmusiclib.network.YamError
 import com.yellastrodev.yandexmusiclib.network.YamResult
-import kotlinx.coroutines.DelicateCoroutinesApi
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.GlobalScope
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.withContext
@@ -73,7 +73,7 @@ class yApplication: Application() {
             dTrackAlbumCrossRef::class,
             dTrackArtistCrossRef::class
                    ],
-        version = 3
+        version = 4
     )
 //    @TypeConverters(StringListConverter::class) // если у тебя есть поля List<String>
     abstract class AppDatabase : RoomDatabase() {
@@ -100,6 +100,7 @@ class yApplication: Application() {
             AppDatabase::class.java,
             "my_database"
         )
+            .addMigrations(MIGRATION_3_4)
             .fallbackToDestructiveMigration()
             .build()
     }
@@ -110,7 +111,6 @@ class yApplication: Application() {
 
 
 
-    @OptIn(DelicateCoroutinesApi::class)
     val playlistRepository: PlaylistRepository by lazy {
         val lruCache = object : LruCache<Int, dYaPlaylist>(50) {
             override fun sizeOf(key: Int, value: dYaPlaylist) = 1
@@ -118,7 +118,7 @@ class yApplication: Application() {
         PlaylistRepository(
             cache = PlaylistCacheSource(lruCache),
             remote = PlaylistRemoteSource(yamClient),
-            scope = GlobalScope,
+            scope = applicationScope,
             trackRepo = trackRepository,
             local = db.dPlaylistDao()
 
@@ -138,7 +138,10 @@ class yApplication: Application() {
     }
 
     val playerRepo: PlayerRepository by lazy {
-        PlayerRepository(applicationContext).apply {
+        PlayerRepository(
+            context = applicationContext,
+            scope = applicationScope
+        ).apply {
 //            bind()
 
         }
@@ -149,7 +152,8 @@ class yApplication: Application() {
         CoverRepository(
             applicationContext,
             yamClient,
-            cacheManager
+            cacheManager,
+            applicationScope
         )
     }
 
@@ -173,12 +177,12 @@ class yApplication: Application() {
         WaveRepository(
             waveRemoteSource,
             trackRepository,
-            playerRepo
+            playerRepo,
+            applicationScope
         )
     }
 
 
-    @OptIn(DelicateCoroutinesApi::class)
     override fun onCreate() {
         super.onCreate()
         playerRepo.waveRepository = this@yApplication.waveRepository
@@ -266,5 +270,66 @@ class yApplication: Application() {
         is YamError.Http -> "Http($statusCode)"
         is YamError.InvalidResponse -> "InvalidResponse"
         is YamError.Network -> "Network"
+    }
+
+    private companion object {
+        val MIGRATION_3_4 = object : Migration(3, 4) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL(
+                    """
+                    CREATE TABLE IF NOT EXISTS playlist_tracks_v4 (
+                        playlistUuid TEXT NOT NULL,
+                        trackId TEXT NOT NULL,
+                        position INTEGER NOT NULL,
+                        PRIMARY KEY(playlistUuid, position),
+                        FOREIGN KEY(playlistUuid)
+                            REFERENCES playlists(playlistUuid)
+                            ON UPDATE NO ACTION ON DELETE CASCADE
+                    )
+                    """.trimIndent()
+                )
+                db.execSQL(
+                    """
+                    INSERT INTO playlist_tracks_v4 (
+                        playlistUuid,
+                        trackId,
+                        position
+                    )
+                    SELECT
+                        current.playlistUuid,
+                        current.trackId,
+                        CASE
+                            WHEN current.position IS NOT NULL
+                                THEN current.position
+                            ELSE COALESCE((
+                                SELECT MAX(position) + 1
+                                FROM playlist_tracks positioned
+                                WHERE positioned.playlistUuid = current.playlistUuid
+                                  AND positioned.position IS NOT NULL
+                            ), 0) + (
+                                SELECT COUNT(*) - 1
+                                FROM playlist_tracks previous
+                                WHERE previous.playlistUuid = current.playlistUuid
+                                  AND previous.position IS NULL
+                                  AND previous.rowid <= current.rowid
+                            )
+                        END
+                    FROM playlist_tracks current
+                    """.trimIndent()
+                )
+                db.execSQL("DROP TABLE playlist_tracks")
+                db.execSQL(
+                    "ALTER TABLE playlist_tracks_v4 RENAME TO playlist_tracks"
+                )
+                db.execSQL(
+                    "CREATE INDEX index_playlist_tracks_playlistUuid " +
+                        "ON playlist_tracks(playlistUuid)"
+                )
+                db.execSQL(
+                    "CREATE INDEX index_playlist_tracks_trackId " +
+                        "ON playlist_tracks(trackId)"
+                )
+            }
+        }
     }
 }

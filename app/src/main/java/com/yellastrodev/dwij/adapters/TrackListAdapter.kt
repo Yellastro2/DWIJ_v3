@@ -1,6 +1,5 @@
 package com.yellastrodev.dwij.adapters
 
-import android.annotation.SuppressLint
 import android.graphics.Bitmap
 import android.util.Log
 import android.view.LayoutInflater
@@ -14,7 +13,6 @@ import com.yellastrodev.dwij.R
 import com.yellastrodev.dwij.data.entities.dYaTrack
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
-import kotlinx.coroutines.Deferred
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.launch
@@ -27,95 +25,58 @@ class TrackListAdapter(
     var mScope: CoroutineScope? = null
 
 
-    var mListOfObj: ArrayList<dYaTrack> = ArrayList<dYaTrack>()
-
-    var mInitJob:  Deferred<Unit>? = null
+    private val mListOfObj = ArrayList<dYaTrack>()
 
 
-    var onItemClicked: (pos: Int) -> Unit = { pos ->}
+    var onItemClicked: (position: Int, track: dYaTrack) -> Unit = { _, _ -> }
 
 
     fun setList(allTracks: List<dYaTrack>) {
-        Log.d("TrackListAdapter", "setList: ${allTracks.size}")
+        Log.d(TAG, "[setList] Треков=${allTracks.size}")
 
         val oldList = mListOfObj.toList()
+        val newList = allTracks.toList()
+        val oldKeys = occurrenceKeys(oldList)
+        val newKeys = occurrenceKeys(newList)
         val diffCallback = object : DiffUtil.Callback() {
             override fun getOldListSize() = oldList.size
-            override fun getNewListSize() = allTracks.size
+            override fun getNewListSize() = newList.size
             override fun areItemsTheSame(oldItemPosition: Int, newItemPosition: Int) =
-                oldList[oldItemPosition].id == allTracks[newItemPosition].id
+                oldKeys[oldItemPosition] == newKeys[newItemPosition]
             override fun areContentsTheSame(oldItemPosition: Int, newItemPosition: Int) =
-                oldList[oldItemPosition] == allTracks[newItemPosition] // или твоя логика
+                oldList[oldItemPosition].hasSameVisibleContentAs(newList[newItemPosition])
         }
         val diffResult = DiffUtil.calculateDiff(diffCallback)
 
         mListOfObj.clear()
-        mListOfObj.addAll(allTracks)
+        mListOfObj.addAll(newList)
         diffResult.dispatchUpdatesTo(this)
     }
 
-    /**
-     * проверяет изменения в списках, включая позиции каждого трека.
-     * читает их только по .id, игнорирует остальные поля и изменения самих обьектов
-     */
-    private fun diffTracks(
-        oldTracks: ArrayList<dYaTrack>,
-        newTracks: List<dYaTrack>
-    ) {
-        val oldMap = oldTracks.associateBy { it.id }
-        val newMap = newTracks.associateBy { it.id }
-        val removed = oldTracks.filter { !newMap.containsKey(it.id) }
-        val added = newTracks.filter { !oldMap.containsKey(it.id) }
-
-        val oldIndexMap = oldTracks.mapIndexed { index, track -> track.id to index }.toMap()
-        val newIndexMap = newTracks.mapIndexed { index, track -> track.id to index }.toMap()
-
-        // 1) удаляем (по убыванию индексов чтобы не ломать позиции)
-        removed.mapNotNull { oldIndexMap[it.id] }
-            .sortedDescending()
-            .forEach { idx ->
-                mListOfObj.removeAt(idx)
-                notifyItemRemoved(idx)
-            }
-
-        // 2) добавляем (по возрастанию индексов)
-        val toAdd = added.map { track -> newIndexMap[track.id]!! to track }
-            .sortedBy { it.first }
-        toAdd.forEach { (idx, track) ->
-            val insertIdx = idx.coerceIn(0, mListOfObj.size)
-            mListOfObj.add(insertIdx, track)
-            notifyItemInserted(insertIdx)
+    private fun occurrenceKeys(tracks: List<dYaTrack>): List<Pair<String, Int>> {
+        val counts = mutableMapOf<String, Int>()
+        return tracks.map { track ->
+            val occurrence = counts.getOrDefault(track.id, 0)
+            counts[track.id] = occurrence + 1
+            track.id to occurrence
         }
-
-        // 3) выравниваем порядок: проходим по newTracks и двигаем элементы в нужные позиции
-        for (i in newTracks.indices) {
-            val id = newTracks[i].id
-            val curr = mListOfObj.indexOfFirst { it.id == id }
-            if (curr == -1) continue // вдруг не найдено (безопасно пропустить)
-            if (curr != i) {
-                val item = mListOfObj.removeAt(curr)
-                mListOfObj.add(i.coerceAtMost(mListOfObj.size), item)
-                notifyItemMoved(curr, i)
-            }
-        }
-
-        mInitJob = null
     }
 
-    fun addToList(fTracks: Collection<dYaTrack>) {
+    private fun dYaTrack.hasSameVisibleContentAs(other: dYaTrack): Boolean =
+        title == other.title &&
+            available == other.available &&
+            getCoverUriAny() == other.getCoverUriAny() &&
+            durationMs == other.durationMs &&
+            artists == other.artists
 
-        mListOfObj.addAll(fTracks)
-        notifyDataSetChanged()
-
-    }
-
-    class ViewHolder(view: View, private val loadCover: suspend (dYaTrack) -> Bitmap) : RecyclerView.ViewHolder(view) {
+    class ViewHolder(
+        view: View,
+        private val loadCover: suspend (dYaTrack) -> Bitmap,
+        private val scope: CoroutineScope
+    ) : RecyclerView.ViewHolder(view) {
         val vTitle: TextView
         val vArtist: TextView
         val vImg: ImageView
-        var mId: Int = -1
-
-
         private var coverJob: Job? = null
 
         init {
@@ -132,7 +93,7 @@ class TrackListAdapter(
 //			vImg.setImageResource(R.drawable.placeholder)
 
             // Запускаем новую корутину для загрузки картинки
-            coverJob = CoroutineScope(Dispatchers.IO).launch {
+            coverJob = scope.launch(Dispatchers.IO) {
                 try {
                     val bitmap = loadCover(track)
                     withContext(Dispatchers.Main) {
@@ -146,6 +107,11 @@ class TrackListAdapter(
                 }
             }
         }
+
+        fun recycle() {
+            coverJob?.cancel()
+            coverJob = null
+        }
     }
 
     override fun onCreateViewHolder(viewGroup: ViewGroup, viewType: Int): ViewHolder {
@@ -153,14 +119,22 @@ class TrackListAdapter(
             .inflate(R.layout.it_track, viewGroup, false)
 
 
-        return ViewHolder(view, loadCover)
+        return ViewHolder(
+            view = view,
+            loadCover = loadCover,
+            scope = checkNotNull(mScope) { "TrackListAdapter.mScope не задан" }
+        )
     }
 
-    @SuppressLint("SuspiciousIndentation")
     override fun onBindViewHolder(viewHolder: ViewHolder, position: Int) {
-        viewHolder.mId = position
         viewHolder.itemView.setOnClickListener {
-            onItemClicked(position)
+            val currentPosition = viewHolder.bindingAdapterPosition
+            if (currentPosition == RecyclerView.NO_POSITION) {
+                return@setOnClickListener
+            }
+            val track = mListOfObj.getOrNull(currentPosition)
+                ?: return@setOnClickListener
+            onItemClicked(currentPosition, track)
         }
 
 
@@ -179,4 +153,13 @@ class TrackListAdapter(
     }
 
     override fun getItemCount() = mListOfObj.size
+
+    override fun onViewRecycled(holder: ViewHolder) {
+        holder.recycle()
+        super.onViewRecycled(holder)
+    }
+
+    private companion object {
+        const val TAG = "TrackListAdapter"
+    }
 }

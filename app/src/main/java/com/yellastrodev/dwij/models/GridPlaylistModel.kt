@@ -5,6 +5,8 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.viewModelScope
 import com.yellastrodev.dwij.adapters.GridPlaylistAdapter
+import com.yellastrodev.dwij.data.DataError
+import com.yellastrodev.dwij.data.DataResult
 import com.yellastrodev.dwij.data.entities.dYaPlaylist
 import com.yellastrodev.dwij.data.entities.dYaTrack
 import com.yellastrodev.dwij.data.entities.iPlaylist
@@ -66,19 +68,33 @@ class GridPlaylistModel(
 		playlistRepo.refreshPlaylists()
 	}
 
-	suspend fun addTrackToPlaylist(playlist: iPlaylist, trackId: String) {
-        if (playlist is dYaPlaylist)
+	suspend fun addTrackToPlaylist(
+		playlist: iPlaylist,
+		trackId: String
+	): DataResult<Unit> {
+        return if (playlist is dYaPlaylist) {
             playlistRepo.addTrackToPlaylist(playlist, trackId)
+		} else {
+			DataResult.Failure(
+				DataError.InvalidData("Плейлист ${playlist.getdId()} не является Яндекс-плейлистом")
+			)
+		}
 	}
 
-	suspend fun getTrack(trackId: String): dYaTrack? {
+	suspend fun getTrack(trackId: String): DataResult<dYaTrack> {
 		return trackRepo.getTrack(trackId)
-
 	}
 
-	suspend fun removeTrackFromPlaylist(playlist: iPlaylist, track: dYaTrack): Boolean {
-        if (playlist is dYaPlaylist)
+	suspend fun removeTrackFromPlaylist(
+		playlist: iPlaylist,
+		track: dYaTrack
+	): DataResult<Unit> {
+        return if (playlist is dYaPlaylist) {
             playlistRepo.removeTrackFromPlaylist(playlist, track)
-		return true
+		} else {
+			DataResult.Failure(
+				DataError.InvalidData("Плейлист ${playlist.getdId()} не является Яндекс-плейлистом")
+			)
+		}
 	}
 }

@@ -16,24 +16,21 @@ import com.yellastrodev.dwij.data.entities.dYaTrack
 import com.yellastrodev.dwij.data.repo.WaveRepository
 import com.yellastrodev.dwij.fragments.ObjectFrag.Companion.TRACKLIST
 import com.yellastrodev.yandexmusiclib.entities.CoverSize
-import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
-import kotlinx.coroutines.flow.asFlow
-import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.flatMapLatest
-import kotlinx.coroutines.flow.flattenMerge
 import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.flow.onEach
 import kotlinx.coroutines.flow.launchIn
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.merge
 import kotlinx.coroutines.flow.scan
+import kotlinx.coroutines.flow.receiveAsFlow
 import kotlinx.coroutines.launch
-import kotlinx.coroutines.withContext
-import kotlin.collections.flatten
 
 
 class TracklistModel(
@@ -69,7 +66,12 @@ class TracklistModel(
         }
     }
 
-    var trackList = ArrayList<dYaTrack>()
+    private var trackList: List<dYaTrack> = emptyList()
+    private var tracksJob: Job? = null
+    private var listIdentity: String? = null
+
+    private val scrollResetChannel = Channel<Unit>(Channel.CONFLATED)
+    val scrollResetEvents = scrollResetChannel.receiveAsFlow()
 
 
     /** Текущее состояние плейлиста (null, пока не загружен). */
@@ -95,23 +97,47 @@ class TracklistModel(
      * @param type тип объекта (например, "playlist")
      * @param value идентификатор объекта
      */
-    suspend fun setType(type: String, value: String) {
-        Log.d(TAG, "setType: type=$type, value=$value")
+    fun setType(type: String, value: String) {
+        val newIdentity = "$type:$value"
+        if (listIdentity == newIdentity && tracksJob?.isActive == true) {
+            return
+        }
+        Log.d(TAG, "[setType] type=$type, value=$value")
+        tracksJob?.cancel()
+        listIdentity = newIdentity
+        trackList = emptyList()
+        adapter.setList(emptyList())
+        _playlist.value = null
+        var resetScrollOnFirstList = true
+
+        fun publishTracks(tracks: List<dYaTrack>) {
+            val snapshot = tracks.toList()
+            trackList = snapshot
+            adapter.setList(snapshot)
+            if (resetScrollOnFirstList) {
+                scrollResetChannel.trySend(Unit)
+                resetScrollOnFirstList = false
+            }
+        }
+
         if (type == "playlist") {
-            playlistRepo.playlistFlow(value)
+            tracksJob = playlistRepo.playlistFlow(value)
                 .onEach { playlist ->
-                    Log.d(TAG, "Получен плейлист: ${playlist.playlistUuid}, треков=${playlist.tracks.size}")
+                    Log.d(
+                        TAG,
+                        "[setType] Получен плейлист ${playlist.playlistUuid}, " +
+                            "треков=${playlist.tracks.size}"
+                    )
                     _playlist.value = playlist
                 }
                 .flatMapLatest { playlist ->
                     trackRepo.tracksFlow(playlist.tracks)
                 }
                 .onEach { tracks ->
-                    Log.d(TAG, "Треки после collect: ${tracks.size}")
-                    trackList = ArrayList(tracks)
-                    adapter.setList(trackList)
+                    Log.d(TAG, "[setType] Получено треков=${tracks.size}")
+                    publishTracks(tracks)
                 }
-                .launchIn(viewModelScope) // подписка живёт пока жив ViewModel
+                .launchIn(viewModelScope)
         } else if (type == TRACKLIST) {
             _playlist.value = dSimpleTracklist()
             val allTracksFlow: Flow<List<dYaTrack>> =
@@ -130,44 +156,12 @@ class TracklistModel(
                                 acc + newList.associateBy { it.id }
                             }
                             .map { it.values.toList() }
-                            .distinctUntilChanged { old, new ->
-                                // сравниваем по id-шникам, чтобы не триггерить лишние обновления
-                                old.map { it.id } == new.map { it.id }
-                            }
                     }
                 }
                     .distinctUntilChanged()
-            viewModelScope.launch  {
-                allTracksFlow.collect { flowedTrackList ->
-                    adapter.setList(flowedTrackList)
-                    trackList = ArrayList(flowedTrackList)
-                }
-            }
-//            playlistRepo.playlists
-//                .flatMapLatest { playlists ->
-//                    playlists
-//                        .map { p -> trackRepo.tracksFlow(p.tracks) } // Flow<List<Track>>
-//                        .asFlow()
-//                        .flattenMerge() // emits as each inner flow updates
-//                }
-//                .onEach { tracks -> // List<Track>
-//                    trackList.addAll(tracks)
-//                    withContext(Dispatchers.Main) {
-//                        adapter.setList(trackList) }
-//                }
-//                .launchIn(viewModelScope)
-//            playlistRepo.playlists
-//                .flatMapLatest { playlists ->
-//                    combine(
-//                        playlists.map { p -> trackRepo.tracksFlow(p.tracks) }
-//                    ) { lists: Array<List<dYaTrack>> ->
-//                        lists.toList().flatten().distinctBy { it.id } // убрали дубли
-//                    }
-//                }
-//                .onEach { tracks ->
-//                    adapter.setList(tracks)
-//                }
-//                .launchIn(viewModelScope)
+            tracksJob = allTracksFlow
+                .onEach { tracks -> publishTracks(tracks) }
+                .launchIn(viewModelScope)
         } else
         {
             Log.w(TAG, "Неизвестный тип: $type")
@@ -191,20 +185,48 @@ class TracklistModel(
         }
     }
 
-    suspend fun onTrackClicked( index: Int) {
-
-        // что бы не тормозить смену экрана, иначе валью будет ждать этого почемуто
-        // нихуя не изменилось
+    fun onTrackClicked(index: Int, expectedTrackId: String? = null): Boolean {
+        val queue = trackList.toList()
+        val resolvedIndex = when {
+            index in queue.indices &&
+                (expectedTrackId == null || queue[index].id == expectedTrackId) -> index
+            expectedTrackId != null -> queue.indexOfFirst { it.id == expectedTrackId }
+            else -> -1
+        }
+        if (resolvedIndex !in queue.indices) {
+            Log.w(
+                TAG,
+                "[onTrackClicked] Трек не найден: index=$index, trackId=$expectedTrackId"
+            )
+            return false
+        }
+        val selectedTracklist = playlist.value ?: run {
+            Log.w(TAG, "[onTrackClicked] Треклист ещё не загружен")
+            return false
+        }
+        Log.d(
+            TAG,
+            "[onTrackClicked] requestedIndex=$index, resolvedIndex=$resolvedIndex, " +
+                "trackId=${queue[resolvedIndex].id}, queueSize=${queue.size}"
+        )
         viewModelScope.launch {
             playerRepo.playQueue(
-                trackList as List<dYaTrack>,
-                index,
-                playlist.value!!)
+                tracks = queue,
+                startIndex = resolvedIndex,
+                tracklist = selectedTracklist
+            )
         }
+        return true
     }
 
 
     suspend fun playWave() {
         waveRepository.playWave(_playlist.value)
+    }
+
+    override fun onCleared() {
+        tracksJob?.cancel()
+        scrollResetChannel.close()
+        super.onCleared()
     }
 }
