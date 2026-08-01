@@ -1,9 +1,15 @@
 package com.yellastrodev.dwij
 
+import android.os.SystemClock
+import android.util.Log
 import androidx.annotation.DrawableRes
+import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.Image
+import androidx.compose.foundation.LocalIndication
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.interaction.MutableInteractionSource
+import androidx.compose.foundation.interaction.PressInteraction
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
@@ -29,10 +35,13 @@ import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.SideEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -40,6 +49,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.ColorFilter
 import androidx.compose.ui.graphics.ImageBitmap
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.drawWithContent
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.res.colorResource
 import androidx.compose.ui.res.painterResource
@@ -52,6 +62,7 @@ import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import kotlinx.coroutines.launch
+import java.util.Locale
 
 /**
  * Полный Compose-интерфейс домашнего экрана: радиальное меню, сетка разделов,
@@ -73,6 +84,8 @@ fun HomeScreen(
 ) {
     var isRadialMenuVisible by remember { mutableStateOf(false) }
     var isPlayerPressed by remember { mutableStateOf(false) }
+    var selectedTab by remember { mutableStateOf(HomeNavigationTab.Main) }
+    val navigationTimingTracker = remember { HomeNavigationTimingTracker() }
     val radialMenuItems = homeRadialMenuItems()
     val snackbarHostState = remember { SnackbarHostState() }
     val coroutineScope = rememberCoroutineScope()
@@ -88,13 +101,25 @@ fun HomeScreen(
             item.title,
         )
     }.toMap()
-    val searchUnavailableMessage = stringResource(R.string.home_search_unavailable)
-
     fun showActionSnackbar(message: String) {
         coroutineScope.launch {
             snackbarHostState.currentSnackbarData?.dismiss()
             snackbarHostState.showSnackbar(message)
         }
+    }
+
+    BackHandler(enabled = selectedTab == HomeNavigationTab.Search) {
+        navigationTimingTracker.onClick(
+            targetLabel = "Главная",
+            targetTab = HomeNavigationTab.Main,
+            currentTab = selectedTab,
+        )
+        selectedTab = HomeNavigationTab.Main
+        navigationTimingTracker.onStateAssigned(HomeNavigationTab.Main)
+    }
+
+    SideEffect {
+        navigationTimingTracker.onCompositionCommitted(selectedTab)
     }
 
     Scaffold(
@@ -120,9 +145,35 @@ fun HomeScreen(
                     )
                 }
                 HomeBottomNavigation(
-                    onCatalogClick = onCatalogClick,
+                    selectedTab = selectedTab,
+                    navigationTimingTracker = navigationTimingTracker,
+                    onCatalogClick = {
+                        navigationTimingTracker.onClick(
+                            targetLabel = "Каталог",
+                            targetTab = null,
+                            currentTab = selectedTab,
+                        )
+                        onCatalogClick()
+                    },
+                    onMainClick = {
+                        navigationTimingTracker.onClick(
+                            targetLabel = "Главная",
+                            targetTab = HomeNavigationTab.Main,
+                            currentTab = selectedTab,
+                        )
+                        selectedTab = HomeNavigationTab.Main
+                        navigationTimingTracker.onStateAssigned(HomeNavigationTab.Main)
+                    },
                     onSearchClick = {
-                        showActionSnackbar(searchUnavailableMessage)
+                        navigationTimingTracker.onClick(
+                            targetLabel = "Поиск",
+                            targetTab = HomeNavigationTab.Search,
+                            currentTab = selectedTab,
+                        )
+                        isRadialMenuVisible = false
+                        isPlayerPressed = false
+                        selectedTab = HomeNavigationTab.Search
+                        navigationTimingTracker.onStateAssigned(HomeNavigationTab.Search)
                     },
                 )
             }
@@ -132,66 +183,76 @@ fun HomeScreen(
             modifier = Modifier
                 .fillMaxSize()
                 .padding(contentPadding)
-                .verticalScroll(rememberScrollState()),
+                .verticalScroll(rememberScrollState())
+                .drawWithContent {
+                    drawContent()
+                    navigationTimingTracker.onFirstDraw(selectedTab)
+                },
         ) {
-            Box(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .aspectRatio(1f),
-            ) {
-                PlayerIconButton(
-                    modifier = Modifier.fillMaxSize(),
-                    expanded = isRadialMenuVisible,
-                    pressed = isPlayerPressed,
-                    gesturesEnabled = false,
-                    expandedAccentOuterRadiusFraction = HOME_RADIAL_MENU_OUTER_RADIUS_FRACTION,
-                    onClick = {},
-                )
-                RadialMenu(
-                    items = radialMenuItems,
-                    visible = isRadialMenuVisible,
-                    onPrimaryClick = {
-                        showActionSnackbar(playerActionMessage)
-                    },
-                    onVisualActivation = {
-                        isRadialMenuVisible = true
-                    },
-                    onPressChange = { isPressed ->
-                        isPlayerPressed = isPressed
-                    },
-                    onItemClick = { item ->
-                        isRadialMenuVisible = false
-                        radialActionMessages[item.id]?.let(::showActionSnackbar)
-                    },
-                    onDismiss = {
-                        isRadialMenuVisible = false
-                    },
-                    outerRadiusFraction = HOME_RADIAL_MENU_OUTER_RADIUS_FRACTION,
-                    animationStyle = RadialMenuAnimationStyle.GlitchFlicker,
-                    modifier = Modifier.fillMaxSize(),
-                )
-                IconButton(
-                    onClick = onSettingsClick,
-                    modifier = Modifier
-                        .align(Alignment.TopEnd)
-                        .padding(top = 15.dp, end = 15.dp)
-                        .size(50.dp),
-                ) {
-                    Image(
-                        painter = painterResource(R.drawable.ic_settings),
-                        contentDescription = stringResource(
-                            R.string.settings_button_content_description,
-                        ),
-                        modifier = Modifier.fillMaxSize(),
+            when (selectedTab) {
+                HomeNavigationTab.Main -> {
+                    Box(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .aspectRatio(1f),
+                    ) {
+                        PlayerIconButton(
+                            modifier = Modifier.fillMaxSize(),
+                            expanded = isRadialMenuVisible,
+                            pressed = isPlayerPressed,
+                            gesturesEnabled = false,
+                            expandedAccentOuterRadiusFraction =
+                                HOME_RADIAL_MENU_OUTER_RADIUS_FRACTION,
+                            onClick = {},
+                        )
+                        RadialMenu(
+                            items = radialMenuItems,
+                            visible = isRadialMenuVisible,
+                            onPrimaryClick = {
+                                showActionSnackbar(playerActionMessage)
+                            },
+                            onVisualActivation = {
+                                isRadialMenuVisible = true
+                            },
+                            onPressChange = { isPressed ->
+                                isPlayerPressed = isPressed
+                            },
+                            onItemClick = { item ->
+                                isRadialMenuVisible = false
+                                radialActionMessages[item.id]?.let(::showActionSnackbar)
+                            },
+                            onDismiss = {
+                                isRadialMenuVisible = false
+                            },
+                            outerRadiusFraction = HOME_RADIAL_MENU_OUTER_RADIUS_FRACTION,
+                            animationStyle = RadialMenuAnimationStyle.GlitchFlicker,
+                            modifier = Modifier.fillMaxSize(),
+                        )
+                        IconButton(
+                            onClick = onSettingsClick,
+                            modifier = Modifier
+                                .align(Alignment.TopEnd)
+                                .padding(top = 15.dp, end = 15.dp)
+                                .size(50.dp),
+                        ) {
+                            Image(
+                                painter = painterResource(R.drawable.ic_settings),
+                                contentDescription = stringResource(
+                                    R.string.settings_button_content_description,
+                                ),
+                                modifier = Modifier.fillMaxSize(),
+                            )
+                        }
+                    }
+                    HomeMenuGrid(
+                        onPlaylistsClick = onPlaylistsClick,
+                        onTracksClick = onTracksClick,
+                        onWaveClick = onWaveClick,
+                        onAllTracksClick = onAllTracksClick,
                     )
                 }
+                HomeNavigationTab.Search -> SearchPlaceholderScreen()
             }
-            HomeMenuGrid(
-                onPlaylistsClick = onPlaylistsClick,
-                onTracksClick = onTracksClick,
-                onWaveClick = onWaveClick,
-                onAllTracksClick = onAllTracksClick,
-            )
         }
     }
 }
@@ -207,6 +268,125 @@ data class HomeCompactPlayerUiState(
 )
 
 private const val HOME_RADIAL_MENU_OUTER_RADIUS_FRACTION = 0.49f
+
+private enum class HomeNavigationTab {
+    Main,
+    Search,
+}
+
+/** Собирает временные метки от касания вкладки до первого draw нового экрана. */
+private class HomeNavigationTimingTracker {
+    private var pressTarget: String? = null
+    private var pressStartedAtNanos: Long = 0L
+    private var clickAtNanos: Long = 0L
+    private var pendingTarget: HomeNavigationTab? = null
+    private var compositionLogged = false
+    private var drawLogged = false
+
+    fun onPress(targetLabel: String) {
+        pressTarget = targetLabel
+        pressStartedAtNanos = SystemClock.elapsedRealtimeNanos()
+        Log.d(
+            HOME_NAVIGATION_TIMING_TAG,
+            "[onPress] Палец нажат: цель=$targetLabel",
+        )
+    }
+
+    fun onRelease(targetLabel: String) {
+        val now = SystemClock.elapsedRealtimeNanos()
+        Log.d(
+            HOME_NAVIGATION_TIMING_TAG,
+            "[onRelease] Палец отпущен: цель=$targetLabel, " +
+                "после DOWN=${elapsedMillis(pressStartedAtNanos, now)} мс",
+        )
+    }
+
+    fun onCancel(targetLabel: String) {
+        val now = SystemClock.elapsedRealtimeNanos()
+        Log.d(
+            HOME_NAVIGATION_TIMING_TAG,
+            "[onCancel] Нажатие отменено: цель=$targetLabel, " +
+                "после DOWN=${elapsedMillis(pressStartedAtNanos, now)} мс",
+        )
+        pressTarget = null
+        pressStartedAtNanos = 0L
+    }
+
+    fun onClick(
+        targetLabel: String,
+        targetTab: HomeNavigationTab?,
+        currentTab: HomeNavigationTab,
+    ) {
+        val now = SystemClock.elapsedRealtimeNanos()
+        val fromPress = if (pressTarget == targetLabel) {
+            "${elapsedMillis(pressStartedAtNanos, now)} мс"
+        } else {
+            "нет DOWN"
+        }
+        Log.d(
+            HOME_NAVIGATION_TIMING_TAG,
+            "[onClick] onClick вызван: цель=$targetLabel, " +
+                "после DOWN=$fromPress, текущая вкладка=$currentTab",
+        )
+
+        if (targetTab == null || targetTab == currentTab) {
+            pendingTarget = null
+            clickAtNanos = 0L
+            return
+        }
+
+        pendingTarget = targetTab
+        clickAtNanos = now
+        compositionLogged = false
+        drawLogged = false
+    }
+
+    fun onStateAssigned(targetTab: HomeNavigationTab) {
+        if (pendingTarget != targetTab) return
+        Log.d(
+            HOME_NAVIGATION_TIMING_TAG,
+            "[onStateAssigned] Вкладка записана в state: цель=$targetTab, " +
+                "после onClick=${elapsedMillis(clickAtNanos)} мс",
+        )
+    }
+
+    fun onCompositionCommitted(tab: HomeNavigationTab) {
+        if (pendingTarget != tab || compositionLogged) return
+        compositionLogged = true
+        Log.d(
+            HOME_NAVIGATION_TIMING_TAG,
+            "[onCompositionCommitted] Композиция подтверждена: вкладка=$tab, " +
+                "после onClick=${elapsedMillis(clickAtNanos)} мс",
+        )
+    }
+
+    fun onFirstDraw(tab: HomeNavigationTab) {
+        if (pendingTarget != tab || drawLogged) return
+        drawLogged = true
+        val now = SystemClock.elapsedRealtimeNanos()
+        Log.d(
+            HOME_NAVIGATION_TIMING_TAG,
+            "[onFirstDraw] Первый draw: вкладка=$tab, " +
+                "после onClick=${elapsedMillis(clickAtNanos, now)} мс, " +
+                "после DOWN=${elapsedMillis(pressStartedAtNanos, now)} мс",
+        )
+        pendingTarget = null
+        clickAtNanos = 0L
+        pressTarget = null
+        pressStartedAtNanos = 0L
+    }
+
+    private fun elapsedMillis(
+        startedAtNanos: Long,
+        finishedAtNanos: Long = SystemClock.elapsedRealtimeNanos(),
+    ): String {
+        if (startedAtNanos <= 0L) return "неизвестно"
+        val durationMillis = (finishedAtNanos - startedAtNanos) / 1_000_000.0
+        return String.format(Locale.US, "%.2f", durationMillis)
+    }
+}
+
+private const val HOME_NAVIGATION_TIMING_TAG = "HomeNavigationTiming"
 
 @Composable
 private fun homeRadialMenuItems(): List<RadialMenuItem> {
@@ -407,10 +587,13 @@ private fun HomePlayerProgress(
     }
 }
 
-/** Три пункта нижней навигации; на этом экране активна центральная «Главная». */
+/** Три пункта нижней навигации с переключением активной главной или поиска. */
 @Composable
 private fun HomeBottomNavigation(
+    selectedTab: HomeNavigationTab,
+    navigationTimingTracker: HomeNavigationTimingTracker,
     onCatalogClick: () -> Unit,
+    onMainClick: () -> Unit,
     onSearchClick: () -> Unit,
 ) {
     BoxWithConstraints(
@@ -431,20 +614,47 @@ private fun HomeBottomNavigation(
                 iconRes = R.drawable.ic_home_nav_catalog,
                 title = stringResource(R.string.home_navigation_catalog),
                 selected = false,
+                onPress = {
+                    navigationTimingTracker.onPress("Каталог")
+                },
+                onRelease = {
+                    navigationTimingTracker.onRelease("Каталог")
+                },
+                onCancel = {
+                    navigationTimingTracker.onCancel("Каталог")
+                },
                 onClick = onCatalogClick,
                 modifier = Modifier.width(itemWidth),
             )
             HomeBottomNavigationItem(
                 iconRes = R.drawable.ic_home_nav_main,
                 title = stringResource(R.string.home_navigation_main),
-                selected = true,
-                onClick = {},
+                selected = selectedTab == HomeNavigationTab.Main,
+                onPress = {
+                    navigationTimingTracker.onPress("Главная")
+                },
+                onRelease = {
+                    navigationTimingTracker.onRelease("Главная")
+                },
+                onCancel = {
+                    navigationTimingTracker.onCancel("Главная")
+                },
+                onClick = onMainClick,
                 modifier = Modifier.width(itemWidth),
             )
             HomeBottomNavigationItem(
                 iconRes = R.drawable.ic_home_nav_search,
                 title = stringResource(R.string.home_navigation_search),
-                selected = false,
+                selected = selectedTab == HomeNavigationTab.Search,
+                onPress = {
+                    navigationTimingTracker.onPress("Поиск")
+                },
+                onRelease = {
+                    navigationTimingTracker.onRelease("Поиск")
+                },
+                onCancel = {
+                    navigationTimingTracker.onCancel("Поиск")
+                },
                 onClick = onSearchClick,
                 modifier = Modifier.width(itemWidth),
             )
@@ -457,16 +667,36 @@ private fun HomeBottomNavigationItem(
     @DrawableRes iconRes: Int,
     title: String,
     selected: Boolean,
+    onPress: () -> Unit,
+    onRelease: () -> Unit,
+    onCancel: () -> Unit,
     onClick: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
     val contentColor = if (selected) Color(0xFFFF178F) else Color(0xFF9095A7)
+    val interactionSource = remember { MutableInteractionSource() }
+    val currentOnPress by rememberUpdatedState(onPress)
+    val currentOnRelease by rememberUpdatedState(onRelease)
+    val currentOnCancel by rememberUpdatedState(onCancel)
+
+    LaunchedEffect(interactionSource) {
+        interactionSource.interactions.collect { interaction ->
+            when (interaction) {
+                is PressInteraction.Press -> currentOnPress()
+                is PressInteraction.Release -> currentOnRelease()
+                is PressInteraction.Cancel -> currentOnCancel()
+                else -> Unit
+            }
+        }
+    }
 
     Column(
         horizontalAlignment = Alignment.CenterHorizontally,
         modifier = modifier
             .fillMaxSize()
             .clickable(
+                interactionSource = interactionSource,
+                indication = LocalIndication.current,
                 role = Role.Tab,
                 onClick = onClick,
             )
