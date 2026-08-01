@@ -99,6 +99,11 @@ class HomeFrag: Fragment(R.layout.frag_home) {
 						findNavController().navigate(R.id.bigPlayerFrag)
 					},
 					onPlayerPlayPauseClick = playerModel::playAudio,
+					onPlayerPreviousClick = {
+						viewLifecycleOwner.lifecycleScope.launch {
+							playerModel.prevTrack()
+						}
+					},
 					onPlayerNextClick = {
 						viewLifecycleOwner.lifecycleScope.launch {
 							playerModel.nextTrack()

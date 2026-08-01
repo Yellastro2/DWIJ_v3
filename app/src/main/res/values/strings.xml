@@ -38,7 +38,9 @@
     <string name="home_navigation_search">Поиск</string>
     <string name="home_player_play_content_description">Продолжить воспроизведение</string>
     <string name="home_player_pause_content_description">Поставить на паузу</string>
+    <string name="home_player_previous_content_description">Предыдущий трек</string>
     <string name="home_player_next_content_description">Следующий трек</string>
+    <string name="home_player_details_content_description">Открыть полный экран плеера</string>
     <string name="home_player_unknown_artist">Неизвестный исполнитель</string>
     <string name="search_title">Поиск</string>
     <string name="search_subtitle">Музыка под любой твой движ</string>

@@ -1,0 +1,265 @@
+<?xml version="1.0" encoding="utf-8"?>
+<svg width="355" height="237" viewBox="0 0 355 237" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <clipPath id="clip-1" clipPathUnits="userSpaceOnUse">
+      <path d="M162,89Q157,86 157,93L157,150Q157,157 163,153L214,126Q220,122 214,118Z" />
+    </clipPath>
+    <clipPath id="clip-2" clipPathUnits="userSpaceOnUse">
+      <path d="M162,89Q157,86 157,93L157,150Q157,157 163,153L214,126Q220,122 214,118Z" />
+    </clipPath>
+    <clipPath id="clip-3" clipPathUnits="userSpaceOnUse">
+      <path d="M162,89Q157,86 157,93L157,150Q157,157 163,153L214,126Q220,122 214,118Z" />
+    </clipPath>
+    <clipPath id="clip-4" clipPathUnits="userSpaceOnUse">
+      <path d="M162,89Q157,86 157,93L157,150Q157,157 163,153L214,126Q220,122 214,118Z" />
+    </clipPath>
+    <clipPath id="clip-5" clipPathUnits="userSpaceOnUse">
+      <path d="M162,89Q157,86 157,93L157,150Q157,157 163,153L214,126Q220,122 214,118Z" />
+    </clipPath>
+    <clipPath id="clip-6" clipPathUnits="userSpaceOnUse">
+      <path d="M162,89Q157,86 157,93L157,150Q157,157 163,153L214,126Q220,122 214,118Z" />
+    </clipPath>
+    <clipPath id="clip-7" clipPathUnits="userSpaceOnUse">
+      <path d="M162,89Q157,86 157,93L157,150Q157,157 163,153L214,126Q220,122 214,118Z" />
+    </clipPath>
+    <clipPath id="clip-8" clipPathUnits="userSpaceOnUse">
+      <path d="M162,89Q157,86 157,93L157,150Q157,157 163,153L214,126Q220,122 214,118Z" />
+    </clipPath>
+    <clipPath id="clip-9" clipPathUnits="userSpaceOnUse">
+      <path d="M162,89Q157,86 157,93L157,150Q157,157 163,153L214,126Q220,122 214,118Z" />
+    </clipPath>
+    <clipPath id="clip-10" clipPathUnits="userSpaceOnUse">
+      <path d="M162,89Q157,86 157,93L157,150Q157,157 163,153L214,126Q220,122 214,118Z" />
+    </clipPath>
+    <clipPath id="clip-11" clipPathUnits="userSpaceOnUse">
+      <path d="M162,89Q157,86 157,93L157,150Q157,157 163,153L214,126Q220,122 214,118Z" />
+    </clipPath>
+    <clipPath id="clip-12" clipPathUnits="userSpaceOnUse">
+      <path d="M162,89Q157,86 157,93L157,150Q157,157 163,153L214,126Q220,122 214,118Z" />
+    </clipPath>
+    <clipPath id="clip-13" clipPathUnits="userSpaceOnUse">
+      <path d="M162,89Q157,86 157,93L157,150Q157,157 163,153L214,126Q220,122 214,118Z" />
+    </clipPath>
+    <clipPath id="clip-14" clipPathUnits="userSpaceOnUse">
+      <path d="M162,89Q157,86 157,93L157,150Q157,157 163,153L214,126Q220,122 214,118Z" />
+    </clipPath>
+    <clipPath id="clip-15" clipPathUnits="userSpaceOnUse">
+      <path d="M162,89Q157,86 157,93L157,150Q157,157 163,153L214,126Q220,122 214,118Z" />
+    </clipPath>
+    <clipPath id="clip-16" clipPathUnits="userSpaceOnUse">
+      <path d="M162,89Q157,86 157,93L157,150Q157,157 163,153L214,126Q220,122 214,118Z" />
+    </clipPath>
+    <clipPath id="clip-17" clipPathUnits="userSpaceOnUse">
+      <path d="M162,89Q157,86 157,93L157,150Q157,157 163,153L214,126Q220,122 214,118Z" />
+    </clipPath>
+    <clipPath id="clip-18" clipPathUnits="userSpaceOnUse">
+      <path d="M162,89Q157,86 157,93L157,150Q157,157 163,153L214,126Q220,122 214,118Z" />
+    </clipPath>
+    <clipPath id="clip-19" clipPathUnits="userSpaceOnUse">
+      <path d="M162,89Q157,86 157,93L157,150Q157,157 163,153L214,126Q220,122 214,118Z" />
+    </clipPath>
+    <clipPath id="clip-20" clipPathUnits="userSpaceOnUse">
+      <path d="M162,89Q157,86 157,93L157,150Q157,157 163,153L214,126Q220,122 214,118Z" />
+    </clipPath>
+    <clipPath id="clip-21" clipPathUnits="userSpaceOnUse">
+      <path d="M162,89Q157,86 157,93L157,150Q157,157 163,153L214,126Q220,122 214,118Z" />
+    </clipPath>
+    <clipPath id="clip-22" clipPathUnits="userSpaceOnUse">
+      <path d="M162,89Q157,86 157,93L157,150Q157,157 163,153L214,126Q220,122 214,118Z" />
+    </clipPath>
+    <clipPath id="clip-23" clipPathUnits="userSpaceOnUse">
+      <path d="M162,89Q157,86 157,93L157,150Q157,157 163,153L214,126Q220,122 214,118Z" />
+    </clipPath>
+    <clipPath id="clip-24" clipPathUnits="userSpaceOnUse">
+      <path d="M162,89Q157,86 157,93L157,150Q157,157 163,153L214,126Q220,122 214,118Z" />
+    </clipPath>
+    <clipPath id="clip-25" clipPathUnits="userSpaceOnUse">
+      <path d="M162,89Q157,86 157,93L157,150Q157,157 163,153L214,126Q220,122 214,118Z" />
+    </clipPath>
+    <clipPath id="clip-26" clipPathUnits="userSpaceOnUse">
+      <path d="M162,89Q157,86 157,93L157,150Q157,157 163,153L214,126Q220,122 214,118Z" />
+    </clipPath>
+    <clipPath id="clip-27" clipPathUnits="userSpaceOnUse">
+      <path d="M162,89Q157,86 157,93L157,150Q157,157 163,153L214,126Q220,122 214,118Z" />
+    </clipPath>
+    <clipPath id="clip-28" clipPathUnits="userSpaceOnUse">
+      <path d="M162,89Q157,86 157,93L157,150Q157,157 163,153L214,126Q220,122 214,118Z" />
+    </clipPath>
+    <clipPath id="clip-29" clipPathUnits="userSpaceOnUse">
+      <path d="M162,89Q157,86 157,93L157,150Q157,157 163,153L214,126Q220,122 214,118Z" />
+    </clipPath>
+    <clipPath id="clip-30" clipPathUnits="userSpaceOnUse">
+      <path d="M162,89Q157,86 157,93L157,150Q157,157 163,153L214,126Q220,122 214,118Z" />
+    </clipPath>
+    <clipPath id="clip-31" clipPathUnits="userSpaceOnUse">
+      <path d="M162,89Q157,86 157,93L157,150Q157,157 163,153L214,126Q220,122 214,118Z" />
+    </clipPath>
+    <clipPath id="clip-32" clipPathUnits="userSpaceOnUse">
+      <path d="M162,89Q157,86 157,93L157,150Q157,157 163,153L214,126Q220,122 214,118Z" />
+    </clipPath>
+    <clipPath id="clip-33" clipPathUnits="userSpaceOnUse">
+      <path d="M162,89Q157,86 157,93L157,150Q157,157 163,153L214,126Q220,122 214,118Z" />
+    </clipPath>
+    <clipPath id="clip-34" clipPathUnits="userSpaceOnUse">
+      <path d="M162,89Q157,86 157,93L157,150Q157,157 163,153L214,126Q220,122 214,118Z" />
+    </clipPath>
+    <clipPath id="clip-35" clipPathUnits="userSpaceOnUse">
+      <path d="M162,89Q157,86 157,93L157,150Q157,157 163,153L214,126Q220,122 214,118Z" />
+    </clipPath>
+    <clipPath id="clip-36" clipPathUnits="userSpaceOnUse">
+      <path d="M162,89Q157,86 157,93L157,150Q157,157 163,153L214,126Q220,122 214,118Z" />
+    </clipPath>
+    <clipPath id="clip-37" clipPathUnits="userSpaceOnUse">
+      <path d="M162,89Q157,86 157,93L157,150Q157,157 163,153L214,126Q220,122 214,118Z" />
+    </clipPath>
+    <clipPath id="clip-38" clipPathUnits="userSpaceOnUse">
+      <path d="M162,89Q157,86 157,93L157,150Q157,157 163,153L214,126Q220,122 214,118Z" />
+    </clipPath>
+    <clipPath id="clip-39" clipPathUnits="userSpaceOnUse">
+      <path d="M162,89Q157,86 157,93L157,150Q157,157 163,153L214,126Q220,122 214,118Z" />
+    </clipPath>
+    <clipPath id="clip-40" clipPathUnits="userSpaceOnUse">
+      <path d="M162,89Q157,86 157,93L157,150Q157,157 163,153L214,126Q220,122 214,118Z" />
+    </clipPath>
+    <clipPath id="clip-41" clipPathUnits="userSpaceOnUse">
+      <path d="M162,89Q157,86 157,93L157,150Q157,157 163,153L214,126Q220,122 214,118Z" />
+    </clipPath>
+    <clipPath id="clip-42" clipPathUnits="userSpaceOnUse">
+      <path d="M162,89Q157,86 157,93L157,150Q157,157 163,153L214,126Q220,122 214,118Z" />
+    </clipPath>
+  </defs>
+  <path d="M159,90Q154,87 154,94L154,151Q154,157 160,154L211,127Q217,123 211,119Z" fill="#17dfff" fill-opacity="0.5" />
+  <path d="M165,89Q160,86 160,93L160,150Q160,156 166,153L217,125Q221,122 216,118Z" fill="#ff138d" fill-opacity="0.55" />
+  <path d="M162,89Q157,86 157,93L157,150Q157,157 163,153L214,126Q220,122 214,118Z" fill="#fbf8fc" />
+  <g clip-path="url(#clip-1)">
+    <path d="M154,92h66v0.65h-66z" fill="#aeb3bf" fill-opacity="0.3" />
+  </g>
+  <g clip-path="url(#clip-2)">
+    <path d="M154,94h66v0.65h-66z" fill="#aeb3bf" fill-opacity="0.3" />
+  </g>
+  <g clip-path="url(#clip-3)">
+    <path d="M154,96h66v0.65h-66z" fill="#aeb3bf" fill-opacity="0.3" />
+  </g>
+  <g clip-path="url(#clip-4)">
+    <path d="M154,98h66v0.65h-66z" fill="#aeb3bf" fill-opacity="0.3" />
+  </g>
+  <g clip-path="url(#clip-5)">
+    <path d="M154,100h66v0.65h-66z" fill="#aeb3bf" fill-opacity="0.3" />
+  </g>
+  <g clip-path="url(#clip-6)">
+    <path d="M154,102h66v0.65h-66z" fill="#aeb3bf" fill-opacity="0.3" />
+  </g>
+  <g clip-path="url(#clip-7)">
+    <path d="M154,104h66v0.65h-66z" fill="#aeb3bf" fill-opacity="0.3" />
+  </g>
+  <g clip-path="url(#clip-8)">
+    <path d="M154,106h66v0.65h-66z" fill="#aeb3bf" fill-opacity="0.3" />
+  </g>
+  <g clip-path="url(#clip-9)">
+    <path d="M154,108h66v0.65h-66z" fill="#aeb3bf" fill-opacity="0.3" />
+  </g>
+  <g clip-path="url(#clip-10)">
+    <path d="M154,110h66v0.65h-66z" fill="#aeb3bf" fill-opacity="0.3" />
+  </g>
+  <g clip-path="url(#clip-11)">
+    <path d="M154,112h66v0.65h-66z" fill="#aeb3bf" fill-opacity="0.3" />
+  </g>
+  <g clip-path="url(#clip-12)">
+    <path d="M154,114h66v0.65h-66z" fill="#aeb3bf" fill-opacity="0.3" />
+  </g>
+  <g clip-path="url(#clip-13)">
+    <path d="M154,116h66v0.65h-66z" fill="#aeb3bf" fill-opacity="0.3" />
+  </g>
+  <g clip-path="url(#clip-14)">
+    <path d="M154,118h66v0.65h-66z" fill="#aeb3bf" fill-opacity="0.3" />
+  </g>
+  <g clip-path="url(#clip-15)">
+    <path d="M154,120h66v0.65h-66z" fill="#aeb3bf" fill-opacity="0.3" />
+  </g>
+  <g clip-path="url(#clip-16)">
+    <path d="M154,122h66v0.65h-66z" fill="#aeb3bf" fill-opacity="0.3" />
+  </g>
+  <g clip-path="url(#clip-17)">
+    <path d="M154,124h66v0.65h-66z" fill="#aeb3bf" fill-opacity="0.3" />
+  </g>
+  <g clip-path="url(#clip-18)">
+    <path d="M154,126h66v0.65h-66z" fill="#aeb3bf" fill-opacity="0.3" />
+  </g>
+  <g clip-path="url(#clip-19)">
+    <path d="M154,128h66v0.65h-66z" fill="#aeb3bf" fill-opacity="0.3" />
+  </g>
+  <g clip-path="url(#clip-20)">
+    <path d="M154,130h66v0.65h-66z" fill="#aeb3bf" fill-opacity="0.3" />
+  </g>
+  <g clip-path="url(#clip-21)">
+    <path d="M154,132h66v0.65h-66z" fill="#aeb3bf" fill-opacity="0.3" />
+  </g>
+  <g clip-path="url(#clip-22)">
+    <path d="M154,134h66v0.65h-66z" fill="#aeb3bf" fill-opacity="0.3" />
+  </g>
+  <g clip-path="url(#clip-23)">
+    <path d="M154,136h66v0.65h-66z" fill="#aeb3bf" fill-opacity="0.3" />
+  </g>
+  <g clip-path="url(#clip-24)">
+    <path d="M154,138h66v0.65h-66z" fill="#aeb3bf" fill-opacity="0.3" />
+  </g>
+  <g clip-path="url(#clip-25)">
+    <path d="M154,140h66v0.65h-66z" fill="#aeb3bf" fill-opacity="0.3" />
+  </g>
+  <g clip-path="url(#clip-26)">
+    <path d="M154,142h66v0.65h-66z" fill="#aeb3bf" fill-opacity="0.3" />
+  </g>
+  <g clip-path="url(#clip-27)">
+    <path d="M154,144h66v0.65h-66z" fill="#aeb3bf" fill-opacity="0.3" />
+  </g>
+  <g clip-path="url(#clip-28)">
+    <path d="M154,146h66v0.65h-66z" fill="#aeb3bf" fill-opacity="0.3" />
+  </g>
+  <g clip-path="url(#clip-29)">
+    <path d="M154,148h66v0.65h-66z" fill="#aeb3bf" fill-opacity="0.3" />
+  </g>
+  <g clip-path="url(#clip-30)">
+    <path d="M154,150h66v0.65h-66z" fill="#aeb3bf" fill-opacity="0.3" />
+  </g>
+  <g clip-path="url(#clip-31)">
+    <path d="M154,152h66v0.65h-66z" fill="#aeb3bf" fill-opacity="0.3" />
+  </g>
+  <g clip-path="url(#clip-32)">
+    <path d="M153,98h54v1.4h-54z" fill="#18dfff" fill-opacity="0.42" />
+  </g>
+  <g clip-path="url(#clip-33)">
+    <path d="M159,104h49v1.2h-49z" fill="#ff168f" fill-opacity="0.38" />
+  </g>
+  <g clip-path="url(#clip-34)">
+    <path d="M154,113h56v1.4h-56z" fill="#17dcff" fill-opacity="0.35" />
+  </g>
+  <g clip-path="url(#clip-35)">
+    <path d="M160,121h55v1.2h-55z" fill="#ff2aa1" fill-opacity="0.4" />
+  </g>
+  <g clip-path="url(#clip-36)">
+    <path d="M152,129h50v1.4h-50z" fill="#18dfff" fill-opacity="0.38" />
+  </g>
+  <g clip-path="url(#clip-37)">
+    <path d="M159,139h43v1.3h-43z" fill="#ff168f" fill-opacity="0.36" />
+  </g>
+  <g clip-path="url(#clip-38)">
+    <path d="M154,146h36v1.2h-36z" fill="#17dcff" fill-opacity="0.32" />
+  </g>
+  <g clip-path="url(#clip-39)">
+    <path d="M159,101h49v1h-49z" fill="#ffffff" fill-opacity="0.72" />
+  </g>
+  <g clip-path="url(#clip-40)">
+    <path d="M159,117h49v1h-49z" fill="#ffffff" fill-opacity="0.72" />
+  </g>
+  <g clip-path="url(#clip-41)">
+    <path d="M159,133h49v1h-49z" fill="#ffffff" fill-opacity="0.72" />
+  </g>
+  <g clip-path="url(#clip-42)">
+    <path d="M159,143h49v1h-49z" fill="#ffffff" fill-opacity="0.72" />
+  </g>
+  <path d="M153,100h8v2h-8z" fill="#18dfff" fill-opacity="0.68" />
+  <path d="M156,114h11v1.5h-11z" fill="#ff168f" fill-opacity="0.7" />
+  <path d="M207,121h10v2h-10z" fill="#ff168f" fill-opacity="0.68" />
+  <path d="M154,137h8v2h-8z" fill="#19dfff" fill-opacity="0.64" />
+  <path d="M198,145h8v1.5h-8z" fill="#ff168f" fill-opacity="0.6" />
+</svg>

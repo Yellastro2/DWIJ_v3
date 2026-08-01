@@ -4,6 +4,7 @@ import androidx.compose.animation.core.animateFloat
 import androidx.compose.animation.core.spring
 import androidx.compose.animation.core.updateTransition
 import androidx.compose.foundation.ExperimentalFoundationApi
+import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.LocalIndication
 import androidx.compose.foundation.background
@@ -30,6 +31,12 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clipToBounds
+import androidx.compose.ui.draw.drawWithContent
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.geometry.Rect
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.Path
+import androidx.compose.ui.graphics.drawscope.clipPath
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.painter.Painter
 import androidx.compose.ui.layout.ContentScale
@@ -41,6 +48,9 @@ import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import kotlinx.coroutines.delay
+import kotlin.math.cos
+import kotlin.math.sin
+import kotlin.math.sqrt
 import kotlin.random.Random
 
 private const val GLITCH_CYCLE_DURATION_MILLIS = 60_000
@@ -69,13 +79,17 @@ private data class GlitchEvent(
  * при раскрытии меню акцентное кольцо дорастает до переданного внешнего радиуса,
  * а Play уменьшается уже при первоначальном нажатии. Внешний обработчик может
  * управлять pressed-состоянием, отключив встроенные жесты. Фоновый слой
- * использует общий с остальными холст, но остаётся неподвижным.
+ * использует общий с остальными холст, но остаётся неподвижным. Состояние
+ * воспроизведения заменяет Play на Pause, а [progress] открывает отдельный
+ * белый слой кольца от верхней точки по часовой стрелке.
  */
 @OptIn(ExperimentalFoundationApi::class)
 @Composable
 fun PlayerIconButton(
     modifier: Modifier = Modifier,
     showPreviewGlitch: Boolean = false,
+    isPlaying: Boolean = false,
+    progress: Float = 0f,
     expanded: Boolean = false,
     pressed: Boolean = false,
     gesturesEnabled: Boolean = true,
@@ -181,8 +195,11 @@ fun PlayerIconButton(
         val artworkContentHeight = artworkSize * (237f / 355f)
         val artworkContentTopOffset = (maxHeight - artworkContentHeight) / 2
         val backgroundPainter = painterResource(R.drawable.bg_player_glitch_v2)
-        val ringPainter = painterResource(R.drawable.ic_player_accent_v2)
-        val playPainter = painterResource(R.drawable.ic_player_play_v2)
+        val ringPainter = painterResource(R.drawable.ic_player_progress_ring_base)
+        val progressPainter = painterResource(R.drawable.ic_player_progress_ring_fill)
+        val playPainter = painterResource(
+            if (isPlaying) R.drawable.ic_player_pause_v2 else R.drawable.ic_player_play_v2,
+        )
         val effectiveGroupAShift = when {
             shouldExpand -> 0f
             showPreviewGlitch -> 0.06f
@@ -214,9 +231,22 @@ fun PlayerIconButton(
                     scaleY = ringScaleY
                 },
         )
+        PlayerProgressRing(
+            painter = progressPainter,
+            progress = progress,
+            artworkSize = artworkSize,
+            scaleX = ringScaleX,
+            scaleY = ringScaleY,
+        )
         Image(
             painter = playPainter,
-            contentDescription = stringResource(R.string.player_button_content_description),
+            contentDescription = stringResource(
+                if (isPlaying) {
+                    R.string.home_player_pause_content_description
+                } else {
+                    R.string.home_player_play_content_description
+                },
+            ),
             contentScale = ContentScale.Fit,
             modifier = Modifier
                 .size(artworkSize)
@@ -249,6 +279,142 @@ fun PlayerIconButton(
         }
     }
 }
+
+/** Показывает отделённый белый эллипс только в угловом секторе прогресса. */
+@Composable
+private fun BoxScope.PlayerProgressRing(
+    painter: Painter,
+    progress: Float,
+    artworkSize: Dp,
+    scaleX: Float,
+    scaleY: Float,
+) {
+    val safeProgress = progress.coerceIn(0f, 1f)
+    if (safeProgress <= 0f) return
+
+    Image(
+        painter = painter,
+        contentDescription = null,
+        contentScale = ContentScale.Fit,
+        modifier = Modifier
+            .size(artworkSize)
+            .graphicsLayer {
+                this.scaleX = scaleX
+                this.scaleY = scaleY
+            }
+            .drawWithProgressSector(safeProgress),
+    )
+    PlayerProgressHead(
+        progress = safeProgress,
+        artworkSize = artworkSize,
+        scaleX = scaleX,
+        scaleY = scaleY,
+    )
+}
+
+/** Рисует белую головку прогресса с разнесёнными cyan/magenta глич-ореолами. */
+@Composable
+private fun BoxScope.PlayerProgressHead(
+    progress: Float,
+    artworkSize: Dp,
+    scaleX: Float,
+    scaleY: Float,
+) {
+    Canvas(
+        modifier = Modifier
+            .size(artworkSize)
+            .graphicsLayer {
+                this.scaleX = scaleX
+                this.scaleY = scaleY
+            },
+    ) {
+        val artworkScale = size.width / PLAYER_ARTWORK_VIEWPORT_WIDTH
+        val artworkHeight = 237f * artworkScale
+        val center = Offset(
+            x = 180f * artworkScale,
+            y = (size.height - artworkHeight) / 2f + 120f * artworkScale,
+        )
+        val radiusX = 81f * artworkScale
+        val radiusY = 88f * artworkScale
+        val angleRadians = Math.toRadians((-90f + progress * 360f).toDouble())
+        val cosAngle = cos(angleRadians).toFloat()
+        val sinAngle = sin(angleRadians).toFloat()
+        val headCenter = Offset(
+            x = center.x + radiusX * cosAngle,
+            y = center.y + radiusY * sinAngle,
+        )
+
+        val tangentX = -radiusX * sinAngle
+        val tangentY = radiusY * cosAngle
+        val tangentLength = sqrt(tangentX * tangentX + tangentY * tangentY)
+            .coerceAtLeast(1f)
+        val tangent = Offset(tangentX / tangentLength, tangentY / tangentLength)
+        val glitchShift = 1.7.dp.toPx()
+        val cyanCenter = headCenter - tangent * glitchShift
+        val magentaCenter = headCenter + tangent * glitchShift
+
+        drawCircle(
+            color = Color(0xFF18DFFF).copy(alpha = 0.28f),
+            radius = 6.2.dp.toPx(),
+            center = cyanCenter,
+        )
+        drawCircle(
+            color = Color(0xFFFF168F).copy(alpha = 0.28f),
+            radius = 6.2.dp.toPx(),
+            center = magentaCenter,
+        )
+        drawCircle(
+            color = Color(0xFF18DFFF).copy(alpha = 0.82f),
+            radius = 3.7.dp.toPx(),
+            center = cyanCenter,
+        )
+        drawCircle(
+            color = Color(0xFFFF168F).copy(alpha = 0.82f),
+            radius = 3.7.dp.toPx(),
+            center = magentaCenter,
+        )
+        drawCircle(
+            color = Color(0xFFFFFAFC),
+            radius = 2.5.dp.toPx(),
+            center = headCenter,
+        )
+    }
+}
+
+/** Обрезает содержимое сектором от верхней точки по часовой стрелке. */
+private fun Modifier.drawWithProgressSector(progress: Float): Modifier =
+    drawWithContent {
+        if (progress >= 1f) {
+            drawContent()
+            return@drawWithContent
+        }
+
+        val artworkScale = size.width / PLAYER_ARTWORK_VIEWPORT_WIDTH
+        val artworkHeight = 237f * artworkScale
+        val center = Offset(
+            x = 180f * artworkScale,
+            y = (size.height - artworkHeight) / 2f + 120f * artworkScale,
+        )
+        val clipRadius = maxOf(size.width, size.height)
+        val sector = Path().apply {
+            moveTo(center.x, center.y)
+            arcTo(
+                rect = Rect(
+                    left = center.x - clipRadius,
+                    top = center.y - clipRadius,
+                    right = center.x + clipRadius,
+                    bottom = center.y + clipRadius,
+                ),
+                startAngleDegrees = -90f,
+                sweepAngleDegrees = progress * 360f,
+                forceMoveTo = false,
+            )
+            close()
+        }
+        clipPath(sector) {
+            this@drawWithContent.drawContent()
+        }
+    }
 
 /** Создаёт случайные серии резких скачков, похожие на исходную пульсацию. */
 private fun generateGlitchSequence(random: Random = Random.Default): List<GlitchEvent> {

@@ -4,6 +4,8 @@ import android.os.SystemClock
 import android.util.Log
 import androidx.annotation.DrawableRes
 import androidx.activity.compose.BackHandler
+import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.core.tween
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.LocalIndication
 import androidx.compose.foundation.background
@@ -21,6 +23,7 @@ import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
@@ -48,6 +51,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.ColorFilter
 import androidx.compose.ui.graphics.ImageBitmap
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.drawWithContent
 import androidx.compose.ui.layout.ContentScale
@@ -55,6 +59,8 @@ import androidx.compose.ui.res.colorResource
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.text.style.TextAlign
@@ -65,8 +71,8 @@ import kotlinx.coroutines.launch
 import java.util.Locale
 
 /**
- * Полный Compose-интерфейс домашнего экрана: радиальное меню, сетка разделов,
- * компактный плеер текущего трека и закреплённая нижняя навигация.
+ * Полный Compose-интерфейс домашнего экрана: орбитальный и радиальный плеер,
+ * сетка разделов, компактный плеер других вкладок и нижняя навигация.
  */
 @Composable
 fun HomeScreen(
@@ -78,6 +84,7 @@ fun HomeScreen(
     onCatalogClick: () -> Unit,
     onPlayerOpenClick: () -> Unit,
     onPlayerPlayPauseClick: () -> Unit,
+    onPlayerPreviousClick: () -> Unit,
     onPlayerNextClick: () -> Unit,
     player: HomeCompactPlayerUiState?,
     modifier: Modifier = Modifier,
@@ -89,11 +96,6 @@ fun HomeScreen(
     val radialMenuItems = homeRadialMenuItems()
     val snackbarHostState = remember { SnackbarHostState() }
     val coroutineScope = rememberCoroutineScope()
-    val playerActionMessage = stringResource(
-        R.string.home_radial_action_triggered,
-        1,
-        stringResource(R.string.home_radial_action_player),
-    )
     val radialActionMessages = radialMenuItems.mapIndexed { index, item ->
         item.id to stringResource(
             R.string.home_radial_action_triggered,
@@ -136,7 +138,7 @@ fun HomeScreen(
                     .fillMaxWidth()
                     .background(colorResource(R.color.background)),
             ) {
-                player?.let { playerState ->
+                if (selectedTab != HomeNavigationTab.Main) player?.let { playerState ->
                     HomeCompactPlayer(
                         player = playerState,
                         onOpenClick = onPlayerOpenClick,
@@ -196,8 +198,16 @@ fun HomeScreen(
                             .fillMaxWidth()
                             .aspectRatio(1f),
                     ) {
+                        val isPlayerHudDimmed = isPlayerPressed || isRadialMenuVisible
+                        val playerHudAlpha by animateFloatAsState(
+                            targetValue = if (isPlayerHudDimmed) 0.16f else 1f,
+                            animationSpec = tween(durationMillis = 70),
+                            label = "homePlayerHudAlpha",
+                        )
                         PlayerIconButton(
                             modifier = Modifier.fillMaxSize(),
+                            isPlaying = player?.isPlaying == true,
+                            progress = player?.playbackProgress ?: 0f,
                             expanded = isRadialMenuVisible,
                             pressed = isPlayerPressed,
                             gesturesEnabled = false,
@@ -205,11 +215,18 @@ fun HomeScreen(
                                 HOME_RADIAL_MENU_OUTER_RADIUS_FRACTION,
                             onClick = {},
                         )
+                        player?.let { playerState ->
+                            HomeOrbitalPlayerHud(
+                                player = playerState,
+                                alpha = playerHudAlpha,
+                                modifier = Modifier.fillMaxSize(),
+                            )
+                        }
                         RadialMenu(
                             items = radialMenuItems,
                             visible = isRadialMenuVisible,
                             onPrimaryClick = {
-                                showActionSnackbar(playerActionMessage)
+                                onPlayerPlayPauseClick()
                             },
                             onVisualActivation = {
                                 isRadialMenuVisible = true
@@ -228,12 +245,20 @@ fun HomeScreen(
                             animationStyle = RadialMenuAnimationStyle.GlitchFlicker,
                             modifier = Modifier.fillMaxSize(),
                         )
+                        if (player != null && !isPlayerHudDimmed) {
+                            HomeOrbitalPlayerTouchTargets(
+                                onPreviousClick = onPlayerPreviousClick,
+                                onNextClick = onPlayerNextClick,
+                                onDetailsClick = onPlayerOpenClick,
+                                modifier = Modifier.fillMaxSize(),
+                            )
+                        }
                         IconButton(
                             onClick = onSettingsClick,
                             modifier = Modifier
                                 .align(Alignment.TopEnd)
                                 .padding(top = 15.dp, end = 15.dp)
-                                .size(50.dp),
+                                .size(30.dp),
                         ) {
                             Image(
                                 painter = painterResource(R.drawable.ic_settings),
@@ -265,7 +290,16 @@ data class HomeCompactPlayerUiState(
     val isPlaying: Boolean,
     val currentPositionMillis: Long,
     val durationMillis: Long,
-)
+) {
+    val playbackProgress: Float
+        get() = if (durationMillis > 0L) {
+            currentPositionMillis
+                .coerceIn(0L, durationMillis)
+                .toFloat() / durationMillis.toFloat()
+        } else {
+            0f
+        }
+}
 
 private const val HOME_RADIAL_MENU_OUTER_RADIUS_FRACTION = 0.49f
 
@@ -416,9 +450,136 @@ private fun homeRadialMenuItems(): List<RadialMenuItem> {
     }
 }
 
+/** Рисует орбитальные элементы управления под слоем радиального меню. */
+@Composable
+private fun HomeOrbitalPlayerHud(
+    player: HomeCompactPlayerUiState,
+    alpha: Float,
+    modifier: Modifier = Modifier,
+) {
+    BoxWithConstraints(
+        modifier = modifier.graphicsLayer {
+            this.alpha = alpha
+        },
+    ) {
+        val sideControlOffset = maxWidth * 0.34f
+        val timeOffset = maxWidth * 0.15f
+        val detailsOffset = maxWidth * 0.32f
+
+        Image(
+            painter = painterResource(R.drawable.ic_home_player_next),
+            contentDescription = null,
+            modifier = Modifier
+                .align(Alignment.Center)
+                .offset(x = -sideControlOffset)
+                .size(34.dp)
+                .graphicsLayer { scaleX = -1f },
+        )
+        Image(
+            painter = painterResource(R.drawable.ic_home_player_next),
+            contentDescription = null,
+            modifier = Modifier
+                .align(Alignment.Center)
+                .offset(x = sideControlOffset)
+                .size(34.dp),
+        )
+        Text(
+            text = formatPlayerTime(player.currentPositionMillis),
+            color = Color(0xFFE7E5ED),
+            fontSize = 10.sp,
+            fontWeight = FontWeight.Medium,
+            modifier = Modifier
+                .align(Alignment.Center)
+                .offset(y = -timeOffset),
+        )
+        Text(
+            text = formatPlayerTime(player.durationMillis),
+            color = Color(0xFFE7E5ED),
+            fontSize = 10.sp,
+            fontWeight = FontWeight.Medium,
+            modifier = Modifier
+                .align(Alignment.Center)
+                .offset(y = timeOffset),
+        )
+        Column(
+            horizontalAlignment = Alignment.CenterHorizontally,
+            modifier = Modifier
+                .align(Alignment.Center)
+                .offset(y = detailsOffset)
+                .width((maxWidth * 0.66f).coerceAtMost(260.dp)),
+        ) {
+            Text(
+                text = player.title,
+                color = Color.White,
+                fontSize = 15.sp,
+                fontWeight = FontWeight.SemiBold,
+                textAlign = TextAlign.Center,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+            )
+            Text(
+                text = player.artist,
+                color = Color(0xFFAAAFC0),
+                fontSize = 12.sp,
+                textAlign = TextAlign.Center,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+            )
+        }
+    }
+}
+
+/** Даёт элементам HUD кликабельность, не перекрывая ими открытое радиальное меню. */
+@Composable
+private fun HomeOrbitalPlayerTouchTargets(
+    onPreviousClick: () -> Unit,
+    onNextClick: () -> Unit,
+    onDetailsClick: () -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    val previousDescription = stringResource(
+        R.string.home_player_previous_content_description,
+    )
+    val nextDescription = stringResource(R.string.home_player_next_content_description)
+    val detailsDescription = stringResource(
+        R.string.home_player_details_content_description,
+    )
+
+    BoxWithConstraints(modifier = modifier) {
+        val sideControlOffset = maxWidth * 0.34f
+        val detailsOffset = maxWidth * 0.32f
+
+        Spacer(
+            modifier = Modifier
+                .align(Alignment.Center)
+                .offset(x = -sideControlOffset)
+                .size(52.dp)
+                .semantics { contentDescription = previousDescription }
+                .clickable(role = Role.Button, onClick = onPreviousClick),
+        )
+        Spacer(
+            modifier = Modifier
+                .align(Alignment.Center)
+                .offset(x = sideControlOffset)
+                .size(52.dp)
+                .semantics { contentDescription = nextDescription }
+                .clickable(role = Role.Button, onClick = onNextClick),
+        )
+        Spacer(
+            modifier = Modifier
+                .align(Alignment.Center)
+                .offset(y = detailsOffset)
+                .width((maxWidth * 0.72f).coerceAtMost(280.dp))
+                .height(56.dp)
+                .semantics { contentDescription = detailsDescription }
+                .clickable(role = Role.Button, onClick = onDetailsClick),
+        )
+    }
+}
+
 /** Карточка текущего трека, закреплённая непосредственно над нижней навигацией. */
 @Composable
-private fun HomeCompactPlayer(
+fun HomeCompactPlayer(
     player: HomeCompactPlayerUiState,
     onOpenClick: () -> Unit,
     onPlayPauseClick: () -> Unit,
@@ -845,6 +1006,7 @@ private fun HomeScreenPreview() {
         onCatalogClick = {},
         onPlayerOpenClick = {},
         onPlayerPlayPauseClick = {},
+        onPlayerPreviousClick = {},
         onPlayerNextClick = {},
         player = HomeCompactPlayerUiState(
             title = "Ночной город",

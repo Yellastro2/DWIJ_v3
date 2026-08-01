@@ -1,9 +1,35 @@
+import com.yellastrodev.build.RasterizeSvgToPngTask
+
 plugins {
     alias(libs.plugins.android.application)
     alias(libs.plugins.kotlin.android)
     alias(libs.plugins.kotlin.compose)
     id("com.google.devtools.ksp")
 }
+
+val rasterizedSvgAssets = mapOf(
+    "ic_player_progress_ring_base" to "355x237",
+    "ic_player_accent_v2" to "355x237",
+    "bg_player_glitch_v2" to "355x355",
+    "ic_player_play_v2" to "355x237",
+    "bg_drive_texture" to "160x92",
+    "bg_focus_texture" to "160x92",
+    "bg_calm_texture" to "160x92",
+    "bg_party_texture" to "160x92",
+    "dvizh_drive_glitch_frame_contour" to "160x92",
+    "dvizh_focus_glitch_frame_contour" to "160x92",
+    "dvizh_orange_glitch_frame_contour" to "160x92",
+    "dvizh_calm_glitch_frame_contour" to "160x92",
+    "dvizh_album_thumb_glitch_frame_contour" to "74x74",
+)
+
+val rasterizedSvgDensities = mapOf(
+    "mdpi" to 1.0,
+    "hdpi" to 1.5,
+    "xhdpi" to 2.0,
+    "xxhdpi" to 3.0,
+    "xxxhdpi" to 4.0,
+)
 
 android {
     namespace = "com.yellastrodev.dwij"
@@ -37,6 +63,29 @@ android {
     }
     buildFeatures {
         compose = true
+    }
+}
+
+androidComponents {
+    onVariants(selector().all()) { variant ->
+        val capitalizedVariantName = variant.name.replaceFirstChar { character ->
+            if (character.isLowerCase()) character.titlecase() else character.toString()
+        }
+        val rasterizeTask = tasks.register<RasterizeSvgToPngTask>(
+            "rasterize${capitalizedVariantName}SvgToPng",
+        ) {
+            sourceDirectory.set(layout.projectDirectory.dir("src/main/vector-png"))
+            assets.set(rasterizedSvgAssets)
+            densityScales.set(rasterizedSvgDensities)
+            outputDirectory.set(
+                layout.buildDirectory.dir("generated/res/vectorPng/${variant.name}"),
+            )
+        }
+
+        variant.sources.res?.addGeneratedSourceDirectory(
+            rasterizeTask,
+            RasterizeSvgToPngTask::getOutputDirectory,
+        )
     }
 }
 

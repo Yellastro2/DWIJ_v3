@@ -1,0 +1,55 @@
+<?xml version="1.0" encoding="utf-8"?>
+<svg width="160" height="92" viewBox="0 0 160 92" opacity="0.4" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <linearGradient id="gradient-1" gradientUnits="userSpaceOnUse" x1="0" y1="0" x2="160" y2="92">
+      <stop offset="0" stop-color="#11061C" />
+      <stop offset="1" stop-color="#170A24" />
+    </linearGradient>
+    <radialGradient id="gradient-2" gradientUnits="userSpaceOnUse" cx="40" cy="41.4" r="112">
+      <stop offset="0" stop-color="#9B5CFF" stop-opacity="0.54902" />
+      <stop offset="0.4" stop-color="#9B5CFF" stop-opacity="0.176471" />
+      <stop offset="1" stop-color="#9B5CFF" stop-opacity="0" />
+    </radialGradient>
+    <radialGradient id="gradient-3" gradientUnits="userSpaceOnUse" cx="131.2" cy="32.2" r="88">
+      <stop offset="0" stop-color="#C255FF" stop-opacity="0.376471" />
+      <stop offset="0.4" stop-color="#C255FF" stop-opacity="0.137255" />
+      <stop offset="1" stop-color="#C255FF" stop-opacity="0" />
+    </radialGradient>
+    <clipPath id="clip-1" clipPathUnits="userSpaceOnUse">
+      <path d="M10,0L150,0A10,10 0,0 1,160 10L160,82A10,10 0,0 1,150 92L10,92A10,10 0,0 1,0 82L0,10A10,10 0,0 1,10 0z" />
+    </clipPath>
+  </defs>
+  <g clip-path="url(#clip-1)">
+    <path d="M0,0h160v92h-160z" fill="url(#gradient-1)" />
+    <path d="M0,0h160v92h-160z" fill="url(#gradient-2)" />
+    <path d="M0,0h160v92h-160z" fill="url(#gradient-3)" />
+    <path d="M0,58C16,52 34,66 52,60C70,54 90,68 108,61C126,54 142,66 160,59V92H0Z" fill="#9B5CFF" fill-opacity="0.12" />
+    <path d="M0,65C20,58 38,72 58,67C76,62 90,74 110,69C128,64 144,72 160,67V92H0Z" fill="#C255FF" fill-opacity="0.1" />
+    <path d="M14,18h26v1.2h-26z" fill="#9B5CFF" fill-opacity="0.78" />
+    <path d="M46,18h42v1.2h-42z" fill="#C255FF" fill-opacity="0.78" />
+    <path d="M106,18h30v1.2h-30z" fill="#6C7DFF" fill-opacity="0.78" />
+    <path d="M10,29h34v1.2h-34z" fill="#6C7DFF" fill-opacity="0.78" />
+    <path d="M60,29h26v1.2h-26z" fill="#9B5CFF" fill-opacity="0.78" />
+    <path d="M94,29h44v1.2h-44z" fill="#C255FF" fill-opacity="0.78" />
+    <path d="M18,42h24v1.3h-24z" fill="#C255FF" fill-opacity="0.78" />
+    <path d="M48,42h54v1.3h-54z" fill="#9B5CFF" fill-opacity="0.78" />
+    <path d="M110,42h22v1.3h-22z" fill="#6C7DFF" fill-opacity="0.78" />
+    <path d="M16,55h36v1.1h-36z" fill="#9B5CFF" fill-opacity="0.78" />
+    <path d="M70,55h56v1.1h-56z" fill="#C255FF" fill-opacity="0.78" />
+    <path d="M118,61C130,52 142,53 148,64C139,70 129,73 119,69Z" fill="#C255FF" fill-opacity="0.06" />
+    <path d="M121,67C128,62 135,61 143,64" fill="#000000" fill-opacity="0" stroke="#6C7DFF" stroke-opacity="0.18" stroke-width="0.7" />
+    <path d="M0,8H160" fill="#000000" fill-opacity="0.08" stroke="#ffffff" stroke-opacity="0.08" stroke-width="0.55" />
+    <path d="M0,14H160" fill="#000000" fill-opacity="0.08" stroke="#ffffff" stroke-opacity="0.08" stroke-width="0.55" />
+    <path d="M0,20H160" fill="#000000" fill-opacity="0.08" stroke="#ffffff" stroke-opacity="0.08" stroke-width="0.55" />
+    <path d="M0,26H160" fill="#000000" fill-opacity="0.08" stroke="#ffffff" stroke-opacity="0.08" stroke-width="0.55" />
+    <path d="M0,32H160" fill="#000000" fill-opacity="0.08" stroke="#ffffff" stroke-opacity="0.08" stroke-width="0.55" />
+    <path d="M0,38H160" fill="#000000" fill-opacity="0.08" stroke="#ffffff" stroke-opacity="0.08" stroke-width="0.55" />
+    <path d="M0,44H160" fill="#000000" fill-opacity="0.08" stroke="#ffffff" stroke-opacity="0.08" stroke-width="0.55" />
+    <path d="M0,50H160" fill="#000000" fill-opacity="0.08" stroke="#ffffff" stroke-opacity="0.08" stroke-width="0.55" />
+    <path d="M0,56H160" fill="#000000" fill-opacity="0.08" stroke="#ffffff" stroke-opacity="0.08" stroke-width="0.55" />
+    <path d="M0,62H160" fill="#000000" fill-opacity="0.08" stroke="#ffffff" stroke-opacity="0.08" stroke-width="0.55" />
+    <path d="M0,68H160" fill="#000000" fill-opacity="0.08" stroke="#ffffff" stroke-opacity="0.08" stroke-width="0.55" />
+    <path d="M0,74H160" fill="#000000" fill-opacity="0.08" stroke="#ffffff" stroke-opacity="0.08" stroke-width="0.55" />
+    <path d="M0,80H160" fill="#000000" fill-opacity="0.08" stroke="#ffffff" stroke-opacity="0.08" stroke-width="0.55" />
+  </g>
+</svg>
