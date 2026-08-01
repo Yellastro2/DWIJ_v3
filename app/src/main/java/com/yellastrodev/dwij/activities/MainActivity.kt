@@ -64,7 +64,6 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import java.io.File
 import java.util.logging.Logger
-import kotlin.getValue
 
 
 class MainActivity : AppCompatActivity() {

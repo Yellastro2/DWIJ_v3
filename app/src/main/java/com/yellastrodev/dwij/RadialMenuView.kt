@@ -84,6 +84,7 @@ fun RadialMenu(
     val glitchFrame = rememberRadialMenuGlitchFrame(
         visible = visible && animationStyle == RadialMenuAnimationStyle.GlitchFlicker,
         frames = glitchFrames,
+        itemCount = items.size,
     )
     val isAnimationVisible = when (animationStyle) {
         RadialMenuAnimationStyle.GlitchFlicker -> glitchFrame.opacity > 0f
@@ -381,11 +382,18 @@ private fun rememberRadialMenuExpansionProgress(visible: Boolean): Float {
 private fun rememberRadialMenuGlitchFrame(
     visible: Boolean,
     frames: List<RadialMenuGlitchFrame>,
+    itemCount: Int,
 ): RadialMenuGlitchFrame {
     var frameIndex by remember { mutableIntStateOf(-1) }
+    var itemMaskOffset by remember { mutableIntStateOf(0) }
 
-    LaunchedEffect(visible, frames) {
+    LaunchedEffect(visible, frames, itemCount) {
         if (visible) {
+            itemMaskOffset = if (itemCount > 1) {
+                Random.nextInt(itemCount.coerceAtMost(RADIAL_MENU_ITEM_MASK_BITS))
+            } else {
+                0
+            }
             frames.forEachIndexed { index, frame ->
                 frameIndex = index
                 if (frame.holdMillis > 0L) {
@@ -410,7 +418,10 @@ private fun rememberRadialMenuGlitchFrame(
     }
 
     return if (frameIndex >= 0) {
-        frames[frameIndex]
+        frames[frameIndex].shiftVisibleItems(
+            offset = itemMaskOffset,
+            itemCount = itemCount,
+        )
     } else {
         HIDDEN_RADIAL_MENU_GLITCH_FRAME
     }
@@ -434,6 +445,35 @@ private data class RadialMenuGlitchFrame(
     fun isItemVisible(index: Int): Boolean =
         visibleItemsMask == ALL_RADIAL_MENU_ITEMS_MASK ||
             (visibleItemsMask and (1 shl (index % RADIAL_MENU_ITEM_MASK_BITS))) != 0
+}
+
+/**
+ * Циклически переносит каждый включённый бит на `index + offset`, не меняя
+ * яркость и длительность кадра. Полные и пустые служебные маски не трогает.
+ */
+private fun RadialMenuGlitchFrame.shiftVisibleItems(
+    offset: Int,
+    itemCount: Int,
+): RadialMenuGlitchFrame {
+    if (
+        visibleItemsMask == ALL_RADIAL_MENU_ITEMS_MASK ||
+        visibleItemsMask == 0 ||
+        itemCount <= 1
+    ) {
+        return this
+    }
+
+    val bitCount = itemCount.coerceAtMost(RADIAL_MENU_ITEM_MASK_BITS)
+    val normalizedOffset = offset.mod(bitCount)
+    if (normalizedOffset == 0) return this
+
+    val itemBitsMask = (1 shl bitCount) - 1
+    val sourceMask = visibleItemsMask and itemBitsMask
+    val shiftedMask = (
+        (sourceMask shl normalizedOffset) or
+            (sourceMask ushr (bitCount - normalizedOffset))
+        ) and itemBitsMask
+    return copy(visibleItemsMask = shiftedMask)
 }
 
 /** Возвращает полный сектор для резкого глитч-кадра без выдвижения из центра. */
