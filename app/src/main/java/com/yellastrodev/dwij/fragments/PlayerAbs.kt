@@ -17,7 +17,7 @@ import androidx.lifecycle.repeatOnLifecycle
 import com.google.android.material.snackbar.Snackbar
 import com.yellastrodev.dwij.R
 import com.yellastrodev.dwij.activities.MainActivity
-import com.yellastrodev.dwij.data.entities.dYaTrack
+import com.yellastrodev.dwij.data.entities.PlaybackTrack
 import com.yellastrodev.dwij.service.PlayerEvent
 import com.yellastrodev.dwij.service.PlayerState
 import com.yellastrodev.yandexmusiclib.entities.CoverSize
@@ -102,11 +102,11 @@ open class PlayerAbs() : Fragment() {
 						lastTrackId = track.id
 						withContext(Dispatchers.Main) {
 							mvTitle.text = track.title
-							mvArtist.text = track.artists.joinToString(", ") { it.name }
+							mvArtist.text = track.artistNames.joinToString(", ")
 						}
 						viewLifecycleOwner.lifecycleScope.launch(Dispatchers.IO) {
 
-							playerModel.coverRepo.getCoverFlow(track, getCoverSize()).collect {
+							playerModel.cover(track).collect {
 								withContext(Dispatchers.Main) {
 									mvCover.setImageBitmap(it)
 								}
@@ -198,7 +198,7 @@ open class PlayerAbs() : Fragment() {
 	}
 
 
-	open suspend fun onTrackFlow(track: dYaTrack){
+	open suspend fun onTrackFlow(track: PlaybackTrack){
 
 	}
 

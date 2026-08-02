@@ -46,6 +46,14 @@
     <string name="home_player_next_content_description">Следующий трек</string>
     <string name="home_player_details_content_description">Открыть полный экран плеера</string>
     <string name="home_player_unknown_artist">Неизвестный исполнитель</string>
+    <string name="local_playlists_title">Локальные плейлисты</string>
+    <string name="local_all_tracks_title">Все локальные треки</string>
+    <string name="local_playlist_title">Локальный плейлист</string>
+    <string name="local_playlists_empty">Плейлисты появятся после синхронизации MediaStore или M3U</string>
+    <string name="local_tracks_empty">Локальные треки пока не найдены</string>
+    <string name="local_playlist_dwij">Плейлист Движа · M3U</string>
+    <string name="local_playlist_media_store">Системный плейлист</string>
+    <string name="local_playlist_m3u">M3U-плейлист</string>
     <string name="search_title">Поиск</string>
     <string name="search_subtitle">Музыка под любой твой движ</string>
     <string name="search_hint">Треки, исполнители, альбомы</string>

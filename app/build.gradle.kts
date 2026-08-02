@@ -110,6 +110,7 @@ dependencies {
     implementation(libs.androidx.compose.ui.graphics)
     implementation(libs.androidx.compose.ui.tooling.preview)
     implementation(libs.androidx.compose.material3)
+    implementation("androidx.work:work-runtime-ktx:2.11.2")
 
     val room_version = "2.8.0"
 

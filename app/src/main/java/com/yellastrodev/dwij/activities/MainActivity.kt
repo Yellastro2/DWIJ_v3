@@ -92,7 +92,8 @@ class MainActivity : AppCompatActivity() {
             playerRepo = (application as yApplication).playerRepo,
             trackRepo = (application as yApplication).trackRepository,
             coverRepo = (application as yApplication).coverRepository,
-            playlistRepo = (application as yApplication).playlistRepository
+            playlistRepo = (application as yApplication).playlistRepository,
+            localMusicRepo = (application as yApplication).localMusicRepository,
         )
     }
 
@@ -121,8 +122,7 @@ class MainActivity : AppCompatActivity() {
 
                 LaunchedEffect(track?.id) {
                     track?.let { currentTrack ->
-                        playerModel.coverRepo
-                            .getCoverFlow(currentTrack, CoverSize.`100x100`)
+                        playerModel.cover(currentTrack)
                             .flowOn(Dispatchers.IO)
                             .collect { bitmap ->
                                 cover = bitmap.asImageBitmap()
@@ -134,8 +134,8 @@ class MainActivity : AppCompatActivity() {
                     HomeCompactPlayer(
                         player = HomeCompactPlayerUiState(
                             title = currentTrack.title,
-                            artist = currentTrack.artists
-                                .joinToString(", ") { artist -> artist.name }
+                            artist = currentTrack.artistNames
+                                .joinToString(", ")
                                 .ifBlank { unknownArtist },
                             cover = cover,
                             isPlaying = playerState.isPlaying,

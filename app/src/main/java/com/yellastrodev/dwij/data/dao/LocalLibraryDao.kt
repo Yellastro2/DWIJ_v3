@@ -1,0 +1,143 @@
+package com.yellastrodev.dwij.data.dao
+
+import androidx.room.Dao
+import androidx.room.Query
+import androidx.room.Transaction
+import androidx.room.Upsert
+import com.yellastrodev.dwij.data.entities.LocalLibraryStateEntity
+import com.yellastrodev.dwij.data.entities.LocalPlaylistEntity
+import com.yellastrodev.dwij.data.entities.LocalPlaylistEntryEntity
+import com.yellastrodev.dwij.data.entities.LocalPlaylistOrigin
+import com.yellastrodev.dwij.data.entities.LocalTrackEntity
+import kotlinx.coroutines.flow.Flow
+
+@Dao
+abstract class LocalLibraryDao {
+    @Query("SELECT * FROM local_tracks ORDER BY title COLLATE NOCASE, artist COLLATE NOCASE")
+    abstract fun observeAllTracks(): Flow<List<LocalTrackEntity>>
+
+    @Query("SELECT * FROM local_tracks ORDER BY title COLLATE NOCASE, artist COLLATE NOCASE")
+    abstract suspend fun getAllTracks(): List<LocalTrackEntity>
+
+    @Query("SELECT * FROM local_playlists ORDER BY name COLLATE NOCASE")
+    abstract fun observePlaylists(): Flow<List<LocalPlaylistEntity>>
+
+    @Query("SELECT * FROM local_playlists WHERE playlistId = :playlistId")
+    abstract fun observePlaylist(playlistId: String): Flow<LocalPlaylistEntity?>
+
+    @Query("SELECT * FROM local_playlists WHERE playlistId = :playlistId")
+    abstract suspend fun getPlaylist(playlistId: String): LocalPlaylistEntity?
+
+    @Query("SELECT * FROM local_playlists WHERE origin = :origin")
+    abstract suspend fun getPlaylistsByOrigin(
+        origin: String = LocalPlaylistOrigin.DWIJ.name,
+    ): List<LocalPlaylistEntity>
+
+    @Query(
+        """
+        SELECT local_tracks.* FROM local_playlist_entries
+        INNER JOIN local_tracks
+            ON local_tracks.instanceId = local_playlist_entries.localTrackId
+        WHERE local_playlist_entries.playlistId = :playlistId
+        ORDER BY local_playlist_entries.position
+        """
+    )
+    abstract fun observePlaylistTracks(playlistId: String): Flow<List<LocalTrackEntity>>
+
+    @Query("SELECT * FROM local_playlist_entries WHERE playlistId = :playlistId ORDER BY position")
+    abstract suspend fun getPlaylistEntries(playlistId: String): List<LocalPlaylistEntryEntity>
+
+    @Query(
+        """
+        SELECT local_playlist_entries.* FROM local_playlist_entries
+        INNER JOIN local_playlists
+            ON local_playlists.playlistId = local_playlist_entries.playlistId
+        WHERE local_playlists.origin = :origin
+          AND local_playlist_entries.localTrackId IS NULL
+        """
+    )
+    abstract suspend fun getUnresolvedDwijEntries(
+        origin: String = LocalPlaylistOrigin.DWIJ.name,
+    ): List<LocalPlaylistEntryEntity>
+
+    @Query("SELECT * FROM local_tracks WHERE instanceId IN (:trackIds)")
+    abstract suspend fun getTracks(trackIds: List<String>): List<LocalTrackEntity>
+
+    @Upsert
+    abstract suspend fun upsertTracks(tracks: List<LocalTrackEntity>)
+
+    @Query("DELETE FROM local_tracks")
+    abstract suspend fun deleteAllTracks()
+
+    @Query("DELETE FROM local_tracks WHERE instanceId NOT IN (:activeIds)")
+    abstract suspend fun deleteTracksExcept(activeIds: List<String>)
+
+    @Upsert
+    abstract suspend fun upsertPlaylists(playlists: List<LocalPlaylistEntity>)
+
+    @Upsert
+    abstract suspend fun upsertPlaylist(playlist: LocalPlaylistEntity)
+
+    @Query("DELETE FROM local_playlists WHERE origin != :dwijOrigin AND playlistId NOT IN (:activeIds)")
+    abstract suspend fun deleteImportedPlaylistsExcept(
+        activeIds: List<String>,
+        dwijOrigin: String = LocalPlaylistOrigin.DWIJ.name,
+    )
+
+    @Query("DELETE FROM local_playlists WHERE origin != :dwijOrigin")
+    abstract suspend fun deleteAllImportedPlaylists(
+        dwijOrigin: String = LocalPlaylistOrigin.DWIJ.name,
+    )
+
+    @Query("DELETE FROM local_playlist_entries WHERE playlistId = :playlistId")
+    abstract suspend fun deletePlaylistEntries(playlistId: String)
+
+    @Upsert
+    abstract suspend fun upsertPlaylistEntries(entries: List<LocalPlaylistEntryEntity>)
+
+    @Query("SELECT value FROM local_library_state WHERE `key` = :key")
+    abstract suspend fun getState(key: String): String?
+
+    @Upsert
+    abstract suspend fun putState(state: LocalLibraryStateEntity)
+
+    /** Применяет только целиком собранный снимок, не оставляя половинчатого индекса. */
+    @Transaction
+    open suspend fun replaceMediaSnapshot(
+        tracks: List<LocalTrackEntity>,
+        playlists: List<LocalPlaylistEntity>,
+        entries: List<LocalPlaylistEntryEntity>,
+        generation: String,
+    ) {
+        if (tracks.isEmpty()) {
+            deleteAllTracks()
+        } else {
+            upsertTracks(tracks)
+            deleteTracksExcept(tracks.map(LocalTrackEntity::instanceId))
+        }
+
+        if (playlists.isEmpty()) {
+            deleteAllImportedPlaylists()
+        } else {
+            upsertPlaylists(playlists)
+            deleteImportedPlaylistsExcept(playlists.map(LocalPlaylistEntity::playlistId))
+            playlists.forEach { deletePlaylistEntries(it.playlistId) }
+            if (entries.isNotEmpty()) upsertPlaylistEntries(entries)
+        }
+        putState(LocalLibraryStateEntity(LAST_GENERATION_KEY, generation))
+    }
+
+    @Transaction
+    open suspend fun replaceDwijPlaylist(
+        playlist: LocalPlaylistEntity,
+        entries: List<LocalPlaylistEntryEntity>,
+    ) {
+        upsertPlaylist(playlist)
+        deletePlaylistEntries(playlist.playlistId)
+        if (entries.isNotEmpty()) upsertPlaylistEntries(entries)
+    }
+
+    companion object {
+        const val LAST_GENERATION_KEY = "media_store_generation"
+    }
+}

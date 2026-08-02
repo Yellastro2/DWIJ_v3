@@ -188,6 +188,13 @@ class PlayerService : MediaSessionService() {
                 }
                 if (mediaItem == null) return
                 val trackId = mediaItem.mediaId
+                if (
+                    mediaItem.mediaMetadata.extras?.getString(PLAYBACK_MUSIC_SOURCE) ==
+                    PLAYBACK_SOURCE_LOCAL
+                ) {
+                    Log.d(TAG, "[onMediaItemTransition] Локальный трек, сетевую обложку не загружаем")
+                    return
+                }
                 // грузим обложку из coverRepo
                 serviceScope.launch(Dispatchers.IO) {
 

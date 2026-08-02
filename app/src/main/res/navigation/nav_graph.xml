@@ -48,4 +48,9 @@
         android:name="com.yellastrodev.dwij.fragments.BigPlayerFrag"
         android:label="BigPlayerFrag" />
 
+    <fragment
+        android:id="@+id/localLibraryFrag"
+        android:name="com.yellastrodev.dwij.fragments.LocalLibraryFrag"
+        android:label="Локальная музыка" />
+
 </navigation>

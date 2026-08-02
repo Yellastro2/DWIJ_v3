@@ -3,6 +3,7 @@ package com.yellastrodev.dwij.fragments
 import android.annotation.SuppressLint
 import android.app.AlertDialog
 import android.os.Bundle
+import android.content.pm.PackageManager
 import android.preference.PreferenceManager
 import android.util.Log
 import android.view.View
@@ -22,12 +23,15 @@ import androidx.compose.ui.platform.ViewCompositionStrategy
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.ui.res.stringResource
 import androidx.fragment.app.Fragment
+import androidx.activity.result.contract.ActivityResultContracts
+import androidx.core.content.ContextCompat
 import androidx.lifecycle.lifecycleScope
 import androidx.media3.common.util.UnstableApi
 import androidx.navigation.fragment.findNavController
 import com.yellastrodev.dwij.DWIJ_ACC_TOKEN
 import com.yellastrodev.dwij.HomeCompactPlayerUiState
 import com.yellastrodev.dwij.HomeScreen
+import com.yellastrodev.dwij.HomeMusicSource
 import com.yellastrodev.dwij.R
 import com.yellastrodev.dwij.TYPE
 import com.yellastrodev.dwij.VALUE
@@ -36,11 +40,35 @@ import com.yellastrodev.dwij.activities.MainActivity
 import com.yellastrodev.dwij.yApplication
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.flowOn
+import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import com.yellastrodev.yandexmusiclib.entities.CoverSize
+import com.yellastrodev.dwij.data.repo.LocalMusicRepository
+import com.yellastrodev.dwij.work.LocalLibrarySyncWorker
 
 class HomeFrag: Fragment(R.layout.frag_home) {
+	private val selectedMusicSource = MutableStateFlow(HomeMusicSource.Yandex)
+	private var permissionRequestInFlight = false
+
+	private val audioPermissionLauncher = registerForActivityResult(
+		ActivityResultContracts.RequestMultiplePermissions()
+	) { permissions ->
+		permissionRequestInFlight = false
+		val granted = LocalMusicRepository.requiredPermissions().all { permission ->
+			permissions[permission] == true || ContextCompat.checkSelfPermission(
+				requireContext(),
+				permission,
+			) == PackageManager.PERMISSION_GRANTED
+		}
+		if (granted) {
+			persistSource(HomeMusicSource.Local)
+			LocalLibrarySyncWorker.enqueueImmediate(requireContext().applicationContext)
+		} else {
+			Log.w(TAG, "[audioPermissionLauncher] Доступ к локальной музыке не выдан")
+			persistSource(HomeMusicSource.Yandex)
+		}
+	}
 
 
     @OptIn(UnstableApi::class)
@@ -48,12 +76,14 @@ class HomeFrag: Fragment(R.layout.frag_home) {
 	/** Связывает домашний Compose-экран с навигацией и состоянием общего плеера Activity. */
 	override fun onViewCreated(view: View, savedInstanceState: Bundle?) {
 		super.onViewCreated(view, savedInstanceState)
+		selectedMusicSource.value = readSavedSource()
 		view.findViewById<ComposeView>(R.id.fr_home_player).apply {
 			setViewCompositionStrategy(ViewCompositionStrategy.DisposeOnViewTreeLifecycleDestroyed)
 			setContent {
 				val playerModel = (activity as MainActivity).playerModel
 				val track by playerModel.track.collectAsState()
 				val playerState by playerModel.playerState.collectAsState()
+				val musicSource by selectedMusicSource.collectAsState()
 				var cover by remember(track?.id) {
 					mutableStateOf<ImageBitmap?>(null)
 				}
@@ -61,8 +91,7 @@ class HomeFrag: Fragment(R.layout.frag_home) {
 
 				LaunchedEffect(track?.id) {
 					track?.let { currentTrack ->
-						playerModel.coverRepo
-							.getCoverFlow(currentTrack, CoverSize.`100x100`)
+						playerModel.cover(currentTrack)
 							.flowOn(Dispatchers.IO)
 							.collect { bitmap ->
 								cover = bitmap.asImageBitmap()
@@ -78,15 +107,23 @@ class HomeFrag: Fragment(R.layout.frag_home) {
 						)
 					},
 					onPlaylistsClick = {
-						(activity as MainActivity).mNavController.navigate(
-							R.id.action_homeFrag_to_gridPlaylistFrag,
-						)
+						if (musicSource == HomeMusicSource.Local) {
+							openLocalLibrary(LocalLibraryFrag.MODE_PLAYLISTS)
+						} else {
+							(activity as MainActivity).mNavController.navigate(
+								R.id.action_homeFrag_to_gridPlaylistFrag,
+							)
+						}
 					},
 					onTracksClick = {
-						val bundle = Bundle().apply {
-							putString(TYPE, ObjectFrag.TRACKLIST)
+						if (musicSource == HomeMusicSource.Local) {
+							openLocalLibrary(LocalLibraryFrag.MODE_ALL_TRACKS)
+						} else {
+							val bundle = Bundle().apply {
+								putString(TYPE, ObjectFrag.TRACKLIST)
+							}
+							findNavController().navigate(R.id.objectFrag, bundle)
 						}
-						findNavController().navigate(R.id.objectFrag, bundle)
 					},
 					onWaveClick = ::playWave,
 					onAllTracksClick = ::openALLTracks,
@@ -112,8 +149,8 @@ class HomeFrag: Fragment(R.layout.frag_home) {
 					player = track?.let { currentTrack ->
 						HomeCompactPlayerUiState(
 							title = currentTrack.title,
-							artist = currentTrack.artists
-								.joinToString(", ") { artist -> artist.name }
+							artist = currentTrack.artistNames
+								.joinToString(", ")
 								.ifBlank { unknownArtist },
 							cover = cover,
 							isPlaying = playerState.isPlaying,
@@ -121,6 +158,8 @@ class HomeFrag: Fragment(R.layout.frag_home) {
 							durationMillis = playerState.duration,
 						)
 					},
+					selectedSource = musicSource,
+					onSourceSelected = ::selectMusicSource,
 				)
 			}
 		}
@@ -136,6 +175,56 @@ class HomeFrag: Fragment(R.layout.frag_home) {
 //			else
 //				(activity as MainActivity).mNavController.navigate(R.id.accountFrag)
 		}
+	}
+
+	private fun selectMusicSource(source: HomeMusicSource) {
+		if (source == selectedMusicSource.value) return
+		if (source == HomeMusicSource.Yandex) {
+			persistSource(source)
+			return
+		}
+		val permissions = LocalMusicRepository.requiredPermissions()
+		if (permissions.all { permission ->
+				ContextCompat.checkSelfPermission(requireContext(), permission) ==
+					PackageManager.PERMISSION_GRANTED
+			}
+		) {
+			persistSource(source)
+			LocalLibrarySyncWorker.enqueueImmediate(requireContext().applicationContext)
+		} else if (!permissionRequestInFlight) {
+			permissionRequestInFlight = true
+			selectedMusicSource.value = HomeMusicSource.Local
+			audioPermissionLauncher.launch(permissions)
+		}
+	}
+
+	private fun persistSource(source: HomeMusicSource) {
+		selectedMusicSource.value = source
+		PreferenceManager.getDefaultSharedPreferences(requireContext())
+			.edit()
+			.putString(PREF_MUSIC_SOURCE, source.name)
+			.apply()
+	}
+
+	private fun readSavedSource(): HomeMusicSource {
+		val saved = PreferenceManager.getDefaultSharedPreferences(requireContext())
+			.getString(PREF_MUSIC_SOURCE, HomeMusicSource.Yandex.name)
+		val source = runCatching { HomeMusicSource.valueOf(saved.orEmpty()) }
+			.getOrDefault(HomeMusicSource.Yandex)
+		return if (
+			source == HomeMusicSource.Local &&
+			ContextCompat.checkSelfPermission(
+				requireContext(),
+				LocalMusicRepository.requiredAudioPermission(),
+			) != PackageManager.PERMISSION_GRANTED
+		) HomeMusicSource.Yandex else source
+	}
+
+	private fun openLocalLibrary(mode: String) {
+		findNavController().navigate(
+			R.id.localLibraryFrag,
+			Bundle().apply { putString(LocalLibraryFrag.ARG_MODE, mode) },
+		)
 	}
 
 	private fun playWave() {
@@ -185,5 +274,10 @@ class HomeFrag: Fragment(R.layout.frag_home) {
 		mDialog = fDialBuilder.show()
 
 //		mDialog?.setMessage("Done $fProg of $fMax")
+	}
+
+	private companion object {
+		const val TAG = "HomeFrag"
+		const val PREF_MUSIC_SOURCE = "home_music_source"
 	}
 }

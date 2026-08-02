@@ -22,7 +22,8 @@ import androidx.lifecycle.repeatOnLifecycle
 import androidx.recyclerview.widget.RecyclerView
 import com.yellastrodev.dwij.R
 import com.yellastrodev.dwij.data.entities.dYaPlaylist
-import com.yellastrodev.dwij.data.entities.dYaTrack
+import com.yellastrodev.dwij.data.entities.MusicSource
+import com.yellastrodev.dwij.data.entities.PlaybackTrack
 import com.yellastrodev.dwij.models.PlayerModel
 import com.yellastrodev.dwij.data.entities.dYaLikeTracklist.Companion.KIND_LIKED
 import com.yellastrodev.yandexmusiclib.entities.CoverSize
@@ -229,9 +230,19 @@ class BigPlayerFrag() :
 			setRotateBtn(state.isRepeatAll)
 	}
 
-	override suspend fun onTrackFlow(track: dYaTrack){
+	override suspend fun onTrackFlow(track: PlaybackTrack){
+		val yandexTrack = track.yandexTrack
+		if (track.source != MusicSource.YANDEX || yandexTrack == null) {
+			withContext(Dispatchers.Main) {
+				mvToPlaylist.visibility = View.GONE
+				mvPlListFlexbox.adapter = null
+				mvLike.isEnabled = false
+			}
+			return
+		}
+		withContext(Dispatchers.Main) { mvLike.isEnabled = true }
 		setLikedState()
-		playerModel.playlistRepo.getPlaylistsByKeys(track.playlists)
+		playerModel.playlistRepo.getPlaylistsByKeys(yandexTrack.playlists)
 			.take(1) // забираем только один результат
 			.collect { fPlLists ->
 			Log.d(TAG, "BigPlayer.onTrackFlow collect playlists=$fPlLists")
@@ -269,6 +280,7 @@ class BigPlayerFrag() :
 	}
 
 	private fun toPlaylist() {
+		if (playerModel.track.value?.source != MusicSource.YANDEX) return
 		val fBndl = Bundle()
 		fBndl.putString(GridPlaylistFrag.PLAYLIST_ACTION,GridPlaylistFrag.ACTION_ADDTRACK)
 		fBndl.putString(GridPlaylistFrag.ACTION_DATA, playerModel.track.value!!.id)

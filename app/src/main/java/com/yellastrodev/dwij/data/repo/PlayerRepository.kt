@@ -19,12 +19,20 @@ import com.yellastrodev.dwij.data.entities.dTracklist
 import com.yellastrodev.dwij.data.entities.dYaPlaylist
 import com.yellastrodev.dwij.data.entities.dYaTrack
 import com.yellastrodev.dwij.data.entities.dYaWave
+import com.yellastrodev.dwij.data.entities.LocalTrackEntity
+import com.yellastrodev.dwij.data.entities.LocalTracklist
+import com.yellastrodev.dwij.data.entities.MusicSource
+import com.yellastrodev.dwij.data.entities.PlaybackTrack
+import com.yellastrodev.dwij.data.entities.toPlaybackTrack
 import com.yellastrodev.dwij.service.DEFAULT_PLAY_AUDIO_SOURCE
 import com.yellastrodev.dwij.service.PLAY_AUDIO_ALBUM_ID
 import com.yellastrodev.dwij.service.PLAY_AUDIO_DURATION_MS
 import com.yellastrodev.dwij.service.PLAY_AUDIO_ITEM_ID
 import com.yellastrodev.dwij.service.PLAY_AUDIO_PLAYLIST_ID
 import com.yellastrodev.dwij.service.PLAY_AUDIO_SOURCE
+import com.yellastrodev.dwij.service.PLAYBACK_MUSIC_SOURCE
+import com.yellastrodev.dwij.service.PLAYBACK_SOURCE_LOCAL
+import com.yellastrodev.dwij.service.PLAYBACK_SOURCE_YANDEX
 import com.yellastrodev.dwij.service.PlayerEvent
 import com.yellastrodev.dwij.service.PlayerService
 import com.yellastrodev.dwij.service.PlayerState
@@ -70,9 +78,13 @@ class PlayerRepository(
     val dtracklist: StateFlow<dTracklist?> = _dtracklist
 
     var currentTrackList: List<String> = listOf()
+    private var currentPlaybackQueue: List<PlaybackTrack> = emptyList()
 
     private val _currentTrack = MutableStateFlow<String?>(null)
     val currentTrack: StateFlow<String?> = _currentTrack
+
+    private val _currentPlaybackTrack = MutableStateFlow<PlaybackTrack?>(null)
+    val currentPlaybackTrack: StateFlow<PlaybackTrack?> = _currentPlaybackTrack
 
     private val _events = MutableSharedFlow<PlayerEvent>()
     val events: SharedFlow<PlayerEvent> = _events
@@ -84,7 +96,7 @@ class PlayerRepository(
             // Подписываемся на state сервиса
             service?.state?.onEach { playerState ->
                 if (playerState.currentIndex != _state.value.currentIndex) {
-                    _currentTrack.value = currentTrackList[playerState.currentIndex]
+                    updateCurrentTrack(playerState.currentIndex)
 //                    loanNextTracks(playerState, _state.value.currentIndex - playerState.currentIndex)
                 }
                 _state.value = playerState
@@ -92,8 +104,13 @@ class PlayerRepository(
                 ?.launchIn(scope)
             service?.events
                 ?.onEach { event ->
-                    if (event is PlayerEvent.TrackListEnd){
-                        waveRepository.playWave(dtracklist.value!!)
+                if (event is PlayerEvent.TrackListEnd){
+                    val tracklist = dtracklist.value
+                    if (tracklist != null && tracklist.getType() != LocalTracklist.TYPE) {
+                        waveRepository.playWave(tracklist)
+                    } else {
+                        _events.emit(event)
+                    }
                     }else
                         _events.emit(event) // пробрасываем в репозиторий
                 }
@@ -129,14 +146,19 @@ class PlayerRepository(
                 Log.d(TAG, "waitForService returned ненулевой плеер, привязываем флоуы")
             service.state.onEach { playerState ->
                 if (playerState.currentIndex != _state.value.currentIndex) {
-                    _currentTrack.value = currentTrackList[playerState.currentIndex]
+                    updateCurrentTrack(playerState.currentIndex)
                 }
                 _state.value = playerState
             }.launchIn(scope)
 
             service.events.onEach { event ->
                 if (event is PlayerEvent.TrackListEnd) {
-                    waveRepository.playWave(dtracklist.value!!)
+                    val tracklist = dtracklist.value
+                    if (tracklist != null && tracklist.getType() != LocalTracklist.TYPE) {
+                        waveRepository.playWave(tracklist)
+                    } else {
+                        _events.emit(event)
+                    }
                 } else {
                     _events.emit(event)
                 }
@@ -163,6 +185,19 @@ class PlayerRepository(
         tracks: List<dYaTrack>,
         startIndex: Int = 0,
         tracklist: dTracklist
+    ) = playPreparedQueue(tracks.map { it.toPlaybackTrack() }, startIndex, tracklist)
+
+    /** Запускает локальные content:// элементы тем же Media3-плеером. */
+    suspend fun playLocalQueue(
+        tracks: List<LocalTrackEntity>,
+        startIndex: Int = 0,
+        tracklist: LocalTracklist,
+    ) = playPreparedQueue(tracks.map { it.toPlaybackTrack() }, startIndex, tracklist)
+
+    private suspend fun playPreparedQueue(
+        tracks: List<PlaybackTrack>,
+        startIndex: Int,
+        tracklist: dTracklist,
     ) {
         if (tracks.isEmpty() || startIndex !in tracks.indices) {
             Log.w(
@@ -190,6 +225,7 @@ class PlayerRepository(
             val newIds = tracks.map { it.id }
             if (currentTrackList == newIds) {
                 _currentTrack.value = tracks[startIndex].id
+                _currentPlaybackTrack.value = currentPlaybackQueue.getOrNull(startIndex)
                 relativeIndex = startIndex
                 service?.playTrack(startIndex)
                 Log.d(
@@ -205,7 +241,9 @@ class PlayerRepository(
         blockShuffle(tracklist.getType() == dYaWave.YA_WAVE)
 
         currentTrackList = tracks.map { track -> track.id }
+        currentPlaybackQueue = tracks
         _currentTrack.value = tracks[startIndex].id
+        _currentPlaybackTrack.value = tracks[startIndex]
         _dtracklist.value = tracklist
 
         relativeIndex = startIndex
@@ -246,7 +284,9 @@ class PlayerRepository(
 //        tracksAndUrls = tracks.associate { track -> track.id to track  }
         currentTrackList = currentTrackList + tracks.map { track -> track.id }
 
-        val mediaItems = tracks.map { track ->
+        val playbackTracks = tracks.map { it.toPlaybackTrack() }
+        currentPlaybackQueue = currentPlaybackQueue + playbackTracks
+        val mediaItems = playbackTracks.map { track ->
             track.toMediaItem(_dtracklist.value)
         }
 
@@ -300,33 +340,48 @@ class PlayerRepository(
     fun List<dYaTrack>.stableHash(): Int =
         fold(1) { acc, track -> 31 * acc + track.id.hashCode() }
 
-    /** Добавляет в MediaItem данные, необходимые паре запросов `/play-audio`. */
-    private fun dYaTrack.toMediaItem(tracklist: dTracklist?): MediaItem {
+    /** Добавляет source-aware метаданные и только для Яндекса — данные `/play-audio`. */
+    private fun PlaybackTrack.toMediaItem(tracklist: dTracklist?): MediaItem {
         val extras = Bundle().apply {
             putString(TRACK_ID, id)
-            putString(PLAY_AUDIO_ITEM_ID, UUID.randomUUID().toString())
-            albums.firstOrNull()?.id?.let {
-                putString(PLAY_AUDIO_ALBUM_ID, it.toString())
+            putString(
+                PLAYBACK_MUSIC_SOURCE,
+                if (source == MusicSource.LOCAL) PLAYBACK_SOURCE_LOCAL else PLAYBACK_SOURCE_YANDEX,
+            )
+            if (source == MusicSource.YANDEX) {
+                putString(PLAY_AUDIO_ITEM_ID, UUID.randomUUID().toString())
+                yandexTrack?.albums?.firstOrNull()?.id?.let {
+                    putString(PLAY_AUDIO_ALBUM_ID, it.toString())
+                }
+                durationMs?.let { putLong(PLAY_AUDIO_DURATION_MS, it) }
+                (tracklist as? dYaPlaylist)?.playlistUuid?.let {
+                    putString(PLAY_AUDIO_PLAYLIST_ID, it)
+                }
+                putString(PLAY_AUDIO_SOURCE, DEFAULT_PLAY_AUDIO_SOURCE)
             }
-            durationMs?.let {
-                putLong(PLAY_AUDIO_DURATION_MS, it.toLong())
-            }
-            (tracklist as? dYaPlaylist)?.playlistUuid?.let {
-                putString(PLAY_AUDIO_PLAYLIST_ID, it)
-            }
-            putString(PLAY_AUDIO_SOURCE, DEFAULT_PLAY_AUDIO_SOURCE)
         }
         return MediaItem.Builder()
             .setMediaId(id)
-            .setUri("ya://$id")
+            .setUri(playbackUri)
             .setMediaMetadata(
                 MediaMetadata.Builder()
                     .setExtras(extras)
                     .setTitle(title)
-                    .setArtist(artists.joinToString(", ") { it.name })
+                    .setArtist(artistNames.joinToString(", "))
+                    .apply {
+                        if (source == MusicSource.LOCAL) {
+                            artworkUri?.let { setArtworkUri(android.net.Uri.parse(it)) }
+                        }
+                    }
                     .build()
             )
             .build()
+    }
+
+    private fun updateCurrentTrack(index: Int) {
+        val current = currentPlaybackQueue.getOrNull(index)
+        _currentTrack.value = current?.id
+        _currentPlaybackTrack.value = current
     }
 
 }

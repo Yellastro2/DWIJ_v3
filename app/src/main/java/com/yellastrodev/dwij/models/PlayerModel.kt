@@ -15,17 +15,24 @@ import com.yellastrodev.dwij.data.repo.CoverRepository
 import com.yellastrodev.dwij.data.repo.PlayerRepository
 import com.yellastrodev.dwij.data.repo.TrackRepository
 import com.yellastrodev.dwij.data.entities.dYaTrack
+import com.yellastrodev.dwij.data.entities.MusicSource
+import com.yellastrodev.dwij.data.entities.PlaybackTrack
+import com.yellastrodev.dwij.data.entities.toPlaybackTrack
+import com.yellastrodev.dwij.data.repo.LocalMusicRepository
 import com.yellastrodev.dwij.data.repo.PlaylistRepository
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.stateIn
+import kotlinx.coroutines.flow.Flow
+import android.graphics.Bitmap
 
 class PlayerModel(
     private val playerRepo: PlayerRepository,
     private val trackRepo: TrackRepository,
     val coverRepo: CoverRepository,
-    val playlistRepo: PlaylistRepository
+    val playlistRepo: PlaylistRepository,
+    private val localMusicRepo: LocalMusicRepository,
 )  : ViewModel() {
 
     /**
@@ -35,14 +42,21 @@ class PlayerModel(
         private val playerRepo: PlayerRepository,
         private val trackRepo: TrackRepository,
         val coverRepo: CoverRepository,
-        val playlistRepo: PlaylistRepository
+        val playlistRepo: PlaylistRepository,
+        private val localMusicRepo: LocalMusicRepository,
     ) : ViewModelProvider.Factory
     {
         @Suppress("UNCHECKED_CAST")
         override fun <T : ViewModel> create(modelClass: Class<T>): T {
             if (modelClass.isAssignableFrom(PlayerModel::class.java)) {
                 Log.d(TAG, "Создаём экземпляр TracklistModel через Factory")
-                return PlayerModel(playerRepo, trackRepo, coverRepo, playlistRepo) as T
+                return PlayerModel(
+                    playerRepo,
+                    trackRepo,
+                    coverRepo,
+                    playlistRepo,
+                    localMusicRepo,
+                ) as T
             }
             throw IllegalArgumentException("Unknown ViewModel class")
         }
@@ -53,15 +67,21 @@ class PlayerModel(
      * Подписан на трек из плеера: получает переключения между треками проигрывания,
      * Также подписан на данные трека из репозитория. Чтобы ловить изменения плейлистов трека
      */
-    val track: StateFlow<dYaTrack?> =
-        combine(playerRepo.currentTrack, trackRepo.tracks) { trackId, tracksMap ->
-            if (trackId != null) {
-                tracksMap[trackId] // всегда актуальный объект из репо
-            } else {
-                null
-            }
+    val track: StateFlow<PlaybackTrack?> =
+        combine(playerRepo.currentPlaybackTrack, trackRepo.tracks) { current, tracksMap ->
+            if (current?.source == MusicSource.YANDEX) {
+                tracksMap[current.id]?.toPlaybackTrack() ?: current
+            } else current
         }
             .stateIn(viewModelScope, SharingStarted.Eagerly, null)
+
+    fun cover(track: PlaybackTrack): Flow<Bitmap> = when (track.source) {
+        MusicSource.YANDEX -> coverRepo.getCoverFlow(
+            requireNotNull(track.yandexTrack),
+            com.yellastrodev.yandexmusiclib.entities.CoverSize.`400x400`,
+        )
+        MusicSource.LOCAL -> localMusicRepo.cover(requireNotNull(track.localTrack))
+    }
 
 
     suspend fun nextTrack() {
@@ -122,12 +142,13 @@ class PlayerModel(
     }
 
     fun isTrackLiked(): Boolean {
+        if (track.value?.source != MusicSource.YANDEX) return false
         val likeList = playlistRepo.playlists.value.find { it.kind == dYaLikeTracklist.KIND_LIKED }
         return likeList?.tracks?.any { it.trackId == track.value?.id} ?: false
     }
 
     suspend fun likeTrack() {
-        track.value?.id?. let { id ->
+        track.value?.takeIf { it.source == MusicSource.YANDEX }?.id?.let { id ->
             val shouldBeLiked = !isTrackLiked()
             playlistRepo.setTrackLiked(id, shouldBeLiked)
         }

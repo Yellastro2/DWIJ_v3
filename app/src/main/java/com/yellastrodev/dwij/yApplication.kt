@@ -24,6 +24,11 @@ import com.yellastrodev.dwij.data.source.PlaybackRemoteSource
 import com.yellastrodev.dwij.data.source.TrackRemoteSource
 import com.yellastrodev.dwij.data.dao.dPlaylistDao
 import com.yellastrodev.dwij.data.dao.dTrackDao
+import com.yellastrodev.dwij.data.dao.LocalLibraryDao
+import com.yellastrodev.dwij.data.entities.LocalLibraryStateEntity
+import com.yellastrodev.dwij.data.entities.LocalPlaylistEntity
+import com.yellastrodev.dwij.data.entities.LocalPlaylistEntryEntity
+import com.yellastrodev.dwij.data.entities.LocalTrackEntity
 import com.yellastrodev.dwij.data.entities.dPlaylistTrack
 import com.yellastrodev.dwij.data.entities.dTrackAlbumCrossRef
 import com.yellastrodev.dwij.data.entities.dTrackArtistCrossRef
@@ -32,6 +37,9 @@ import com.yellastrodev.dwij.data.entities.dYaArtist
 import com.yellastrodev.dwij.data.entities.dYaPlaylist
 import com.yellastrodev.dwij.data.entities.dYaTrack
 import com.yellastrodev.dwij.data.repo.WaveRepository
+import com.yellastrodev.dwij.data.repo.LocalMusicRepository
+import com.yellastrodev.dwij.data.source.LocalLibraryMonitor
+import com.yellastrodev.dwij.data.source.MediaStoreLocalSource
 import com.yellastrodev.dwij.data.source.WaveRemoteSource
 import com.yellastrodev.dwij.service.PlayerService
 import com.yellastrodev.dwij.service.PlaybackFeedbackTracker
@@ -45,6 +53,7 @@ import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.withContext
 import java.io.File
 import java.lang.ref.WeakReference
+import com.yellastrodev.dwij.work.LocalLibrarySyncWorker
 
 @UnstableApi
 class yApplication: Application() {
@@ -71,14 +80,19 @@ class yApplication: Application() {
             dYaAlbum::class,
             dYaArtist::class,
             dTrackAlbumCrossRef::class,
-            dTrackArtistCrossRef::class
+            dTrackArtistCrossRef::class,
+            LocalTrackEntity::class,
+            LocalPlaylistEntity::class,
+            LocalPlaylistEntryEntity::class,
+            LocalLibraryStateEntity::class,
                    ],
-        version = 4
+        version = 5
     )
 //    @TypeConverters(StringListConverter::class) // если у тебя есть поля List<String>
     abstract class AppDatabase : RoomDatabase() {
         abstract fun dPlaylistDao(): dPlaylistDao
         abstract fun dTrackDao(): dTrackDao
+        abstract fun localLibraryDao(): LocalLibraryDao
     }
 
 //    val trackLocalSource by lazy {
@@ -100,7 +114,7 @@ class yApplication: Application() {
             AppDatabase::class.java,
             "my_database"
         )
-            .addMigrations(MIGRATION_3_4)
+            .addMigrations(MIGRATION_3_4, MIGRATION_4_5)
             .fallbackToDestructiveMigration()
             .build()
     }
@@ -161,6 +175,22 @@ class yApplication: Application() {
         WaveRemoteSource(yamClient)
     }
 
+    private val mediaStoreLocalSource by lazy {
+        MediaStoreLocalSource(applicationContext)
+    }
+
+    val localMusicRepository: LocalMusicRepository by lazy {
+        LocalMusicRepository(
+            context = applicationContext,
+            dao = db.localLibraryDao(),
+            mediaStore = mediaStoreLocalSource,
+        )
+    }
+
+    private val localLibraryMonitor by lazy {
+        LocalLibraryMonitor(localMusicRepository, applicationScope)
+    }
+
     private val playbackRemoteSource: PlaybackRemoteSource by lazy {
         PlaybackRemoteSource(yamClient)
     }
@@ -186,6 +216,13 @@ class yApplication: Application() {
     override fun onCreate() {
         super.onCreate()
         playerRepo.waveRepository = this@yApplication.waveRepository
+        LocalLibraryMonitor.observedUris().forEach { uri ->
+            contentResolver.registerContentObserver(uri, true, localLibraryMonitor)
+        }
+        LocalLibrarySyncWorker.schedule(applicationContext)
+        if (localMusicRepository.hasAudioPermission()) {
+            LocalLibrarySyncWorker.enqueueImmediate(applicationContext)
+        }
 
     }
 
@@ -328,6 +365,93 @@ class yApplication: Application() {
                 db.execSQL(
                     "CREATE INDEX index_playlist_tracks_trackId " +
                         "ON playlist_tracks(trackId)"
+                )
+            }
+        }
+
+        val MIGRATION_4_5 = object : Migration(4, 5) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL(
+                    """
+                    CREATE TABLE IF NOT EXISTS local_tracks (
+                        instanceId TEXT NOT NULL PRIMARY KEY,
+                        mediaStoreId INTEGER NOT NULL,
+                        volumeName TEXT NOT NULL,
+                        contentUri TEXT NOT NULL,
+                        displayName TEXT NOT NULL,
+                        title TEXT NOT NULL,
+                        artist TEXT,
+                        album TEXT,
+                        albumId INTEGER,
+                        durationMs INTEGER NOT NULL,
+                        trackNumber INTEGER,
+                        discNumber INTEGER,
+                        year INTEGER,
+                        mimeType TEXT,
+                        sizeBytes INTEGER,
+                        dateModifiedSeconds INTEGER NOT NULL,
+                        relativePath TEXT,
+                        absolutePath TEXT
+                    )
+                    """.trimIndent()
+                )
+                db.execSQL(
+                    "CREATE UNIQUE INDEX IF NOT EXISTS index_local_tracks_contentUri " +
+                        "ON local_tracks(contentUri)"
+                )
+                db.execSQL(
+                    "CREATE UNIQUE INDEX IF NOT EXISTS " +
+                        "index_local_tracks_volumeName_mediaStoreId " +
+                        "ON local_tracks(volumeName, mediaStoreId)"
+                )
+                db.execSQL(
+                    """
+                    CREATE TABLE IF NOT EXISTS local_playlists (
+                        playlistId TEXT NOT NULL PRIMARY KEY,
+                        name TEXT NOT NULL,
+                        origin TEXT NOT NULL,
+                        externalKey TEXT NOT NULL,
+                        externalUri TEXT,
+                        dateModifiedSeconds INTEGER NOT NULL,
+                        editable INTEGER NOT NULL,
+                        exportedHash TEXT
+                    )
+                    """.trimIndent()
+                )
+                db.execSQL(
+                    "CREATE UNIQUE INDEX IF NOT EXISTS index_local_playlists_origin_externalKey " +
+                        "ON local_playlists(origin, externalKey)"
+                )
+                db.execSQL(
+                    """
+                    CREATE TABLE IF NOT EXISTS local_playlist_entries (
+                        playlistId TEXT NOT NULL,
+                        position INTEGER NOT NULL,
+                        localTrackId TEXT,
+                        rawReference TEXT,
+                        PRIMARY KEY(playlistId, position),
+                        FOREIGN KEY(playlistId) REFERENCES local_playlists(playlistId)
+                            ON UPDATE NO ACTION ON DELETE CASCADE,
+                        FOREIGN KEY(localTrackId) REFERENCES local_tracks(instanceId)
+                            ON UPDATE NO ACTION ON DELETE SET NULL
+                    )
+                    """.trimIndent()
+                )
+                db.execSQL(
+                    "CREATE INDEX IF NOT EXISTS index_local_playlist_entries_playlistId " +
+                        "ON local_playlist_entries(playlistId)"
+                )
+                db.execSQL(
+                    "CREATE INDEX IF NOT EXISTS index_local_playlist_entries_localTrackId " +
+                        "ON local_playlist_entries(localTrackId)"
+                )
+                db.execSQL(
+                    """
+                    CREATE TABLE IF NOT EXISTS local_library_state (
+                        `key` TEXT NOT NULL PRIMARY KEY,
+                        value TEXT NOT NULL
+                    )
+                    """.trimIndent()
                 )
             }
         }

@@ -20,6 +20,9 @@ internal const val PLAY_AUDIO_DURATION_MS = "play_audio_duration_ms"
 internal const val PLAY_AUDIO_SOURCE = "play_audio_source"
 internal const val PLAY_AUDIO_ITEM_ID = "play_audio_item_id"
 internal const val DEFAULT_PLAY_AUDIO_SOURCE = "dwij-android"
+internal const val PLAYBACK_MUSIC_SOURCE = "playback_music_source"
+internal const val PLAYBACK_SOURCE_YANDEX = "yandex"
+internal const val PLAYBACK_SOURCE_LOCAL = "local"
 
 /**
  * Ведёт единственную сессию `/play-audio` поверх событий Media3.
@@ -168,6 +171,9 @@ class PlaybackFeedbackTracker(
 
     private fun MediaItem.toPlaybackMetadata(): PlaybackMetadata? {
         val extras = mediaMetadata.extras
+        if (extras?.getString(PLAYBACK_MUSIC_SOURCE) == PLAYBACK_SOURCE_LOCAL) {
+            return null
+        }
         val albumId = extras?.getString(PLAY_AUDIO_ALBUM_ID)
         if (mediaId.isBlank() || albumId.isNullOrBlank()) {
             Log.w(

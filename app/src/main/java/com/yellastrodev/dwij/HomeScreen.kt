@@ -100,6 +100,8 @@ fun HomeScreen(
     onPlayerPreviousClick: () -> Unit,
     onPlayerNextClick: () -> Unit,
     player: HomeCompactPlayerUiState?,
+    selectedSource: HomeMusicSource,
+    onSourceSelected: (HomeMusicSource) -> Unit,
     modifier: Modifier = Modifier,
 ) {
     var isRadialMenuVisible by remember { mutableStateOf(false) }
@@ -286,12 +288,16 @@ fun HomeScreen(
                             )
                         }
                     }
-                    HomeSourceSelector()
+                    HomeSourceSelector(
+                        selectedSource = selectedSource,
+                        onSourceSelected = onSourceSelected,
+                    )
                     HomeMenuGrid(
                         onPlaylistsClick = onPlaylistsClick,
                         onTracksClick = onTracksClick,
                         onWaveClick = onWaveClick,
                         onAllTracksClick = onAllTracksClick,
+                        waveEnabled = selectedSource == HomeMusicSource.Yandex,
                     )
                 }
                 HomeNavigationTab.Search -> SearchPlaceholderScreen()
@@ -920,21 +926,23 @@ private fun formatPlayerTime(milliseconds: Long): String {
 private data class HomeSourceOption(
     val id: String,
     val title: String,
+    val source: HomeMusicSource,
 )
+
+enum class HomeMusicSource {
+    Local,
+    Yandex,
+}
 
 /** Собирает локализованные заглушки источников музыки. */
 @Composable
 private fun homeSourceOptions(): List<HomeSourceOption> {
     val local = stringResource(R.string.home_source_local)
     val yandexMusic = stringResource(R.string.home_source_yandex_music)
-    val all = stringResource(R.string.home_source_all)
-    val road = stringResource(R.string.home_source_road)
-    return remember(local, yandexMusic, all, road) {
+    return remember(local, yandexMusic) {
         listOf(
-            HomeSourceOption("local", local),
-            HomeSourceOption("yandex", yandexMusic),
-            HomeSourceOption("all", all),
-            HomeSourceOption("road", road),
+            HomeSourceOption("local", local, HomeMusicSource.Local),
+            HomeSourceOption("yandex", yandexMusic, HomeMusicSource.Yandex),
         )
     }
 }
@@ -944,11 +952,16 @@ private fun homeSourceOptions(): List<HomeSourceOption> {
  * после свайпа и коротко глитч-мерцает выбранной растровой рамкой.
  */
 @Composable
-private fun HomeSourceSelector(modifier: Modifier = Modifier) {
+private fun HomeSourceSelector(
+    selectedSource: HomeMusicSource,
+    onSourceSelected: (HomeMusicSource) -> Unit,
+    modifier: Modifier = Modifier,
+) {
     val options = homeSourceOptions()
-    val defaultSelectedIndex = if (options.size > 1) 1 else 0
-    var selectedIndex by remember(options.size) {
-        mutableIntStateOf(defaultSelectedIndex)
+    var selectedIndex by remember(options.size, selectedSource) {
+        mutableIntStateOf(
+            options.indexOfFirst { it.source == selectedSource }.coerceAtLeast(0)
+        )
     }
     var requestedIndex by remember { mutableStateOf<Int?>(null) }
     var selectedFrameVisible by remember { mutableStateOf(true) }
@@ -990,7 +1003,7 @@ private fun HomeSourceSelector(modifier: Modifier = Modifier) {
     }
 
     val isScrollInProgress = listState.isScrollInProgress
-    LaunchedEffect(isScrollInProgress, options.size, requestedIndex) {
+    LaunchedEffect(isScrollInProgress, options.size, requestedIndex, selectedSource) {
         if (!isScrollInProgress && options.isNotEmpty()) {
             requestedIndex?.let { targetIndex ->
                 selectedIndex = targetIndex.coerceIn(options.indices)
@@ -1004,6 +1017,10 @@ private fun HomeSourceSelector(modifier: Modifier = Modifier) {
             }
             centeredItem?.index?.let { index ->
                 selectedIndex = index.coerceIn(options.indices)
+                options.getOrNull(selectedIndex)
+                    ?.source
+                    ?.takeIf { source -> source != selectedSource }
+                    ?.let(onSourceSelected)
             }
         }
     }
@@ -1015,7 +1032,7 @@ private fun HomeSourceSelector(modifier: Modifier = Modifier) {
     ) {
         val sidePadding = ((maxWidth - itemWidth) / 2).coerceAtLeast(0.dp)
 
-        LaunchedEffect(options.size, maxWidth) {
+        LaunchedEffect(options.size, maxWidth, selectedIndex) {
             if (options.isNotEmpty()) {
                 centerItem(
                     index = selectedIndex.coerceIn(options.indices),
@@ -1046,6 +1063,9 @@ private fun HomeSourceSelector(modifier: Modifier = Modifier) {
                         .clickable(role = Role.Tab) {
                             requestedIndex = index
                             selectedIndex = index
+                            if (option.source != selectedSource) {
+                                onSourceSelected(option.source)
+                            }
                             coroutineScope.launch {
                                 try {
                                     centerItem(
@@ -1102,6 +1122,7 @@ private fun HomeMenuGrid(
     onTracksClick: () -> Unit,
     onWaveClick: () -> Unit,
     onAllTracksClick: () -> Unit,
+    waveEnabled: Boolean,
 ) {
     LazyVerticalGrid(
         columns = GridCells.Fixed(2),
@@ -1135,6 +1156,7 @@ private fun HomeMenuGrid(
                 frameRes = R.drawable.dvizh_focus_glitch_frame_contour,
                 title = stringResource(R.string.home_wave),
                 onClick = onWaveClick,
+                enabled = waveEnabled,
                 modifier = Modifier.height(110.dp),
             )
         }
@@ -1157,12 +1179,15 @@ private fun HomeMenuCard(
     @DrawableRes frameRes: Int,
     title: String,
     onClick: () -> Unit,
+    enabled: Boolean = true,
     modifier: Modifier = Modifier,
 ) {
     Box(
         modifier = modifier
             .padding(5.dp)
+            .graphicsLayer { alpha = if (enabled) 1f else 0.35f }
             .clickable(
+                enabled = enabled,
                 role = Role.Button,
                 onClick = onClick,
             ),
@@ -1211,6 +1236,8 @@ private fun HomeScreenPreview() {
         onPlayerPlayPauseClick = {},
         onPlayerPreviousClick = {},
         onPlayerNextClick = {},
+        selectedSource = HomeMusicSource.Yandex,
+        onSourceSelected = {},
         player = HomeCompactPlayerUiState(
             title = "Ночной город",
             artist = "Три дня дождя",
