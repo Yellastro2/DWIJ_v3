@@ -1,17 +1,13 @@
 package com.yellastrodev.dwij.data.entities
 
-/** Источник конкретного воспроизводимого экземпляра трека. */
-enum class MusicSource {
-    YANDEX,
-    LOCAL,
-}
-
 /**
- * Общая граница между каталогами и плеером.
- * Позже несколько таких экземпляров можно объединить одной сущностью MusicTrack.
+ * Внутренний транспорт выбранного [TrackInstance] к Media3.
+ * Экраны и публичная очередь работают с [Song], а не с этим DTO.
  */
 data class PlaybackTrack(
     val id: String,
+    val songId: String,
+    val instanceId: String,
     val source: MusicSource,
     val title: String,
     val artistNames: List<String>,
@@ -22,24 +18,45 @@ data class PlaybackTrack(
     val localTrack: LocalTrackEntity? = null,
 )
 
-fun dYaTrack.toPlaybackTrack(): PlaybackTrack = PlaybackTrack(
-    id = id,
-    source = MusicSource.YANDEX,
-    title = title,
-    artistNames = artists.map { it.name },
-    durationMs = durationMs?.toLong(),
-    playbackUri = "ya://$id",
-    artworkUri = null,
-    yandexTrack = this,
-)
+/** Выбирает preferred, локальный либо доступный/закэшированный Яндекс-экземпляр. */
+fun Song.toPlaybackTrack(isYandexCached: (String) -> Boolean): PlaybackTrack? {
+    fun TrackInstance.isPlayable(): Boolean = when (this) {
+        is TrackInstance.Local -> true
+        is TrackInstance.Yandex -> track.available || isYandexCached(track.id)
+    }
 
-fun LocalTrackEntity.toPlaybackTrack(): PlaybackTrack = PlaybackTrack(
-    id = instanceId,
-    source = MusicSource.LOCAL,
-    title = title,
-    artistNames = artist?.takeIf { it.isNotBlank() }?.let(::listOf).orEmpty(),
-    durationMs = durationMs,
-    playbackUri = contentUri,
-    artworkUri = albumId?.let { "content://media/external/audio/albumart/$it" },
-    localTrack = this,
-)
+    val selected = instances.firstOrNull { instance ->
+        instance.id == preferredInstanceId && instance.isPlayable()
+    } ?: localInstances.firstOrNull()
+        ?: yandexInstances.firstOrNull { instance ->
+            instance.track.available || isYandexCached(instance.track.id)
+        }
+        ?: return null
+
+    return when (selected) {
+        is TrackInstance.Yandex -> PlaybackTrack(
+            id = selected.track.id,
+            songId = id,
+            instanceId = selected.id,
+            source = MusicSource.YANDEX,
+            title = title,
+            artistNames = artistNames,
+            durationMs = durationMs,
+            playbackUri = "ya://${selected.track.id}",
+            artworkUri = coverUri,
+            yandexTrack = selected.track,
+        )
+        is TrackInstance.Local -> PlaybackTrack(
+            id = selected.track.instanceId,
+            songId = id,
+            instanceId = selected.id,
+            source = MusicSource.LOCAL,
+            title = title,
+            artistNames = artistNames,
+            durationMs = durationMs,
+            playbackUri = selected.track.contentUri,
+            artworkUri = coverUri,
+            localTrack = selected.track,
+        )
+    }
+}

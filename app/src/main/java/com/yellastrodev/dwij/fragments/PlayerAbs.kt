@@ -17,7 +17,7 @@ import androidx.lifecycle.repeatOnLifecycle
 import com.google.android.material.snackbar.Snackbar
 import com.yellastrodev.dwij.R
 import com.yellastrodev.dwij.activities.MainActivity
-import com.yellastrodev.dwij.data.entities.PlaybackTrack
+import com.yellastrodev.dwij.data.entities.Song
 import com.yellastrodev.dwij.service.PlayerEvent
 import com.yellastrodev.dwij.service.PlayerState
 import com.yellastrodev.yandexmusiclib.entities.CoverSize
@@ -198,7 +198,7 @@ open class PlayerAbs() : Fragment() {
 	}
 
 
-	open suspend fun onTrackFlow(track: PlaybackTrack){
+	open suspend fun onTrackFlow(track: Song){
 
 	}
 

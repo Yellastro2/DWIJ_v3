@@ -45,14 +45,17 @@ class BigPlayerFrag : Fragment() {
         setViewCompositionStrategy(ViewCompositionStrategy.DisposeOnViewTreeLifecycleDestroyed)
         setContent {
             val track by playerModel.track.collectAsState()
+            val playbackTrack by playerModel.playbackTrack.collectAsState()
             val playerState by playerModel.playerState.collectAsState()
             val playedTracklist by playerModel.playdTracklist.collectAsState()
             val shuffleBlocked by playerModel.shuffleBlock.collectAsState()
             val allPlaylists by playerModel.playlistRepo.playlists.collectAsState()
             val scope = rememberCoroutineScope()
-            var cover by remember(track?.id) { mutableStateOf<ImageBitmap?>(null) }
+            var cover by remember(track?.id, playbackTrack?.instanceId) {
+                mutableStateOf<ImageBitmap?>(null)
+            }
 
-            LaunchedEffect(track?.id) {
+            LaunchedEffect(track?.id, playbackTrack?.instanceId) {
                 val currentTrack = track ?: return@LaunchedEffect
                 try {
                     playerModel.cover(currentTrack)
@@ -70,42 +73,42 @@ class BigPlayerFrag : Fragment() {
             }
 
             val currentTrackId = track?.id
-            val yandexTrack = track?.yandexTrack
+            val yandexTrack = track?.yandexInstances?.firstOrNull()?.track
+            val yandexTrackId = yandexTrack?.id
             val playlistKeys = yandexTrack?.playlists.orEmpty()
-            val containingPlaylists = remember(currentTrackId, playlistKeys, allPlaylists) {
+            val containingPlaylists = remember(
+                currentTrackId,
+                yandexTrackId,
+                playlistKeys,
+                allPlaylists,
+            ) {
                 if (currentTrackId == null || yandexTrack == null) {
                     emptyList()
                 } else {
                     allPlaylists.filter { playlist ->
                         playlist.kind != KIND_LIKED &&
                             (playlist.playlistUuid in playlistKeys ||
-                                playlist.tracks.any { it.trackId == currentTrackId })
+                                playlist.tracks.any { it.trackId == yandexTrackId })
                     }
                 }
             }
-            val isLiked = remember(currentTrackId, allPlaylists) {
-                currentTrackId != null && allPlaylists
+            val isLiked = remember(currentTrackId, yandexTrackId, allPlaylists) {
+                yandexTrackId != null && allPlaylists
                     .firstOrNull { it.kind == KIND_LIKED }
                     ?.tracks
-                    ?.any { it.trackId == currentTrackId } == true
+                    ?.any { it.trackId == yandexTrackId } == true
             }
             val containingPlaylistTitles = remember(containingPlaylists) {
                 containingPlaylists.map { it.title }
             }
             val fallbackQueueTitle = getString(R.string.player_current_queue)
             val unknownArtist = getString(R.string.home_player_unknown_artist)
-            val sourceLabel = when (track?.source) {
+            val sourceLabel = when (playbackTrack?.source) {
                 MusicSource.YANDEX -> getString(R.string.player_source_yandex)
                 MusicSource.LOCAL -> getString(R.string.player_source_local)
                 null -> null
             }
-            val album = when (track?.source) {
-                MusicSource.YANDEX -> yandexTrack?.albums
-                    ?.joinToString(", ") { it.title }
-                    ?.takeIf(String::isNotBlank)
-                MusicSource.LOCAL -> track?.localTrack?.album?.takeIf(String::isNotBlank)
-                null -> null
-            }
+            val album = track?.albumTitle?.takeIf(String::isNotBlank)
 
             FullPlayerScreen(
                 state = FullPlayerUiState(
@@ -128,7 +131,7 @@ class BigPlayerFrag : Fragment() {
                     isShuffle = playerState.isShuffle,
                     isRepeatAll = playerState.isRepeatAll,
                     showPlaybackModes = !shuffleBlocked,
-                    canLike = track?.source == MusicSource.YANDEX,
+                    canLike = yandexTrack != null,
                     isLiked = isLiked,
                     playlistTitles = containingPlaylistTitles,
                 ),
@@ -163,11 +166,15 @@ class BigPlayerFrag : Fragment() {
     /** Открывает существующий режим выбора плейлиста для текущего трека Яндекс Музыки. */
     private fun openPlaylistPicker() {
         val track = playerModel.track.value
-            ?.takeIf { it.source == MusicSource.YANDEX }
+        val yandexTrackId = track
+            ?.yandexInstances
+            ?.firstOrNull()
+            ?.track
+            ?.id
             ?: return
         val arguments = Bundle().apply {
             putString(GridPlaylistFrag.PLAYLIST_ACTION, GridPlaylistFrag.ACTION_ADDTRACK)
-            putString(GridPlaylistFrag.ACTION_DATA, track.id)
+            putString(GridPlaylistFrag.ACTION_DATA, yandexTrackId)
         }
         findNavController().navigate(R.id.gridPlaylistFrag, arguments)
     }

@@ -32,7 +32,7 @@ import com.yellastrodev.dwij.TYPE
 import com.yellastrodev.dwij.TrackListItemUiModel
 import com.yellastrodev.dwij.VALUE
 import com.yellastrodev.dwij.data.entities.dYaPlaylist
-import com.yellastrodev.dwij.data.entities.dYaTrack
+import com.yellastrodev.dwij.data.entities.Song
 import com.yellastrodev.dwij.models.TracklistModel
 import com.yellastrodev.dwij.yApplication
 import kotlinx.coroutines.CancellationException
@@ -46,6 +46,7 @@ class ObjectFrag : Fragment() {
             coverRepo = (requireActivity().application as yApplication).coverRepository,
             trackRepo = (requireActivity().application as yApplication).trackRepository,
             trackCacheRepo = (requireActivity().application as yApplication).trackCacheRepo,
+            songRepo = (requireActivity().application as yApplication).songRepository,
             playerRepo = (requireActivity().application as yApplication).playerRepo,
             waveRepo = (requireActivity().application as yApplication).waveRepository,
         )
@@ -73,7 +74,7 @@ class ObjectFrag : Fragment() {
         setContent {
             val playlist by model.playlist.collectAsState()
             val tracks by model.tracks.collectAsState()
-            val cachedUnavailableTrackIds by model.cachedUnavailableTrackIds.collectAsState()
+            val cachedUnavailableSongIds by model.cachedUnavailableSongIds.collectAsState()
             val yandexPlaylist = playlist as? dYaPlaylist
             val objectId = yandexPlaylist?.playlistUuid
             val unknownArtist = stringResource(R.string.home_player_unknown_artist)
@@ -88,10 +89,10 @@ class ObjectFrag : Fragment() {
                 count,
                 count,
             )
-            val trackItems = remember(tracks, cachedUnavailableTrackIds, unknownArtist) {
+            val trackItems = remember(tracks, cachedUnavailableSongIds, unknownArtist) {
                 tracks.toTrackListItems(
                     unknownArtist = unknownArtist,
-                    cachedUnavailableTrackIds = cachedUnavailableTrackIds,
+                    cachedUnavailableSongIds = cachedUnavailableSongIds,
                 )
             }
             val listState = rememberLazyListState()
@@ -161,7 +162,7 @@ class ObjectFrag : Fragment() {
                     if (firstPlayableIndex >= 0) {
                         playTrack(
                             position = firstPlayableIndex,
-                            expectedTrackId = trackItems[firstPlayableIndex].trackId,
+                            expectedSongId = trackItems[firstPlayableIndex].trackId,
                         )
                     } else if (trackItems.isNotEmpty()) {
                         showUnavailableTrackSnackbar()
@@ -184,8 +185,8 @@ class ObjectFrag : Fragment() {
     }
 
     /** Запускает очередь с выбранной позиции и открывает полный плеер. */
-    private fun playTrack(position: Int, expectedTrackId: String? = null) {
-        if (model.onTrackClicked(position, expectedTrackId)) {
+    private fun playTrack(position: Int, expectedSongId: String? = null) {
+        if (model.onTrackClicked(position, expectedSongId)) {
             findNavController().navigate(R.id.action_objectFrag_to_bigPlayerFrag)
         }
     }
@@ -199,25 +200,29 @@ class ObjectFrag : Fragment() {
     }
 
     /** Создаёт уникальные LazyColumn-ключи для повторяющихся треков одного объекта. */
-    private fun List<dYaTrack>.toTrackListItems(
+    private fun List<Song>.toTrackListItems(
         unknownArtist: String,
-        cachedUnavailableTrackIds: Set<String>,
+        cachedUnavailableSongIds: Set<String>,
     ): List<TrackListItemUiModel> {
         val occurrences = mutableMapOf<String, Int>()
-        return map { track ->
-            val occurrence = occurrences.getOrDefault(track.id, 0)
-            occurrences[track.id] = occurrence + 1
+        return map { song ->
+            val occurrence = occurrences.getOrDefault(song.id, 0)
+            occurrences[song.id] = occurrence + 1
+            val yandexUnavailable = song.yandexInstances.isNotEmpty() &&
+                song.yandexInstances.none { instance -> instance.track.available }
+            val yandexPlayable = song.yandexInstances.any { instance ->
+                instance.track.available || song.id in cachedUnavailableSongIds
+            }
             TrackListItemUiModel(
-                key = "${track.id}:$occurrence",
-                trackId = track.id,
-                title = track.title,
-                artist = track.artists
-                    .joinToString(", ") { artist -> artist.name }
+                key = "${song.id}:$occurrence",
+                trackId = song.id,
+                title = song.title,
+                artist = song.artistNames
+                    .joinToString(", ")
                     .ifBlank { unknownArtist },
-                shouldLoadCover = track.getCoverUriAny() != null,
-                isYandexUnavailable = !track.available,
-                isPlaybackBlocked = !track.available &&
-                    track.id !in cachedUnavailableTrackIds,
+                shouldLoadCover = song.coverUri != null,
+                isYandexUnavailable = yandexUnavailable,
+                isPlaybackBlocked = song.localInstances.isEmpty() && !yandexPlayable,
             )
         }
     }

@@ -19,10 +19,12 @@ import com.yellastrodev.dwij.data.entities.LocalPlaylistEntryEntity
 import com.yellastrodev.dwij.data.entities.LocalPlaylistOrigin
 import com.yellastrodev.dwij.data.entities.LocalTrackEntity
 import com.yellastrodev.dwij.data.entities.LocalTracklist
+import com.yellastrodev.dwij.data.entities.Song
 import com.yellastrodev.dwij.data.source.MediaStoreLocalSource
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.flow
+import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import java.util.UUID
@@ -38,10 +40,14 @@ class LocalMusicRepository(
     private val context: Context,
     private val dao: LocalLibraryDao,
     private val mediaStore: MediaStoreLocalSource,
+    private val songRepository: SongRepository,
 ) {
     private val syncMutex = Mutex()
 
     val tracks: Flow<List<LocalTrackEntity>> = dao.observeAllTracks()
+    val songs: Flow<List<Song>> = tracks.map { sourceTracks ->
+        songRepository.songsForLocalTracks(sourceTracks)
+    }
     val playlists: Flow<List<LocalPlaylistEntity>> = dao.observePlaylists()
 
     fun playlist(playlistId: String): Flow<LocalPlaylistEntity?> =
@@ -49,6 +55,11 @@ class LocalMusicRepository(
 
     fun playlistTracks(playlistId: String): Flow<List<LocalTrackEntity>> =
         dao.observePlaylistTracks(playlistId)
+
+    fun playlistSongs(playlistId: String): Flow<List<Song>> =
+        playlistTracks(playlistId).map { sourceTracks ->
+            songRepository.songsForLocalTracks(sourceTracks)
+        }
 
     fun hasAudioPermission(): Boolean = ContextCompat.checkSelfPermission(
         context,
@@ -78,6 +89,7 @@ class LocalMusicRepository(
                 entries = snapshot.entries.filter { it.playlistId in importedIds },
                 generation = snapshot.generation,
             )
+            songRepository.registerLocalTracks(snapshot.tracks, removeMissing = true)
             val tracksByUri = snapshot.tracks.associateBy(LocalTrackEntity::contentUri)
             val tracksByPath = snapshot.tracks
                 .mapNotNull { track -> track.absolutePath?.let { it.normalizedPath() to track } }

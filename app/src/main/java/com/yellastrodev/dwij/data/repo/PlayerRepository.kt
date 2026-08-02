@@ -17,12 +17,11 @@ import androidx.media3.common.util.UnstableApi
 import com.yellastrodev.dwij.TRACK_ID
 import com.yellastrodev.dwij.data.entities.dTracklist
 import com.yellastrodev.dwij.data.entities.dYaPlaylist
-import com.yellastrodev.dwij.data.entities.dYaTrack
 import com.yellastrodev.dwij.data.entities.dYaWave
-import com.yellastrodev.dwij.data.entities.LocalTrackEntity
 import com.yellastrodev.dwij.data.entities.LocalTracklist
 import com.yellastrodev.dwij.data.entities.MusicSource
 import com.yellastrodev.dwij.data.entities.PlaybackTrack
+import com.yellastrodev.dwij.data.entities.Song
 import com.yellastrodev.dwij.data.entities.toPlaybackTrack
 import com.yellastrodev.dwij.service.DEFAULT_PLAY_AUDIO_SOURCE
 import com.yellastrodev.dwij.service.PLAY_AUDIO_ALBUM_ID
@@ -79,10 +78,14 @@ class PlayerRepository(
     val dtracklist: StateFlow<dTracklist?> = _dtracklist
 
     var currentTrackList: List<String> = listOf()
+    private var currentSongQueue: List<Song> = emptyList()
     private var currentPlaybackQueue: List<PlaybackTrack> = emptyList()
 
     private val _currentTrack = MutableStateFlow<String?>(null)
     val currentTrack: StateFlow<String?> = _currentTrack
+
+    private val _currentSong = MutableStateFlow<Song?>(null)
+    val currentSong: StateFlow<Song?> = _currentSong
 
     private val _currentPlaybackTrack = MutableStateFlow<PlaybackTrack?>(null)
     val currentPlaybackTrack: StateFlow<PlaybackTrack?> = _currentPlaybackTrack
@@ -179,61 +182,60 @@ class PlayerRepository(
     var relativeIndex = 0
 
     /**
-     * Запускает Яндекс-очередь, не передавая Media3 недоступные треки без локального файла.
+     * Запускает очередь логических песен, выбирая для каждой воспроизводимый экземпляр.
      * [startIndex] переводится из исходного списка в индекс уже отфильтрованной очереди.
      */
     suspend fun playQueue(
-        tracks: List<dYaTrack>,
+        songs: List<Song>,
         startIndex: Int = 0,
         tracklist: dTracklist
     ) {
-        if (tracks.isEmpty() || startIndex !in tracks.indices) {
+        if (songs.isEmpty() || startIndex !in songs.indices) {
             Log.w(
                 TAG,
-                "[playQueue] Некорректная исходная очередь: size=${tracks.size}, " +
+                "[playQueue] Некорректная исходная очередь: size=${songs.size}, " +
                     "startIndex=$startIndex",
             )
             return
         }
-        val playableTracks = playableYandexTracks(tracks)
-        if (playableTracks.isEmpty()) {
+        val playableSongs = withContext(Dispatchers.IO) {
+            songs.mapIndexedNotNull { index, song ->
+                song.toPlaybackTrack(isTrackCached)?.let { track ->
+                    IndexedValue(index, song to track)
+                }
+            }
+        }
+        if (playableSongs.isEmpty()) {
             Log.w(
                 TAG,
-                "[playQueue] В очереди нет доступных или закэшированных Яндекс-треков",
+                "[playQueue] В очереди нет воспроизводимых экземпляров",
             )
             return
         }
-        val resolvedStartIndex = playableTracks
-            .indexOfFirst { indexedTrack -> indexedTrack.index == startIndex }
+        val resolvedStartIndex = playableSongs
+            .indexOfFirst { indexedSong -> indexedSong.index == startIndex }
             .takeIf { index -> index >= 0 }
-            ?: playableTracks.indexOfFirst { indexedTrack -> indexedTrack.index > startIndex }
+            ?: playableSongs.indexOfFirst { indexedSong -> indexedSong.index > startIndex }
                 .takeIf { index -> index >= 0 }
             ?: 0
-        val skippedCount = tracks.size - playableTracks.size
+        val skippedCount = songs.size - playableSongs.size
         if (skippedCount > 0) {
             Log.d(
                 TAG,
-                "[playQueue] Пропущено недоступных без кэша=$skippedCount, " +
+                "[playQueue] Пропущено песен без воспроизводимых экземпляров=$skippedCount, " +
                     "исходный index=$startIndex, итоговый index=$resolvedStartIndex",
             )
         }
         playPreparedQueue(
-            tracks = playableTracks.map { indexedTrack ->
-                indexedTrack.value.toPlaybackTrack()
-            },
+            songs = playableSongs.map { it.value.first },
+            tracks = playableSongs.map { it.value.second },
             startIndex = resolvedStartIndex,
             tracklist = tracklist,
         )
     }
 
-    /** Запускает локальные content:// элементы тем же Media3-плеером. */
-    suspend fun playLocalQueue(
-        tracks: List<LocalTrackEntity>,
-        startIndex: Int = 0,
-        tracklist: LocalTracklist,
-    ) = playPreparedQueue(tracks.map { it.toPlaybackTrack() }, startIndex, tracklist)
-
     private suspend fun playPreparedQueue(
+        songs: List<Song>,
         tracks: List<PlaybackTrack>,
         startIndex: Int,
         tracklist: dTracklist,
@@ -254,23 +256,25 @@ class PlayerRepository(
             bind()
         }
 
-        if (tracks[startIndex].id == _currentTrack.value && dtracklist.value?.getdId() == tracklist.getdId()) {
-            Log.d(TAG, "[playQueue] Выбранный трек уже играет")
-            return
-        }
-
         if (dtracklist.value?.getdId() == tracklist.getdId()){
             Log.d(TAG, "[playQueue] Треклист не изменился")
-            val newIds = tracks.map { it.id }
-            if (currentTrackList == newIds) {
-                _currentTrack.value = tracks[startIndex].id
+            val newIds = songs.map { it.id }
+            val sameInstances = currentPlaybackQueue.map(PlaybackTrack::instanceId) ==
+                tracks.map(PlaybackTrack::instanceId)
+            if (currentTrackList == newIds && sameInstances) {
+                if (_state.value.currentIndex == startIndex) {
+                    Log.d(TAG, "[playQueue] Выбранная позиция очереди уже играет")
+                    return
+                }
+                _currentTrack.value = songs[startIndex].id
+                _currentSong.value = songs[startIndex]
                 _currentPlaybackTrack.value = currentPlaybackQueue.getOrNull(startIndex)
                 relativeIndex = startIndex
                 service?.playTrack(startIndex)
                 Log.d(
                     TAG,
                     "[playQueue] Переключаем текущую очередь на index=$startIndex, " +
-                        "trackId=${tracks[startIndex].id}"
+                        "songId=${songs[startIndex].id}"
                 )
                 return
             }
@@ -279,9 +283,11 @@ class PlayerRepository(
         // сюда доходит логика ток если треклист сменился.
         blockShuffle(tracklist.getType() == dYaWave.YA_WAVE)
 
-        currentTrackList = tracks.map { track -> track.id }
+        currentTrackList = songs.map(Song::id)
+        currentSongQueue = songs
         currentPlaybackQueue = tracks
-        _currentTrack.value = tracks[startIndex].id
+        _currentTrack.value = songs[startIndex].id
+        _currentSong.value = songs[startIndex]
         _currentPlaybackTrack.value = tracks[startIndex]
         _dtracklist.value = tracklist
 
@@ -290,7 +296,8 @@ class PlayerRepository(
         Log.d(
             TAG,
             "[playQueue] Формируем очередь: size=${tracks.size}, " +
-                "startIndex=$startIndex, trackId=${tracks[startIndex].id}"
+                "startIndex=$startIndex, songId=${songs[startIndex].id}, " +
+                "instanceId=${tracks[startIndex].instanceId}"
         )
 
         val mediaItems = tracks.map { track ->
@@ -318,22 +325,25 @@ class PlayerRepository(
     }
 
 
-    /** Догружает в текущую очередь только доступные либо уже закэшированные Яндекс-треки. */
-    suspend fun addTracks(tracks: List<dYaTrack>) {
-        val playableTracks = playableYandexTracks(tracks).map { indexedTrack ->
-            indexedTrack.value
+    /** Догружает в текущую очередь песни, для которых удалось выбрать экземпляр. */
+    suspend fun addTracks(songs: List<Song>) {
+        val resolved = withContext(Dispatchers.IO) {
+            songs.mapNotNull { song ->
+                song.toPlaybackTrack(isTrackCached)?.let { track -> song to track }
+            }
         }
-        val skippedCount = tracks.size - playableTracks.size
+        val skippedCount = songs.size - resolved.size
         Log.d(
             TAG,
-            "[addTracks] Получено=${tracks.size}, добавляем=${playableTracks.size}, " +
+            "[addTracks] Получено=${songs.size}, добавляем=${resolved.size}, " +
                 "пропущено=$skippedCount",
         )
-        if (playableTracks.isEmpty()) return
-//        tracksAndUrls = tracks.associate { track -> track.id to track  }
-        currentTrackList = currentTrackList + playableTracks.map { track -> track.id }
+        if (resolved.isEmpty()) return
+        val resolvedSongs = resolved.map { it.first }
+        val playbackTracks = resolved.map { it.second }
+        currentTrackList = currentTrackList + resolvedSongs.map(Song::id)
+        currentSongQueue = currentSongQueue + resolvedSongs
 
-        val playbackTracks = playableTracks.map { it.toPlaybackTrack() }
         currentPlaybackQueue = currentPlaybackQueue + playbackTracks
         val mediaItems = playbackTracks.map { track ->
             track.toMediaItem(_dtracklist.value)
@@ -341,22 +351,6 @@ class PlayerRepository(
 
         withContext(Dispatchers.Main) {
             service?.addTracks(mediaItems)
-        }
-    }
-
-    /**
-     * Оставляет доступные Яндекс-треки и недоступные треки с готовым файлом в кэше.
-     * Исходные индексы сохраняются, чтобы после фильтрации правильно выбрать стартовую позицию.
-     */
-    private suspend fun playableYandexTracks(
-        tracks: List<dYaTrack>,
-    ): List<IndexedValue<dYaTrack>> = withContext(Dispatchers.IO) {
-        tracks.mapIndexedNotNull { index, track ->
-            if (track.available || isTrackCached(track.id)) {
-                IndexedValue(index, track)
-            } else {
-                null
-            }
         }
     }
 
@@ -402,8 +396,8 @@ class PlayerRepository(
         }
     }
 
-    fun List<dYaTrack>.stableHash(): Int =
-        fold(1) { acc, track -> 31 * acc + track.id.hashCode() }
+    fun List<Song>.stableHash(): Int =
+        fold(1) { acc, song -> 31 * acc + song.id.hashCode() }
 
     /** Добавляет source-aware метаданные и только для Яндекса — данные `/play-audio`. */
     private fun PlaybackTrack.toMediaItem(tracklist: dTracklist?): MediaItem {
@@ -444,8 +438,10 @@ class PlayerRepository(
     }
 
     private fun updateCurrentTrack(index: Int) {
+        val song = currentSongQueue.getOrNull(index)
         val current = currentPlaybackQueue.getOrNull(index)
-        _currentTrack.value = current?.id
+        _currentTrack.value = song?.id
+        _currentSong.value = song
         _currentPlaybackTrack.value = current
     }
 

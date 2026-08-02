@@ -25,17 +25,17 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.yellastrodev.dwij.data.entities.LocalPlaylistEntity
 import com.yellastrodev.dwij.data.entities.LocalPlaylistOrigin
-import com.yellastrodev.dwij.data.entities.LocalTrackEntity
+import com.yellastrodev.dwij.data.entities.Song
 
 /** Показывает локальные плейлисты либо общий Compose-список локальных треков. */
 @Composable
 fun LocalLibraryScreen(
     title: String,
     playlists: List<LocalPlaylistEntity>?,
-    tracks: List<LocalTrackEntity>?,
+    tracks: List<Song>?,
     onPlaylistClick: (LocalPlaylistEntity) -> Unit,
-    onTrackClick: (Int, LocalTrackEntity) -> Unit,
-    loadTrackCover: suspend (LocalTrackEntity) -> ImageBitmap? = { null },
+    onTrackClick: (Int, Song) -> Unit,
+    loadTrackCover: suspend (Song) -> ImageBitmap? = { null },
     modifier: Modifier = Modifier,
 ) {
     Column(
@@ -66,15 +66,15 @@ fun LocalLibraryScreen(
 @Composable
 fun LocalPlaylistObjectScreen(
     title: String,
-    tracks: List<LocalTrackEntity>,
+    tracks: List<Song>,
     onBackClick: () -> Unit,
     onPlayClick: () -> Unit,
-    onTrackClick: (Int, LocalTrackEntity) -> Unit,
-    loadTrackCover: suspend (LocalTrackEntity) -> ImageBitmap?,
+    onTrackClick: (Int, Song) -> Unit,
+    loadTrackCover: suspend (Song) -> ImageBitmap?,
     modifier: Modifier = Modifier,
 ) {
     val unknownArtist = stringResource(R.string.home_player_unknown_artist)
-    val tracksById = remember(tracks) { tracks.associateBy(LocalTrackEntity::instanceId) }
+    val tracksById = remember(tracks) { tracks.associateBy(Song::id) }
     val items = remember(tracks, unknownArtist) {
         tracks.toTrackListItems(unknownArtist)
     }
@@ -145,16 +145,16 @@ private fun LocalPlaylistList(
 
 @Composable
 private fun LocalTrackList(
-    tracks: List<LocalTrackEntity>,
-    onClick: (Int, LocalTrackEntity) -> Unit,
-    loadCover: suspend (LocalTrackEntity) -> ImageBitmap?,
+    tracks: List<Song>,
+    onClick: (Int, Song) -> Unit,
+    loadCover: suspend (Song) -> ImageBitmap?,
 ) {
     if (tracks.isEmpty()) {
         EmptyLocalLibraryText(stringResource(R.string.local_tracks_empty))
         return
     }
     val unknownArtist = stringResource(R.string.home_player_unknown_artist)
-    val tracksById = remember(tracks) { tracks.associateBy(LocalTrackEntity::instanceId) }
+    val tracksById = remember(tracks) { tracks.associateBy(Song::id) }
     val items = remember(tracks, unknownArtist) {
         tracks.toTrackListItems(unknownArtist)
     }
@@ -172,14 +172,14 @@ private fun LocalTrackList(
 }
 
 /** Преобразует локальные сущности в независимые от источника строки Compose-списка. */
-private fun List<LocalTrackEntity>.toTrackListItems(
+private fun List<Song>.toTrackListItems(
     unknownArtist: String,
-): List<TrackListItemUiModel> = mapIndexed { index, track ->
+): List<TrackListItemUiModel> = mapIndexed { index, song ->
     TrackListItemUiModel(
-        key = "${track.instanceId}:$index",
-        trackId = track.instanceId,
-        title = track.title,
-        artist = track.artist?.takeIf { artist -> artist.isNotBlank() } ?: unknownArtist,
+        key = "${song.id}:$index",
+        trackId = song.id,
+        title = song.title,
+        artist = song.artistNames.joinToString(", ").ifBlank { unknownArtist },
     )
 }
 

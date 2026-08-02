@@ -8,39 +8,30 @@ import android.util.Log
 import androidx.core.content.ContextCompat
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.ViewModelProvider
-import androidx.lifecycle.viewModelScope
 import com.yellastrodev.dwij.R
 import com.yellastrodev.dwij.data.entities.dYaLikeTracklist
 import com.yellastrodev.dwij.data.repo.CoverRepository
 import com.yellastrodev.dwij.data.repo.PlayerRepository
-import com.yellastrodev.dwij.data.repo.TrackRepository
-import com.yellastrodev.dwij.data.entities.dYaTrack
 import com.yellastrodev.dwij.data.entities.MusicSource
-import com.yellastrodev.dwij.data.entities.PlaybackTrack
-import com.yellastrodev.dwij.data.entities.toPlaybackTrack
+import com.yellastrodev.dwij.data.entities.Song
 import com.yellastrodev.dwij.data.repo.LocalMusicRepository
 import com.yellastrodev.dwij.data.repo.PlaylistRepository
-import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
-import kotlinx.coroutines.flow.combine
-import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.flow.Flow
 import android.graphics.Bitmap
 
 class PlayerModel(
     private val playerRepo: PlayerRepository,
-    private val trackRepo: TrackRepository,
     val coverRepo: CoverRepository,
     val playlistRepo: PlaylistRepository,
     private val localMusicRepo: LocalMusicRepository,
 )  : ViewModel() {
 
     /**
-     * Factory для создания [TracklistModel] с передачей зависимостей.
+     * Factory для создания [PlayerModel] с передачей зависимостей.
      */
     class Factory(
         private val playerRepo: PlayerRepository,
-        private val trackRepo: TrackRepository,
         val coverRepo: CoverRepository,
         val playlistRepo: PlaylistRepository,
         private val localMusicRepo: LocalMusicRepository,
@@ -52,7 +43,6 @@ class PlayerModel(
                 Log.d(TAG, "Создаём экземпляр TracklistModel через Factory")
                 return PlayerModel(
                     playerRepo,
-                    trackRepo,
                     coverRepo,
                     playlistRepo,
                     localMusicRepo,
@@ -63,24 +53,29 @@ class PlayerModel(
     }
 
     /**
-     * Flow для UI с полным объектом Track
-     * Подписан на трек из плеера: получает переключения между треками проигрывания,
-     * Также подписан на данные трека из репозитория. Чтобы ловить изменения плейлистов трека
+     * Полная логическая песня для UI и отдельно фактически выбранный source-инстанс.
      */
-    val track: StateFlow<PlaybackTrack?> =
-        combine(playerRepo.currentPlaybackTrack, trackRepo.tracks) { current, tracksMap ->
-            if (current?.source == MusicSource.YANDEX) {
-                tracksMap[current.id]?.toPlaybackTrack() ?: current
-            } else current
-        }
-            .stateIn(viewModelScope, SharingStarted.Eagerly, null)
+    val track: StateFlow<Song?> = playerRepo.currentSong
+    val playbackTrack = playerRepo.currentPlaybackTrack
 
-    fun cover(track: PlaybackTrack): Flow<Bitmap> = when (track.source) {
-        MusicSource.YANDEX -> coverRepo.getCoverFlow(
-            requireNotNull(track.yandexTrack),
-            com.yellastrodev.yandexmusiclib.entities.CoverSize.`400x400`,
-        )
-        MusicSource.LOCAL -> localMusicRepo.cover(requireNotNull(track.localTrack))
+    fun cover(song: Song): Flow<Bitmap> {
+        val playback = playerRepo.currentPlaybackTrack.value
+            ?.takeIf { track -> track.songId == song.id }
+        return when (playback?.source) {
+            MusicSource.YANDEX -> coverRepo.getCoverFlow(
+                requireNotNull(playback.yandexTrack),
+                com.yellastrodev.yandexmusiclib.entities.CoverSize.`400x400`,
+            )
+            MusicSource.LOCAL -> localMusicRepo.cover(requireNotNull(playback.localTrack))
+            null -> song.yandexInstances.firstOrNull()?.let { instance ->
+                coverRepo.getCoverFlow(
+                    instance.track,
+                    com.yellastrodev.yandexmusiclib.entities.CoverSize.`400x400`,
+                )
+            } ?: song.localInstances.firstOrNull()?.let { instance ->
+                localMusicRepo.cover(instance.track)
+            } ?: kotlinx.coroutines.flow.emptyFlow()
+        }
     }
 
 
@@ -142,13 +137,14 @@ class PlayerModel(
     }
 
     fun isTrackLiked(): Boolean {
-        if (track.value?.source != MusicSource.YANDEX) return false
+        val yandexTrackId = track.value?.yandexInstances?.firstOrNull()?.track?.id
+            ?: return false
         val likeList = playlistRepo.playlists.value.find { it.kind == dYaLikeTracklist.KIND_LIKED }
-        return likeList?.tracks?.any { it.trackId == track.value?.id} ?: false
+        return likeList?.tracks?.any { it.trackId == yandexTrackId } ?: false
     }
 
     suspend fun likeTrack() {
-        track.value?.takeIf { it.source == MusicSource.YANDEX }?.id?.let { id ->
+        track.value?.yandexInstances?.firstOrNull()?.track?.id?.let { id ->
             val shouldBeLiked = !isTrackLiked()
             playlistRepo.setTrackLiked(id, shouldBeLiked)
         }

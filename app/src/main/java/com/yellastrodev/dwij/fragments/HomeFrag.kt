@@ -88,14 +88,15 @@ class HomeFrag: Fragment(R.layout.frag_home) {
 			setContent {
 				val playerModel = (activity as MainActivity).playerModel
 				val track by playerModel.track.collectAsState()
+				val playbackTrack by playerModel.playbackTrack.collectAsState()
 				val playerState by playerModel.playerState.collectAsState()
 				val musicSource by selectedMusicSource.collectAsState()
-				var cover by remember(track?.id) {
+				var cover by remember(track?.id, playbackTrack?.instanceId) {
 					mutableStateOf<ImageBitmap?>(null)
 				}
 				val unknownArtist = stringResource(R.string.home_player_unknown_artist)
 
-				LaunchedEffect(track?.id) {
+				LaunchedEffect(track?.id, playbackTrack?.instanceId) {
 					track?.let { currentTrack ->
 						playerModel.cover(currentTrack)
 							.flowOn(Dispatchers.IO)

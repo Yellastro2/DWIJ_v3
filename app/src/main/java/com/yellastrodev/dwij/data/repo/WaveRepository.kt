@@ -2,7 +2,7 @@ package com.yellastrodev.dwij.data.repo
 
 import android.util.Log
 import com.yellastrodev.dwij.data.entities.dTracklist
-import com.yellastrodev.dwij.data.entities.dYaTrack
+import com.yellastrodev.dwij.data.entities.Song
 import com.yellastrodev.dwij.data.entities.dYaWave
 import com.yellastrodev.dwij.data.entities.toEntity
 import com.yellastrodev.dwij.data.source.WaveRemoteSource
@@ -20,6 +20,7 @@ import kotlinx.coroutines.launch
 class WaveRepository(
     val remote: WaveRemoteSource,
     val trackRepository: TrackRepository,
+    private val songRepository: SongRepository,
     val playerRepository: PlayerRepository,
     private val scope: CoroutineScope
 ) {
@@ -28,9 +29,10 @@ class WaveRepository(
 
     private var curentWave: dYaWave? = null
 
-    suspend fun getWave(dTracklist: dTracklist?): List<dYaTrack> {
-        val result = remote.getWave(dTracklist?.getWaveId() ?: "user:onyourwave")
-        when(result){
+    suspend fun getWave(dTracklist: dTracklist?): List<Song> {
+        return when (
+            val result = remote.getWave(dTracklist?.getWaveId() ?: "user:onyourwave")
+        ) {
             is YamResult.Success -> {
                 curentWave = dYaWave(
                     radioSessionId = result.value.station,
@@ -46,17 +48,14 @@ class WaveRepository(
                 }
                 val trackList = result.value.tracks.map { it.toEntity() }
                 trackRepository.putTracks(trackList)
-                return trackList
+                songRepository.songsForYandexTracks(trackList)
             }
 
-            else -> {
-                // обработка всех остальных случаев
-                // например, логирование или возврат пустого списка
-                ArrayList<dYaTrack>()
+            is YamResult.Failure -> {
+                Log.e(TAG, "[getWave] Волну загрузить не удалось: ${result.error}")
+                emptyList()
             }
         }
-
-        return ArrayList<dYaTrack>()
     }
 
     // Храним job, чтобы можно было отменить снаружи
@@ -94,7 +93,11 @@ class WaveRepository(
         observeJob = playerRepository.state
             .onEach { state ->
 
-                val currentId = playerRepository.currentTrack.value
+                val currentId = playerRepository.currentSong.value
+                    ?.yandexInstances
+                    ?.firstOrNull()
+                    ?.track
+                    ?.id
 
                 // обновляем позицию для текущего трека
                 if (currentId == lastTrackId) {
@@ -110,7 +113,7 @@ class WaveRepository(
                     lastTrackId?.let { prevId ->
                         onTrackNext(prevId, lastTrackPosSec, lastTrackDuration)
                     }
-                    onTrackStarted(currentId ?: "")
+                    currentId?.let { trackId -> onTrackStarted(trackId) }
                     lastTrackId = currentId
                     lastTrackPosSec = 0
                     lastTrackDuration = (state.duration / 1000).toInt()
@@ -151,10 +154,11 @@ class WaveRepository(
             is YamResult.Success -> {
                 val dTracks = result.value.tracks.map { tr -> tr.toEntity() }
                 trackRepository.putTracks(dTracks)
+                val songs = songRepository.songsForYandexTracks(dTracks)
                 wave.batchId = result.value.batchId
                 wave.tracks = wave.tracks +
                     result.value.tracks.map { TrackShort(it.id) }
-                playerRepository.addTracks(dTracks)
+                playerRepository.addTracks(songs)
                 Log.d(TAG, "updateWave: ${wave.tracks.size}")
             }
 

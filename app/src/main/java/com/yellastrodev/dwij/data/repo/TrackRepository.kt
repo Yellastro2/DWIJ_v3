@@ -21,7 +21,8 @@ import kotlinx.coroutines.sync.withLock
 
 class TrackRepository(
     private val remote: TrackRemoteSource,
-    private val local: dTrackDao
+    private val local: dTrackDao,
+    private val songRepository: SongRepository,
 ) {
 
     val TAG = "TrackRepository"
@@ -38,6 +39,7 @@ class TrackRepository(
             _tracks.update { current ->
                 current + (trackId to track)
             }
+            songRepository.registerYandexTracks(listOf(track))
             DataResult.Success(track)
         } catch (error: CancellationException) {
             throw error
@@ -68,6 +70,7 @@ class TrackRepository(
                 val localTrack = local.getTrack(trackId)
                 if (localTrack != null && localTrack.albums.isNotEmpty()) {
                     _tracks.update { it + (trackId to localTrack) }
+                    songRepository.registerYandexTracks(listOf(localTrack))
                     return@withLock DataResult.Success(localTrack)
                 }
 
@@ -79,6 +82,7 @@ class TrackRepository(
                             )
                         local.insert(remoteTrack)
                         _tracks.update { it + (trackId to remoteTrack) }
+                        songRepository.registerYandexTracks(listOf(remoteTrack))
                         DataResult.Success(remoteTrack)
                     }
                     is DataResult.Failure -> result
@@ -94,6 +98,7 @@ class TrackRepository(
     suspend fun putTracks(trackList: List<dYaTrack>) {
 
         local.insertAll(trackList)
+        songRepository.registerYandexTracks(trackList)
 
         val updated = mutableMapOf<String, dYaTrack>()
         trackList.forEach { track ->
@@ -184,7 +189,9 @@ class TrackRepository(
                     )
                 )
             }
-            DataResult.Success(trackIds.mapNotNull(_tracks.value::get))
+            val resolvedTracks = trackIds.mapNotNull(_tracks.value::get)
+            songRepository.registerYandexTracks(resolvedTracks)
+            DataResult.Success(resolvedTracks)
         } catch (error: CancellationException) {
             throw error
         } catch (error: Exception) {

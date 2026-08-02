@@ -1,28 +1,27 @@
 package com.yellastrodev.dwij.activities
 
-import android.annotation.SuppressLint
 import android.content.ActivityNotFoundException
 import android.content.ClipData
 import android.content.ClipboardManager
 import android.content.Intent
 import android.net.Uri
 import android.os.Bundle
-import android.os.Environment
 import android.os.StatFs
 import android.preference.PreferenceManager
 import android.util.Log
-import android.widget.Button
-import android.widget.SeekBar
-import android.widget.TextView
 import android.widget.Toast
 import androidx.activity.enableEdgeToEdge
+import androidx.activity.compose.setContent
 import androidx.appcompat.app.AlertDialog
 import androidx.appcompat.app.AppCompatActivity
-import androidx.media3.common.util.UnstableApi
-import com.google.android.material.snackbar.Snackbar
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.setValue
+import androidx.core.view.WindowCompat
 import com.yellastrodev.dwij.CACHE_SIZE
 import com.yellastrodev.dwij.DEFAULT_CACHE_SIZE
 import com.yellastrodev.dwij.R
+import com.yellastrodev.dwij.SettingsScreen
 import com.yellastrodev.dwij.YA_ID
 import com.yellastrodev.dwij.YA_LOGIN
 import com.yellastrodev.dwij.YA_REFRESH_TOKEN
@@ -44,20 +43,31 @@ import kotlinx.coroutines.Job
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.cancel
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 
 
-@androidx.annotation.OptIn(UnstableApi::class)
+/** Хостит Compose-настройки и сохраняет существующую OAuth- и cache-логику Activity. */
 class SettingsAct: AppCompatActivity() {
 
 	companion object {
 		private const val TAG = "SettingsAct"
+		private const val MIN_CACHE_SIZE_MB = 200
+		private const val BYTES_PER_MEGABYTE = 1024L * 1024L
+
+		private fun bytesToMegabytes(bytes: Long): Int =
+			(bytes / BYTES_PER_MEGABYTE).toInt()
 	}
 
-	lateinit var vYaLoginText: TextView
-	lateinit var vYaLoginBtn: Button
-	var isYaLogin = false
+	private var yandexLogin by mutableStateOf<String?>(null)
+	private var isAuthInProgress by mutableStateOf(false)
+	private var cacheLimitMb by mutableStateOf(bytesToMegabytes(DEFAULT_CACHE_SIZE))
+	private var maxCacheMb by mutableStateOf(MIN_CACHE_SIZE_MB + 1)
+	private var occupiedCacheSize by mutableStateOf("0 B")
+	private var skipNextResumeCacheRefresh = false
+	private val isYaLogin: Boolean
+		get() = yandexLogin != null
 
-	lateinit var sharedPref: android.content.SharedPreferences
+	private lateinit var sharedPref: android.content.SharedPreferences
 	private val activityScope = CoroutineScope(SupervisorJob() + Dispatchers.Main.immediate)
 	private var authJob: Job? = null
 	private var authDialog: AlertDialog? = null
@@ -67,36 +77,36 @@ class SettingsAct: AppCompatActivity() {
 	override fun onCreate(savedInstanceState: Bundle?) {
 		super.onCreate(savedInstanceState)
 		enableEdgeToEdge()
-		setContentView(R.layout.lay_settings)
-		applySystemBarInsets(
-			rootView = findViewById(R.id.settings_lay),
-			useDarkSystemBarIcons = true,
-		)
+		WindowCompat.getInsetsController(window, window.decorView).apply {
+			isAppearanceLightStatusBars = false
+			isAppearanceLightNavigationBars = false
+		}
 
 		sharedPref = PreferenceManager.getDefaultSharedPreferences(this)
-
-		vYaLoginBtn = findViewById(R.id.ya_m_btn)
-		vYaLoginText = findViewById(R.id.ya_m_auth_text)
-
-
-		val fKey = sharedPref.getString(YA_TOKEN,"")
-
-		if (fKey.equals("")){
+		val token = sharedPref.getString(YA_TOKEN, "")
+		if (token.isNullOrEmpty()) {
 			setNoYaAuth()
-		}else{
-			val fLogin = sharedPref.getString(YA_LOGIN,"nologin")!!
-			setYaAuth(fLogin)
+		} else {
+			setYaAuth(sharedPref.getString(YA_LOGIN, "nologin") ?: "nologin")
 		}
+		refreshCacheState()
+		skipNextResumeCacheRefresh = true
 
-		vYaLoginBtn.setOnClickListener {
-			if (isYaLogin){
-				clearYandexSession()
-			}else{
-				authYa()
-			}
+		setContent {
+			SettingsScreen(
+				yandexLogin = yandexLogin,
+				isAuthInProgress = isAuthInProgress,
+				cacheLimitMb = cacheLimitMb,
+				minCacheMb = MIN_CACHE_SIZE_MB,
+				maxCacheMb = maxCacheMb,
+				occupiedCacheSize = occupiedCacheSize,
+				onBackClick = ::finish,
+				onAuthClick = {
+					if (isYaLogin) clearYandexSession() else authYa()
+				},
+				onCacheLimitCommitted = ::saveCacheLimit,
+			)
 		}
-
-
 	}
 
 	private fun authYa() {
@@ -104,8 +114,7 @@ class SettingsAct: AppCompatActivity() {
 			return
 		}
 
-		vYaLoginBtn.isEnabled = false
-		vYaLoginBtn.setText(R.string.auth_btn_waiting)
+		isAuthInProgress = true
 		authJob = activityScope.launch {
 			try {
 				when (
@@ -156,10 +165,7 @@ class SettingsAct: AppCompatActivity() {
 			} finally {
 				authDialog?.dismiss()
 				authDialog = null
-				vYaLoginBtn.isEnabled = true
-				if (!isYaLogin) {
-					vYaLoginBtn.setText(R.string.auth_btn)
-				}
+				isAuthInProgress = false
 			}
 		}
 	}
@@ -334,82 +340,46 @@ class SettingsAct: AppCompatActivity() {
 		data object Failure : AccountSaveResult
 	}
 
-    @androidx.annotation.OptIn(UnstableApi::class)
-    @SuppressLint("SetTextI18n")
-    fun initCacheStoreSize(){
-		val fvSeekBar = findViewById<SeekBar>(R.id.act_sett_store_progress)
-		val fvMin = findViewById<TextView>(R.id.act_sett_store_min)
-		val fvMax = findViewById<TextView>(R.id.act_sett_store_max)
-		val fvCur = findViewById<TextView>(R.id.act_sett_store_cur)
+	/** Перечитывает лимит сразу, а фактический объём файлов считает вне UI-потока. */
+	private fun refreshCacheState() {
+		cacheLimitMb = bytesToMegabytes(
+			sharedPref.getLong(CACHE_SIZE, DEFAULT_CACHE_SIZE),
+		).coerceAtLeast(MIN_CACHE_SIZE_MB)
+		val statFs = StatFs(cacheDir.absolutePath)
+		val availableMb = (statFs.availableBytes / BYTES_PER_MEGABYTE)
+			.coerceAtMost(Int.MAX_VALUE.toLong())
+			.toInt()
+		maxCacheMb = maxOf(MIN_CACHE_SIZE_MB + 1, cacheLimitMb, availableMb)
 
-		val KILOBYTE = 1024
-
-		val externalStatFs = StatFs(Environment.getExternalStorageDirectory().absolutePath)
-		var externalTotal: Long
-		var externalFree: Int
-		externalTotal = ( externalStatFs.blockCountLong * externalStatFs.blockSizeLong) / ( KILOBYTE * KILOBYTE )
-		externalFree = (( externalStatFs.availableBlocksLong * externalStatFs.blockSizeLong) / ( KILOBYTE * KILOBYTE )).toInt()
-
-		val fMin = 200
-		val fMax = externalFree
-		fvSeekBar.max = fMax
-		fvSeekBar.min = fMin
-		fvMax.text = "${fMax/KILOBYTE}Gb"
-
-		val fCur = sharedPref.getLong(CACHE_SIZE, DEFAULT_CACHE_SIZE)
-		val fCurMb = (fCur / KILOBYTE / KILOBYTE ).toInt()
-		if (fCurMb > KILOBYTE)
-			fvCur.text = "${(fCurMb / KILOBYTE)}Gb $cacheSizeStr"
-		else
-			fvCur.text = "${fCurMb}Mb $cacheSizeStr"
-
-		fvSeekBar.progress = fCurMb
-
-		fvSeekBar.secondaryProgress = 5000
-
-
-		fvSeekBar.setOnSeekBarChangeListener(object : SeekBar.OnSeekBarChangeListener {
-			override fun onProgressChanged(seekBar: SeekBar, i: Int, b: Boolean) {
-				if (b) {
-					if(i<KILOBYTE){
-						fvCur.text = "${i}Mb $cacheSizeStr"
-					}else
-						fvCur.text = "${i/KILOBYTE}Gb $cacheSizeStr"
-					val dsds =5
-				}
+		activityScope.launch(Dispatchers.IO) {
+			val totalSize = (application as yApplication).cacheManager.getTotalSize()
+			val formattedSize = formatSize(totalSize)
+			withContext(Dispatchers.Main) {
+				occupiedCacheSize = formattedSize
 			}
-
-			override fun onStartTrackingTouch(seekBar: SeekBar) {
-			}
-
-			override fun onStopTrackingTouch(seekBar: SeekBar) {
-				val fCurChanged = seekBar.progress
-				if (fCurChanged < fCurMb){
-					Snackbar.make(seekBar,"Память очистится в след. кешировании =_=",Snackbar.LENGTH_LONG)
-						.show()
-				}
-				sharedPref.edit()
-					.putLong(CACHE_SIZE, (fCurChanged.toLong() * KILOBYTE * KILOBYTE))
-					.apply()
-
-				val dsf =0
-			}
-		})
+		}
 	}
 
-	var cacheSizeStr = ""
+	/** Сохраняет выбранный Compose-слайдером предел в байтах. */
+	private fun saveCacheLimit(megabytes: Int) {
+		val normalizedMb = megabytes.coerceIn(MIN_CACHE_SIZE_MB, maxCacheMb)
+		cacheLimitMb = normalizedMb
+		sharedPref.edit()
+			.putLong(CACHE_SIZE, normalizedMb.toLong() * BYTES_PER_MEGABYTE)
+			.apply()
+	}
 
-    @androidx.annotation.OptIn(UnstableApi::class)
 	override fun onResume() {
 		super.onResume()
-
-		val cacheSize = (application as yApplication).cacheManager.getTotalSize()
-		cacheSizeStr = "(занято ${formatSize(cacheSize)})"
-
-		initCacheStoreSize()
+		if (skipNextResumeCacheRefresh) {
+			skipNextResumeCacheRefresh = false
+		} else if (::sharedPref.isInitialized) {
+			refreshCacheState()
+		}
 	}
 
-	fun formatSize(bytes: Long): String {
+	/** Форматирует реальный занятый объём с двумя знаками после запятой. */
+	private fun formatSize(bytes: Long): String {
 		if (bytes < 1024) return "$bytes B"
 
 		val units = arrayOf("KB", "MB", "GB", "TB")
@@ -426,15 +396,11 @@ class SettingsAct: AppCompatActivity() {
 	}
 
 	private fun setYaAuth(fLogin: String) {
-		vYaLoginBtn.text = getText(R.string.auth_btn_exit)
-		isYaLogin = true
-		vYaLoginText.text = fLogin
+		yandexLogin = fLogin
 	}
 
 	private fun setNoYaAuth() {
-		isYaLogin = false
-		vYaLoginText.text = getText(R.string.no_auth)
-		vYaLoginBtn.text = getText(R.string.auth_btn)
+		yandexLogin = null
 	}
 
 	override fun onDestroy() {

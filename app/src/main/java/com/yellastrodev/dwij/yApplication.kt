@@ -25,10 +25,13 @@ import com.yellastrodev.dwij.data.source.TrackRemoteSource
 import com.yellastrodev.dwij.data.dao.dPlaylistDao
 import com.yellastrodev.dwij.data.dao.dTrackDao
 import com.yellastrodev.dwij.data.dao.LocalLibraryDao
+import com.yellastrodev.dwij.data.dao.SongDao
 import com.yellastrodev.dwij.data.entities.LocalLibraryStateEntity
 import com.yellastrodev.dwij.data.entities.LocalPlaylistEntity
 import com.yellastrodev.dwij.data.entities.LocalPlaylistEntryEntity
 import com.yellastrodev.dwij.data.entities.LocalTrackEntity
+import com.yellastrodev.dwij.data.entities.SongEntity
+import com.yellastrodev.dwij.data.entities.TrackInstanceEntity
 import com.yellastrodev.dwij.data.entities.dPlaylistTrack
 import com.yellastrodev.dwij.data.entities.dTrackAlbumCrossRef
 import com.yellastrodev.dwij.data.entities.dTrackArtistCrossRef
@@ -38,6 +41,7 @@ import com.yellastrodev.dwij.data.entities.dYaPlaylist
 import com.yellastrodev.dwij.data.entities.dYaTrack
 import com.yellastrodev.dwij.data.repo.WaveRepository
 import com.yellastrodev.dwij.data.repo.LocalMusicRepository
+import com.yellastrodev.dwij.data.repo.SongRepository
 import com.yellastrodev.dwij.data.source.LocalLibraryMonitor
 import com.yellastrodev.dwij.data.source.MediaStoreLocalSource
 import com.yellastrodev.dwij.data.source.WaveRemoteSource
@@ -47,9 +51,11 @@ import com.yellastrodev.yandexmusiclib.YamApiClient
 import com.yellastrodev.yandexmusiclib.network.YamError
 import com.yellastrodev.yandexmusiclib.network.YamResult
 import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.runBlocking
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import java.io.File
 import java.lang.ref.WeakReference
@@ -85,14 +91,17 @@ class yApplication: Application() {
             LocalPlaylistEntity::class,
             LocalPlaylistEntryEntity::class,
             LocalLibraryStateEntity::class,
+            SongEntity::class,
+            TrackInstanceEntity::class,
                    ],
-        version = 5
+        version = 6
     )
 //    @TypeConverters(StringListConverter::class) // если у тебя есть поля List<String>
     abstract class AppDatabase : RoomDatabase() {
         abstract fun dPlaylistDao(): dPlaylistDao
         abstract fun dTrackDao(): dTrackDao
         abstract fun localLibraryDao(): LocalLibraryDao
+        abstract fun songDao(): SongDao
     }
 
 //    val trackLocalSource by lazy {
@@ -104,7 +113,8 @@ class yApplication: Application() {
     val trackRepository: TrackRepository by lazy {
         TrackRepository(
             TrackRemoteSource(yamClient),
-            db.dTrackDao()
+            db.dTrackDao(),
+            songRepository,
             )
     }
 
@@ -114,7 +124,7 @@ class yApplication: Application() {
             AppDatabase::class.java,
             "my_database"
         )
-            .addMigrations(MIGRATION_3_4, MIGRATION_4_5)
+            .addMigrations(MIGRATION_3_4, MIGRATION_4_5, MIGRATION_5_6)
             .fallbackToDestructiveMigration()
             .build()
     }
@@ -180,11 +190,20 @@ class yApplication: Application() {
         MediaStoreLocalSource(applicationContext)
     }
 
+    val songRepository: SongRepository by lazy {
+        SongRepository(
+            songDao = db.songDao(),
+            yandexTrackDao = db.dTrackDao(),
+            localTrackDao = db.localLibraryDao(),
+        )
+    }
+
     val localMusicRepository: LocalMusicRepository by lazy {
         LocalMusicRepository(
             context = applicationContext,
             dao = db.localLibraryDao(),
             mediaStore = mediaStoreLocalSource,
+            songRepository = songRepository,
         )
     }
 
@@ -208,6 +227,7 @@ class yApplication: Application() {
         WaveRepository(
             waveRemoteSource,
             trackRepository,
+            songRepository,
             playerRepo,
             applicationScope
         )
@@ -223,6 +243,20 @@ class yApplication: Application() {
         LocalLibrarySyncWorker.schedule(applicationContext)
         if (localMusicRepository.hasAudioPermission()) {
             LocalLibrarySyncWorker.enqueueImmediate(applicationContext)
+        }
+        applicationScope.launch {
+            try {
+                songRepository.indexExistingTracks()
+                Log.d("SongRepository", "[indexExistingTracks] Индекс песен актуализирован")
+            } catch (error: CancellationException) {
+                throw error
+            } catch (error: Exception) {
+                Log.e(
+                    "SongRepository",
+                    "[indexExistingTracks] Не удалось актуализировать индекс песен",
+                    error,
+                )
+            }
         }
 
     }
@@ -453,6 +487,50 @@ class yApplication: Application() {
                         value TEXT NOT NULL
                     )
                     """.trimIndent()
+                )
+            }
+        }
+
+        val MIGRATION_5_6 = object : Migration(5, 6) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL(
+                    """
+                    CREATE TABLE IF NOT EXISTS songs (
+                        songId TEXT NOT NULL PRIMARY KEY,
+                        matchKey TEXT NOT NULL,
+                        title TEXT NOT NULL,
+                        artistNames TEXT NOT NULL,
+                        albumTitle TEXT,
+                        durationMs INTEGER,
+                        coverUri TEXT,
+                        preferredInstanceId TEXT
+                    )
+                    """.trimIndent()
+                )
+                db.execSQL(
+                    "CREATE UNIQUE INDEX IF NOT EXISTS index_songs_matchKey " +
+                        "ON songs(matchKey)"
+                )
+                db.execSQL(
+                    """
+                    CREATE TABLE IF NOT EXISTS track_instances (
+                        instanceId TEXT NOT NULL PRIMARY KEY,
+                        songId TEXT NOT NULL,
+                        source TEXT NOT NULL,
+                        sourceTrackId TEXT NOT NULL,
+                        FOREIGN KEY(songId) REFERENCES songs(songId)
+                            ON UPDATE NO ACTION ON DELETE CASCADE
+                    )
+                    """.trimIndent()
+                )
+                db.execSQL(
+                    "CREATE INDEX IF NOT EXISTS index_track_instances_songId " +
+                        "ON track_instances(songId)"
+                )
+                db.execSQL(
+                    "CREATE UNIQUE INDEX IF NOT EXISTS " +
+                        "index_track_instances_source_sourceTrackId " +
+                        "ON track_instances(source, sourceTrackId)"
                 )
             }
         }

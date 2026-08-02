@@ -22,7 +22,7 @@ import com.yellastrodev.dwij.LocalLibraryScreen
 import com.yellastrodev.dwij.LocalPlaylistObjectScreen
 import com.yellastrodev.dwij.R
 import com.yellastrodev.dwij.data.entities.LocalPlaylistEntity
-import com.yellastrodev.dwij.data.entities.LocalTrackEntity
+import com.yellastrodev.dwij.data.entities.Song
 import com.yellastrodev.dwij.data.entities.LocalTracklist
 import com.yellastrodev.dwij.yApplication
 import com.yellastrodev.dwij.work.LocalLibrarySyncWorker
@@ -61,7 +61,7 @@ class LocalLibraryFrag : Fragment() {
                 }
                 mode == MODE_PLAYLIST && playlistId != null -> {
                     val playlist by repository.playlist(playlistId).collectAsState(initial = null)
-                    val tracks by repository.playlistTracks(playlistId)
+                    val tracks by repository.playlistSongs(playlistId)
                         .collectAsState(initial = emptyList())
                     val playlistTitle =
                         playlist?.name ?: getString(R.string.local_playlist_title)
@@ -94,7 +94,7 @@ class LocalLibraryFrag : Fragment() {
                     )
                 }
                 else -> {
-                    val tracks by repository.tracks.collectAsState(initial = emptyList())
+                    val tracks by repository.songs.collectAsState(initial = emptyList())
                     LocalLibraryScreen(
                         title = getString(R.string.local_all_tracks_title),
                         playlists = null,
@@ -119,8 +119,11 @@ class LocalLibraryFrag : Fragment() {
     }
 
     /** Загружает локальную обложку вне UI-потока для общей Compose-строки трека. */
-    private suspend fun loadTrackCover(track: LocalTrackEntity): ImageBitmap =
+    private suspend fun loadTrackCover(song: Song): ImageBitmap =
         withContext(Dispatchers.IO) {
+            val track = requireNotNull(song.localInstances.firstOrNull()?.track) {
+                "У песни ${song.id} отсутствует локальный экземпляр"
+            }
             val source = app.localMusicRepository.cover(track).first()
             val largestSide = maxOf(source.width, source.height)
             val displayBitmap = if (largestSide > TRACK_COVER_SIZE_PX) {
@@ -153,7 +156,7 @@ class LocalLibraryFrag : Fragment() {
     }
 
     private fun playTracks(
-        tracks: List<LocalTrackEntity>,
+        tracks: List<Song>,
         index: Int,
         tracklist: LocalTracklist,
     ) {
@@ -163,7 +166,7 @@ class LocalLibraryFrag : Fragment() {
                 TAG,
                 "[playTracks] Запускаем локальную очередь: index=$index, size=${tracks.size}",
             )
-            app.playerRepo.playLocalQueue(tracks, index, tracklist)
+            app.playerRepo.playQueue(tracks, index, tracklist)
             findNavController().navigate(R.id.bigPlayerFrag)
         }
     }

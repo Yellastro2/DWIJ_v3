@@ -21,6 +21,15 @@
     <string name="title_placehold">некий ДвИж</string>
     <string name="player_button_content_description">Открыть плеер</string>
     <string name="settings_button_content_description">Открыть настройки</string>
+    <string name="settings_title">Настройки</string>
+    <string name="settings_yandex_music">Яндекс Музыка</string>
+    <string name="settings_cache_title">Хранилище</string>
+    <string name="settings_cache_description">Общий предел для кэша треков и обложек</string>
+    <string name="settings_cache_limit">ЛИМИТ</string>
+    <string name="settings_cache_occupied">ЗАНЯТО</string>
+    <string name="settings_cache_shrink_warning">Лишние файлы удалятся при следующем кэшировании</string>
+    <string name="settings_cache_size_mb">%1$d МБ</string>
+    <string name="settings_cache_size_gb">%1$.1f ГБ</string>
     <string name="home_playlists">Плейлисты</string>
     <string name="home_tracks">Треки</string>
     <string name="track_list_all_title">Все треки</string>

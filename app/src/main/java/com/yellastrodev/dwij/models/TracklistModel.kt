@@ -12,6 +12,8 @@ import com.yellastrodev.dwij.data.repo.PlayerRepository
 import com.yellastrodev.dwij.data.repo.PlaylistRepository
 import com.yellastrodev.dwij.data.repo.TrackRepository
 import com.yellastrodev.dwij.data.repo.TrackCacheRepository
+import com.yellastrodev.dwij.data.repo.SongRepository
+import com.yellastrodev.dwij.data.entities.Song
 import com.yellastrodev.dwij.data.entities.dYaPlaylist
 import com.yellastrodev.dwij.data.entities.dYaTrack
 import com.yellastrodev.dwij.data.repo.WaveRepository
@@ -45,6 +47,7 @@ class TracklistModel(
     val coverRepo: CoverRepository,
     private val trackRepo: TrackRepository,
     private val trackCacheRepo: TrackCacheRepository,
+    private val songRepo: SongRepository,
     private val playerRepo: PlayerRepository,
     private val waveRepository: WaveRepository
 ) : ViewModel() {
@@ -61,6 +64,7 @@ class TracklistModel(
         private val coverRepo: CoverRepository,
         private val trackRepo: TrackRepository,
         private val trackCacheRepo: TrackCacheRepository,
+        private val songRepo: SongRepository,
         private val playerRepo: PlayerRepository,
         private val waveRepo: WaveRepository
     ) : ViewModelProvider.Factory
@@ -74,6 +78,7 @@ class TracklistModel(
                     coverRepo,
                     trackRepo,
                     trackCacheRepo,
+                    songRepo,
                     playerRepo,
                     waveRepo,
                 ) as T
@@ -82,16 +87,16 @@ class TracklistModel(
         }
     }
 
-    private var trackList: List<dYaTrack> = emptyList()
+    private var trackList: List<Song> = emptyList()
     private var tracksJob: Job? = null
     private var listIdentity: String? = null
 
-    private val _tracks = MutableStateFlow<List<dYaTrack>>(emptyList())
-    val tracks: StateFlow<List<dYaTrack>> = _tracks
+    private val _tracks = MutableStateFlow<List<Song>>(emptyList())
+    val tracks: StateFlow<List<Song>> = _tracks
 
-    private val _cachedUnavailableTrackIds = MutableStateFlow<Set<String>>(emptySet())
-    /** Недоступные в Яндексе треки, которые всё ещё можно воспроизвести из файлового кэша. */
-    val cachedUnavailableTrackIds: StateFlow<Set<String>> = _cachedUnavailableTrackIds
+    private val _cachedUnavailableSongIds = MutableStateFlow<Set<String>>(emptySet())
+    /** Песни с недоступным Яндекс-инстансом, который всё ещё есть в файловом кэше. */
+    val cachedUnavailableSongIds: StateFlow<Set<String>> = _cachedUnavailableSongIds
 
     private val scrollResetChannel = Channel<Unit>(Channel.CONFLATED)
     val scrollResetEvents = scrollResetChannel.receiveAsFlow()
@@ -117,14 +122,14 @@ class TracklistModel(
         listIdentity = newIdentity
         trackList = emptyList()
         _tracks.value = emptyList()
-        _cachedUnavailableTrackIds.value = emptySet()
+        _cachedUnavailableSongIds.value = emptySet()
         _playlist.value = null
         var resetScrollOnFirstList = true
         val unavailableCacheChecks = mutableMapOf<String, Boolean>()
 
-        suspend fun publishTracks(tracks: List<dYaTrack>) {
-            val snapshot = tracks.toList()
-            val unavailableIds = snapshot
+        suspend fun publishTracks(sourceTracks: List<dYaTrack>) {
+            val snapshot = songRepo.songsForYandexTracks(sourceTracks)
+            val unavailableIds = sourceTracks
                 .asSequence()
                 .filterNot(dYaTrack::available)
                 .map(dYaTrack::id)
@@ -137,9 +142,13 @@ class TracklistModel(
                     },
                 )
             }
-            _cachedUnavailableTrackIds.value = unavailableIds.filterTo(mutableSetOf()) { id ->
-                unavailableCacheChecks[id] == true
-            }
+            _cachedUnavailableSongIds.value = snapshot
+                .filter { song ->
+                    song.yandexInstances.any { instance ->
+                        !instance.track.available && unavailableCacheChecks[instance.track.id] == true
+                    }
+                }
+                .mapTo(mutableSetOf(), Song::id)
             trackList = snapshot
             _tracks.value = snapshot
             if (resetScrollOnFirstList) {
@@ -213,18 +222,18 @@ class TracklistModel(
         }
     }
 
-    fun onTrackClicked(index: Int, expectedTrackId: String? = null): Boolean {
+    fun onTrackClicked(index: Int, expectedSongId: String? = null): Boolean {
         val queue = trackList.toList()
         val resolvedIndex = when {
             index in queue.indices &&
-                (expectedTrackId == null || queue[index].id == expectedTrackId) -> index
-            expectedTrackId != null -> queue.indexOfFirst { it.id == expectedTrackId }
+                (expectedSongId == null || queue[index].id == expectedSongId) -> index
+            expectedSongId != null -> queue.indexOfFirst { it.id == expectedSongId }
             else -> -1
         }
         if (resolvedIndex !in queue.indices) {
             Log.w(
                 TAG,
-                "[onTrackClicked] Трек не найден: index=$index, trackId=$expectedTrackId"
+                "[onTrackClicked] Песня не найдена: index=$index, songId=$expectedSongId"
             )
             return false
         }
@@ -235,11 +244,11 @@ class TracklistModel(
         Log.d(
             TAG,
             "[onTrackClicked] requestedIndex=$index, resolvedIndex=$resolvedIndex, " +
-                "trackId=${queue[resolvedIndex].id}, queueSize=${queue.size}"
+                "songId=${queue[resolvedIndex].id}, queueSize=${queue.size}"
         )
         viewModelScope.launch {
             playerRepo.playQueue(
-                tracks = queue,
+                songs = queue,
                 startIndex = resolvedIndex,
                 tracklist = selectedTracklist
             )
@@ -248,8 +257,12 @@ class TracklistModel(
     }
 
     /** Загружает небольшую обложку трека для видимой строки Compose-списка. */
-    suspend fun getTrackCover(trackId: String): Bitmap? {
-        val track = trackList.firstOrNull { it.id == trackId } ?: return null
+    suspend fun getTrackCover(songId: String): Bitmap? {
+        val track = trackList.firstOrNull { it.id == songId }
+            ?.yandexInstances
+            ?.firstOrNull()
+            ?.track
+            ?: return null
         return withContext(Dispatchers.IO) {
             coverRepo.getCover(track, CoverSize.`100x100`)
         }
