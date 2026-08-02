@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" width="104" height="38" viewBox="0 0 104 38">
+  <defs>
+    <linearGradient id="plate" x1="0" y1="0" x2="104" y2="0" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#0a0714" stop-opacity="0.95"/>
+      <stop offset="0.66" stop-color="#0a0714" stop-opacity="0.85"/>
+      <stop offset="1" stop-color="#00bbeb" stop-opacity="0.24"/>
+    </linearGradient>
+  </defs>
+  <path d="M2 0H97Q104 0 104 7V31Q104 38 97 38H2Q0 38 0 36V2Q0 0 2 0Z" fill="url(#plate)"/>
+  <rect x="0" y="0" width="2" height="38" fill="#00bbeb" fill-opacity="0.68"/>
+  <path d="M12.5 0H60" fill="none" stroke="#00bbeb" stroke-width="1" stroke-opacity="0.72"/>
+  <path d="M54 37.5H91.5" fill="none" stroke="#ff00bf" stroke-width="1" stroke-opacity="0.68"/>
+</svg>

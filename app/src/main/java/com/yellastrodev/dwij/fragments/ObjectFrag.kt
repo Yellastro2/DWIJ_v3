@@ -1,266 +1,206 @@
 package com.yellastrodev.dwij.fragments
 
-import androidx.fragment.app.viewModels
 import android.os.Bundle
 import android.util.Log
-import androidx.fragment.app.Fragment
+import android.view.LayoutInflater
 import android.view.View
-import android.widget.ImageView
-import android.widget.TextView
-import androidx.lifecycle.Lifecycle
+import android.view.ViewGroup
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.lazy.rememberLazyListState
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.collectAsState
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.setValue
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.ImageBitmap
+import androidx.compose.ui.graphics.asImageBitmap
+import androidx.compose.ui.platform.ComposeView
+import androidx.compose.ui.platform.ViewCompositionStrategy
+import androidx.compose.ui.res.pluralStringResource
+import androidx.compose.ui.res.stringResource
+import androidx.fragment.app.Fragment
+import androidx.fragment.app.viewModels
 import androidx.lifecycle.lifecycleScope
-import androidx.lifecycle.repeatOnLifecycle
-import androidx.lifecycle.viewModelScope
 import androidx.navigation.fragment.findNavController
-import androidx.recyclerview.widget.LinearLayoutManager
-import androidx.recyclerview.widget.RecyclerView
-import androidx.swiperefreshlayout.widget.SwipeRefreshLayout
-import com.google.android.material.appbar.AppBarLayout
+import com.yellastrodev.dwij.ObjectScreen
 import com.yellastrodev.dwij.R
 import com.yellastrodev.dwij.TYPE
+import com.yellastrodev.dwij.TrackListItemUiModel
 import com.yellastrodev.dwij.VALUE
 import com.yellastrodev.dwij.data.entities.dYaPlaylist
+import com.yellastrodev.dwij.data.entities.dYaTrack
 import com.yellastrodev.dwij.models.TracklistModel
-import com.yellastrodev.dwij.utils.LangFormats.Companion.getNumericPostfix
 import com.yellastrodev.dwij.yApplication
-import com.yellastrodev.yandexmusiclib.entities.CoverSize
-import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.launch
-import kotlinx.coroutines.withContext
 
-class ObjectFrag : Fragment(R.layout.frag_object) {
-
-    companion object {
-        val TRACK = "track"
-        val PLAYLIST = "playlist"
-        val TRACKLIST = "tracklist"
-        val ARTIST = "artist"
-
-        fun newInstance() = ObjectFrag()
-    }
-
-    val TAG = "ObjectFrag"
-
-    lateinit var mvTitle2: TextView
-
-//    lateinit var mMain: MainActivity
-
-//    private val mViewModel: ObjectViewModel by viewModels()
-
+/** Полностью Compose-экран абстрактного музыкального объекта и его списка треков. */
+class ObjectFrag : Fragment() {
     private val model: TracklistModel by viewModels {
         TracklistModel.Factory(
             repo = (requireActivity().application as yApplication).playlistRepository,
             coverRepo = (requireActivity().application as yApplication).coverRepository,
             trackRepo = (requireActivity().application as yApplication).trackRepository,
             playerRepo = (requireActivity().application as yApplication).playerRepo,
-            waveRepo = (requireActivity().application as yApplication).waveRepository
+            waveRepo = (requireActivity().application as yApplication).waveRepository,
         )
     }
 
-    var mType = ""
-    var mValue: String = ""
+    private var objectType = ""
+    private var objectValue = ""
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-        Log.d("DWIJ_TIMING", "ObjectFrag created")
-
-        if(arguments != null) {
-            mType = requireArguments().getString(TYPE)!!
-            mValue = requireArguments().getString(VALUE)?: ""
-
-            model.setType(mType, mValue)
+        objectType = arguments?.getString(TYPE).orEmpty()
+        objectValue = arguments?.getString(VALUE).orEmpty()
+        if (objectType.isNotBlank()) {
+            model.setType(objectType, objectValue)
         }
-
-//        Log.d("DWIJ_TIMING", "ObjectFrag created")
     }
 
-    override fun onViewCreated(view: View, savedInstanceState: Bundle?) {
-        super.onViewCreated(view, savedInstanceState)
-        Log.d("DWIJ_TIMING", "ObjectFrag start onViewCreated")
+    /** Создаёт единственный ComposeView вместо старой XML-шапки и RecyclerView. */
+    override fun onCreateView(
+        inflater: LayoutInflater,
+        container: ViewGroup?,
+        savedInstanceState: Bundle?,
+    ): View = ComposeView(requireContext()).apply {
+        setViewCompositionStrategy(ViewCompositionStrategy.DisposeOnViewTreeLifecycleDestroyed)
+        setContent {
+            val playlist by model.playlist.collectAsState()
+            val tracks by model.tracks.collectAsState()
+            val yandexPlaylist = playlist as? dYaPlaylist
+            val objectId = yandexPlaylist?.playlistUuid
+            val unknownArtist = stringResource(R.string.home_player_unknown_artist)
+            val title = when {
+                objectType == TRACKLIST -> stringResource(R.string.track_list_all_title)
+                yandexPlaylist != null -> yandexPlaylist.title
+                else -> stringResource(R.string.object_loading_title)
+            }
+            val count = yandexPlaylist?.trackCount ?: tracks.size
+            val subtitle = pluralStringResource(
+                R.plurals.object_track_count,
+                count,
+                count,
+            )
+            val trackItems = remember(tracks, unknownArtist) {
+                tracks.toTrackListItems(unknownArtist)
+            }
+            val listState = rememberLazyListState()
+            val refreshScope = rememberCoroutineScope()
+            var objectCover by remember(objectId) { mutableStateOf<ImageBitmap?>(null) }
+            var isRefreshing by remember { mutableStateOf(false) }
 
-        val appBarLayout = view.findViewById<AppBarLayout>(R.id.appBarLayout)
-        val pinnedLayout = view.findViewById<View>(R.id.pinnedLayout)
-        val toolbar = view.findViewById<View>(R.id.toolbar)
-        val swipeRefreshLayout = view.findViewById<SwipeRefreshLayout>(R.id.fr_obj_refresher)
-
-        swipeRefreshLayout.setOnRefreshListener {
-            model.viewModelScope.launch { model.refreshObject()
-                withContext(Dispatchers.Main) {
-                    swipeRefreshLayout.isRefreshing = false
+            LaunchedEffect(objectId) {
+                objectCover = null
+                val currentPlaylist = yandexPlaylist ?: return@LaunchedEffect
+                if (currentPlaylist.ogImageUri.isNullOrBlank()) return@LaunchedEffect
+                objectCover = try {
+                    model.getPlaylistCover(currentPlaylist).asImageBitmap()
+                } catch (error: CancellationException) {
+                    throw error
+                } catch (error: Exception) {
+                    Log.w(
+                        TAG,
+                        "[loadObjectCover] Не удалось загрузить обложку objectId=$objectId",
+                        error,
+                    )
+                    null
                 }
             }
-        }
 
-        appBarLayout.addOnOffsetChangedListener(
-            AppBarLayout.OnOffsetChangedListener { appBar, verticalOffset ->
-//                if (verticalOffset  == appBarLayout.totalScrollRange) {
-//                    // Полностью схлопнулся → показываем pinnedLayout
-//                    pinnedLayout.visibility = View.VISIBLE
-//                } else {
-//                    // Любое другое состояние → скрываем pinnedLayout
-//                    pinnedLayout.visibility = View.GONE
-//                }
-                    val percent = Math.abs(verticalOffset).toFloat() / appBarLayout.totalScrollRange
-                toolbar.alpha = percent  // 0 — раскрыт, 1 — полностью схлопнул
-
-//                swipeRefreshLayout.isEnabled = verticalOffset == 0
-
+            LaunchedEffect(listState) {
+                model.scrollResetEvents.collect {
+                    listState.scrollToItem(0)
+                }
             }
-        )
 
-
-
-        if(arguments != null) {
-
-            if (mType == TRACKLIST){
-                view.findViewById<TextView>(R.id.fr_object_title).text = "Все треки"
-                view.findViewById<TextView>(R.id.fr_object_title_colaps).text = "Все треки"
-                view.findViewById<TextView>(R.id.fr_object_title2).text =
-                    "много треков"
-                view.findViewById<View>(R.id.fr_object_wave_btn).visibility = View.GONE
-                view.findViewById<View>(R.id.fr_object_share).visibility = View.GONE
-
-            }
-            if (mType == PLAYLIST){
-                viewLifecycleOwner.lifecycleScope.launch {
-                    viewLifecycleOwner.repeatOnLifecycle(Lifecycle.State.STARTED) {
-                        model.playlist.collect { playlist ->
-                            if (playlist != null) {
-                                playlist as dYaPlaylist
-                                lifecycleScope.launch(Dispatchers.IO) {
-                                    val bitmap = model.coverRepo.getCover(playlist, CoverSize.`200x200`)
-
-                                    // Ставим в ImageView на главном потоке
-                                    withContext(Dispatchers.Main) {
-                                        view.findViewById<ImageView>(R.id.fr_object_image).setImageBitmap(bitmap)
-                                    }
-                                }
-                                view.findViewById<TextView>(R.id.fr_object_title).text = playlist.title
-                                view.findViewById<TextView>(R.id.fr_object_title_colaps).text = playlist.title
-                                view.findViewById<TextView>(R.id.fr_object_title2).text =
-                                    "${playlist.trackCount} трек${getNumericPostfix(playlist.trackCount)}"
-//                                view.findViewById<TextView>(R.id.fr_object_title2).text = playlist.description ?: ""
+            ObjectScreen(
+                title = title,
+                subtitle = subtitle,
+                description = yandexPlaylist?.description,
+                cover = objectCover,
+                tracks = trackItems,
+                listState = listState,
+                showShare = objectType == PLAYLIST,
+                showWave = objectType == PLAYLIST,
+                emptyMessage = stringResource(R.string.track_list_empty),
+                isRefreshing = isRefreshing,
+                onRefresh = {
+                    if (!isRefreshing) {
+                        refreshScope.launch {
+                            isRefreshing = true
+                            try {
+                                model.refreshObject()
+                            } catch (error: CancellationException) {
+                                throw error
+                            } catch (error: Exception) {
+                                Log.w(TAG, "[refreshObject] Не удалось обновить объект", error)
+                            } finally {
+                                isRefreshing = false
                             }
                         }
                     }
-                }
-
-
-
-            }
-            val recyclerView = view.findViewById<RecyclerView>(R.id.fr_obj_recycler)
-            val layoutManager = LinearLayoutManager(context)
-            recyclerView.layoutManager = layoutManager
-            recyclerView.adapter = model.adapter
-            viewLifecycleOwner.lifecycleScope.launch {
-                viewLifecycleOwner.repeatOnLifecycle(Lifecycle.State.STARTED) {
-                    model.scrollResetEvents.collect {
-                        layoutManager.scrollToPositionWithOffset(0, 0)
-                    }
-                }
-            }
-            model.adapter.onItemClicked = { position, track ->
-                Log.d(
-                    TAG,
-                    "[onItemClicked] position=$position, trackId=${track.id}"
-                )
-                if (model.onTrackClicked(position, track.id)) {
-                    findNavController().navigate(
-                        R.id.action_objectFrag_to_bigPlayerFrag
-                    )
-                }
-            }
-        }
-
-        mvTitle2 = requireView().findViewById<TextView>(R.id.fr_object_title2)
-        view.findViewById<TextView>(R.id.fr_object_title)
-        view.findViewById<View>(R.id.fr_object_wave_btn).setOnClickListener { onWaveBtn() }
-        view.findViewById<View>(R.id.fr_object_play).setOnClickListener { onPlayBtn() }
-        view.findViewById<View>(R.id.fr_object_share).setOnClickListener { share() }
-
-//        viewLifecycleOwner.lifecycleScope.launchWhenStarted {
-//            model.openPlayerScreen.collect { shouldOpen ->
-//                if (shouldOpen) {
-//                    findNavController().navigate(
-//                        R.id.action_objectFrag_to_bigPlayerFrag
-//                    )
-//                    // после навигации сбрасываем, чтобы событие не сработало повторно
-//                    model.resetOpenPlayerScreen()
-//                }
-//            }
-//        }
-
-
-//        Log.d("DWIJ_TIMING", "ObjectFrag on view created")
-//        view.post { Log.d("DWIJ_TIMING", "first frame drawn") }
-    }
-
-    private fun share() {
-//        if (mViewModel.mDataObject is YaTrack ||
-//        mViewModel.mDataObject is YaPlaylist){
-//            val fLink = mViewModel.mDataObject!!.getLink()
-//
-//            val sendIntent: Intent = Intent().apply {
-//                action = Intent.ACTION_SEND
-//                putExtra(Intent.EXTRA_TEXT, fLink)
-//                putExtra(Intent.EXTRA_TITLE,mViewModel.mDataObject!!.getTitle())
-//                type = "text/plain"
-//            }
-//
-//            val shareIntent = Intent.createChooser(sendIntent, null)
-//            startActivity(shareIntent)
-//        }
-    }
-
-    private fun onWaveBtn() {
-        Log.d(TAG, " onWaveBtn")
-        lifecycleScope.launch {
-            model.playWave()
-        }
-        findNavController().navigate(R.id.bigPlayerFrag)
-//        val fMain = requireActivity() as MainActivity
-//        GlobalScope.launch(Dispatchers.IO){
-//
-//            withContext(Dispatchers.Main) {
-//
-//            }
-//            val fStore = yMediaStore.store(fMain)
-//
-//            fMain.mPlayer?.setWaveList(mViewModel.mDataObject?.let { fStore.getWave(it) } as yWave)
-//        }
-//        fMain.openPlayer()
-    }
-
-    private fun onPlayBtn() {
-        Log.d(TAG, "[onPlayBtn] Запуск плейлиста с первого трека")
-        if (model.onTrackClicked(0)) {
-            findNavController().navigate(
-                R.id.action_objectFrag_to_bigPlayerFrag
+                },
+                loadTrackCover = { trackId ->
+                    model.getTrackCover(trackId)?.asImageBitmap()
+                },
+                onBackClick = { findNavController().navigateUp() },
+                onPlayClick = { playTrack(0) },
+                onTrackClick = { position, item ->
+                    playTrack(position, item.trackId)
+                },
+                onShareClick = {
+                    Log.d(TAG, "[shareObject] Поделиться объектом пока не подключено")
+                },
+                onWaveClick = ::playWave,
+                modifier = Modifier.fillMaxSize(),
             )
         }
     }
 
-    private fun loadObject() {
-
-//        mViewModel.mDataObject?.let {
-//            lifecycleScope.launch(Dispatchers.Default){
-//                val fRes = it.getImage(yMediaStore.store(requireContext()))
-//                withContext(Dispatchers.Main) {
-//                    requireView().findViewById<ImageView>(R.id.fr_object_image)
-//                        .setImageBitmap(fRes)
-//                }
-//            }
-//            requireView().findViewById<TextView>(R.id.fr_object_title)
-//                .text = it.getTitle()
-//            mvTitle2.text = it.getInfo()
-//            if (mViewModel.mType == TRACK){
-//                mvTitle2.setOnClickListener {v->
-//                    lifecycleScope.launch(Dispatchers.Default) {
-//                        mMain.showArtistChoise(it as YaTrack)
-//                    }
-//                }
-//            }
-//        }
+    /** Запускает очередь с выбранной позиции и открывает полный плеер. */
+    private fun playTrack(position: Int, expectedTrackId: String? = null) {
+        if (model.onTrackClicked(position, expectedTrackId)) {
+            findNavController().navigate(R.id.action_objectFrag_to_bigPlayerFrag)
+        }
     }
 
+    /** Запускает волну для объекта и сразу открывает полный плеер. */
+    private fun playWave() {
+        viewLifecycleOwner.lifecycleScope.launch {
+            model.playWave()
+        }
+        findNavController().navigate(R.id.bigPlayerFrag)
+    }
+
+    /** Создаёт уникальные LazyColumn-ключи для повторяющихся треков одного объекта. */
+    private fun List<dYaTrack>.toTrackListItems(
+        unknownArtist: String,
+    ): List<TrackListItemUiModel> {
+        val occurrences = mutableMapOf<String, Int>()
+        return map { track ->
+            val occurrence = occurrences.getOrDefault(track.id, 0)
+            occurrences[track.id] = occurrence + 1
+            TrackListItemUiModel(
+                key = "${track.id}:$occurrence",
+                trackId = track.id,
+                title = track.title,
+                artist = track.artists
+                    .joinToString(", ") { artist -> artist.name }
+                    .ifBlank { unknownArtist },
+                shouldLoadCover = track.getCoverUriAny() != null,
+            )
+        }
+    }
+
+    companion object {
+        const val TRACK = "track"
+        const val PLAYLIST = "playlist"
+        const val TRACKLIST = "tracklist"
+        const val ARTIST = "artist"
+        private const val TAG = "ObjectFrag"
+    }
 }

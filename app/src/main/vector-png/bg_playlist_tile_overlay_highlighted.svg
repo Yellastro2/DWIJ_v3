@@ -1,0 +1,22 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" width="112" height="112" viewBox="0 0 112 112">
+  <defs>
+    <linearGradient id="scrim" x1="0" y1="0" x2="0" y2="112" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#03040f" stop-opacity="0.10"/>
+      <stop offset="0.48" stop-color="#03040f" stop-opacity="0.20"/>
+      <stop offset="1" stop-color="#03040f" stop-opacity="0.80"/>
+    </linearGradient>
+    <linearGradient id="selectedBorder" x1="0" y1="0" x2="112" y2="112" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#00dfff"/>
+      <stop offset="0.50" stop-color="#fffaff"/>
+      <stop offset="1" stop-color="#00bbeb"/>
+    </linearGradient>
+  </defs>
+  <rect x="0" y="0" width="112" height="112" rx="12" fill="url(#scrim)"/>
+  <rect x="1.2" y="1.2" width="109.6" height="109.6" rx="10.8" fill="none" stroke="#00dfff" stroke-width="5" stroke-opacity="0.12"/>
+  <rect x="1" y="1" width="110" height="110" rx="11" fill="none" stroke="url(#selectedBorder)" stroke-width="1.6" stroke-opacity="0.94"/>
+  <path d="M13.5 1H48" fill="none" stroke="#ff00bf" stroke-width="1.5" stroke-opacity="0.95"/>
+  <path d="M65 111H98.5" fill="none" stroke="#00dfff" stroke-width="1.8"/>
+  <path d="M2 72V96" fill="none" stroke="#00dfff" stroke-width="1.3" stroke-opacity="0.74"/>
+  <path d="M110 16V38" fill="none" stroke="#ffffff" stroke-width="1" stroke-opacity="0.64"/>
+</svg>

@@ -9,6 +9,8 @@ import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.ImageBitmap
+import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.platform.ComposeView
 import androidx.compose.ui.platform.ViewCompositionStrategy
 import androidx.compose.foundation.background
@@ -24,6 +26,9 @@ import com.yellastrodev.dwij.data.entities.LocalTracklist
 import com.yellastrodev.dwij.yApplication
 import com.yellastrodev.dwij.work.LocalLibrarySyncWorker
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.withContext
 
 /** Показывает быстрое Room-представление локальных треков и плейлистов. */
 class LocalLibraryFrag : Fragment() {
@@ -49,6 +54,7 @@ class LocalLibraryFrag : Fragment() {
                         tracks = null,
                         onPlaylistClick = ::openPlaylist,
                         onTrackClick = { _, _ -> },
+                        loadTrackCover = ::loadTrackCover,
                         modifier = Modifier.fillMaxSize().background(Color(0xFF101116)),
                     )
                 }
@@ -61,6 +67,7 @@ class LocalLibraryFrag : Fragment() {
                         playlists = null,
                         tracks = tracks,
                         onPlaylistClick = {},
+                        loadTrackCover = ::loadTrackCover,
                         onTrackClick = { index, _ ->
                             playTracks(
                                 tracks = tracks,
@@ -81,6 +88,7 @@ class LocalLibraryFrag : Fragment() {
                         playlists = null,
                         tracks = tracks,
                         onPlaylistClick = {},
+                        loadTrackCover = ::loadTrackCover,
                         onTrackClick = { index, _ ->
                             playTracks(
                                 tracks = tracks,
@@ -97,6 +105,25 @@ class LocalLibraryFrag : Fragment() {
             }
         }
     }
+
+    /** Загружает локальную обложку вне UI-потока для общей Compose-строки трека. */
+    private suspend fun loadTrackCover(track: LocalTrackEntity): ImageBitmap =
+        withContext(Dispatchers.IO) {
+            val source = app.localMusicRepository.cover(track).first()
+            val largestSide = maxOf(source.width, source.height)
+            val displayBitmap = if (largestSide > TRACK_COVER_SIZE_PX) {
+                val scale = TRACK_COVER_SIZE_PX.toFloat() / largestSide
+                android.graphics.Bitmap.createScaledBitmap(
+                    source,
+                    (source.width * scale).toInt().coerceAtLeast(1),
+                    (source.height * scale).toInt().coerceAtLeast(1),
+                    true,
+                )
+            } else {
+                source
+            }
+            displayBitmap.asImageBitmap()
+        }
 
     override fun onResume() {
         super.onResume()
@@ -135,6 +162,7 @@ class LocalLibraryFrag : Fragment() {
         const val MODE_PLAYLISTS = "playlists"
         const val MODE_ALL_TRACKS = "all_tracks"
         const val MODE_PLAYLIST = "playlist"
+        private const val TRACK_COVER_SIZE_PX = 180
         private const val TAG = "LocalLibraryFrag"
     }
 }

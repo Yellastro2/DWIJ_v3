@@ -2,6 +2,7 @@ package com.yellastrodev.dwij.fragments
 
 import android.content.pm.PackageManager
 import android.os.Bundle
+import android.os.SystemClock
 import android.util.Log
 import android.view.LayoutInflater
 import android.view.View
@@ -11,7 +12,6 @@ import androidx.appcompat.app.AlertDialog
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableStateMapOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
@@ -47,6 +47,7 @@ import com.yellastrodev.dwij.utils.LangFormats.Companion.getNumericPostfix
 import com.yellastrodev.dwij.work.LocalLibrarySyncWorker
 import com.yellastrodev.dwij.yApplication
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 
@@ -97,7 +98,6 @@ class GridPlaylistFrag : Fragment() {
             val localPlaylists by app.localMusicRepository.playlists
                 .collectAsState(initial = emptyList())
             val musicSource by selectedMusicSource.collectAsState()
-            val covers = remember { mutableStateMapOf<String, ImageBitmap>() }
             val pickedTrackId = arguments?.getString(ACTION_DATA)
                 .takeIf { isAddTrackMode() }
             var pickedTrack by remember(pickedTrackId) { mutableStateOf<dYaTrack?>(null) }
@@ -112,49 +112,54 @@ class GridPlaylistFrag : Fragment() {
                 }
             }
 
-            LaunchedEffect(yandexPlaylists) {
-                yandexPlaylists.forEach { playlist ->
-                    if (playlist.ogImageUri.isNullOrBlank() || covers.containsKey(playlist.getdId())) {
-                        return@forEach
-                    }
-                    launch {
-                        try {
-                            val bitmap = withContext(Dispatchers.IO) {
-                                model.getCover(playlist)
-                            }
-                            covers[playlist.getdId()] = bitmap.asImageBitmap()
-                        } catch (error: Exception) {
-                            Log.w(
-                                TAG,
-                                "[loadPlaylistCovers] Не загрузилась обложка " +
-                                    "playlistId=${playlist.getdId()}",
-                                error,
-                            )
-                        }
-                    }
-                }
-            }
-
             val createTitle = stringResource(R.string.playlists_create)
             val likedTitle = stringResource(R.string.playlists_liked)
             val localDwij = stringResource(R.string.local_playlist_dwij)
             val localMediaStore = stringResource(R.string.local_playlist_media_store)
             val localM3u = stringResource(R.string.local_playlist_m3u)
-            val screenItems = when (musicSource) {
-                HomeMusicSource.Yandex -> yandexItems(
+            val yandexScreenItems = remember(
+                yandexPlaylists,
+                pickedTrackId,
+                createTitle,
+                likedTitle,
+            ) {
+                val startedNanos = SystemClock.elapsedRealtimeNanos()
+                yandexItems(
                     playlists = yandexPlaylists,
-                    covers = covers,
                     pickedTrackId = pickedTrackId,
                     createTitle = createTitle,
                     likedTitle = likedTitle,
-                )
-
-                HomeMusicSource.Local -> localItems(
+                ).also { items ->
+                    Log.d(
+                        TAG,
+                        "[composeYandexItems] Собрано=${items.size}, " +
+                            "время=${elapsedMillis(startedNanos)} мс",
+                    )
+                }
+            }
+            val localScreenItems = remember(
+                localPlaylists,
+                localDwij,
+                localMediaStore,
+                localM3u,
+            ) {
+                val startedNanos = SystemClock.elapsedRealtimeNanos()
+                localItems(
                     playlists = localPlaylists,
                     dwijLabel = localDwij,
                     mediaStoreLabel = localMediaStore,
                     m3uLabel = localM3u,
-                )
+                ).also { items ->
+                    Log.d(
+                        TAG,
+                        "[composeLocalItems] Собрано=${items.size}, " +
+                            "время=${elapsedMillis(startedNanos)} мс",
+                    )
+                }
+            }
+            val screenItems = when (musicSource) {
+                HomeMusicSource.Yandex -> yandexScreenItems
+                HomeMusicSource.Local -> localScreenItems
             }
 
             PlaylistGridScreen(
@@ -185,6 +190,7 @@ class GridPlaylistFrag : Fragment() {
                             ?.let(::showPlaylistDeleteInfo)
                     }
                 },
+                loadCover = ::loadPlaylistCover,
                 emptyMessage = stringResource(
                     if (musicSource == HomeMusicSource.Local) {
                         R.string.local_playlists_empty
@@ -215,6 +221,27 @@ class GridPlaylistFrag : Fragment() {
                 },
                 modifier = Modifier,
             )
+        }
+    }
+
+    /** Загружает одну обложку по запросу видимой Compose-плитки. */
+    private suspend fun loadPlaylistCover(playlistId: String): ImageBitmap? {
+        val playlist = model.playlists.value.firstOrNull { it.getdId() == playlistId }
+            ?: return null
+        if (playlist.ogImageUri.isNullOrBlank()) return null
+        return try {
+            withContext(Dispatchers.IO) {
+                model.getCover(playlist).asImageBitmap()
+            }
+        } catch (error: CancellationException) {
+            throw error
+        } catch (error: Exception) {
+            Log.w(
+                TAG,
+                "[loadPlaylistCover] Не загрузилась обложка playlistId=$playlistId",
+                error,
+            )
+            null
         }
     }
 
@@ -378,6 +405,10 @@ class GridPlaylistFrag : Fragment() {
         }
     }
 
+    /** Возвращает время после монотонной отметки для диагностических логов. */
+    private fun elapsedMillis(startedNanos: Long): Long =
+        (SystemClock.elapsedRealtimeNanos() - startedNanos) / 1_000_000L
+
     companion object {
         const val PLAYLIST_ACTION = "playlist_action"
         const val ACTION_ADDTRACK = "add_track"
@@ -388,7 +419,6 @@ class GridPlaylistFrag : Fragment() {
         /** Собирает Compose-модели Яндекс-плейлистов, включая плитку создания. */
         private fun yandexItems(
             playlists: List<dYaPlaylist>,
-            covers: Map<String, ImageBitmap>,
             pickedTrackId: String?,
             createTitle: String,
             likedTitle: String,
@@ -398,7 +428,6 @@ class GridPlaylistFrag : Fragment() {
                     PlaylistGridScreenItem(
                         id = CREATE_ITEM_ID,
                         title = createTitle,
-                        iconRes = R.drawable.ic_playlist_create,
                         isCreateAction = true,
                     ),
                 )
@@ -413,12 +442,7 @@ class GridPlaylistFrag : Fragment() {
                             title = if (playlist.kind == KIND_LIKED) likedTitle else playlist.title,
                             details = "$trackCount трек${getNumericPostfix(trackCount)}\n" +
                                 formatDuration(playlist.durationMs ?: 0),
-                            cover = covers[playlist.getdId()],
-                            iconRes = if (playlist.kind == KIND_LIKED) {
-                                R.drawable.ic_playlist_liked
-                            } else {
-                                null
-                            },
+                            shouldLoadCover = !playlist.ogImageUri.isNullOrBlank(),
                             highlighted = pickedTrackId != null &&
                                 playlist.tracks.any { it.trackId == pickedTrackId },
                         ),

@@ -1,10 +1,10 @@
 package com.yellastrodev.dwij.models
 
 import android.util.Log
+import android.graphics.Bitmap
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.viewModelScope
-import com.yellastrodev.dwij.adapters.TrackListAdapter
 import com.yellastrodev.dwij.data.entities.dSimpleTracklist
 import com.yellastrodev.dwij.data.entities.dTracklist
 import com.yellastrodev.dwij.data.repo.CoverRepository
@@ -17,6 +17,7 @@ import com.yellastrodev.dwij.data.repo.WaveRepository
 import com.yellastrodev.dwij.fragments.ObjectFrag.Companion.TRACKLIST
 import com.yellastrodev.yandexmusiclib.entities.CoverSize
 import kotlinx.coroutines.Job
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -31,8 +32,10 @@ import kotlinx.coroutines.flow.merge
 import kotlinx.coroutines.flow.scan
 import kotlinx.coroutines.flow.receiveAsFlow
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 
 
+/** Готовит треки выбранного Яндекс-объекта и управляет запуском его очереди. */
 class TracklistModel(
     private val playlistRepo: PlaylistRepository,
     val coverRepo: CoverRepository,
@@ -70,6 +73,9 @@ class TracklistModel(
     private var tracksJob: Job? = null
     private var listIdentity: String? = null
 
+    private val _tracks = MutableStateFlow<List<dYaTrack>>(emptyList())
+    val tracks: StateFlow<List<dYaTrack>> = _tracks
+
     private val scrollResetChannel = Channel<Unit>(Channel.CONFLATED)
     val scrollResetEvents = scrollResetChannel.receiveAsFlow()
 
@@ -78,23 +84,10 @@ class TracklistModel(
     private val _playlist = MutableStateFlow<dTracklist?>(null)
     val playlist: StateFlow<dTracklist?> = _playlist
 
-    /** Адаптер списка треков с ленивой инициализацией. */
-    val adapter: TrackListAdapter by lazy {
-        Log.d(TAG, "Инициализация адаптера треков | Model id=${this.hashCode()}")
-        TrackListAdapter({ track ->
-            Log.d(TAG, "Загрузка обложки для трека: ${track.id}")
-            coverRepo.getCover(track, CoverSize.`100x100`)
-        }).apply {
-            mScope = viewModelScope
-            Log.d(TAG, "Адаптер инициализирован | Adapter id=${this.hashCode()}")
-        }
-    }
-
     /**
-     * Устанавливает тип и значение объекта для отображения.
-     * Сейчас поддерживается только тип "playlist".
+     * Устанавливает тип и значение объекта и публикует его треки для Compose-списка.
      *
-     * @param type тип объекта (например, "playlist")
+     * @param type тип объекта: playlist или общий tracklist
      * @param value идентификатор объекта
      */
     fun setType(type: String, value: String) {
@@ -106,14 +99,14 @@ class TracklistModel(
         tracksJob?.cancel()
         listIdentity = newIdentity
         trackList = emptyList()
-        adapter.setList(emptyList())
+        _tracks.value = emptyList()
         _playlist.value = null
         var resetScrollOnFirstList = true
 
         fun publishTracks(tracks: List<dYaTrack>) {
             val snapshot = tracks.toList()
             trackList = snapshot
-            adapter.setList(snapshot)
+            _tracks.value = snapshot
             if (resetScrollOnFirstList) {
                 scrollResetChannel.trySend(Unit)
                 resetScrollOnFirstList = false
@@ -217,6 +210,19 @@ class TracklistModel(
             )
         }
         return true
+    }
+
+    /** Загружает небольшую обложку трека для видимой строки Compose-списка. */
+    suspend fun getTrackCover(trackId: String): Bitmap? {
+        val track = trackList.firstOrNull { it.id == trackId } ?: return null
+        return withContext(Dispatchers.IO) {
+            coverRepo.getCover(track, CoverSize.`100x100`)
+        }
+    }
+
+    /** Загружает обложку текущего плейлиста для Compose-шапки объекта. */
+    suspend fun getPlaylistCover(playlist: dYaPlaylist): Bitmap = withContext(Dispatchers.IO) {
+        coverRepo.getCover(playlist, CoverSize.`200x200`)
     }
 
 

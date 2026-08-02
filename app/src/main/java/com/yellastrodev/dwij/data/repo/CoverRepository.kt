@@ -3,6 +3,7 @@ package com.yellastrodev.dwij.data.repo
 import android.content.Context
 import android.graphics.Bitmap
 import android.graphics.BitmapFactory
+import android.os.SystemClock
 import android.util.Log
 import com.yellastrodev.dwij.CacheManager
 import com.yellastrodev.dwij.DIR_COVER_CACHE
@@ -152,16 +153,23 @@ class CoverRepository(
 
 
 
+    /** Возвращает обложку и в debug-логах отмечает фактический слой кеша и его задержку. */
     suspend fun getCover(key: String, url: String, size: CoverSize = CoverSize.`200x200`): Bitmap {
+        val startedNanos = SystemClock.elapsedRealtimeNanos()
+
         // 1. Сначала память
-        memoryCache[key]?.let { return it }
+        memoryCache[key]?.let { bitmap ->
+            logCoverResult(key, "память", startedNanos)
+            return bitmap
+        }
 
         // 2. Потом диск
         val file = File(cacheDir, "$key.JPEG")
         if (file.exists()) {
-            BitmapFactory.decodeFile(file.absolutePath)?.let {
-                memoryCache[key] = it
-                return it
+            BitmapFactory.decodeFile(file.absolutePath)?.let { bitmap ->
+                memoryCache[key] = bitmap
+                logCoverResult(key, "диск", startedNanos)
+                return bitmap
             }
         }
 
@@ -178,6 +186,23 @@ class CoverRepository(
             }
             cacheManager.ensureWithinLimit()
         }
+        logCoverResult(key, "сеть", startedNanos)
         return bitmap
+    }
+
+    /** Пишет только действительно медленный результат, не засоряя logd кеш-попаданиями. */
+    private fun logCoverResult(key: String, source: String, startedNanos: Long) {
+        val durationMillis =
+            (SystemClock.elapsedRealtimeNanos() - startedNanos) / 1_000_000L
+        if (durationMillis < SLOW_COVER_LOG_MILLIS) return
+        Log.d(
+            TAG,
+            "[getCover] key=$key, источник=$source, время=$durationMillis мс",
+        )
+    }
+
+    companion object {
+        private const val TAG = "CoverRepository"
+        private const val SLOW_COVER_LOG_MILLIS = 20L
     }
 }

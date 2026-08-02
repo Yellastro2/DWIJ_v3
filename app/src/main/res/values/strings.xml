@@ -23,6 +23,18 @@
     <string name="settings_button_content_description">Открыть настройки</string>
     <string name="home_playlists">Плейлисты</string>
     <string name="home_tracks">Треки</string>
+    <string name="track_list_all_title">Все треки</string>
+    <string name="track_list_empty">Треков пока нет</string>
+    <string name="object_loading_title">Загрузка…</string>
+    <string name="object_share">Поделиться</string>
+    <string name="object_wave">Волна</string>
+    <string name="object_play_content_description">Воспроизвести объект</string>
+    <plurals name="object_track_count">
+        <item quantity="one">%1$d трек</item>
+        <item quantity="few">%1$d трека</item>
+        <item quantity="many">%1$d треков</item>
+        <item quantity="other">%1$d трека</item>
+    </plurals>
     <string name="home_wave">Волна</string>
     <string name="home_all_tracks">Ваще всё</string>
     <string name="home_source_local">Локальная</string>

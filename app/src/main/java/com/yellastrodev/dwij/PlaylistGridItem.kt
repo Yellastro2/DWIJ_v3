@@ -1,7 +1,6 @@
 package com.yellastrodev.dwij
 
-import androidx.annotation.DrawableRes
-import androidx.compose.foundation.Canvas
+import android.util.Log
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
@@ -16,20 +15,18 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.Immutable
+import androidx.compose.runtime.Stable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.draw.drawBehind
-import androidx.compose.ui.draw.alpha
-import androidx.compose.ui.geometry.CornerRadius
-import androidx.compose.ui.geometry.Offset
-import androidx.compose.ui.geometry.Size
-import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.ImageBitmap
-import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.layout.ContentScale
-import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.tooling.preview.Preview
@@ -37,13 +34,45 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 
 /** Данные одной квадратной плитки плейлиста, не зависящие от экрана и его стейтов. */
+@Immutable
 data class PlaylistGridItemUiModel(
     val title: String,
     val details: String = "",
-    val cover: ImageBitmap? = null,
-    @DrawableRes val iconRes: Int? = null,
     val highlighted: Boolean = false,
 )
+
+/**
+ * Хранит изменяемую обложку отдельно от неизменяемых данных плитки.
+ *
+ * [bitmap] читает только composable изображения, поэтому её обновление не инвалидирует
+ * заголовок, подпись и кликабельный контейнер плитки. Флаг загрузки не является Compose-state:
+ * он лишь не даёт запустить две coroutine для одного playlist id одновременно.
+ */
+@Stable
+class PlaylistCoverState(initialBitmap: ImageBitmap? = null) {
+    var bitmap by mutableStateOf(initialBitmap)
+        private set
+
+    private var isLoading = false
+
+    /** Разрешает начать загрузку, только если обложки ещё нет и запрос не выполняется. */
+    internal fun tryStartLoading(): Boolean {
+        if (bitmap != null || isLoading) return false
+        isLoading = true
+        return true
+    }
+
+    /** Завершает запрос и публикует результат только для composable изображения. */
+    internal fun finishLoading(loadedBitmap: ImageBitmap?) {
+        bitmap = loadedBitmap
+        isLoading = false
+    }
+
+    /** Снимает внутренний флаг после отмены или ошибки, чтобы позднее запрос можно было повторить. */
+    internal fun cancelLoading() {
+        isLoading = false
+    }
+}
 
 /**
  * Показывает обложку плейлиста с компактными глич-плашками текста.
@@ -55,12 +84,13 @@ data class PlaylistGridItemUiModel(
 @Composable
 fun PlaylistGridItem(
     item: PlaylistGridItemUiModel,
+    coverState: PlaylistCoverState,
     onClick: () -> Unit,
     modifier: Modifier = Modifier,
     onLongClick: (() -> Unit)? = null,
 ) {
+    val compositionStartedNanos = System.nanoTime()
     val shape = RoundedCornerShape(12.dp)
-    val accent = if (item.highlighted) PlaylistCyan else PlaylistPink
 
     Box(
         modifier = modifier
@@ -71,52 +101,8 @@ fun PlaylistGridItem(
                 onLongClick = onLongClick,
             ),
     ) {
-        if (item.cover != null) {
-            Image(
-                bitmap = item.cover,
-                contentDescription = null,
-                contentScale = ContentScale.Crop,
-                modifier = Modifier.fillMaxSize(),
-            )
-        } else {
-            Image(
-                painter = painterResource(R.drawable.back1_1000),
-                contentDescription = null,
-                contentScale = ContentScale.Crop,
-                modifier = Modifier.fillMaxSize(),
-            )
-        }
-
-        Box(
-            modifier = Modifier
-                .fillMaxSize()
-                .background(
-                    Brush.verticalGradient(
-                        colorStops = arrayOf(
-                            0f to Color(0x1903040F),
-                            0.48f to Color(0x3303040F),
-                            1f to Color(0xCC03040F),
-                        ),
-                    ),
-                ),
-        )
-
-        item.iconRes?.let { iconRes ->
-            Image(
-                painter = painterResource(iconRes),
-                contentDescription = null,
-                contentScale = ContentScale.Fit,
-                modifier = Modifier
-                    .align(Alignment.BottomEnd)
-                    .padding(7.dp)
-                    .size(54.dp)
-                    .alpha(0.92f),
-            )
-        }
-
-        PlaylistGridGlitchFrame(
-            accent = accent,
-            highlighted = item.highlighted,
+        PlaylistCover(
+            coverState = coverState,
             modifier = Modifier.fillMaxSize(),
         )
 
@@ -126,7 +112,13 @@ fun PlaylistGridItem(
                 .align(Alignment.TopStart)
                 .padding(start = 6.dp, top = 6.dp, end = 10.dp),
         ) {
-            PlaylistGridTextPlate(accent = accent) {
+            PlaylistGridTextPlate(
+                backgroundColor = if (item.highlighted) {
+                    PlaylistHighlightedTitleBackground
+                } else {
+                    PlaylistTitleBackground
+                },
+            ) {
                 Text(
                     text = item.title,
                     color = Color.White,
@@ -140,7 +132,9 @@ fun PlaylistGridItem(
             }
 
             if (item.details.isNotBlank()) {
-                PlaylistGridTextPlate(accent = PlaylistCyan, quiet = true) {
+                PlaylistGridTextPlate(
+                    backgroundColor = PlaylistDetailsBackground,
+                ) {
                     Text(
                         text = item.details,
                         color = Color(0xFFE9F8FF),
@@ -155,84 +149,43 @@ fun PlaylistGridItem(
             }
         }
     }
+    PlaylistTileCompositionProfiler.record(System.nanoTime() - compositionStartedNanos)
 }
 
-/** Рисует тонкую рамку плитки и несколько коротких цветных разрывов по её периметру. */
+/**
+ * Единственная restart-группа плитки, которая читает bitmap-state и перезапускается при его смене.
+ */
 @Composable
-private fun PlaylistGridGlitchFrame(
-    accent: Color,
-    highlighted: Boolean,
+private fun PlaylistCover(
+    coverState: PlaylistCoverState,
     modifier: Modifier = Modifier,
 ) {
-    Canvas(modifier = modifier) {
-        val inset = 1.dp.toPx()
-        val strokeWidth = if (highlighted) 1.6.dp.toPx() else 0.8.dp.toPx()
-        val radius = 11.dp.toPx()
-
-        drawRoundRect(
-            color = if (highlighted) accent.copy(alpha = 0.9f) else Color.White.copy(alpha = 0.2f),
-            topLeft = Offset(inset, inset),
-            size = Size(size.width - inset * 2f, size.height - inset * 2f),
-            cornerRadius = CornerRadius(radius, radius),
-            style = Stroke(width = strokeWidth),
+    val cover = coverState.bitmap
+    if (cover != null) {
+        Image(
+            bitmap = cover,
+            contentDescription = null,
+            contentScale = ContentScale.Crop,
+            modifier = modifier,
         )
-        drawLine(
-            color = PlaylistPink.copy(alpha = 0.9f),
-            start = Offset(size.width * 0.12f, inset),
-            end = Offset(size.width * 0.43f, inset),
-            strokeWidth = 1.5.dp.toPx(),
-        )
-        drawLine(
-            color = PlaylistCyan.copy(alpha = 0.9f),
-            start = Offset(size.width * 0.58f, size.height - inset),
-            end = Offset(size.width * 0.88f, size.height - inset),
-            strokeWidth = 1.5.dp.toPx(),
+    } else {
+        Box(
+            modifier = modifier.background(PlaylistBackground),
         )
     }
 }
 
-/** Создаёт тёмную читаемую подложку, оставляя неоновый цвет только на тонких кромках. */
+/** Добавляет под текст простую полупрозрачную цветную подложку. */
 @Composable
 private fun PlaylistGridTextPlate(
-    accent: Color,
-    quiet: Boolean = false,
+    backgroundColor: Color,
     content: @Composable () -> Unit,
 ) {
     Box(
-        modifier = Modifier
-            .background(
-                brush = Brush.horizontalGradient(
-                    colors = listOf(
-                        Color(0xF20A0714),
-                        Color(0xD90A0714),
-                        accent.copy(alpha = if (quiet) 0.24f else 0.36f),
-                    ),
-                ),
-                shape = RoundedCornerShape(
-                    topStart = 2.dp,
-                    topEnd = 7.dp,
-                    bottomEnd = 7.dp,
-                    bottomStart = 2.dp,
-                ),
-            )
-            .drawBehind {
-                drawRect(
-                    color = accent.copy(alpha = if (quiet) 0.65f else 0.95f),
-                    size = Size(2.dp.toPx(), size.height),
-                )
-                drawLine(
-                    color = PlaylistCyan.copy(alpha = 0.75f),
-                    start = Offset(size.width * 0.12f, 0f),
-                    end = Offset(size.width * 0.58f, 0f),
-                    strokeWidth = 1.dp.toPx(),
-                )
-                drawLine(
-                    color = PlaylistPink.copy(alpha = 0.72f),
-                    start = Offset(size.width * 0.52f, size.height),
-                    end = Offset(size.width * 0.88f, size.height),
-                    strokeWidth = 1.dp.toPx(),
-                )
-            },
+        modifier = Modifier.background(
+            color = backgroundColor,
+            shape = RoundedCornerShape(4.dp),
+        ),
     ) {
         content()
     }
@@ -248,6 +201,7 @@ private fun PlaylistGridTextPlate(
 )
 @Composable
 private fun PlaylistGridItemPreview() {
+    val coverState = remember { PlaylistCoverState() }
     Box(
         contentAlignment = Alignment.Center,
         modifier = Modifier
@@ -259,6 +213,7 @@ private fun PlaylistGridItemPreview() {
                 title = "Ночной движ",
                 details = "28 треков\n1 ч 42 мин",
             ),
+            coverState = coverState,
             onClick = {},
             modifier = Modifier.size(150.dp),
         )
@@ -266,5 +221,43 @@ private fun PlaylistGridItemPreview() {
 }
 
 private val PlaylistBackground = Color(0xFF03040F)
-private val PlaylistPink = Color(0xFFFF00BF)
-private val PlaylistCyan = Color(0xFF00BBEB)
+private val PlaylistTitleBackground = Color(0xB30A0714)
+private val PlaylistHighlightedTitleBackground = Color(0xB31A0B22)
+private val PlaylistDetailsBackground = Color(0x99001622)
+
+/** Агрегирует реальное время выполнения composable плитки без логов на каждый элемент. */
+private object PlaylistTileCompositionProfiler {
+    private const val SAMPLE_SIZE = 60
+    private const val SLOW_COMPOSITION_NANOS = 4_000_000L
+    private const val TAG = "PlaylistPerf"
+
+    private var samples = 0
+    private var slowSamples = 0
+    private var totalNanos = 0L
+    private var maxNanos = 0L
+
+    /** Добавляет одно выполнение composable и печатает агрегат после [SAMPLE_SIZE] замеров. */
+    fun record(durationNanos: Long) {
+        samples += 1
+        totalNanos += durationNanos
+        maxNanos = maxOf(maxNanos, durationNanos)
+        if (durationNanos > SLOW_COMPOSITION_NANOS) slowSamples += 1
+        if (samples < SAMPLE_SIZE) return
+
+        val averageTenthsMillis = totalNanos / samples / 100_000L
+        val maxTenthsMillis = maxNanos / 100_000L
+        Log.d(
+            TAG,
+            "[composeTileBatch] Замеров=$samples, медленных>4мс=$slowSamples, " +
+                "среднее=${formatTenths(averageTenthsMillis)} мс, " +
+                "max=${formatTenths(maxTenthsMillis)} мс",
+        )
+        samples = 0
+        slowSamples = 0
+        totalNanos = 0L
+        maxNanos = 0L
+    }
+
+    /** Форматирует десятые доли миллисекунды без тяжёлого форматтера в UI-потоке. */
+    private fun formatTenths(value: Long): String = "${value / 10}.${value % 10}"
+}

@@ -1,0 +1,16 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" width="112" height="112" viewBox="0 0 112 112">
+  <defs>
+    <linearGradient id="scrim" x1="0" y1="0" x2="0" y2="112" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#03040f" stop-opacity="0.10"/>
+      <stop offset="0.48" stop-color="#03040f" stop-opacity="0.20"/>
+      <stop offset="1" stop-color="#03040f" stop-opacity="0.80"/>
+    </linearGradient>
+  </defs>
+  <rect x="0" y="0" width="112" height="112" rx="12" fill="url(#scrim)"/>
+  <rect x="1" y="1" width="110" height="110" rx="11" fill="none" stroke="#ffffff" stroke-width="0.8" stroke-opacity="0.20"/>
+  <path d="M13.5 1H48" fill="none" stroke="#ff00bf" stroke-width="1.5" stroke-opacity="0.90"/>
+  <path d="M65 111H98.5" fill="none" stroke="#00bbeb" stroke-width="1.5" stroke-opacity="0.90"/>
+  <path d="M2 78V95" fill="none" stroke="#ff00bf" stroke-width="1" stroke-opacity="0.38"/>
+  <path d="M110 18V33" fill="none" stroke="#00bbeb" stroke-width="1" stroke-opacity="0.40"/>
+</svg>

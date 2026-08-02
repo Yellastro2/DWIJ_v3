@@ -25,6 +25,11 @@ val rasterizedSvgAssets = mapOf(
     "bg_home_source_chip_selected" to "152x56",
     "ic_playlist_create" to "64x64",
     "ic_playlist_liked" to "64x64",
+    "bg_playlist_tile_overlay" to "112x112",
+    "bg_playlist_tile_overlay_highlighted" to "112x112",
+    "bg_playlist_title_plate" to "104x48",
+    "bg_playlist_title_plate_highlighted" to "104x48",
+    "bg_playlist_details_plate" to "104x38",
 )
 
 val rasterizedSvgDensities = mapOf(
