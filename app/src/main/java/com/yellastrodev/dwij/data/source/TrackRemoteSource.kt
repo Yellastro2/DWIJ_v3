@@ -14,13 +14,17 @@ class TrackRemoteSource(private val client: YamApiClient) {
             is YamResult.Failure -> DataResult.Failure(result.error.toDataError())
         }
 
+    /** Загружает актуальные метаданные и ставит всей ответившей пачке одну отметку проверки. */
     suspend fun fetchTracks(
         trackIds: List<String>
     ): DataResult<List<dYaTrack>> {
         return when (val result = client.tracks(trackIds)) {
-            is YamResult.Success -> DataResult.Success(
-                result.value.map { it.toEntity() }
-            )
+            is YamResult.Success -> {
+                val availabilityCheckedAt = System.currentTimeMillis()
+                DataResult.Success(
+                    result.value.map { it.toEntity(availabilityCheckedAt) }
+                )
+            }
             is YamResult.Failure -> DataResult.Failure(
                 result.error.toDataError()
             )

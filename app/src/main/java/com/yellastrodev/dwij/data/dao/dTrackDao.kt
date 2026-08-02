@@ -6,6 +6,7 @@ import androidx.room.Insert
 import androidx.room.OnConflictStrategy
 import androidx.room.Query
 import androidx.room.Transaction
+import androidx.room.Update
 import com.yellastrodev.dwij.data.entities.dTrackAlbumCrossRef
 import com.yellastrodev.dwij.data.entities.dTrackArtistCrossRef
 import com.yellastrodev.dwij.data.entities.dYaAlbum
@@ -71,6 +72,7 @@ interface dTrackDao {
         track: dYaTrack
     ) {
         insertTrack(track)
+        updateTracks(listOf(track))
         track.albums.forEach {
             insertAlbum(it)
             insertTrackAlbumCrossRef(dTrackAlbumCrossRef(track.id, it.id))
@@ -87,6 +89,13 @@ interface dTrackDao {
     @Insert(onConflict = OnConflictStrategy.IGNORE)
     suspend fun _insertTracks(tracks: List<dYaTrack>)
 
+    @Update
+    suspend fun updateTracks(tracks: List<dYaTrack>)
+
+    /**
+     * Добавляет новые треки и обновляет существующие без REPLACE, чтобы не удалить
+     * каскадно их связи с плейлистами, альбомами и артистами.
+     */
     @Transaction
     suspend fun insertAll(tracks: List<dYaTrack>) {
         if (tracks.isEmpty()) return
@@ -94,9 +103,13 @@ interface dTrackDao {
         // 1. Определяем, какие треки уже есть
         val existingIds = getExistingTrackIds(tracks.map { it.id }).toSet()
         val newTracks = tracks.filter { it.id !in existingIds }
+        val existingTracks = tracks.filter { it.id in existingIds }
 
         // 2. Вставляем только новые треки
         _insertTracks(newTracks)
+        if (existingTracks.isNotEmpty()) {
+            updateTracks(existingTracks)
+        }
 
         // 3. Собираем все альбомы и связи
         val allAlbums = tracks.flatMap { it.albums }.distinctBy { it.id }

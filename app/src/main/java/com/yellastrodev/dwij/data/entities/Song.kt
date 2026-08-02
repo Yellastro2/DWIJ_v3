@@ -14,7 +14,10 @@ enum class MusicSource {
 /** Компактная каноническая метадата логической песни в Room. */
 @Entity(
     tableName = "songs",
-    indices = [Index(value = ["matchKey"], unique = true)],
+    indices = [
+        Index("matchKey"),
+        Index("matchResolverVersion"),
+    ],
 )
 data class SongEntity(
     @PrimaryKey val songId: String,
@@ -25,6 +28,7 @@ data class SongEntity(
     val durationMs: Long?,
     val coverUri: String?,
     val preferredInstanceId: String?,
+    val matchResolverVersion: Int = 0,
 )
 
 /** Связывает [SongEntity] с подробной записью конкретного музыкального источника. */

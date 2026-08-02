@@ -7,12 +7,14 @@ import androidx.room.PrimaryKey
 import com.yellastrodev.yandexmusiclib.entities.YaTrack
 import androidx.room.Ignore
 
+/** Сохранённые метаданные трека Яндекс Музыки и время проверки его доступности. */
 @Entity(tableName = "tracks")
 class dYaTrack(
     @PrimaryKey
     val id: String,
     val title: String,
     val available: Boolean,
+    val availabilityCheckedAt: Long = 0L,
     val ogImageUri: String? = null,
     val coverUri: String? = null,
     val durationMs: Int? = null,
@@ -108,11 +110,13 @@ data class dTrackArtistCrossRef(
     val artistLocalId: Long
 )
 
-fun YaTrack.toEntity(): dYaTrack =
+/** Преобразует сетевой трек и отмечает момент получения актуальной доступности. */
+fun YaTrack.toEntity(availabilityCheckedAt: Long = System.currentTimeMillis()): dYaTrack =
     dYaTrack(
         id = id,
         title = title,
         available = available,
+        availabilityCheckedAt = availabilityCheckedAt,
         durationMs = durationMs,
         previewDurationMs = previewDurationMs,
         storageDir = storageDir,

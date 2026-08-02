@@ -26,11 +26,13 @@ import com.yellastrodev.dwij.data.dao.dPlaylistDao
 import com.yellastrodev.dwij.data.dao.dTrackDao
 import com.yellastrodev.dwij.data.dao.LocalLibraryDao
 import com.yellastrodev.dwij.data.dao.SongDao
+import com.yellastrodev.dwij.data.dao.SongMatchDao
 import com.yellastrodev.dwij.data.entities.LocalLibraryStateEntity
 import com.yellastrodev.dwij.data.entities.LocalPlaylistEntity
 import com.yellastrodev.dwij.data.entities.LocalPlaylistEntryEntity
 import com.yellastrodev.dwij.data.entities.LocalTrackEntity
 import com.yellastrodev.dwij.data.entities.SongEntity
+import com.yellastrodev.dwij.data.entities.SongMatchCandidateEntity
 import com.yellastrodev.dwij.data.entities.TrackInstanceEntity
 import com.yellastrodev.dwij.data.entities.dPlaylistTrack
 import com.yellastrodev.dwij.data.entities.dTrackAlbumCrossRef
@@ -42,6 +44,7 @@ import com.yellastrodev.dwij.data.entities.dYaTrack
 import com.yellastrodev.dwij.data.repo.WaveRepository
 import com.yellastrodev.dwij.data.repo.LocalMusicRepository
 import com.yellastrodev.dwij.data.repo.SongRepository
+import com.yellastrodev.dwij.data.repo.SongMatchRepository
 import com.yellastrodev.dwij.data.source.LocalLibraryMonitor
 import com.yellastrodev.dwij.data.source.MediaStoreLocalSource
 import com.yellastrodev.dwij.data.source.WaveRemoteSource
@@ -93,8 +96,9 @@ class yApplication: Application() {
             LocalLibraryStateEntity::class,
             SongEntity::class,
             TrackInstanceEntity::class,
+            SongMatchCandidateEntity::class,
                    ],
-        version = 6
+        version = 8
     )
 //    @TypeConverters(StringListConverter::class) // если у тебя есть поля List<String>
     abstract class AppDatabase : RoomDatabase() {
@@ -102,6 +106,7 @@ class yApplication: Application() {
         abstract fun dTrackDao(): dTrackDao
         abstract fun localLibraryDao(): LocalLibraryDao
         abstract fun songDao(): SongDao
+        abstract fun songMatchDao(): SongMatchDao
     }
 
 //    val trackLocalSource by lazy {
@@ -115,6 +120,7 @@ class yApplication: Application() {
             TrackRemoteSource(yamClient),
             db.dTrackDao(),
             songRepository,
+            applicationScope,
             )
     }
 
@@ -124,7 +130,13 @@ class yApplication: Application() {
             AppDatabase::class.java,
             "my_database"
         )
-            .addMigrations(MIGRATION_3_4, MIGRATION_4_5, MIGRATION_5_6)
+            .addMigrations(
+                MIGRATION_3_4,
+                MIGRATION_4_5,
+                MIGRATION_5_6,
+                MIGRATION_6_7,
+                MIGRATION_7_8,
+            )
             .fallbackToDestructiveMigration()
             .build()
     }
@@ -198,6 +210,13 @@ class yApplication: Application() {
         )
     }
 
+    val songMatchRepository: SongMatchRepository by lazy {
+        SongMatchRepository(
+            songDao = db.songDao(),
+            matchDao = db.songMatchDao(),
+        )
+    }
+
     val localMusicRepository: LocalMusicRepository by lazy {
         LocalMusicRepository(
             context = applicationContext,
@@ -257,6 +276,7 @@ class yApplication: Application() {
                     error,
                 )
             }
+            songMatchRepository.start(applicationScope)
         }
 
     }
@@ -531,6 +551,99 @@ class yApplication: Application() {
                     "CREATE UNIQUE INDEX IF NOT EXISTS " +
                         "index_track_instances_source_sourceTrackId " +
                         "ON track_instances(source, sourceTrackId)"
+                )
+            }
+        }
+
+        val MIGRATION_6_7 = object : Migration(6, 7) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL(
+                    "ALTER TABLE tracks ADD COLUMN availabilityCheckedAt INTEGER NOT NULL DEFAULT 0"
+                )
+            }
+        }
+
+        /**
+         * `songs` и `track_instances` — производный индекс, поэтому безопасно пересоздаём его,
+         * разлепляя все прежние автоматические совпадения. Source-таблицы не затрагиваются.
+         */
+        val MIGRATION_7_8 = object : Migration(7, 8) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL("DROP TABLE IF EXISTS song_match_candidates")
+                db.execSQL("DROP TABLE IF EXISTS track_instances")
+                db.execSQL("DROP TABLE IF EXISTS songs")
+                db.execSQL(
+                    """
+                    CREATE TABLE IF NOT EXISTS songs (
+                        songId TEXT NOT NULL PRIMARY KEY,
+                        matchKey TEXT NOT NULL,
+                        title TEXT NOT NULL,
+                        artistNames TEXT NOT NULL,
+                        albumTitle TEXT,
+                        durationMs INTEGER,
+                        coverUri TEXT,
+                        preferredInstanceId TEXT,
+                        matchResolverVersion INTEGER NOT NULL
+                    )
+                    """.trimIndent()
+                )
+                db.execSQL(
+                    "CREATE INDEX IF NOT EXISTS index_songs_matchKey ON songs(matchKey)"
+                )
+                db.execSQL(
+                    "CREATE INDEX IF NOT EXISTS index_songs_matchResolverVersion " +
+                        "ON songs(matchResolverVersion)"
+                )
+                db.execSQL(
+                    """
+                    CREATE TABLE IF NOT EXISTS track_instances (
+                        instanceId TEXT NOT NULL PRIMARY KEY,
+                        songId TEXT NOT NULL,
+                        source TEXT NOT NULL,
+                        sourceTrackId TEXT NOT NULL,
+                        FOREIGN KEY(songId) REFERENCES songs(songId)
+                            ON UPDATE NO ACTION ON DELETE CASCADE
+                    )
+                    """.trimIndent()
+                )
+                db.execSQL(
+                    "CREATE INDEX IF NOT EXISTS index_track_instances_songId " +
+                        "ON track_instances(songId)"
+                )
+                db.execSQL(
+                    "CREATE UNIQUE INDEX IF NOT EXISTS " +
+                        "index_track_instances_source_sourceTrackId " +
+                        "ON track_instances(source, sourceTrackId)"
+                )
+                db.execSQL(
+                    """
+                    CREATE TABLE IF NOT EXISTS song_match_candidates (
+                        firstSongId TEXT NOT NULL,
+                        secondSongId TEXT NOT NULL,
+                        titleSimilarity REAL NOT NULL,
+                        artistSimilarity REAL NOT NULL,
+                        score REAL NOT NULL,
+                        resolverVersion INTEGER NOT NULL,
+                        status TEXT NOT NULL,
+                        PRIMARY KEY(firstSongId, secondSongId),
+                        FOREIGN KEY(firstSongId) REFERENCES songs(songId)
+                            ON UPDATE NO ACTION ON DELETE CASCADE,
+                        FOREIGN KEY(secondSongId) REFERENCES songs(songId)
+                            ON UPDATE NO ACTION ON DELETE CASCADE
+                    )
+                    """.trimIndent()
+                )
+                db.execSQL(
+                    "CREATE INDEX IF NOT EXISTS index_song_match_candidates_firstSongId " +
+                        "ON song_match_candidates(firstSongId)"
+                )
+                db.execSQL(
+                    "CREATE INDEX IF NOT EXISTS index_song_match_candidates_secondSongId " +
+                        "ON song_match_candidates(secondSongId)"
+                )
+                db.execSQL(
+                    "CREATE INDEX IF NOT EXISTS index_song_match_candidates_status " +
+                        "ON song_match_candidates(status)"
                 )
             }
         }

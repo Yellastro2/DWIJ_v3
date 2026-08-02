@@ -9,7 +9,6 @@ import androidx.room.Relation
 import androidx.room.Transaction
 import androidx.room.Update
 import androidx.room.Upsert
-import com.yellastrodev.dwij.data.entities.MusicSource
 import com.yellastrodev.dwij.data.entities.SongEntity
 import com.yellastrodev.dwij.data.entities.TrackInstanceEntity
 import kotlinx.coroutines.flow.Flow
@@ -33,11 +32,25 @@ abstract class SongDao {
     @Query("SELECT * FROM songs WHERE songId IN (:songIds)")
     abstract suspend fun getSongs(songIds: List<String>): List<SongWithInstances>
 
-    @Query("SELECT * FROM songs WHERE matchKey = :matchKey LIMIT 1")
-    abstract suspend fun findByMatchKey(matchKey: String): SongEntity?
-
     @Query("SELECT * FROM songs WHERE songId = :songId LIMIT 1")
     abstract suspend fun getSong(songId: String): SongEntity?
+
+    @Transaction
+    @Query("SELECT * FROM songs")
+    abstract suspend fun getAllSongs(): List<SongWithInstances>
+
+    @Transaction
+    @Query(
+        "SELECT * FROM songs WHERE matchResolverVersion < :resolverVersion " +
+            "ORDER BY songId LIMIT :limit"
+    )
+    abstract suspend fun getUnscannedSongs(
+        resolverVersion: Int,
+        limit: Int,
+    ): List<SongWithInstances>
+
+    @Query("SELECT COUNT(*) FROM songs WHERE matchResolverVersion < :resolverVersion")
+    abstract fun observeUnscannedSongCount(resolverVersion: Int): Flow<Int>
 
     @Query(
         "SELECT * FROM track_instances " +
@@ -53,6 +66,19 @@ abstract class SongDao {
 
     @Query("UPDATE songs SET preferredInstanceId = :instanceId WHERE songId = :songId")
     abstract suspend fun updatePreferredInstance(songId: String, instanceId: String?)
+
+    @Query("UPDATE songs SET matchResolverVersion = :resolverVersion WHERE songId = :songId")
+    abstract suspend fun markResolverVersion(songId: String, resolverVersion: Int)
+
+    @Query(
+        "UPDATE songs SET matchResolverVersion = :resolverVersion " +
+            "WHERE songId = :songId AND matchKey = :expectedMatchKey"
+    )
+    abstract suspend fun markResolverVersionIfUnchanged(
+        songId: String,
+        expectedMatchKey: String,
+        resolverVersion: Int,
+    ): Int
 
     @Insert(onConflict = OnConflictStrategy.IGNORE)
     abstract suspend fun insertSong(song: SongEntity): Long
@@ -83,34 +109,33 @@ abstract class SongDao {
     )
     abstract suspend fun deleteOrphanSongs()
 
-    /** Атомарно находит либо создаёт песню и привязывает к ней source-экземпляр. */
+    /**
+     * Обновляет песню уже известного source-экземпляра либо создаёт для него отдельную [SongEntity].
+     * Сходство метаданных намеренно не используется для автоматического объединения.
+     */
     @Transaction
     open suspend fun link(song: SongEntity, instance: TrackInstanceEntity): String {
-        val existing = findByMatchKey(song.matchKey)
-        val songId = existing?.songId ?: run {
-            insertSong(song)
-            findByMatchKey(song.matchKey)?.songId ?: song.songId
-        }
-        val stored = getSong(songId)
-        if (stored != null) {
-            val updated = if (instance.source == MusicSource.YANDEX.name) {
-                stored.copy(
-                    title = song.title,
-                    artistNames = song.artistNames,
-                    albumTitle = song.albumTitle ?: stored.albumTitle,
-                    durationMs = song.durationMs ?: stored.durationMs,
-                    coverUri = song.coverUri ?: stored.coverUri,
-                )
-            } else {
-                stored.copy(
-                    albumTitle = stored.albumTitle ?: song.albumTitle,
-                    durationMs = stored.durationMs ?: song.durationMs,
-                    coverUri = stored.coverUri ?: song.coverUri,
-                )
+        val existingInstance = getInstance(instance.instanceId)
+        if (existingInstance != null) {
+            val stored = getSong(existingInstance.songId)
+                ?: error("Для экземпляра ${instance.instanceId} отсутствует Song")
+            val updated = stored.copy(
+                matchKey = song.matchKey,
+                title = song.title,
+                artistNames = song.artistNames,
+                albumTitle = song.albumTitle,
+                durationMs = song.durationMs,
+                coverUri = song.coverUri,
+            )
+            if (updated != stored) {
+                updateSong(updated.copy(matchResolverVersion = 0))
             }
-            if (updated != stored) updateSong(updated)
+            upsertInstance(instance.copy(songId = stored.songId))
+            return stored.songId
         }
-        upsertInstance(instance.copy(songId = songId))
-        return songId
+
+        insertSong(song)
+        upsertInstance(instance.copy(songId = song.songId))
+        return song.songId
     }
 }

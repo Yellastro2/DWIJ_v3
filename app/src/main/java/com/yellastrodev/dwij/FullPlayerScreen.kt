@@ -92,6 +92,7 @@ data class FullPlayerUiState(
     val artist: String,
     val album: String?,
     val sourceLabel: String?,
+    val hasMultipleSources: Boolean,
     val cover: ImageBitmap?,
     val isPlaying: Boolean,
     val currentPositionMillis: Long,
@@ -152,6 +153,7 @@ fun FullPlayerScreen(
             FullPlayerTopBar(
                 queueTitle = state.queueTitle,
                 queuePosition = state.queuePosition,
+                hasMultipleSources = state.hasMultipleSources,
                 onBackClick = onBackClick,
             )
             Column(
@@ -226,6 +228,7 @@ fun FullPlayerScreen(
 private fun FullPlayerTopBar(
     queueTitle: String,
     queuePosition: Int,
+    hasMultipleSources: Boolean,
     onBackClick: () -> Unit,
 ) {
     val backDescription = stringResource(R.string.player_back_content_description)
@@ -300,7 +303,80 @@ private fun FullPlayerTopBar(
                 overflow = TextOverflow.Ellipsis,
             )
         }
-        Spacer(modifier = Modifier.width(46.dp))
+        MultipleSourcesIndicator(
+            isActive = hasMultipleSources,
+            modifier = Modifier.size(46.dp),
+        )
+    }
+}
+
+/** Рисует три сцепленных знака Play и подсвечивает их у песни с несколькими источниками. */
+@Composable
+private fun MultipleSourcesIndicator(
+    isActive: Boolean,
+    modifier: Modifier = Modifier,
+) {
+    val intensity by animateFloatAsState(
+        targetValue = if (isActive) 1f else 0f,
+        animationSpec = tween(durationMillis = 180),
+        label = "multipleSourcesIntensity",
+    )
+    val description = stringResource(
+        if (isActive) {
+            R.string.player_multiple_sources_active_content_description
+        } else {
+            R.string.player_multiple_sources_inactive_content_description
+        },
+    )
+
+    Canvas(
+        modifier = modifier.semantics {
+            contentDescription = description
+        },
+    ) {
+        val triangleWidth = size.width * 0.29f
+        val triangleHeight = size.height * 0.42f
+        val startX = size.width * 0.18f
+        val stepX = size.width * 0.17f
+        val centerY = size.height * 0.5f
+        val activeColors = listOf(PlayerCyan, PlayerPink, Color.White)
+
+        if (intensity > 0f) {
+            drawCircle(
+                color = PlayerPink.copy(alpha = 0.08f * intensity),
+                radius = size.minDimension * 0.42f,
+                center = center,
+            )
+        }
+
+        repeat(3) { index ->
+            val x = startX + stepX * index
+            val yOffset = when (index) {
+                0 -> size.height * 0.035f
+                1 -> -size.height * 0.035f
+                else -> 0f
+            }
+            val path = Path().apply {
+                moveTo(x, centerY - triangleHeight / 2f + yOffset)
+                lineTo(x + triangleWidth, centerY + yOffset)
+                lineTo(x, centerY + triangleHeight / 2f + yOffset)
+                close()
+            }
+            val color = activeColors[index]
+            drawPath(
+                path = path,
+                color = color.copy(alpha = 0.06f + 0.2f * intensity),
+            )
+            drawPath(
+                path = path,
+                color = if (isActive) {
+                    color.copy(alpha = 0.64f + index * 0.15f)
+                } else {
+                    PlayerSecondary.copy(alpha = 0.2f)
+                },
+                style = Stroke(width = (1.dp + 0.45.dp * intensity).toPx()),
+            )
+        }
     }
 }
 
@@ -1046,6 +1122,7 @@ private fun FullPlayerScreenPreview() {
             artist = "Три дня дождя",
             album = "Когда ты откроешь глаза",
             sourceLabel = "ЯНДЕКС МУЗЫКА",
+            hasMultipleSources = true,
             cover = null,
             isPlaying = true,
             currentPositionMillis = 84_000L,

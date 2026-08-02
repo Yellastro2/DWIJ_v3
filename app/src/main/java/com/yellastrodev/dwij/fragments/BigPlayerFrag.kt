@@ -124,6 +124,7 @@ class BigPlayerFrag : Fragment() {
                         ?: unknownArtist,
                     album = album,
                     sourceLabel = sourceLabel,
+                    hasMultipleSources = (track?.instances?.size ?: 0) > 1,
                     cover = cover,
                     isPlaying = playerState.isPlaying,
                     currentPositionMillis = playerState.currentPosition,
