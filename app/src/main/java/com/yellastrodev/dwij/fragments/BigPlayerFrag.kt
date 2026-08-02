@@ -1,427 +1,178 @@
 package com.yellastrodev.dwij.fragments
 
-import android.annotation.SuppressLint
-import android.graphics.Color
 import android.os.Bundle
-import android.os.Handler
-import android.util.DisplayMetrics
 import android.util.Log
 import android.view.LayoutInflater
 import android.view.View
 import android.view.ViewGroup
-import android.view.ViewPropertyAnimator
-import android.widget.Button
-import android.widget.ImageButton
-import android.widget.ImageView
-import android.widget.SeekBar
-import android.widget.TextView
-import androidx.constraintlayout.widget.ConstraintLayout
-import androidx.lifecycle.Lifecycle
-import androidx.lifecycle.lifecycleScope
-import androidx.lifecycle.repeatOnLifecycle
-import androidx.recyclerview.widget.RecyclerView
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.collectAsState
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.setValue
+import androidx.compose.ui.graphics.ImageBitmap
+import androidx.compose.ui.graphics.asImageBitmap
+import androidx.compose.ui.platform.ComposeView
+import androidx.compose.ui.platform.ViewCompositionStrategy
+import androidx.fragment.app.Fragment
+import androidx.navigation.fragment.findNavController
+import com.yellastrodev.dwij.FullPlayerScreen
+import com.yellastrodev.dwij.FullPlayerUiState
 import com.yellastrodev.dwij.R
-import com.yellastrodev.dwij.data.entities.dYaPlaylist
-import com.yellastrodev.dwij.data.entities.MusicSource
-import com.yellastrodev.dwij.data.entities.PlaybackTrack
-import com.yellastrodev.dwij.models.PlayerModel
-import com.yellastrodev.dwij.data.entities.dYaLikeTracklist.Companion.KIND_LIKED
-import com.yellastrodev.yandexmusiclib.entities.CoverSize
-import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.flow.take
-import kotlinx.coroutines.launch
-import kotlinx.coroutines.withContext
-import com.google.android.flexbox.AlignItems
-import com.google.android.flexbox.FlexDirection
-import com.google.android.flexbox.FlexWrap
-import com.google.android.flexbox.FlexboxLayoutManager
-import com.google.android.flexbox.JustifyContent
 import com.yellastrodev.dwij.activities.MainActivity
-import com.yellastrodev.dwij.service.PlayerState
-
-class BigPlayerFrag() :
-	PlayerAbs()
-{
-	override val TAG = "BigPlayerFrag"
-
-
-	val sPrevieAlpha = 0.3F
-
-	lateinit var mvTrackList: Button
-	lateinit var mvPlListFlexbox: RecyclerView
-	lateinit var mvToPlaylist: View
-	lateinit var mvAlbum: TextView
-	lateinit var mvLike: ImageView
-	lateinit var mvRestrict: TextView
-	lateinit var mvRepeatBtn: ImageView
-	lateinit var mvRandom: ImageButton
-
-//	var mTrack: iTrack? = null
-
-	var isLiked = false
-
-	@SuppressLint("MissingInflatedId")
-	override fun onCreateView(
-		inflater: LayoutInflater,
-		container: ViewGroup?,
-		savedInstanceState: Bundle?
-	): View? {
-
-		Log.d("DWIJ_TIMING", "BigPlayerFrag onCreateView")
-
-
-		val view = inflater.inflate(R.layout.frag_player,container,false)
-
-		mvSeekBar = view.findViewById(R.id.seekBar)
-		mvTitle = view.findViewById(R.id.txt_title)
-		mvArtist = view.findViewById(R.id.txt_artist)
-		mvCover = view.findViewById(R.id.fr_player_cover)
-		mvPlay = view.findViewById(R.id.btn_play)
-		mvPrev = view.findViewById(R.id.btn_prev)
-		mvNext = view.findViewById(R.id.btn_next)
-		mvRandom = view.findViewById(R.id.fr_player_random)
-		mvMainTitle = view.findViewById(R.id.bigplayer_main_title)
-		mvAlbum = view.findViewById(R.id.fr_player_album_name)
-		mvLike = view.findViewById(R.id.fr_player_like)
-		mvRestrict =  view.findViewById(R.id.fr_player_restrict)
-
-
-		Log.d("DWIJ_TIMING", "BigPlayerFrag onCreateView finish")
-		return view
-	}
-
-	override fun getCoverSize(): CoverSize {
-		return CoverSize.`400x400`
-	}
-
-	override fun onViewCreated(view: View, savedInstanceState: Bundle?) {
-		super.onViewCreated(view, savedInstanceState)
-
-		mvTitle.setOnClickListener { openTrackInfo() }
-
-
-		mvLike.alpha = 0.0F
-		mvAlbum.alpha = 0.0F
-
-		showPreviewLike()
-
-
-
-		mvCover.setOnClickListener {
-			onLikeClick()
-		}
-
-//		view.findViewById<View>(R.id.fr_bg_player_btn_close).setOnClickListener {
-//			(activity as MainActivity).mNavController.navigate(R.id.action_bigPlayerFrag_to_trackListFrag)
-//		}
-
-
-		mvRandom?.setOnClickListener { v -> setRandom(v) }
-
-		mvRepeatBtn = view.findViewById<ImageView>(R.id.fr_player_cycle)
-		mvRepeatBtn.setOnClickListener {
-			setRotate(it)
-		}
-
-		setRotateBtn(false)
-
-
-
-		mvSeekBar?.setOnSeekBarChangeListener(object : SeekBar.OnSeekBarChangeListener {
-			override fun onProgressChanged(seekBar: SeekBar, progress: Int, fromUser: Boolean) {
-				if (fromUser) {
-					lifecycleScope.launch {
-						playerModel.seekTo(progress.toLong())
-					}
-					val dsds =5
-				}
-			}
-
-			override fun onStartTrackingTouch(seekBar: SeekBar) {
-			}
-
-			override fun onStopTrackingTouch(seekBar: SeekBar) {
-			}
-		})
-//		initializeSeekBar()
-		mvToPlaylist = view.findViewById<View>(R.id.fr_bigplay_topl_text)
-		mvToPlaylist.setOnClickListener{
-			toPlaylist()
-		}
-
-		mvPlListFlexbox = view.findViewById(R.id.fr_bg_player_pllist_flex)
-		mvPlListFlexbox.setOnClickListener {
-			toPlaylist()
-		}
-		val displayMetrics = DisplayMetrics()
-		requireActivity().windowManager.defaultDisplay.getMetrics(displayMetrics)
-
-		var width = displayMetrics.widthPixels
-		mvCover.layoutParams = ConstraintLayout.LayoutParams(width,width)
-
-//		if (mTrack != null){
-//			setTrack(mTrack!!,null)
-//		}
-
-		viewLifecycleOwner.lifecycleScope.launch() {
-			var lastBlocState = false
-			viewLifecycleOwner.repeatOnLifecycle(Lifecycle.State.STARTED) {
-				playerModel.shuffleBlock.collect { isBlocked ->
-					if (lastBlocState != isBlocked){
-						val newMode = if (isBlocked) View.GONE else View.VISIBLE
-						mvRandom.visibility = newMode
-						mvRepeatBtn.visibility = newMode
-						lastBlocState = isBlocked
-					}
-				}
-			}
-		}
-
-
-		Log.d("DWIJ_TIMING", "BigPlayerFrag onViewCreated")
-		view.post { Log.d("TIMING", "BigPlayerFrag first frame drawn") }
-	}
-
-
-	var nowShuffle = false
-
-	fun setRandomBtn(isShuffle: Boolean){
-//		if (mPlayer == null) return
-		nowShuffle = isShuffle
-		if (isShuffle) {
-			mvRandom?.setImageResource(R.drawable.ic_shuffle_select)
-		} else{
-			mvRandom?.setImageResource(R.drawable.ic_shuffle)
-
-		}
-	}
-
-	fun setRandom(fV: View){
-		playerModel.shuffle()
-	}
-
-
-	var nowRepeat = false
-
-	fun setRotateBtn(isRepeat: Boolean){
-		if (isRepeat)
-			mvRepeatBtn.setImageResource(R.drawable.ic_repeat_select)
-				else
-			mvRepeatBtn.setImageResource(R.drawable.ic_repeat)
-		nowRepeat = isRepeat
-	}
-
-	fun setRotate(fV: View){
-		playerModel.rotate()
-//			mPlayer?.let {
-//				mPlayer?.isRepeat = !mPlayer?.isRepeat!!
-//				if (mPlayer?.isRepeat!!)
-//					fvRepeat.setBackgroundColor(Color.GREEN)
-//				else
-//					fvRepeat.background = null
-//			}
-	}
-
-
-	override fun onPlayerStateFlow(state: PlayerState) {
-		if (state.isShuffle != nowShuffle)
-			setRandomBtn(state.isShuffle)
-		if (state.isRepeatAll != nowRepeat)
-			setRotateBtn(state.isRepeatAll)
-	}
-
-	override suspend fun onTrackFlow(track: PlaybackTrack){
-		val yandexTrack = track.yandexTrack
-		if (track.source != MusicSource.YANDEX || yandexTrack == null) {
-			withContext(Dispatchers.Main) {
-				mvToPlaylist.visibility = View.GONE
-				mvPlListFlexbox.adapter = null
-				mvLike.isEnabled = false
-			}
-			return
-		}
-		withContext(Dispatchers.Main) { mvLike.isEnabled = true }
-		setLikedState()
-		playerModel.playlistRepo.getPlaylistsByKeys(yandexTrack.playlists)
-			.take(1) // забираем только один результат
-			.collect { fPlLists ->
-			Log.d(TAG, "BigPlayer.onTrackFlow collect playlists=$fPlLists")
-			val filtered = fPlLists.filter { it.kind != KIND_LIKED }
-			withContext(Dispatchers.Main) {
-				if (filtered.isNotEmpty()) {
-					mvToPlaylist.visibility = View.GONE
-					val lm = FlexboxLayoutManager(context).apply {
-						flexDirection = FlexDirection.ROW
-						flexWrap = FlexWrap.WRAP
-						justifyContent = JustifyContent.CENTER
-						alignItems = AlignItems.CENTER
-					}
-					mvPlListFlexbox.layoutManager = lm
-					mvPlListFlexbox.adapter = CustomAdapter(filtered, playerModel)
-				}else {
-					mvToPlaylist.visibility = View.VISIBLE
-					mvPlListFlexbox.adapter = null
-				}
-
-			}
-		}
-	}
-
-
-
-	private fun openTrackInfo() {
-//		(activity as MainActivity).openTrackInfo(mTrackId)
-	}
-
-
-	override fun onResume() {
-		super.onResume()
-//		attachToService()
-	}
-
-	private fun toPlaylist() {
-		if (playerModel.track.value?.source != MusicSource.YANDEX) return
-		val fBndl = Bundle()
-		fBndl.putString(GridPlaylistFrag.PLAYLIST_ACTION,GridPlaylistFrag.ACTION_ADDTRACK)
-		fBndl.putString(GridPlaylistFrag.ACTION_DATA, playerModel.track.value!!.id)
-
-		(activity as MainActivity).mNavController.navigate(R.id.gridPlaylistFrag, fBndl)
-	}
-
-
-
-	fun setLikedState(){
-		val fisLiked = playerModel.isTrackLiked()
-		if (fisLiked != isLiked){
-			if (fisLiked)
-				mvLike.drawable.setTint(resources.getColor(R.color.pink))
-			else
-				mvLike.drawable.setTint(Color.parseColor("#FFFFFF"))
-		}
-		isLiked = fisLiked
-	}
-
-	var doubleClick = false
-	var isLikeAnimaton = false
-	private fun onLikeClick() {
-		val fAnims = showPreviewLike()
-
-		if (doubleClick!!) {
-			lifecycleScope.launch {
-				playerModel.likeTrack()
-				withContext(Dispatchers.Main) {
-					setLikedState()
-				}
-			}
-//				val fStore = yMediaStore.store(requireContext())
-//				mModel.viewModelScope.launch(Dispatchers.IO){
-//					fStore.likeTrack(mTrackId)
-//                    withContext(Dispatchers.Main) {
-//                        setLikedState(fStore)
-//                    }
-//				}
-			isLikeAnimaton = !isLikeAnimaton
-			fAnims.forEach { it.cancel() }
-			mvAlbum.animate()
-				.alpha(0.0F)
-				.setDuration(300)
-			var fFirstDur = 300
-			var fSecDur = 200
-			if (isLikeAnimaton){
-				fFirstDur = 100
-				fSecDur = 400
-			}
-			val fSecondAnim = mvLike.animate()
-				.alpha(1F)
-				.setDuration(fFirstDur.toLong())
-				.withEndAction { mvLike.animate()
-					.alpha(0.0F)
-					.setDuration(fSecDur.toLong())
-				}
-		}else
-			doubleClick = true
-		Handler().postDelayed({ doubleClick = false }, 500)
-	}
-
-//	override fun setTrack(fTrack: iTrack, fTrackList: iTrackList?) {
-//
-//
-//
-//		setLikedState(fStore)
-//
-
-
-	fun showPreviewLike(): List<ViewPropertyAnimator> {
-
-		val fFirstAnim = mvLike.animate()
-			.alpha(sPrevieAlpha)
-			.setDuration(800)
-			.withEndAction { mvLike.animate()
-				.alpha(0.0F)
-				.setDuration(300)
-			}
-		val fFirstAnimAlbum = mvAlbum.animate()
-			.alpha(sPrevieAlpha)
-			.setDuration(1200)
-			.withEndAction { mvAlbum.animate()
-				.alpha(0.0F)
-				.setDuration(500)
-			}
-
-		return listOf(fFirstAnim,fFirstAnimAlbum)
-	}
-
-	class CustomAdapter(
-		private val dataSet: List<dYaPlaylist>,
-		val model: PlayerModel
-	) :
-		RecyclerView.Adapter<CustomAdapter.ViewHolder>() {
-
-		lateinit var mRecyclerView: RecyclerView
-
-
-
-
-		override fun onAttachedToRecyclerView(recyclerView: RecyclerView) {
-			super.onAttachedToRecyclerView(recyclerView)
-			mRecyclerView = recyclerView
-		}
-
-		class ViewHolder(view: View) : RecyclerView.ViewHolder(view) {
-			val vTitle: TextView
-
-			init {
-				vTitle = view.findViewById(R.id.it_pllist_flex_title)
-
-			}
-		}
-
-		override fun onCreateViewHolder(viewGroup: ViewGroup, viewType: Int): ViewHolder {
-			val view = LayoutInflater.from(viewGroup.context)
-				.inflate(R.layout.it_playlist_flex, viewGroup, false)
-
-			view.setOnClickListener {
-				mRecyclerView.callOnClick() }
-			return ViewHolder(view)
-		}
-
-		override fun onBindViewHolder(viewHolder: ViewHolder, position: Int) {
-//			viewHolder.itemView.setOnClickListener {
-////				TODO
-//				  }
-			viewHolder.vTitle.text = dataSet[position].title
-
-			viewHolder.vTitle.apply {
-				background = model.getBackground(viewHolder.vTitle.context, dataSet[position].title)
-			}
-
-			viewHolder.itemView.setOnClickListener {
-				mRecyclerView.callOnClick() }
-		}
-
-		override fun getItemCount() = dataSet.size
-
-
-
-	}
+import com.yellastrodev.dwij.data.entities.MusicSource
+import com.yellastrodev.dwij.data.entities.dYaLikeTracklist.Companion.KIND_LIKED
+import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.flow.flowOn
+import kotlinx.coroutines.launch
+
+/**
+ * Связывает полноэкранный Compose-плеер с общим activity-scoped [com.yellastrodev.dwij.models.PlayerModel].
+ * Старый XML-плеер больше не создаётся, но очередь, Media3-команды и экран добавления в плейлист остаются прежними.
+ */
+class BigPlayerFrag : Fragment() {
+    private val playerModel by lazy { (requireActivity() as MainActivity).playerModel }
+
+    /** Создаёт единственный ComposeView и переводит состояния репозиториев в неизменяемую UI-модель. */
+    override fun onCreateView(
+        inflater: LayoutInflater,
+        container: ViewGroup?,
+        savedInstanceState: Bundle?,
+    ): View = ComposeView(requireContext()).apply {
+        setViewCompositionStrategy(ViewCompositionStrategy.DisposeOnViewTreeLifecycleDestroyed)
+        setContent {
+            val track by playerModel.track.collectAsState()
+            val playerState by playerModel.playerState.collectAsState()
+            val playedTracklist by playerModel.playdTracklist.collectAsState()
+            val shuffleBlocked by playerModel.shuffleBlock.collectAsState()
+            val allPlaylists by playerModel.playlistRepo.playlists.collectAsState()
+            val scope = rememberCoroutineScope()
+            var cover by remember(track?.id) { mutableStateOf<ImageBitmap?>(null) }
+
+            LaunchedEffect(track?.id) {
+                val currentTrack = track ?: return@LaunchedEffect
+                try {
+                    playerModel.cover(currentTrack)
+                        .flowOn(Dispatchers.IO)
+                        .collect { bitmap -> cover = bitmap.asImageBitmap() }
+                } catch (error: CancellationException) {
+                    throw error
+                } catch (error: Exception) {
+                    Log.w(
+                        TAG,
+                        "[loadPlayerCover] Не удалось загрузить обложку trackId=${currentTrack.id}",
+                        error,
+                    )
+                }
+            }
+
+            val currentTrackId = track?.id
+            val yandexTrack = track?.yandexTrack
+            val playlistKeys = yandexTrack?.playlists.orEmpty()
+            val containingPlaylists = remember(currentTrackId, playlistKeys, allPlaylists) {
+                if (currentTrackId == null || yandexTrack == null) {
+                    emptyList()
+                } else {
+                    allPlaylists.filter { playlist ->
+                        playlist.kind != KIND_LIKED &&
+                            (playlist.playlistUuid in playlistKeys ||
+                                playlist.tracks.any { it.trackId == currentTrackId })
+                    }
+                }
+            }
+            val isLiked = remember(currentTrackId, allPlaylists) {
+                currentTrackId != null && allPlaylists
+                    .firstOrNull { it.kind == KIND_LIKED }
+                    ?.tracks
+                    ?.any { it.trackId == currentTrackId } == true
+            }
+            val containingPlaylistTitles = remember(containingPlaylists) {
+                containingPlaylists.map { it.title }
+            }
+            val fallbackQueueTitle = getString(R.string.player_current_queue)
+            val unknownArtist = getString(R.string.home_player_unknown_artist)
+            val sourceLabel = when (track?.source) {
+                MusicSource.YANDEX -> getString(R.string.player_source_yandex)
+                MusicSource.LOCAL -> getString(R.string.player_source_local)
+                null -> null
+            }
+            val album = when (track?.source) {
+                MusicSource.YANDEX -> yandexTrack?.albums
+                    ?.joinToString(", ") { it.title }
+                    ?.takeIf(String::isNotBlank)
+                MusicSource.LOCAL -> track?.localTrack?.album?.takeIf(String::isNotBlank)
+                null -> null
+            }
+
+            FullPlayerScreen(
+                state = FullPlayerUiState(
+                    trackId = currentTrackId,
+                    queueTitle = playedTracklist?.getDTitle()
+                        ?.takeIf(String::isNotBlank)
+                        ?: fallbackQueueTitle,
+                    queuePosition = (playerState.currentIndex + 1).coerceAtLeast(1),
+                    title = track?.title ?: getString(R.string.player_no_track),
+                    artist = track?.artistNames
+                        ?.joinToString(", ")
+                        ?.takeIf(String::isNotBlank)
+                        ?: unknownArtist,
+                    album = album,
+                    sourceLabel = sourceLabel,
+                    cover = cover,
+                    isPlaying = playerState.isPlaying,
+                    currentPositionMillis = playerState.currentPosition,
+                    durationMillis = playerState.duration,
+                    isShuffle = playerState.isShuffle,
+                    isRepeatAll = playerState.isRepeatAll,
+                    showPlaybackModes = !shuffleBlocked,
+                    canLike = track?.source == MusicSource.YANDEX,
+                    isLiked = isLiked,
+                    playlistTitles = containingPlaylistTitles,
+                ),
+                playerEvents = playerModel.playerEvent,
+                onBackClick = { findNavController().navigateUp() },
+                onPlayPauseClick = playerModel::playAudio,
+                onPreviousClick = {
+                    scope.launch { playerModel.prevTrack() }
+                },
+                onNextClick = {
+                    scope.launch { playerModel.nextTrack() }
+                },
+                onSeek = playerModel::seekTo,
+                onShuffleClick = playerModel::shuffle,
+                onRepeatClick = playerModel::rotate,
+                onLikeClick = {
+                    scope.launch {
+                        try {
+                            playerModel.likeTrack()
+                        } catch (error: CancellationException) {
+                            throw error
+                        } catch (error: Exception) {
+                            Log.w(TAG, "[likeTrack] Не удалось изменить лайк", error)
+                        }
+                    }
+                },
+                onAddToPlaylistClick = ::openPlaylistPicker,
+            )
+        }
+    }
+
+    /** Открывает существующий режим выбора плейлиста для текущего трека Яндекс Музыки. */
+    private fun openPlaylistPicker() {
+        val track = playerModel.track.value
+            ?.takeIf { it.source == MusicSource.YANDEX }
+            ?: return
+        val arguments = Bundle().apply {
+            putString(GridPlaylistFrag.PLAYLIST_ACTION, GridPlaylistFrag.ACTION_ADDTRACK)
+            putString(GridPlaylistFrag.ACTION_DATA, track.id)
+        }
+        findNavController().navigate(R.id.gridPlaylistFrag, arguments)
+    }
+
+    private companion object {
+        const val TAG = "BigPlayerFrag"
+    }
 }

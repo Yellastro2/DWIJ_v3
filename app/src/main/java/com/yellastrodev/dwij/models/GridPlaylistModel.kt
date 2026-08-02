@@ -62,6 +62,12 @@ class GridPlaylistModel(
 	/** Принудительно обновляет Яндекс-плейлисты и возвращает ошибку вызывающему экрану. */
 	suspend fun refreshPlaylists(): DataResult<Unit> = playlistRepo.refreshPlaylists()
 
+	/** Создаёт пустой Яндекс-плейлист и публикует его в текущей сетке. */
+	suspend fun createPlaylist(
+		title: String,
+		isPublic: Boolean,
+	): DataResult<dYaPlaylist> = playlistRepo.createPlaylist(title, isPublic)
+
 	suspend fun addTrackToPlaylist(
 		playlist: iPlaylist,
 		trackId: String

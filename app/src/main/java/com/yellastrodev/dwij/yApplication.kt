@@ -154,7 +154,8 @@ class yApplication: Application() {
     val playerRepo: PlayerRepository by lazy {
         PlayerRepository(
             context = applicationContext,
-            scope = applicationScope
+            scope = applicationScope,
+            isTrackCached = trackCacheRepo::isCached,
         ).apply {
 //            bind()
 

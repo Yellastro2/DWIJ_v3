@@ -37,6 +37,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.ImageBitmap
 import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.tooling.preview.Preview
@@ -44,7 +45,12 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import kotlinx.coroutines.CancellationException
 
-/** Независимые от источника данные одной строки трека. */
+/**
+ * Независимые от источника данные одной строки трека.
+ *
+ * [isYandexUnavailable] включает индикатор, а [isPlaybackBlocked] дополнительно приглушает
+ * метаданные и сообщает владельцу списка, что вместо воспроизведения нужно объяснить отказ.
+ */
 @Immutable
 data class TrackListItemUiModel(
     val key: String,
@@ -52,6 +58,8 @@ data class TrackListItemUiModel(
     val title: String,
     val artist: String,
     val shouldLoadCover: Boolean = true,
+    val isYandexUnavailable: Boolean = false,
+    val isPlaybackBlocked: Boolean = false,
 )
 
 /**
@@ -130,7 +138,7 @@ fun TrackList(
     }
 }
 
-/** Рисует компактную строку: квадратную обложку, название и исполнителя. */
+/** Рисует строку трека и визуально отделяет недоступное без кэша состояние. */
 @Composable
 fun TrackListItem(
     item: TrackListItemUiModel,
@@ -138,40 +146,91 @@ fun TrackListItem(
     onClick: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
-    Row(
-        verticalAlignment = Alignment.CenterVertically,
+    val titleColor = if (item.isPlaybackBlocked) {
+        Color.White.copy(alpha = 0.34f)
+    } else {
+        Color.White
+    }
+    val artistColor = if (item.isPlaybackBlocked) {
+        TrackSecondaryText.copy(alpha = 0.38f)
+    } else {
+        TrackSecondaryText
+    }
+    Box(
         modifier = modifier
             .fillMaxWidth()
             .height(72.dp)
-            .clickable(onClick = onClick)
-            .padding(horizontal = 10.dp, vertical = 6.dp),
+            .clickable(onClick = onClick),
     ) {
-        TrackCover(
-            coverState = coverState,
+        Row(
+            verticalAlignment = Alignment.CenterVertically,
             modifier = Modifier
-                .size(60.dp)
-                .clip(RoundedCornerShape(5.dp)),
-        )
-        Column(
-            modifier = Modifier
-                .weight(1f)
-                .padding(start = 12.dp, end = 8.dp),
+                .fillMaxSize()
+                .padding(horizontal = 10.dp, vertical = 6.dp),
         ) {
-            Text(
-                text = item.title,
-                color = Color.White,
-                fontSize = 17.sp,
-                fontWeight = FontWeight.Medium,
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis,
+            TrackCover(
+                coverState = coverState,
+                modifier = Modifier
+                    .size(60.dp)
+                    .clip(RoundedCornerShape(5.dp)),
             )
-            Text(
-                text = item.artist,
-                color = TrackSecondaryText,
-                fontSize = 13.sp,
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis,
-                modifier = Modifier.padding(top = 5.dp),
+            Column(
+                modifier = Modifier
+                    .weight(1f)
+                    .padding(
+                        start = 12.dp,
+                        end = if (item.isYandexUnavailable) 30.dp else 8.dp,
+                    ),
+            ) {
+                Text(
+                    text = item.title,
+                    color = titleColor,
+                    fontSize = 17.sp,
+                    fontWeight = FontWeight.Medium,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                )
+                Text(
+                    text = item.artist,
+                    color = artistColor,
+                    fontSize = 13.sp,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                    modifier = Modifier.padding(top = 5.dp),
+                )
+            }
+        }
+        if (item.isYandexUnavailable) {
+            TrackUnavailableIndicator(
+                modifier = Modifier
+                    .align(Alignment.TopEnd)
+                    .padding(top = 5.dp, end = 8.dp),
+            )
+        }
+    }
+}
+
+/** Рисует маленькую жёлтую перечёркнутую букву «Я» для недоступного Яндекс-трека. */
+@Composable
+private fun TrackUnavailableIndicator(modifier: Modifier = Modifier) {
+    Box(
+        contentAlignment = Alignment.Center,
+        modifier = modifier.size(22.dp),
+    ) {
+        Text(
+            text = stringResource(R.string.track_unavailable_indicator),
+            color = TrackUnavailableYellow,
+            fontSize = 14.sp,
+            fontWeight = FontWeight.Bold,
+        )
+        Canvas(modifier = Modifier.fillMaxSize()) {
+            val inset = 3.dp.toPx()
+            drawLine(
+                color = TrackUnavailableYellow,
+                start = Offset(inset, size.height - inset),
+                end = Offset(size.width - inset, inset),
+                strokeWidth = 1.6.dp.toPx(),
+                cap = StrokeCap.Square,
             )
         }
     }
@@ -308,8 +367,23 @@ private fun TrackListPreview() {
     TrackList(
         items = listOf(
             TrackListItemUiModel("1:0", "1", "Ночной город", "Три дня дождя", false),
-            TrackListItemUiModel("2:0", "2", "MARDI GRAS", "Scriptz", false),
-            TrackListItemUiModel("3:0", "3", "FROSTSURGE", "qõke, N:GHT", false),
+            TrackListItemUiModel(
+                "2:0",
+                "2",
+                "MARDI GRAS",
+                "Scriptz",
+                false,
+                isYandexUnavailable = true,
+            ),
+            TrackListItemUiModel(
+                "3:0",
+                "3",
+                "FROSTSURGE",
+                "qõke, N:GHT",
+                false,
+                isYandexUnavailable = true,
+                isPlaybackBlocked = true,
+            ),
         ),
         onItemClick = { _, _ -> },
         modifier = Modifier.background(TrackListBackground),
@@ -319,4 +393,5 @@ private fun TrackListPreview() {
 private val TrackListBackground = Color(0xFF03040F)
 private val TrackCoverBackground = Color(0xFF101522)
 private val TrackSecondaryText = Color(0xFFA7AABC)
+private val TrackUnavailableYellow = Color(0xFFFFD54A)
 private const val TRACK_LIST_TAG = "TrackList"

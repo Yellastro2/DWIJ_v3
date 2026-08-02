@@ -25,6 +25,7 @@ import androidx.fragment.app.Fragment
 import androidx.fragment.app.viewModels
 import androidx.lifecycle.lifecycleScope
 import androidx.navigation.fragment.findNavController
+import com.google.android.material.snackbar.Snackbar
 import com.yellastrodev.dwij.ObjectScreen
 import com.yellastrodev.dwij.R
 import com.yellastrodev.dwij.TYPE
@@ -44,6 +45,7 @@ class ObjectFrag : Fragment() {
             repo = (requireActivity().application as yApplication).playlistRepository,
             coverRepo = (requireActivity().application as yApplication).coverRepository,
             trackRepo = (requireActivity().application as yApplication).trackRepository,
+            trackCacheRepo = (requireActivity().application as yApplication).trackCacheRepo,
             playerRepo = (requireActivity().application as yApplication).playerRepo,
             waveRepo = (requireActivity().application as yApplication).waveRepository,
         )
@@ -71,6 +73,7 @@ class ObjectFrag : Fragment() {
         setContent {
             val playlist by model.playlist.collectAsState()
             val tracks by model.tracks.collectAsState()
+            val cachedUnavailableTrackIds by model.cachedUnavailableTrackIds.collectAsState()
             val yandexPlaylist = playlist as? dYaPlaylist
             val objectId = yandexPlaylist?.playlistUuid
             val unknownArtist = stringResource(R.string.home_player_unknown_artist)
@@ -85,8 +88,11 @@ class ObjectFrag : Fragment() {
                 count,
                 count,
             )
-            val trackItems = remember(tracks, unknownArtist) {
-                tracks.toTrackListItems(unknownArtist)
+            val trackItems = remember(tracks, cachedUnavailableTrackIds, unknownArtist) {
+                tracks.toTrackListItems(
+                    unknownArtist = unknownArtist,
+                    cachedUnavailableTrackIds = cachedUnavailableTrackIds,
+                )
             }
             val listState = rememberLazyListState()
             val refreshScope = rememberCoroutineScope()
@@ -148,9 +154,25 @@ class ObjectFrag : Fragment() {
                     model.getTrackCover(trackId)?.asImageBitmap()
                 },
                 onBackClick = { findNavController().navigateUp() },
-                onPlayClick = { playTrack(0) },
+                onPlayClick = {
+                    val firstPlayableIndex = trackItems.indexOfFirst { item ->
+                        !item.isPlaybackBlocked
+                    }
+                    if (firstPlayableIndex >= 0) {
+                        playTrack(
+                            position = firstPlayableIndex,
+                            expectedTrackId = trackItems[firstPlayableIndex].trackId,
+                        )
+                    } else if (trackItems.isNotEmpty()) {
+                        showUnavailableTrackSnackbar()
+                    }
+                },
                 onTrackClick = { position, item ->
-                    playTrack(position, item.trackId)
+                    if (item.isPlaybackBlocked) {
+                        showUnavailableTrackSnackbar()
+                    } else {
+                        playTrack(position, item.trackId)
+                    }
                 },
                 onShareClick = {
                     Log.d(TAG, "[shareObject] Поделиться объектом пока не подключено")
@@ -179,6 +201,7 @@ class ObjectFrag : Fragment() {
     /** Создаёт уникальные LazyColumn-ключи для повторяющихся треков одного объекта. */
     private fun List<dYaTrack>.toTrackListItems(
         unknownArtist: String,
+        cachedUnavailableTrackIds: Set<String>,
     ): List<TrackListItemUiModel> {
         val occurrences = mutableMapOf<String, Int>()
         return map { track ->
@@ -192,7 +215,21 @@ class ObjectFrag : Fragment() {
                     .joinToString(", ") { artist -> artist.name }
                     .ifBlank { unknownArtist },
                 shouldLoadCover = track.getCoverUriAny() != null,
+                isYandexUnavailable = !track.available,
+                isPlaybackBlocked = !track.available &&
+                    track.id !in cachedUnavailableTrackIds,
             )
+        }
+    }
+
+    /** Показывает причину, по которой строка недоступного трека не открыла плеер. */
+    private fun showUnavailableTrackSnackbar() {
+        view?.let { root ->
+            Snackbar.make(
+                root,
+                R.string.track_unavailable_yandex,
+                Snackbar.LENGTH_LONG,
+            ).show()
         }
     }
 

@@ -12,6 +12,20 @@ import com.yellastrodev.yandexmusiclib.YamApiClient
 import com.yellastrodev.yandexmusiclib.network.YamResult
 
 class PlaylistRemoteSource(private val client: YamApiClient) {
+    /** Создаёт пустой плейлист пользователя и переводит сетевую модель в app-entity. */
+    suspend fun createPlaylist(
+        title: String,
+        isPublic: Boolean,
+    ): DataResult<dYaPlaylist> = when (
+        val result = client.createPlaylist(
+            title = title,
+            isPublic = isPublic,
+        )
+    ) {
+        is YamResult.Success -> DataResult.Success(result.value.toEntity())
+        is YamResult.Failure -> DataResult.Failure(result.error.toDataError())
+    }
+
     suspend fun fetch(kind: Int): DataResult<PlaylistSnapshot> {
         return when (val result = client.playlist(kind)) {
             is YamResult.Success -> DataResult.Success(

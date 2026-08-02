@@ -139,6 +139,32 @@ class PlaylistRepository(
             .filterNotNull()
             .distinctUntilChanged()
 
+    /** Создаёт Яндекс-плейлист, сохраняет его локально и сразу публикует в списке экрана. */
+    suspend fun createPlaylist(
+        title: String,
+        isPublic: Boolean,
+    ): DataResult<dYaPlaylist> {
+        val normalizedTitle = title.trim()
+        if (normalizedTitle.isBlank()) {
+            return DataResult.Failure(DataError.InvalidData("Название не должно быть пустым"))
+        }
+        return when (val result = remote.createPlaylist(normalizedTitle, isPublic)) {
+            is DataResult.Success -> {
+                when (val saveResult = savePlaylist(result.value)) {
+                    is DataResult.Success -> {
+                        Log.d(
+                            TAG,
+                            "[createPlaylist] Создан плейлист '${result.value.title}'",
+                        )
+                        result
+                    }
+                    is DataResult.Failure -> saveResult
+                }
+            }
+            is DataResult.Failure -> result
+        }
+    }
+
     suspend fun refreshPlaylist(plUuid: String): DataResult<Unit> {
         val playlist = _playlistMap.value[plUuid]
             ?: return DataResult.Failure(DataError.NotFound("playlist", plUuid))

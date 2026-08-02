@@ -1,6 +1,7 @@
 package com.yellastrodev.dwij
 
 import android.util.Log
+import androidx.annotation.DrawableRes
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
@@ -23,10 +24,12 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.ImageBitmap
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.tooling.preview.Preview
@@ -38,6 +41,8 @@ import androidx.compose.ui.unit.sp
 data class PlaylistGridItemUiModel(
     val title: String,
     val details: String = "",
+    @DrawableRes val fallbackCoverResId: Int? = null,
+    @DrawableRes val artworkResId: Int? = null,
     val highlighted: Boolean = false,
 )
 
@@ -103,6 +108,7 @@ fun PlaylistGridItem(
     ) {
         PlaylistCover(
             coverState = coverState,
+            fallbackCoverResId = item.fallbackCoverResId,
             modifier = Modifier.fillMaxSize(),
         )
 
@@ -148,6 +154,19 @@ fun PlaylistGridItem(
                 }
             }
         }
+
+        item.artworkResId?.let { artworkResId ->
+            Image(
+                painter = painterResource(artworkResId),
+                contentDescription = null,
+                contentScale = ContentScale.Fit,
+                modifier = Modifier
+                    .align(Alignment.BottomEnd)
+                    .padding(7.dp)
+                    .size(54.dp)
+                    .alpha(0.92f),
+            )
+        }
     }
     PlaylistTileCompositionProfiler.record(System.nanoTime() - compositionStartedNanos)
 }
@@ -158,12 +177,20 @@ fun PlaylistGridItem(
 @Composable
 private fun PlaylistCover(
     coverState: PlaylistCoverState,
+    @DrawableRes fallbackCoverResId: Int?,
     modifier: Modifier = Modifier,
 ) {
     val cover = coverState.bitmap
     if (cover != null) {
         Image(
             bitmap = cover,
+            contentDescription = null,
+            contentScale = ContentScale.Crop,
+            modifier = modifier,
+        )
+    } else if (fallbackCoverResId != null) {
+        Image(
+            painter = painterResource(fallbackCoverResId),
             contentDescription = null,
             contentScale = ContentScale.Crop,
             modifier = modifier,

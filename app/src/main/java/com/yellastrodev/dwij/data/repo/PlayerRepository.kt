@@ -53,7 +53,8 @@ import java.util.UUID
 @OptIn(UnstableApi::class)
 class PlayerRepository(
     private val context: Context,
-    private val scope: CoroutineScope
+    private val scope: CoroutineScope,
+    private val isTrackCached: (trackId: String) -> Boolean,
 ) {
     val TAG = "PlayerRepository"
 
@@ -178,14 +179,52 @@ class PlayerRepository(
     var relativeIndex = 0
 
     /**
-     * @param tracks список треков и их урл ссылок (на скачивание, либо на кеш файл)
-     * @param startIndex индекс трека в списке, который будет проигран
+     * Запускает Яндекс-очередь, не передавая Media3 недоступные треки без локального файла.
+     * [startIndex] переводится из исходного списка в индекс уже отфильтрованной очереди.
      */
     suspend fun playQueue(
         tracks: List<dYaTrack>,
         startIndex: Int = 0,
         tracklist: dTracklist
-    ) = playPreparedQueue(tracks.map { it.toPlaybackTrack() }, startIndex, tracklist)
+    ) {
+        if (tracks.isEmpty() || startIndex !in tracks.indices) {
+            Log.w(
+                TAG,
+                "[playQueue] Некорректная исходная очередь: size=${tracks.size}, " +
+                    "startIndex=$startIndex",
+            )
+            return
+        }
+        val playableTracks = playableYandexTracks(tracks)
+        if (playableTracks.isEmpty()) {
+            Log.w(
+                TAG,
+                "[playQueue] В очереди нет доступных или закэшированных Яндекс-треков",
+            )
+            return
+        }
+        val resolvedStartIndex = playableTracks
+            .indexOfFirst { indexedTrack -> indexedTrack.index == startIndex }
+            .takeIf { index -> index >= 0 }
+            ?: playableTracks.indexOfFirst { indexedTrack -> indexedTrack.index > startIndex }
+                .takeIf { index -> index >= 0 }
+            ?: 0
+        val skippedCount = tracks.size - playableTracks.size
+        if (skippedCount > 0) {
+            Log.d(
+                TAG,
+                "[playQueue] Пропущено недоступных без кэша=$skippedCount, " +
+                    "исходный index=$startIndex, итоговый index=$resolvedStartIndex",
+            )
+        }
+        playPreparedQueue(
+            tracks = playableTracks.map { indexedTrack ->
+                indexedTrack.value.toPlaybackTrack()
+            },
+            startIndex = resolvedStartIndex,
+            tracklist = tracklist,
+        )
+    }
 
     /** Запускает локальные content:// элементы тем же Media3-плеером. */
     suspend fun playLocalQueue(
@@ -279,12 +318,22 @@ class PlayerRepository(
     }
 
 
+    /** Догружает в текущую очередь только доступные либо уже закэшированные Яндекс-треки. */
     suspend fun addTracks(tracks: List<dYaTrack>) {
-        Log.d(TAG, "addTracks: ${tracks.size}")
+        val playableTracks = playableYandexTracks(tracks).map { indexedTrack ->
+            indexedTrack.value
+        }
+        val skippedCount = tracks.size - playableTracks.size
+        Log.d(
+            TAG,
+            "[addTracks] Получено=${tracks.size}, добавляем=${playableTracks.size}, " +
+                "пропущено=$skippedCount",
+        )
+        if (playableTracks.isEmpty()) return
 //        tracksAndUrls = tracks.associate { track -> track.id to track  }
-        currentTrackList = currentTrackList + tracks.map { track -> track.id }
+        currentTrackList = currentTrackList + playableTracks.map { track -> track.id }
 
-        val playbackTracks = tracks.map { it.toPlaybackTrack() }
+        val playbackTracks = playableTracks.map { it.toPlaybackTrack() }
         currentPlaybackQueue = currentPlaybackQueue + playbackTracks
         val mediaItems = playbackTracks.map { track ->
             track.toMediaItem(_dtracklist.value)
@@ -292,6 +341,22 @@ class PlayerRepository(
 
         withContext(Dispatchers.Main) {
             service?.addTracks(mediaItems)
+        }
+    }
+
+    /**
+     * Оставляет доступные Яндекс-треки и недоступные треки с готовым файлом в кэше.
+     * Исходные индексы сохраняются, чтобы после фильтрации правильно выбрать стартовую позицию.
+     */
+    private suspend fun playableYandexTracks(
+        tracks: List<dYaTrack>,
+    ): List<IndexedValue<dYaTrack>> = withContext(Dispatchers.IO) {
+        tracks.mapIndexedNotNull { index, track ->
+            if (track.available || isTrackCached(track.id)) {
+                IndexedValue(index, track)
+            } else {
+                null
+            }
         }
     }
 

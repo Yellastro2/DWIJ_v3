@@ -17,6 +17,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.ImageBitmap
+import androidx.compose.ui.res.pluralStringResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
@@ -54,6 +55,52 @@ fun LocalLibraryScreen(
             tracks != null -> LocalTrackList(tracks, onTrackClick, loadTrackCover)
         }
     }
+}
+
+/**
+ * Показывает локальный плейлист через общую шапку музыкального объекта.
+ *
+ * У локального плейлиста пока нет собственной обложки, поэтому [ObjectScreen] получает `null`
+ * и рисует штатную фирменную заглушку. Очередь и загрузка миниатюр остаются локальными.
+ */
+@Composable
+fun LocalPlaylistObjectScreen(
+    title: String,
+    tracks: List<LocalTrackEntity>,
+    onBackClick: () -> Unit,
+    onPlayClick: () -> Unit,
+    onTrackClick: (Int, LocalTrackEntity) -> Unit,
+    loadTrackCover: suspend (LocalTrackEntity) -> ImageBitmap?,
+    modifier: Modifier = Modifier,
+) {
+    val unknownArtist = stringResource(R.string.home_player_unknown_artist)
+    val tracksById = remember(tracks) { tracks.associateBy(LocalTrackEntity::instanceId) }
+    val items = remember(tracks, unknownArtist) {
+        tracks.toTrackListItems(unknownArtist)
+    }
+    ObjectScreen(
+        title = title,
+        subtitle = pluralStringResource(
+            R.plurals.object_track_count,
+            tracks.size,
+            tracks.size,
+        ),
+        description = null,
+        cover = null,
+        tracks = items,
+        onBackClick = onBackClick,
+        onPlayClick = onPlayClick,
+        onTrackClick = { index, _ ->
+            tracks.getOrNull(index)?.let { track -> onTrackClick(index, track) }
+        },
+        loadTrackCover = { trackId ->
+            tracksById[trackId]?.let { track -> loadTrackCover(track) }
+        },
+        showShare = false,
+        showWave = false,
+        emptyMessage = stringResource(R.string.local_tracks_empty),
+        modifier = modifier,
+    )
 }
 
 @Composable
@@ -109,14 +156,7 @@ private fun LocalTrackList(
     val unknownArtist = stringResource(R.string.home_player_unknown_artist)
     val tracksById = remember(tracks) { tracks.associateBy(LocalTrackEntity::instanceId) }
     val items = remember(tracks, unknownArtist) {
-        tracks.mapIndexed { index, track ->
-            TrackListItemUiModel(
-                key = "${track.instanceId}:$index",
-                trackId = track.instanceId,
-                title = track.title,
-                artist = track.artist?.takeIf { artist -> artist.isNotBlank() } ?: unknownArtist,
-            )
-        }
+        tracks.toTrackListItems(unknownArtist)
     }
     TrackList(
         items = items,
@@ -128,6 +168,18 @@ private fun LocalTrackList(
             tracks.getOrNull(index)?.let { track -> onClick(index, track) }
         },
         modifier = Modifier.fillMaxSize(),
+    )
+}
+
+/** Преобразует локальные сущности в независимые от источника строки Compose-списка. */
+private fun List<LocalTrackEntity>.toTrackListItems(
+    unknownArtist: String,
+): List<TrackListItemUiModel> = mapIndexed { index, track ->
+    TrackListItemUiModel(
+        key = "${track.instanceId}:$index",
+        trackId = track.instanceId,
+        title = track.title,
+        artist = track.artist?.takeIf { artist -> artist.isNotBlank() } ?: unknownArtist,
     )
 }
 

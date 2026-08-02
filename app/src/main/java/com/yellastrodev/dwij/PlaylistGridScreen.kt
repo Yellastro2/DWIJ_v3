@@ -3,6 +3,7 @@ package com.yellastrodev.dwij
 import android.os.SystemClock
 import android.util.Log
 import android.view.Choreographer
+import androidx.annotation.DrawableRes
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
@@ -60,6 +61,8 @@ data class PlaylistGridScreenItem(
     val title: String,
     val details: String = "",
     val shouldLoadCover: Boolean = false,
+    @DrawableRes val fallbackCoverResId: Int? = null,
+    @DrawableRes val artworkResId: Int? = null,
     val highlighted: Boolean = false,
     val isCreateAction: Boolean = false,
 )
@@ -260,6 +263,8 @@ private fun LazyPlaylistGridItem(
         item = PlaylistGridItemUiModel(
             title = item.title,
             details = item.details,
+            fallbackCoverResId = item.fallbackCoverResId,
+            artworkResId = item.artworkResId,
             highlighted = item.highlighted,
         ),
         coverState = coverState,
@@ -366,12 +371,14 @@ private fun PlaylistGridScreenPreview() {
             PlaylistGridScreenItem(
                 "create",
                 "Создать плейлист",
+                artworkResId = R.drawable.ic_playlist_create,
                 isCreateAction = true,
             ),
             PlaylistGridScreenItem(
                 "liked",
                 "Мне нравится",
                 "148 треков\n9 ч 12 мин",
+                artworkResId = R.drawable.ic_playlist_liked,
             ),
             PlaylistGridScreenItem("night", "Ночной движ", "28 треков\n1 ч 42 мин"),
             PlaylistGridScreenItem("road", "В дорогу", "41 трек\n2 ч 36 мин"),

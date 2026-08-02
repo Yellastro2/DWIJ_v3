@@ -11,6 +11,7 @@ import com.yellastrodev.dwij.data.repo.CoverRepository
 import com.yellastrodev.dwij.data.repo.PlayerRepository
 import com.yellastrodev.dwij.data.repo.PlaylistRepository
 import com.yellastrodev.dwij.data.repo.TrackRepository
+import com.yellastrodev.dwij.data.repo.TrackCacheRepository
 import com.yellastrodev.dwij.data.entities.dYaPlaylist
 import com.yellastrodev.dwij.data.entities.dYaTrack
 import com.yellastrodev.dwij.data.repo.WaveRepository
@@ -35,11 +36,15 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 
 
-/** Готовит треки выбранного Яндекс-объекта и управляет запуском его очереди. */
+/**
+ * Готовит треки выбранного Яндекс-объекта, проверяет кэш недоступных записей
+ * и управляет запуском его очереди.
+ */
 class TracklistModel(
     private val playlistRepo: PlaylistRepository,
     val coverRepo: CoverRepository,
     private val trackRepo: TrackRepository,
+    private val trackCacheRepo: TrackCacheRepository,
     private val playerRepo: PlayerRepository,
     private val waveRepository: WaveRepository
 ) : ViewModel() {
@@ -55,6 +60,7 @@ class TracklistModel(
         private val repo: PlaylistRepository,
         private val coverRepo: CoverRepository,
         private val trackRepo: TrackRepository,
+        private val trackCacheRepo: TrackCacheRepository,
         private val playerRepo: PlayerRepository,
         private val waveRepo: WaveRepository
     ) : ViewModelProvider.Factory
@@ -63,7 +69,14 @@ class TracklistModel(
         override fun <T : ViewModel> create(modelClass: Class<T>): T {
             if (modelClass.isAssignableFrom(TracklistModel::class.java)) {
                 Log.d(TAG, "Создаём экземпляр TracklistModel через Factory")
-                return TracklistModel(repo, coverRepo, trackRepo, playerRepo, waveRepo) as T
+                return TracklistModel(
+                    repo,
+                    coverRepo,
+                    trackRepo,
+                    trackCacheRepo,
+                    playerRepo,
+                    waveRepo,
+                ) as T
             }
             throw IllegalArgumentException("Unknown ViewModel class")
         }
@@ -75,6 +88,10 @@ class TracklistModel(
 
     private val _tracks = MutableStateFlow<List<dYaTrack>>(emptyList())
     val tracks: StateFlow<List<dYaTrack>> = _tracks
+
+    private val _cachedUnavailableTrackIds = MutableStateFlow<Set<String>>(emptySet())
+    /** Недоступные в Яндексе треки, которые всё ещё можно воспроизвести из файлового кэша. */
+    val cachedUnavailableTrackIds: StateFlow<Set<String>> = _cachedUnavailableTrackIds
 
     private val scrollResetChannel = Channel<Unit>(Channel.CONFLATED)
     val scrollResetEvents = scrollResetChannel.receiveAsFlow()
@@ -100,11 +117,29 @@ class TracklistModel(
         listIdentity = newIdentity
         trackList = emptyList()
         _tracks.value = emptyList()
+        _cachedUnavailableTrackIds.value = emptySet()
         _playlist.value = null
         var resetScrollOnFirstList = true
+        val unavailableCacheChecks = mutableMapOf<String, Boolean>()
 
-        fun publishTracks(tracks: List<dYaTrack>) {
+        suspend fun publishTracks(tracks: List<dYaTrack>) {
             val snapshot = tracks.toList()
+            val unavailableIds = snapshot
+                .asSequence()
+                .filterNot(dYaTrack::available)
+                .map(dYaTrack::id)
+                .toSet()
+            val uncheckedIds = unavailableIds - unavailableCacheChecks.keys
+            if (uncheckedIds.isNotEmpty()) {
+                unavailableCacheChecks.putAll(
+                    withContext(Dispatchers.IO) {
+                        uncheckedIds.associateWith(trackCacheRepo::isCached)
+                    },
+                )
+            }
+            _cachedUnavailableTrackIds.value = unavailableIds.filterTo(mutableSetOf()) { id ->
+                unavailableCacheChecks[id] == true
+            }
             trackList = snapshot
             _tracks.value = snapshot
             if (resetScrollOnFirstList) {

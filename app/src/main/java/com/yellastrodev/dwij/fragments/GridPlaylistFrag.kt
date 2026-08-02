@@ -27,6 +27,7 @@ import androidx.fragment.app.viewModels
 import androidx.lifecycle.lifecycleScope
 import androidx.navigation.fragment.findNavController
 import com.google.android.material.snackbar.Snackbar
+import com.yellastrodev.dwij.CreatePlaylistDialog
 import com.yellastrodev.dwij.HomeMusicSource
 import com.yellastrodev.dwij.MusicSourceSelectionStore
 import com.yellastrodev.dwij.PlaylistGridScreen
@@ -102,6 +103,9 @@ class GridPlaylistFrag : Fragment() {
                 .takeIf { isAddTrackMode() }
             var pickedTrack by remember(pickedTrackId) { mutableStateOf<dYaTrack?>(null) }
             var isRefreshing by remember { mutableStateOf(false) }
+            var createDialogSource by remember { mutableStateOf<HomeMusicSource?>(null) }
+            var isCreatingPlaylist by remember { mutableStateOf(false) }
+            val showCreateAction = !isAddTrackMode()
 
             LaunchedEffect(pickedTrackId) {
                 if (pickedTrackId != null) {
@@ -120,6 +124,7 @@ class GridPlaylistFrag : Fragment() {
             val yandexScreenItems = remember(
                 yandexPlaylists,
                 pickedTrackId,
+                showCreateAction,
                 createTitle,
                 likedTitle,
             ) {
@@ -127,6 +132,7 @@ class GridPlaylistFrag : Fragment() {
                 yandexItems(
                     playlists = yandexPlaylists,
                     pickedTrackId = pickedTrackId,
+                    showCreateAction = showCreateAction,
                     createTitle = createTitle,
                     likedTitle = likedTitle,
                 ).also { items ->
@@ -139,6 +145,8 @@ class GridPlaylistFrag : Fragment() {
             }
             val localScreenItems = remember(
                 localPlaylists,
+                showCreateAction,
+                createTitle,
                 localDwij,
                 localMediaStore,
                 localM3u,
@@ -146,6 +154,8 @@ class GridPlaylistFrag : Fragment() {
                 val startedNanos = SystemClock.elapsedRealtimeNanos()
                 localItems(
                     playlists = localPlaylists,
+                    showCreateAction = showCreateAction,
+                    createTitle = createTitle,
                     dwijLabel = localDwij,
                     mediaStoreLabel = localMediaStore,
                     m3uLabel = localM3u,
@@ -175,14 +185,18 @@ class GridPlaylistFrag : Fragment() {
                 onSourceSelected = ::selectMusicSource,
                 onBackClick = { findNavController().popBackStack() },
                 onItemClick = { item ->
-                    onPlaylistItemClick(
-                        item = item,
-                        source = musicSource,
-                        yandexPlaylists = yandexPlaylists,
-                        localPlaylists = localPlaylists,
-                        pickedTrackId = pickedTrackId,
-                        pickedTrack = pickedTrack,
-                    )
+                    if (item.isCreateAction) {
+                        createDialogSource = musicSource
+                    } else {
+                        onPlaylistItemClick(
+                            item = item,
+                            source = musicSource,
+                            yandexPlaylists = yandexPlaylists,
+                            localPlaylists = localPlaylists,
+                            pickedTrackId = pickedTrackId,
+                            pickedTrack = pickedTrack,
+                        )
+                    }
                 },
                 onItemLongClick = { item ->
                     if (musicSource == HomeMusicSource.Yandex && !isAddTrackMode()) {
@@ -221,6 +235,30 @@ class GridPlaylistFrag : Fragment() {
                 },
                 modifier = Modifier,
             )
+
+            createDialogSource?.let { dialogSource ->
+                CreatePlaylistDialog(
+                    source = dialogSource,
+                    isCreating = isCreatingPlaylist,
+                    onDismiss = {
+                        if (!isCreatingPlaylist) createDialogSource = null
+                    },
+                    onCreate = { title, isPublic ->
+                        if (!isCreatingPlaylist) {
+                            isCreatingPlaylist = true
+                            createPlaylist(
+                                source = dialogSource,
+                                title = title,
+                                isPublic = isPublic,
+                                onFinished = { success ->
+                                    isCreatingPlaylist = false
+                                    if (success) createDialogSource = null
+                                },
+                            )
+                        }
+                    },
+                )
+            }
         }
     }
 
@@ -245,7 +283,7 @@ class GridPlaylistFrag : Fragment() {
         }
     }
 
-    /** Обрабатывает обычный режим, создание и режим добавления трека одной точкой входа. */
+    /** Обрабатывает открытие плейлиста и режим добавления трека одной точкой входа. */
     private fun onPlaylistItemClick(
         item: PlaylistGridScreenItem,
         source: HomeMusicSource,
@@ -254,10 +292,6 @@ class GridPlaylistFrag : Fragment() {
         pickedTrackId: String?,
         pickedTrack: dYaTrack?,
     ) {
-        if (item.isCreateAction) {
-            showSnackbar(R.string.playlists_create_pending)
-            return
-        }
         if (source == HomeMusicSource.Local) {
             if (isAddTrackMode()) {
                 showSnackbar(R.string.playlists_local_add_unavailable)
@@ -278,6 +312,59 @@ class GridPlaylistFrag : Fragment() {
             }
         } else {
             addTrackToPlaylist(playlist, pickedTrackId)
+        }
+    }
+
+    /** Создаёт плейлист выбранного источника и открывает его после локального сохранения. */
+    private fun createPlaylist(
+        source: HomeMusicSource,
+        title: String,
+        isPublic: Boolean,
+        onFinished: (success: Boolean) -> Unit,
+    ) {
+        viewLifecycleOwner.lifecycleScope.launch {
+            try {
+                when (source) {
+                    HomeMusicSource.Yandex -> when (
+                        val result = model.createPlaylist(title, isPublic)
+                    ) {
+                        is DataResult.Success -> {
+                            onFinished(true)
+                            openYandexPlaylist(result.value)
+                        }
+                        is DataResult.Failure -> {
+                            Log.w(TAG, "[createPlaylist] Яндекс не создал плейлист: ${result.error}")
+                            onFinished(false)
+                            showSnackbar(R.string.playlists_create_failed)
+                        }
+                    }
+
+                    HomeMusicSource.Local -> when (
+                        val result = withContext(Dispatchers.IO) {
+                            app.localMusicRepository.saveDwijPlaylist(
+                                name = title,
+                                trackIds = emptyList(),
+                            )
+                        }
+                    ) {
+                        is DataResult.Success -> {
+                            onFinished(true)
+                            openLocalPlaylist(result.value)
+                        }
+                        is DataResult.Failure -> {
+                            Log.w(TAG, "[createPlaylist] Локальный плейлист не создан: ${result.error}")
+                            onFinished(false)
+                            showSnackbar(R.string.playlists_create_failed)
+                        }
+                    }
+                }
+            } catch (error: CancellationException) {
+                throw error
+            } catch (error: Exception) {
+                Log.e(TAG, "[createPlaylist] Непредвиденная ошибка создания", error)
+                onFinished(false)
+                showSnackbar(R.string.playlists_create_failed)
+            }
         }
     }
 
@@ -420,14 +507,16 @@ class GridPlaylistFrag : Fragment() {
         private fun yandexItems(
             playlists: List<dYaPlaylist>,
             pickedTrackId: String?,
+            showCreateAction: Boolean,
             createTitle: String,
             likedTitle: String,
         ): List<PlaylistGridScreenItem> = buildList {
-            if (pickedTrackId == null) {
+            if (showCreateAction) {
                 add(
                     PlaylistGridScreenItem(
                         id = CREATE_ITEM_ID,
                         title = createTitle,
+                        artworkResId = R.drawable.ic_playlist_create,
                         isCreateAction = true,
                     ),
                 )
@@ -436,13 +525,25 @@ class GridPlaylistFrag : Fragment() {
                 .filterNot { pickedTrackId != null && it.kind == KIND_LIKED }
                 .forEach { playlist ->
                     val trackCount = playlist.trackCount
+                    val isLikedPlaylist = playlist.kind == KIND_LIKED
                     add(
                         PlaylistGridScreenItem(
                             id = playlist.getdId(),
-                            title = if (playlist.kind == KIND_LIKED) likedTitle else playlist.title,
+                            title = if (isLikedPlaylist) likedTitle else playlist.title,
                             details = "$trackCount трек${getNumericPostfix(trackCount)}\n" +
                                 formatDuration(playlist.durationMs ?: 0),
-                            shouldLoadCover = !playlist.ogImageUri.isNullOrBlank(),
+                            shouldLoadCover = !isLikedPlaylist &&
+                                !playlist.ogImageUri.isNullOrBlank(),
+                            fallbackCoverResId = if (isLikedPlaylist) {
+                                null
+                            } else {
+                                R.drawable.logo_lil
+                            },
+                            artworkResId = if (isLikedPlaylist) {
+                                R.drawable.ic_playlist_liked
+                            } else {
+                                null
+                            },
                             highlighted = pickedTrackId != null &&
                                 playlist.tracks.any { it.trackId == pickedTrackId },
                         ),
@@ -453,19 +554,36 @@ class GridPlaylistFrag : Fragment() {
         /** Преобразует локальные записи в те же плитки без сетевой обложки. */
         private fun localItems(
             playlists: List<LocalPlaylistEntity>,
+            showCreateAction: Boolean,
+            createTitle: String,
             dwijLabel: String,
             mediaStoreLabel: String,
             m3uLabel: String,
-        ): List<PlaylistGridScreenItem> = playlists.map { playlist ->
-            PlaylistGridScreenItem(
-                id = playlist.playlistId,
-                title = playlist.name,
-                details = when (playlist.origin) {
-                    LocalPlaylistOrigin.DWIJ.name -> dwijLabel
-                    LocalPlaylistOrigin.MEDIA_STORE.name -> mediaStoreLabel
-                    else -> m3uLabel
-                },
-            )
+        ): List<PlaylistGridScreenItem> = buildList {
+            if (showCreateAction) {
+                add(
+                    PlaylistGridScreenItem(
+                        id = CREATE_ITEM_ID,
+                        title = createTitle,
+                        artworkResId = R.drawable.ic_playlist_create,
+                        isCreateAction = true,
+                    ),
+                )
+            }
+            playlists.forEach { playlist ->
+                add(
+                    PlaylistGridScreenItem(
+                        id = playlist.playlistId,
+                        title = playlist.name,
+                        fallbackCoverResId = R.drawable.logo_lil,
+                        details = when (playlist.origin) {
+                            LocalPlaylistOrigin.DWIJ.name -> dwijLabel
+                            LocalPlaylistOrigin.MEDIA_STORE.name -> mediaStoreLabel
+                            else -> m3uLabel
+                        },
+                    ),
+                )
+            }
         }
     }
 }

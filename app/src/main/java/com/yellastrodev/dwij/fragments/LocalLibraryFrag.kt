@@ -19,6 +19,7 @@ import androidx.fragment.app.Fragment
 import androidx.lifecycle.lifecycleScope
 import androidx.navigation.fragment.findNavController
 import com.yellastrodev.dwij.LocalLibraryScreen
+import com.yellastrodev.dwij.LocalPlaylistObjectScreen
 import com.yellastrodev.dwij.R
 import com.yellastrodev.dwij.data.entities.LocalPlaylistEntity
 import com.yellastrodev.dwij.data.entities.LocalTrackEntity
@@ -62,11 +63,22 @@ class LocalLibraryFrag : Fragment() {
                     val playlist by repository.playlist(playlistId).collectAsState(initial = null)
                     val tracks by repository.playlistTracks(playlistId)
                         .collectAsState(initial = emptyList())
-                    LocalLibraryScreen(
-                        title = playlist?.name ?: getString(R.string.local_playlist_title),
-                        playlists = null,
+                    val playlistTitle =
+                        playlist?.name ?: getString(R.string.local_playlist_title)
+                    LocalPlaylistObjectScreen(
+                        title = playlistTitle,
                         tracks = tracks,
-                        onPlaylistClick = {},
+                        onBackClick = { findNavController().navigateUp() },
+                        onPlayClick = {
+                            playTracks(
+                                tracks = tracks,
+                                index = 0,
+                                tracklist = LocalTracklist(
+                                    id = playlistId,
+                                    name = playlistTitle,
+                                ),
+                            )
+                        },
                         loadTrackCover = ::loadTrackCover,
                         onTrackClick = { index, _ ->
                             playTracks(
@@ -74,7 +86,7 @@ class LocalLibraryFrag : Fragment() {
                                 index = index,
                                 tracklist = LocalTracklist(
                                     id = playlistId,
-                                    name = playlist?.name ?: getString(R.string.local_playlist_title),
+                                    name = playlistTitle,
                                 ),
                             )
                         },
