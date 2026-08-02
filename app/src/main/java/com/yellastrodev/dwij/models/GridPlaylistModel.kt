@@ -1,10 +1,9 @@
 package com.yellastrodev.dwij.models
 
-import android.util.Log
+import android.graphics.Bitmap
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.viewModelScope
-import com.yellastrodev.dwij.adapters.GridPlaylistAdapter
 import com.yellastrodev.dwij.data.DataError
 import com.yellastrodev.dwij.data.DataResult
 import com.yellastrodev.dwij.data.entities.dYaPlaylist
@@ -14,15 +13,17 @@ import com.yellastrodev.dwij.data.repo.CoverRepository
 import com.yellastrodev.dwij.data.repo.PlaylistRepository
 import com.yellastrodev.dwij.data.repo.TrackRepository
 import com.yellastrodev.yandexmusiclib.entities.CoverSize
-import kotlinx.coroutines.launch
+import kotlinx.coroutines.flow.SharingStarted
+import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.map
+import kotlinx.coroutines.flow.stateIn
 
+/** Хранит данные Compose-экрана плейлистов и выполняет операции над выбранным списком. */
 class GridPlaylistModel(
 	private val playlistRepo: PlaylistRepository,
 	private val trackRepo: TrackRepository,
 	private val coverRepo: CoverRepository
 ): ViewModel() {
-
-	val TAG = "GridPlaylistModel"
 
 	class Factory(
 		private val repo: PlaylistRepository,
@@ -40,33 +41,26 @@ class GridPlaylistModel(
 	}
 
 
-	val adapter: GridPlaylistAdapter by lazy {
-		GridPlaylistAdapter(this) { coverUrl ->
-			coverRepo.getCover(coverUrl, CoverSize.`100x100`) // suspend функция
+	/** Отсортированные плейлисты для Compose-сетки: лайки первыми, затем новые списки. */
+	val playlists: StateFlow<List<dYaPlaylist>> = playlistRepo.playlists
+		.map { playlists ->
+			playlists.sortedWith(
+				compareBy<dYaPlaylist> { it.kind != "liked" }
+					.thenByDescending { it.kind.toIntOrNull() ?: Int.MIN_VALUE }
+			)
 		}
-			.apply {
-			mScope = viewModelScope
-		}
-	}
+		.stateIn(
+			scope = viewModelScope,
+			started = SharingStarted.WhileSubscribed(5_000),
+			initialValue = emptyList(),
+		)
 
-	init {
-		viewModelScope.launch {
-			playlistRepo.playlists.collect {
-				if (it.isNotEmpty()) {
+	/** Загружает квадратную обложку плейлиста через общий кеш обложек. */
+	suspend fun getCover(playlist: iPlaylist): Bitmap =
+		coverRepo.getCover(playlist, CoverSize.`200x200`)
 
-					adapter.setList(ArrayList(it.sortedWith(
-						compareBy<dYaPlaylist> { it.kind != "liked" }
-							.thenByDescending { it.kind.toIntOrNull() ?: Int.MIN_VALUE }
-					)))
-					Log.d(TAG, "не пустой список плейлистов подан в адаптер")
-				}
-			}
-		}
-	}
-
-	suspend fun refreshPlaylists() {
-		playlistRepo.refreshPlaylists()
-	}
+	/** Принудительно обновляет Яндекс-плейлисты и возвращает ошибку вызывающему экрану. */
+	suspend fun refreshPlaylists(): DataResult<Unit> = playlistRepo.refreshPlaylists()
 
 	suspend fun addTrackToPlaylist(
 		playlist: iPlaylist,

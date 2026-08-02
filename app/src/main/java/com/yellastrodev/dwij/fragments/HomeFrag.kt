@@ -32,6 +32,7 @@ import com.yellastrodev.dwij.DWIJ_ACC_TOKEN
 import com.yellastrodev.dwij.HomeCompactPlayerUiState
 import com.yellastrodev.dwij.HomeScreen
 import com.yellastrodev.dwij.HomeMusicSource
+import com.yellastrodev.dwij.MusicSourceSelectionStore
 import com.yellastrodev.dwij.R
 import com.yellastrodev.dwij.TYPE
 import com.yellastrodev.dwij.VALUE
@@ -40,7 +41,6 @@ import com.yellastrodev.dwij.activities.MainActivity
 import com.yellastrodev.dwij.yApplication
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.flowOn
-import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import com.yellastrodev.yandexmusiclib.entities.CoverSize
@@ -48,7 +48,7 @@ import com.yellastrodev.dwij.data.repo.LocalMusicRepository
 import com.yellastrodev.dwij.work.LocalLibrarySyncWorker
 
 class HomeFrag: Fragment(R.layout.frag_home) {
-	private val selectedMusicSource = MutableStateFlow(HomeMusicSource.Yandex)
+	private val selectedMusicSource = MusicSourceSelectionStore.selectedSource
 	private var permissionRequestInFlight = false
 
 	private val audioPermissionLauncher = registerForActivityResult(
@@ -70,13 +70,19 @@ class HomeFrag: Fragment(R.layout.frag_home) {
 		}
 	}
 
+	/** Подхватывает источник, который пользователь мог поменять на дочернем экране. */
+	override fun onResume() {
+		super.onResume()
+		readSavedSource()
+	}
+
 
     @OptIn(UnstableApi::class)
     @SuppressLint("CheckResult")
 	/** Связывает домашний Compose-экран с навигацией и состоянием общего плеера Activity. */
 	override fun onViewCreated(view: View, savedInstanceState: Bundle?) {
 		super.onViewCreated(view, savedInstanceState)
-		selectedMusicSource.value = readSavedSource()
+		readSavedSource()
 		view.findViewById<ComposeView>(R.id.fr_home_player).apply {
 			setViewCompositionStrategy(ViewCompositionStrategy.DisposeOnViewTreeLifecycleDestroyed)
 			setContent {
@@ -193,31 +199,28 @@ class HomeFrag: Fragment(R.layout.frag_home) {
 			LocalLibrarySyncWorker.enqueueImmediate(requireContext().applicationContext)
 		} else if (!permissionRequestInFlight) {
 			permissionRequestInFlight = true
-			selectedMusicSource.value = HomeMusicSource.Local
+			MusicSourceSelectionStore.preview(HomeMusicSource.Local)
 			audioPermissionLauncher.launch(permissions)
 		}
 	}
 
 	private fun persistSource(source: HomeMusicSource) {
-		selectedMusicSource.value = source
-		PreferenceManager.getDefaultSharedPreferences(requireContext())
-			.edit()
-			.putString(PREF_MUSIC_SOURCE, source.name)
-			.apply()
+		MusicSourceSelectionStore.select(requireContext(), source)
 	}
 
 	private fun readSavedSource(): HomeMusicSource {
-		val saved = PreferenceManager.getDefaultSharedPreferences(requireContext())
-			.getString(PREF_MUSIC_SOURCE, HomeMusicSource.Yandex.name)
-		val source = runCatching { HomeMusicSource.valueOf(saved.orEmpty()) }
-			.getOrDefault(HomeMusicSource.Yandex)
-		return if (
+		val source = MusicSourceSelectionStore.restore(requireContext())
+		val resolved = if (
 			source == HomeMusicSource.Local &&
 			ContextCompat.checkSelfPermission(
 				requireContext(),
 				LocalMusicRepository.requiredAudioPermission(),
 			) != PackageManager.PERMISSION_GRANTED
 		) HomeMusicSource.Yandex else source
+		if (resolved != source) {
+			MusicSourceSelectionStore.select(requireContext(), resolved)
+		}
+		return resolved
 	}
 
 	private fun openLocalLibrary(mode: String) {
@@ -278,6 +281,5 @@ class HomeFrag: Fragment(R.layout.frag_home) {
 
 	private companion object {
 		const val TAG = "HomeFrag"
-		const val PREF_MUSIC_SOURCE = "home_music_source"
 	}
 }

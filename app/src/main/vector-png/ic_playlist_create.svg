@@ -1,0 +1,18 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" width="64" height="64" viewBox="0 0 64 64">
+  <g fill="none" stroke-linecap="square" stroke-linejoin="miter">
+    <path d="M12 13H45V49H12Z" stroke="#00dfff" stroke-width="3" opacity="0.48" transform="translate(-1 1)"/>
+    <path d="M12 13H45V49H12Z" stroke="#ff00bf" stroke-width="3" opacity="0.52" transform="translate(2 -1)"/>
+    <path d="M12 13H45V49H12Z" stroke="#f8fbff" stroke-width="2.4" opacity="0.92"/>
+
+    <path d="M18 22H36M18 29H32M18 36H29" stroke="#f8fbff" stroke-width="3"/>
+    <path d="M17 23H27" stroke="#00dfff" stroke-width="1.4" opacity="0.9"/>
+    <path d="M29 28H38" stroke="#ff00bf" stroke-width="1.4" opacity="0.9"/>
+
+    <path d="M44 35V55M34 45H54" stroke="#00dfff" stroke-width="7" opacity="0.44" transform="translate(-1 1)"/>
+    <path d="M44 35V55M34 45H54" stroke="#ff00bf" stroke-width="7" opacity="0.5" transform="translate(2 -1)"/>
+    <path d="M44 35V55M34 45H54" stroke="#ffffff" stroke-width="4.5"/>
+  </g>
+  <path d="M7 17H18V19H7ZM39 10H51V12H39ZM8 45H20V47H8ZM48 51H59V53H48Z" fill="#ff00bf" opacity="0.75"/>
+  <path d="M5 23H14V24.5H5ZM42 17H57V18.5H42ZM27 53H39V55H27Z" fill="#00dfff" opacity="0.78"/>
+</svg>

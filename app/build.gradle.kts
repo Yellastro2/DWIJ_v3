@@ -23,6 +23,8 @@ val rasterizedSvgAssets = mapOf(
     "dvizh_album_thumb_glitch_frame_contour" to "74x74",
     "bg_home_source_chip" to "152x56",
     "bg_home_source_chip_selected" to "152x56",
+    "ic_playlist_create" to "64x64",
+    "ic_playlist_liked" to "64x64",
 )
 
 val rasterizedSvgDensities = mapOf(

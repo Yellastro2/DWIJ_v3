@@ -288,7 +288,7 @@ fun HomeScreen(
                             )
                         }
                     }
-                    HomeSourceSelector(
+                    MusicSourceSelector(
                         selectedSource = selectedSource,
                         onSourceSelected = onSourceSelected,
                     )
@@ -952,7 +952,7 @@ private fun homeSourceOptions(): List<HomeSourceOption> {
  * после свайпа и коротко глитч-мерцает выбранной растровой рамкой.
  */
 @Composable
-private fun HomeSourceSelector(
+fun MusicSourceSelector(
     selectedSource: HomeMusicSource,
     onSourceSelected: (HomeMusicSource) -> Unit,
     modifier: Modifier = Modifier,
@@ -964,6 +964,7 @@ private fun HomeSourceSelector(
         )
     }
     var requestedIndex by remember { mutableStateOf<Int?>(null) }
+    var scrollWasInProgress by remember { mutableStateOf(false) }
     var selectedFrameVisible by remember { mutableStateOf(true) }
     val listState = rememberLazyListState()
     val coroutineScope = rememberCoroutineScope()
@@ -1004,11 +1005,17 @@ private fun HomeSourceSelector(
 
     val isScrollInProgress = listState.isScrollInProgress
     LaunchedEffect(isScrollInProgress, options.size, requestedIndex, selectedSource) {
-        if (!isScrollInProgress && options.isNotEmpty()) {
+        if (isScrollInProgress) {
+            scrollWasInProgress = true
+            return@LaunchedEffect
+        }
+        if (options.isNotEmpty()) {
             requestedIndex?.let { targetIndex ->
                 selectedIndex = targetIndex.coerceIn(options.indices)
                 return@LaunchedEffect
             }
+            if (!scrollWasInProgress) return@LaunchedEffect
+            scrollWasInProgress = false
             val layoutInfo = listState.layoutInfo
             val viewportCenter =
                 (layoutInfo.viewportStartOffset + layoutInfo.viewportEndOffset) / 2
