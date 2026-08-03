@@ -1,4 +1,15 @@
 import com.yellastrodev.build.RasterizeSvgToPngTask
+import java.util.Properties
+
+val localProperties = Properties().apply {
+    val propertiesFile = rootProject.file("local.properties")
+    if (propertiesFile.isFile) {
+        propertiesFile.inputStream().use { load(it) }
+    }
+}
+
+fun buildConfigString(value: String): String =
+    "\"${value.replace("\\", "\\\\").replace("\"", "\\\"")}\""
 
 plugins {
     alias(libs.plugins.android.application)
@@ -57,6 +68,16 @@ android {
         versionName = "1.0"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
+        buildConfigField(
+            "String",
+            "YANDEX_OAUTH_CLIENT_ID",
+            buildConfigString(localProperties.getProperty("YANDEX_OAUTH_CLIENT_ID", "")),
+        )
+        buildConfigField(
+            "String",
+            "YANDEX_OAUTH_CLIENT_SECRET",
+            buildConfigString(localProperties.getProperty("YANDEX_OAUTH_CLIENT_SECRET", "")),
+        )
     }
 
     buildTypes {
@@ -77,6 +98,7 @@ android {
     }
     buildFeatures {
         compose = true
+        buildConfig = true
     }
 }
 

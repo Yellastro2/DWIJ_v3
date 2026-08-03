@@ -250,7 +250,7 @@ fun ObjectRoute(
                 Log.d(TAG, "[shareObject] Поделиться объектом пока не подключено")
             },
             onWaveClick = {
-                coroutineScope.launch { model.playWave() }
+                model.requestWave()
                 navController.navigate(DwijDestination.PLAYER)
             },
         )

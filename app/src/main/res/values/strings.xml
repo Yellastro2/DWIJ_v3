@@ -73,6 +73,8 @@
     <string name="player_current_queue">Текущая очередь</string>
     <string name="player_now_playing">СЕЙЧАС ИГРАЕТ · %1$d</string>
     <string name="player_no_track">Пока ничего не играет</string>
+    <string name="player_wave_loading_title">Загружаю волну</string>
+    <string name="player_wave_loading_artist">Подбираю первые треки…</string>
     <string name="player_source_yandex">ЯНДЕКС МУЗЫКА</string>
     <string name="player_source_local">ЛОКАЛЬНАЯ МУЗЫКА</string>
     <string name="player_multiple_sources_active_content_description">У трека есть дубли или возможное совпадение</string>
@@ -149,4 +151,5 @@
     <string name="search_result_second_subtitle">Движ · электронная подборка</string>
     <string name="search_result_third_title">Тихий район</string>
     <string name="search_result_third_subtitle">Движ · спокойный микс</string>
+    <string name="player_like_failed">Не удалось изменить лайк</string>
 </resources>

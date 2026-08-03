@@ -104,6 +104,7 @@ data class FullPlayerUiState(
     val canLike: Boolean,
     val isLiked: Boolean,
     val playlistTitles: List<String>,
+    val isWaveLoading: Boolean = false,
 )
 
 /**
@@ -176,6 +177,7 @@ fun FullPlayerScreen(
                 FullPlayerCover(
                     trackId = state.trackId,
                     cover = state.cover,
+                    isWaveLoading = state.isWaveLoading,
                     canLike = state.canLike,
                     isLiked = state.isLiked,
                     onLikeClick = onLikeClick,
@@ -201,7 +203,7 @@ fun FullPlayerScreen(
                 }
             }
             FullPlayerControls(
-                enabled = state.trackId != null,
+                enabled = state.trackId != null && !state.isWaveLoading,
                 isPlaying = state.isPlaying,
                 isShuffle = state.isShuffle,
                 isRepeatAll = state.isRepeatAll,
@@ -334,6 +336,7 @@ private fun FullPlayerTopBar(
 private fun FullPlayerCover(
     trackId: String?,
     cover: ImageBitmap?,
+    isWaveLoading: Boolean,
     canLike: Boolean,
     isLiked: Boolean,
     onLikeClick: () -> Unit,
@@ -408,6 +411,13 @@ private fun FullPlayerCover(
                         contentDescription = null,
                         modifier = Modifier.size(116.dp),
                     )
+                    if (isWaveLoading) {
+                        androidx.compose.material3.CircularProgressIndicator(
+                            color = PlayerPink,
+                            strokeWidth = 3.dp,
+                            modifier = Modifier.size(54.dp),
+                        )
+                    }
                 }
             }
             GlitchCoverFrame(modifier = Modifier.fillMaxSize())

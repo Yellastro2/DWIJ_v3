@@ -9,6 +9,8 @@ import androidx.core.content.ContextCompat
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.ViewModelProvider
 import com.yellastrodev.dwij.R
+import com.yellastrodev.dwij.data.DataError
+import com.yellastrodev.dwij.data.DataResult
 import com.yellastrodev.dwij.data.entities.dYaLikeTracklist
 import com.yellastrodev.dwij.data.repo.CoverRepository
 import com.yellastrodev.dwij.data.repo.PlayerRepository
@@ -158,11 +160,13 @@ class PlayerModel(
         return likeList?.tracks?.any { it.trackId == yandexTrackId } ?: false
     }
 
-    suspend fun likeTrack() {
-        track.value?.yandexInstances?.firstOrNull()?.track?.id?.let { id ->
-            val shouldBeLiked = !isTrackLiked()
-            playlistRepo.setTrackLiked(id, shouldBeLiked)
-        }
+    /** Меняет лайк текущего Яндекс-инстанса и возвращает результат вплоть до UI. */
+    suspend fun likeTrack(): DataResult<Unit> {
+        val trackId = track.value?.yandexInstances?.firstOrNull()?.track?.id
+            ?: return DataResult.Failure(
+                DataError.InvalidData("У текущей песни отсутствует Яндекс-инстанс")
+            )
+        return playlistRepo.setTrackLiked(trackId, liked = !isTrackLiked())
     }
 
 

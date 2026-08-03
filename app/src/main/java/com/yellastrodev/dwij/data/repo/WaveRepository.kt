@@ -16,6 +16,11 @@ import kotlinx.coroutines.withContext
 import kotlinx.coroutines.flow.launchIn
 import kotlinx.coroutines.flow.onEach
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.asStateFlow
+import java.util.concurrent.atomic.AtomicBoolean
+import kotlin.coroutines.cancellation.CancellationException
 
 class WaveRepository(
     val remote: WaveRemoteSource,
@@ -28,6 +33,11 @@ class WaveRepository(
     val TAG = "WaveRepository"
 
     private var curentWave: dYaWave? = null
+    private val loadingGate = AtomicBoolean(false)
+    private val mutableIsLoading = MutableStateFlow(false)
+
+    /** Общий признак загрузки первой пачки волны для UI и защиты от повторных запросов. */
+    val isLoading: StateFlow<Boolean> = mutableIsLoading.asStateFlow()
 
     suspend fun getWave(dTracklist: dTracklist?): List<Song> {
         return when (
@@ -61,23 +71,81 @@ class WaveRepository(
     // Храним job, чтобы можно было отменить снаружи
     private var observeJob: Job? = null
 
+    /**
+     * Запускает волну в application-scope и сразу возвращает управление UI.
+     *
+     * В отличие от coroutine scope экрана, [scope] не отменяется при переходе в полный плеер.
+     * Возвращает `false`, если первая пачка уже загружается.
+     */
+    fun requestWave(dtrackList: dTracklist? = null): Boolean {
+        if (!tryStartLoading()) return false
+        scope.launch {
+            try {
+                loadAndPlayWave(dtrackList)
+            } catch (error: CancellationException) {
+                throw error
+            } catch (error: Exception) {
+                Log.e(TAG, "[requestWave] Не удалось запустить волну", error)
+            } finally {
+                finishLoading()
+            }
+        }
+        return true
+    }
+
+    /**
+     * Загружает и запускает первую пачку в coroutine вызывающего слоя.
+     *
+     * Этот вариант нужен автоматическому продолжению волны в [PlayerRepository].
+     */
     suspend fun playWave(dtrackList: dTracklist? = null) {
-        Log.d(TAG, "playWave: ${dtrackList?.getWaveId()?: "own"}")
+        if (!tryStartLoading()) return
+        try {
+            loadAndPlayWave(dtrackList)
+        } finally {
+            finishLoading()
+        }
+    }
+
+    /** Выполняет сетевую загрузку и публикует подготовленную очередь в общем репозитории плеера. */
+    private suspend fun loadAndPlayWave(dtrackList: dTracklist?) {
+        Log.d(TAG, "[loadAndPlayWave] Запрашиваем ${dtrackList?.getWaveId() ?: "свою"} волну")
         val waveList = getWave(dtrackList)
-        if (waveList.isEmpty())
+        if (waveList.isEmpty()) {
+            Log.w(TAG, "[loadAndPlayWave] Сервер не вернул треки волны")
             return
+        }
         withContext(Dispatchers.Main) {
             playerRepository.playQueue(
                 waveList,
                 0,
-                curentWave!!)
+                requireNotNull(curentWave),
+            )
         }
+        Log.d(TAG, "[loadAndPlayWave] Очередь волны запущена: треков=${waveList.size}")
         observePlayerState()
         scope.launch {
             playerRepository.isShuffleBlock
-                .first { isBlocked -> !isBlocked } // ждём пока станет false
+                .first { isBlocked -> !isBlocked }
             stopObserving()
         }
+    }
+
+    /** Атомарно занимает единственный слот загрузки волны и публикует его UI. */
+    private fun tryStartLoading(): Boolean {
+        val accepted = loadingGate.compareAndSet(false, true)
+        if (accepted) {
+            mutableIsLoading.value = true
+        } else {
+            Log.d(TAG, "[tryStartLoading] Загрузка волны уже идёт")
+        }
+        return accepted
+    }
+
+    /** Освобождает слот только после установки очереди или полного завершения ошибки. */
+    private fun finishLoading() {
+        mutableIsLoading.value = false
+        loadingGate.set(false)
     }
 
     private var lastTrackId: String? = null

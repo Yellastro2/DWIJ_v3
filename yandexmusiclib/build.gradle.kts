@@ -1,65 +1,20 @@
-import java.util.Properties
+import org.jetbrains.kotlin.gradle.dsl.JvmTarget
 
 plugins {
-    id("com.android.library")
-    kotlin("android")
+    kotlin("jvm")
     kotlin("plugin.serialization") version "2.0.21"
 }
 
-val moduleLocalProperties = Properties().apply {
-    val localPropertiesFile = project.file("local.properties")
-    if (localPropertiesFile.isFile) {
-        localPropertiesFile.inputStream().use { load(it) }
+kotlin {
+    compilerOptions {
+        jvmTarget.set(JvmTarget.JVM_11)
     }
 }
-
-fun buildConfigString(value: String): String =
-    "\"${value.replace("\\", "\\\\").replace("\"", "\\\"")}\""
 
 java {
     sourceCompatibility = JavaVersion.VERSION_11
     targetCompatibility = JavaVersion.VERSION_11
 }
-
-android {
-    namespace = "com.yellastrodev.yandexmusiclib"
-    compileSdk = 34
-    defaultConfig {
-        minSdk = 26
-        buildConfigField(
-            "String",
-            "YANDEX_OAUTH_CLIENT_ID",
-            buildConfigString(moduleLocalProperties.getProperty("YANDEX_OAUTH_CLIENT_ID", ""))
-        )
-        buildConfigField(
-            "String",
-            "YANDEX_OAUTH_CLIENT_SECRET",
-            buildConfigString(moduleLocalProperties.getProperty("YANDEX_OAUTH_CLIENT_SECRET", ""))
-        )
-    }
-
-    buildFeatures {
-        buildConfig = true
-    }
-
-    compileOptions {
-        sourceCompatibility = JavaVersion.VERSION_11
-        targetCompatibility = JavaVersion.VERSION_11
-    }
-
-    packagingOptions {
-        resources {
-            excludes += "/META-INF/{AL2.0,LGPL2.1}"
-            excludes += "META-INF/*"
-        }
-    }
-
-    kotlinOptions {
-        jvmTarget = "11"
-    }
-}
-
-
 
 dependencies {
     implementation("org.jetbrains.kotlinx:kotlinx-coroutines-core:1.8.1")

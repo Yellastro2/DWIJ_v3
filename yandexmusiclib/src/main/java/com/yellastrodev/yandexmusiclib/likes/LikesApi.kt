@@ -68,9 +68,9 @@ internal class LikesApi(
                 )
             )
         ) {
-            is YamResult.Success -> YamResponseDecoder.decodeBody(
+            is YamResult.Success -> YamResponseDecoder.decodeResult(
                 response = response.value,
-                serializer = LikeActionResult.serializer()
+                resultSerializer = LikeActionResult.serializer()
             )
             is YamResult.Failure -> response
         }

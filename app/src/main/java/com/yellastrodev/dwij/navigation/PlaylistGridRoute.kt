@@ -88,6 +88,9 @@ fun PlaylistGridRoute(
         localPlaylistSummaries.map(LocalPlaylistSummary::playlist)
     }
     val isAddTrackMode = trackToAdd != null
+    // Добавление трека в Яндекс-плейлист не имеет локального аналога. Не меняем глобальный
+    // источник пользователя, но для picker-а всегда показываем только Яндекс-плейлисты.
+    val screenSource = if (isAddTrackMode) HomeMusicSource.Yandex else musicSource
     var permissionRequestInFlight by remember { mutableStateOf(false) }
     var pickedTrack by remember(trackToAdd) { mutableStateOf<dYaTrack?>(null) }
     var isRefreshing by remember { mutableStateOf(false) }
@@ -210,7 +213,7 @@ fun PlaylistGridRoute(
             )
         }
     }
-    val screenItems = when (musicSource) {
+    val screenItems = when (screenSource) {
         HomeMusicSource.Yandex -> yandexScreenItems
         HomeMusicSource.Local -> localScreenItems
     }
@@ -291,13 +294,14 @@ fun PlaylistGridRoute(
                 },
             ),
             items = screenItems,
-            selectedSource = musicSource,
+            selectedSource = screenSource,
             onSourceSelected = ::selectMusicSource,
+            showSourceSelector = !isAddTrackMode,
             onBackClick = { navController.popBackStack() },
             onItemClick = { item ->
                 if (item.isCreateAction) {
-                    createDialogSource = musicSource
-                } else if (musicSource == HomeMusicSource.Local) {
+                    createDialogSource = screenSource
+                } else if (screenSource == HomeMusicSource.Local) {
                     if (isAddTrackMode) {
                         showSnackbar(R.string.playlists_local_add_unavailable)
                     } else {
@@ -329,7 +333,7 @@ fun PlaylistGridRoute(
                 }
             },
             onItemLongClick = { item ->
-                if (musicSource == HomeMusicSource.Yandex && !isAddTrackMode) {
+                if (screenSource == HomeMusicSource.Yandex && !isAddTrackMode) {
                     deleteInfoPlaylist = yandexPlaylists.firstOrNull {
                         it.getdId() == item.id
                     }
@@ -357,22 +361,22 @@ fun PlaylistGridRoute(
                 }
             },
             emptyMessage = stringResource(
-                if (musicSource == HomeMusicSource.Local) {
+                if (screenSource == HomeMusicSource.Local) {
                     R.string.local_playlists_empty
                 } else {
                     R.string.playlists_empty_yandex
                 },
             ),
-            isLoading = when (musicSource) {
+            isLoading = when (screenSource) {
                 HomeMusicSource.Yandex -> !yandexInitialLoadComplete
                 HomeMusicSource.Local -> localPlaylistSummarySnapshot == null ||
                     (localPlaylistSummarySnapshot.isNullOrEmpty() && isLocalSynchronizing)
             },
             isRefreshing = isRefreshing ||
-                (musicSource == HomeMusicSource.Local && isLocalSynchronizing),
+                (screenSource == HomeMusicSource.Local && isLocalSynchronizing),
             onRefresh = {
                 if (!isRefreshing) {
-                    if (musicSource == HomeMusicSource.Local) {
+                    if (screenSource == HomeMusicSource.Local) {
                         LocalLibrarySyncWorker.enqueueImmediate(context.applicationContext)
                     } else {
                         isRefreshing = true

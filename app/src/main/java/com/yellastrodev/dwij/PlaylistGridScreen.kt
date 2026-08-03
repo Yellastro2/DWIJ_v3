@@ -71,7 +71,7 @@ data class PlaylistGridScreenItem(
 )
 
 /**
- * Экран плейлистов с общим переключателем источника и квадратной сеткой в три колонки.
+ * Экран плейлистов с опциональным переключателем источника и квадратной сеткой в три колонки.
  *
  * Экран не знает о репозиториях и Navigation: все данные и действия приходят параметрами,
  * поэтому его можно отдельно превьюить и постепенно расширять новыми состояниями.
@@ -83,6 +83,7 @@ fun PlaylistGridScreen(
     items: List<PlaylistGridScreenItem>,
     selectedSource: HomeMusicSource,
     onSourceSelected: (HomeMusicSource) -> Unit,
+    showSourceSelector: Boolean = true,
     onBackClick: () -> Unit,
     onItemClick: (PlaylistGridScreenItem) -> Unit,
     onItemLongClick: (PlaylistGridScreenItem) -> Unit,
@@ -144,21 +145,23 @@ fun PlaylistGridScreen(
                 title = title,
                 onBackClick = onBackClick,
             )
-            MusicSourceSelector(
-                selectedSource = selectedSource,
-                onSourceSelected = { source ->
-                    if (source != selectedSource) {
-                        requestedSource = source
-                        sourceSwitchStartedNanos = SystemClock.elapsedRealtimeNanos()
-                        Log.d(
-                            PLAYLIST_PERFORMANCE_TAG,
-                            "[sourceSwitchClick] Запрошен источник=$source",
-                        )
-                    }
-                    onSourceSelected(source)
-                },
-                modifier = Modifier.fillMaxWidth(),
-            )
+            if (showSourceSelector) {
+                MusicSourceSelector(
+                    selectedSource = selectedSource,
+                    onSourceSelected = { source ->
+                        if (source != selectedSource) {
+                            requestedSource = source
+                            sourceSwitchStartedNanos = SystemClock.elapsedRealtimeNanos()
+                            Log.d(
+                                PLAYLIST_PERFORMANCE_TAG,
+                                "[sourceSwitchClick] Запрошен источник=$source",
+                            )
+                        }
+                        onSourceSelected(source)
+                    },
+                    modifier = Modifier.fillMaxWidth(),
+                )
+            }
 
             PullToRefreshBox(
                 isRefreshing = isRefreshing,

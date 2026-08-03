@@ -21,6 +21,7 @@ import com.yellastrodev.dwij.R
 import com.yellastrodev.dwij.TrackListItemUiModel
 import com.yellastrodev.dwij.TrackSourceIndicator
 import com.yellastrodev.dwij.TrackSourceOptionUiModel
+import com.yellastrodev.dwij.data.DataResult
 import com.yellastrodev.dwij.data.entities.MusicSource
 import com.yellastrodev.dwij.data.entities.Song
 import com.yellastrodev.dwij.data.entities.SongMatchCandidateEntity
@@ -53,6 +54,7 @@ fun PlayerRoute(
     val playedTracklist by playerModel.playdTracklist.collectAsState()
     val shuffleBlocked by playerModel.shuffleBlock.collectAsState()
     val allPlaylists by playerModel.playlistRepo.playlists.collectAsState()
+    val isWaveLoading by application.waveRepository.isLoading.collectAsState()
     val coroutineScope = rememberCoroutineScope()
     val uiMessages = remember { MutableSharedFlow<String>(extraBufferCapacity = 1) }
     var cover by remember(track?.id, playbackTrack?.instanceId) {
@@ -133,6 +135,9 @@ fun PlayerRoute(
     }
     val fallbackQueueTitle = stringResource(R.string.player_current_queue)
     val unknownArtist = stringResource(R.string.home_player_unknown_artist)
+    val waveLoadingTitle = stringResource(R.string.player_wave_loading_title)
+    val waveLoadingArtist = stringResource(R.string.player_wave_loading_artist)
+    val showWaveLoadingPlaceholder = isWaveLoading && currentTrackId == null
     val sourceEntries = remember(track, candidateSongs) {
         (listOfNotNull(track) + candidateSongs)
             .distinctBy(Song::id)
@@ -172,14 +177,26 @@ fun PlayerRoute(
     FullPlayerScreen(
         state = FullPlayerUiState(
             trackId = currentTrackId,
-            queueTitle = playedTracklist?.getDTitle()?.takeIf(String::isNotBlank)
-                ?: fallbackQueueTitle,
+            queueTitle = if (showWaveLoadingPlaceholder) {
+                waveLoadingTitle
+            } else {
+                playedTracklist?.getDTitle()?.takeIf(String::isNotBlank)
+                    ?: fallbackQueueTitle
+            },
             queuePosition = (playerState.currentIndex + 1).coerceAtLeast(1),
-            title = track?.title ?: stringResource(R.string.player_no_track),
-            artist = track?.artistNames
-                ?.joinToString(", ")
-                ?.takeIf(String::isNotBlank)
-                ?: unknownArtist,
+            title = if (showWaveLoadingPlaceholder) {
+                waveLoadingTitle
+            } else {
+                track?.title ?: stringResource(R.string.player_no_track)
+            },
+            artist = if (showWaveLoadingPlaceholder) {
+                waveLoadingArtist
+            } else {
+                track?.artistNames
+                    ?.joinToString(", ")
+                    ?.takeIf(String::isNotBlank)
+                    ?: unknownArtist
+            },
             album = track?.albumTitle?.takeIf(String::isNotBlank),
             sourceLabel = sourceLabel,
             hasMultipleSources = (track?.instances?.size ?: 0) > 1,
@@ -194,6 +211,7 @@ fun PlayerRoute(
             canLike = yandexTrack != null,
             isLiked = isLiked,
             playlistTitles = containingPlaylistTitles,
+            isWaveLoading = showWaveLoadingPlaceholder,
         ),
         playerEvents = playerModel.playerEvent,
         uiMessages = uiMessages,
@@ -207,7 +225,16 @@ fun PlayerRoute(
         onLikeClick = {
             coroutineScope.launch {
                 try {
-                    playerModel.likeTrack()
+                    when (val result = playerModel.likeTrack()) {
+                        is DataResult.Success -> Log.d(
+                            TAG,
+                            "[likeTrack] Лайк текущего трека успешно изменён",
+                        )
+                        is DataResult.Failure -> {
+                            Log.e(TAG, "[likeTrack] Лайк не изменён: ${result.error}")
+                            uiMessages.emit(context.getString(R.string.player_like_failed))
+                        }
+                    }
                 } catch (error: CancellationException) {
                     throw error
                 } catch (error: Exception) {

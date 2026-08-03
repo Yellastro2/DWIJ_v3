@@ -299,9 +299,8 @@ class TracklistModel(
     }
 
 
-    suspend fun playWave() {
-        waveRepository.playWave(_playlist.value)
-    }
+    /** Запускает волну объекта в application-scope, чтобы переход на плеер не отменил запрос. */
+    fun requestWave(): Boolean = waveRepository.requestWave(_playlist.value)
 
     override fun onCleared() {
         tracksJob?.cancel()

@@ -1,6 +1,5 @@
 package com.yellastrodev.yandexmusiclib
 
-import android.util.Log
 import com.yellastrodev.yandexmusiclib.account.AccountApi
 import com.yellastrodev.yandexmusiclib.account.AccountStatus
 import com.yellastrodev.yandexmusiclib.covers.CoverApi

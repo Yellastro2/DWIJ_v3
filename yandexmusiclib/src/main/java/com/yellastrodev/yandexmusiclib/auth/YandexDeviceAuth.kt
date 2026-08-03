@@ -1,7 +1,5 @@
 package com.yellastrodev.yandexmusiclib.auth
 
-import android.util.Log
-import com.yellastrodev.yandexmusiclib.BuildConfig
 import com.yellastrodev.yandexmusiclib.YamLogger
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.currentCoroutineContext
@@ -10,7 +8,6 @@ import kotlinx.coroutines.ensureActive
 import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.SerializationException
-import kotlinx.serialization.decodeFromString
 import kotlinx.serialization.json.Json
 import java.io.IOException
 import java.security.SecureRandom
@@ -24,21 +21,6 @@ interface DeviceAuthLogger {
     fun error(message: String, cause: Throwable? = null)
 }
 
-object AndroidDeviceAuthLogger : DeviceAuthLogger {
-    private const val TAG = "YandexDeviceAuth"
-
-    override fun debug(message: String) {
-        Log.d(TAG, message)
-    }
-
-    override fun warning(message: String) {
-        Log.w(TAG, message)
-    }
-
-    override fun error(message: String, cause: Throwable?) {
-        Log.e(TAG, message, cause)
-    }
-}
 
 /**
  * OAuth Device Flow, совместимый с поведением локальной Python SDK.
@@ -54,15 +36,14 @@ class YandexDeviceAuth internal constructor(
     private val transport: DeviceAuthTransport,
     private val nowMillis: () -> Long,
     private val delayMillis: suspend (Long) -> Unit,
-    private val deviceIdFactory: () -> String
+    private val deviceIdFactory: () -> String,
 ) {
 
-    @JvmOverloads
     constructor(
-        clientId: String = BuildConfig.YANDEX_OAUTH_CLIENT_ID,
-        clientSecret: String = BuildConfig.YANDEX_OAUTH_CLIENT_SECRET,
+        clientId: String,
+        clientSecret: String,
+        logger: YamLogger,
         deviceName: String = DEFAULT_DEVICE_NAME,
-        logger: YamLogger
     ) : this(
         clientId = clientId,
         clientSecret = clientSecret,
@@ -71,8 +52,9 @@ class YandexDeviceAuth internal constructor(
         transport = HttpUrlConnectionDeviceAuthTransport(),
         nowMillis = { System.nanoTime() / NANOS_IN_MILLISECOND },
         delayMillis = { delay(it) },
-        deviceIdFactory = { randomDeviceId() }
+        deviceIdFactory = { randomDeviceId() },
     )
+
 
     val TAG = "YandexDeviceAuth"
 

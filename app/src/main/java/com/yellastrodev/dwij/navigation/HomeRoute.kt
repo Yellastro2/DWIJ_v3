@@ -35,7 +35,6 @@ import com.yellastrodev.dwij.yApplication
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.flowOn
 import kotlinx.coroutines.launch
-import kotlinx.coroutines.withContext
 
 /**
  * Связывает домашний экран с общим плеером, разрешением локальной медиатеки и Compose-навигацией.
@@ -140,15 +139,8 @@ fun HomeRoute(
             }
         },
         onWaveClick = {
-            coroutineScope.launch {
-                runCatching {
-                    withContext(Dispatchers.IO) { application.waveRepository.playWave() }
-                }.onSuccess {
-                    navController.navigate(DwijDestination.PLAYER)
-                }.onFailure { error ->
-                    Log.e(TAG, "[playWave] Не удалось запустить волну", error)
-                }
-            }
+            application.waveRepository.requestWave()
+            navController.navigate(DwijDestination.PLAYER)
         },
         onAllTracksClick = {},
         onCatalogClick = { navController.navigate(DwijDestination.PLAYLISTS) },

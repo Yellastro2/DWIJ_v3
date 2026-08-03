@@ -91,13 +91,24 @@ class PlaylistRepository(
         }
 
         val diff = diffPlaylists(_playlistMap.value, remoteData)
-        if (diff.isNotEmpty()) {
+        val incompletePlaylistUuids = remoteData
+            .asSequence()
+            .filter { playlist -> playlist.kind != KIND_LIKED }
+            .filter { remotePlaylist ->
+                val localPlaylist = _playlistMap.value[remotePlaylist.playlistUuid]
+                localPlaylist != null && localPlaylist.tracks.size != remotePlaylist.trackCount
+            }
+            .map(dYaPlaylist::playlistUuid)
+            .toList()
+        val playlistsToRefresh = (diff.added + diff.changed + incompletePlaylistUuids).distinct()
+        if (playlistsToRefresh.isNotEmpty() || diff.removed.isNotEmpty()) {
             Log.d(
                 TAG,
                 "[refreshPlaylists] Изменения: added=${diff.added.size}, " +
-                    "changed=${diff.changed.size}, removed=${diff.removed.size}"
+                    "changed=${diff.changed.size}, removed=${diff.removed.size}, " +
+                    "неполных=${incompletePlaylistUuids.size}"
             )
-            for (uuid in diff.added + diff.changed) {
+            for (uuid in playlistsToRefresh) {
                 var playlist = remoteData.first { it.playlistUuid == uuid }
                 var snapshot: PlaylistSnapshot? = null
                 if (playlist.kind != KIND_LIKED) {
@@ -205,15 +216,25 @@ class PlaylistRepository(
         }
         return when (val result = remote.addTrackToPlaylist(playlist, track)) {
             is DataResult.Success -> {
-                when (val saveResult = savePlaylist(result.value)) {
-                    is DataResult.Success -> Unit
-                    is DataResult.Failure -> return saveResult
+                when (val refreshResult = refreshAfterPlaylistMutation(result.value)) {
+                    is DataResult.Success -> {
+                        Log.d(TAG, "[addTrackToPlaylist] Трек $trackId добавлен, снимок обновлён")
+                        DataResult.Success(Unit)
+                    }
+                    is DataResult.Failure -> {
+                        Log.e(
+                            TAG,
+                            "[addTrackToPlaylist] Трек добавлен на Яндексе, " +
+                                "но новый снимок не загружен: ${refreshResult.error}",
+                        )
+                        refreshResult
+                    }
                 }
-                trackRepo.refreshTrackLocaly(trackId)
-                Log.d(TAG, "[addTrackToPlaylist] Трек $trackId добавлен")
-                DataResult.Success(Unit)
             }
-            is DataResult.Failure -> result
+            is DataResult.Failure -> {
+                Log.e(TAG, "[addTrackToPlaylist] Добавление отклонено: ${result.error}")
+                result
+            }
         }
     }
 
@@ -232,19 +253,43 @@ class PlaylistRepository(
             )
         ) {
             is DataResult.Success -> {
-                when (val saveResult = savePlaylist(result.value)) {
-                    is DataResult.Success -> Unit
-                    is DataResult.Failure -> return saveResult
+                when (val refreshResult = refreshAfterPlaylistMutation(result.value)) {
+                    is DataResult.Success -> {
+                        Log.d(
+                            TAG,
+                            "[removeTrackFromPlaylist] Трек ${track.title} удалён " +
+                                "из ${playlist.title}, снимок обновлён",
+                        )
+                        DataResult.Success(Unit)
+                    }
+                    is DataResult.Failure -> {
+                        Log.e(
+                            TAG,
+                            "[removeTrackFromPlaylist] Трек удалён на Яндексе, " +
+                                "но новый снимок не загружен: ${refreshResult.error}",
+                        )
+                        refreshResult
+                    }
                 }
-                trackRepo.refreshTrackLocaly(track.id)
-                Log.d(
-                    TAG,
-                    "[removeTrackFromPlaylist] Трек ${track.title} удалён " +
-                        "из ${playlist.title}"
-                )
-                DataResult.Success(Unit)
             }
-            is DataResult.Failure -> result
+            is DataResult.Failure -> {
+                Log.e(TAG, "[removeTrackFromPlaylist] Удаление отклонено: ${result.error}")
+                result
+            }
+        }
+    }
+
+    /** После POST-мутации получает detail endpoint: change-ответ может не содержать tracks. */
+    private suspend fun refreshAfterPlaylistMutation(
+        changedPlaylist: dYaPlaylist,
+    ): DataResult<Unit> {
+        val kind = changedPlaylist.kind.toIntOrNull()
+            ?: return DataResult.Failure(
+                DataError.InvalidData("Некорректный kind=${changedPlaylist.kind}")
+            )
+        return when (val snapshotResult = remote.fetch(kind)) {
+            is DataResult.Success -> saveSnapshot(snapshotResult.value)
+            is DataResult.Failure -> snapshotResult
         }
     }
 
@@ -252,17 +297,38 @@ class PlaylistRepository(
         _playlistMap.value.values.find { it.kind == KIND_LIKED }
 
     suspend fun setTrackLiked(trackId: String, liked: Boolean): DataResult<Unit> {
-        Log.d(TAG, "[setTrackLiked] trackId=$trackId, liked=$liked")
-        val result = remote.setTrackLiked(trackId, liked)
-        if (result is DataResult.Success) {
-            val likeList = getLikeList()
-            if (likeList == null) {
-                refreshLikedPlaylist()
-            } else {
-                refreshPlaylist(likeList.playlistUuid)
+        Log.d(TAG, "[setTrackLiked] Начато: trackId=$trackId, liked=$liked")
+        return when (val remoteResult = remote.setTrackLiked(trackId, liked)) {
+            is DataResult.Success -> {
+                Log.d(TAG, "[setTrackLiked] Яндекс подтвердил изменение, обновляем список лайков")
+                val likeList = getLikeList()
+                val refreshResult = if (likeList == null) {
+                    refreshLikedPlaylist()
+                } else {
+                    refreshPlaylist(likeList.playlistUuid)
+                }
+                when (refreshResult) {
+                    is DataResult.Success -> Log.d(
+                        TAG,
+                        "[setTrackLiked] Завершено: trackId=$trackId, liked=$liked, " +
+                            "локальный список обновлён",
+                    )
+                    is DataResult.Failure -> Log.e(
+                        TAG,
+                        "[setTrackLiked] Яндекс изменил лайк, но список не обновлён: " +
+                            "${refreshResult.error}",
+                    )
+                }
+                refreshResult
+            }
+            is DataResult.Failure -> {
+                Log.e(
+                    TAG,
+                    "[setTrackLiked] Яндекс не изменил лайк: ${remoteResult.error}",
+                )
+                remoteResult
             }
         }
-        return result
     }
 
     private suspend fun refreshLikedPlaylist(): DataResult<Unit> {

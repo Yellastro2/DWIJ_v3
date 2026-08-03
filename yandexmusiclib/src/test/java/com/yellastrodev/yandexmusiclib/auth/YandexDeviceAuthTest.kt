@@ -1,5 +1,6 @@
 package com.yellastrodev.yandexmusiclib.auth
 
+import com.yellastrodev.yandexmusiclib.YamLoggerTest
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.cancelAndJoin
 import kotlinx.coroutines.launch
@@ -220,7 +221,7 @@ class YandexDeviceAuthTest {
         clientId = "client-id",
         clientSecret = "client-secret",
         deviceName = "YandexMusicAPI",
-        logger = SilentLogger,
+        logger = YamLoggerTest,
         transport = transport,
         nowMillis = nowMillis,
         delayMillis = delayMillis,

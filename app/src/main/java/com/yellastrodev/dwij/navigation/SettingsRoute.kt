@@ -39,6 +39,7 @@ import com.yellastrodev.dwij.YA_TOKEN
 import com.yellastrodev.dwij.YA_TOKEN_EXPIRES_AT
 import com.yellastrodev.dwij.YamLoggerAndroid
 import com.yellastrodev.dwij.yApplication
+import com.yellastrodev.dwij.BuildConfig
 import com.yellastrodev.yandexmusiclib.YamApiClient
 import com.yellastrodev.yandexmusiclib.auth.DeviceAuthError
 import com.yellastrodev.yandexmusiclib.auth.DeviceAuthResult
@@ -171,7 +172,10 @@ fun SettingsRoute(
         authJob = coroutineScope.launch {
             try {
                 when (
-                    val result = YandexDeviceAuth(logger = YamLoggerAndroid()).authorize(
+                    val result = YandexDeviceAuth(
+                        clientId = BuildConfig.YANDEX_OAUTH_CLIENT_ID,
+                        clientSecret = BuildConfig.YANDEX_OAUTH_CLIENT_SECRET,
+                        logger = YamLoggerAndroid()).authorize(
                         onCode = { code -> deviceCode = code },
                     )
                 ) {

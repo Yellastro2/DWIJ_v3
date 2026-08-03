@@ -36,6 +36,9 @@ interface dPlaylistDao {
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun insertTracks(tracks: List<dPlaylistTrack>)
 
+    @Query("DELETE FROM playlist_tracks WHERE playlistUuid = :playlistUuid")
+    suspend fun deleteTracksForPlaylist(playlistUuid: String)
+
     @Query("SELECT * FROM playlists WHERE playlistUuid = :id LIMIT 1")
     suspend fun getPlaylistEntity(id: String): dYaPlaylist?
 
@@ -51,6 +54,7 @@ interface dPlaylistDao {
     @Transaction
     suspend fun insert(playlist: dYaPlaylist) {
         insertPlaylistDump(playlist)
+        deleteTracksForPlaylist(playlist.playlistUuid)
         insertTracks(playlist.tracks.map { it.copy(playlistUuid = playlist.playlistUuid) })
     }
 
