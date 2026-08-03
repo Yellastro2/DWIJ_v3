@@ -11,7 +11,6 @@ import androidx.room.Room
 import androidx.room.RoomDatabase
 import androidx.room.migration.Migration
 import androidx.sqlite.db.SupportSQLiteDatabase
-import com.yellastrodev.dwij.activities.MainActivity
 import com.yellastrodev.dwij.data.repo.CoverRepository
 import com.yellastrodev.dwij.data.repo.PlayerRepository
 import com.yellastrodev.dwij.data.repo.PlaylistRepository
@@ -73,7 +72,7 @@ class yApplication: Application() {
         runBlocking(Dispatchers.IO) {
             val result = initYaM(applicationContext)
             when (result) {
-                is ClientResult.Error -> YamApiClient("", "")
+                is ClientResult.Error -> YamApiClient("", "", logger = YamLoggerAndroid())
                 is ClientResult.Success -> result.client
             }
         }
@@ -301,14 +300,12 @@ class yApplication: Application() {
 
         sharedPref.getString(YA_TOKEN, null)?.let { token ->
             if (token.isEmpty()){
-                withContext(Dispatchers.IO) {
-                    MainActivity.LOG.info("no YandexMusic login")
-                }
+                Log.i("DWIJ_TAG", "[initYaM] Нет авторизации Яндекс Музыки")
                 return ClientResult.Error(ClientResult.Reason.NO_TOKEN)
             }
             var userId = sharedPref.getString(YA_ID, null)
             if (userId == null) {
-                val bootstrapClient = YamApiClient(token, "")
+                val bootstrapClient = YamApiClient(token, "", logger = YamLoggerAndroid())
                 when (val statusResult = bootstrapClient.accountStatus()) {
                     is YamResult.Success -> {
                         val account = statusResult.value.account
@@ -339,11 +336,9 @@ class yApplication: Application() {
             }
             val resolvedUserId = userId
                 ?: return ClientResult.Error(ClientResult.Reason.UNKNOWN)
-            return ClientResult.Success(YamApiClient(token, resolvedUserId))
+            return ClientResult.Success(YamApiClient(token, resolvedUserId, logger = YamLoggerAndroid()))
         }?: run {
-            withContext(Dispatchers.IO) {
-                MainActivity.LOG.info("no YandexMusic login")
-            }
+            Log.i("DWIJ_TAG", "[initYaM] Нет авторизации Яндекс Музыки")
             return ClientResult.Error(ClientResult.Reason.NO_TOKEN)
         }
 

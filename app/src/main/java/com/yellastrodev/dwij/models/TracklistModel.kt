@@ -17,7 +17,7 @@ import com.yellastrodev.dwij.data.entities.Song
 import com.yellastrodev.dwij.data.entities.dYaPlaylist
 import com.yellastrodev.dwij.data.entities.dYaTrack
 import com.yellastrodev.dwij.data.repo.WaveRepository
-import com.yellastrodev.dwij.fragments.ObjectFrag.Companion.TRACKLIST
+import com.yellastrodev.dwij.navigation.DwijDestination
 import com.yellastrodev.yandexmusiclib.entities.CoverSize
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.Dispatchers
@@ -162,7 +162,7 @@ class TracklistModel(
             }
         }
 
-        if (type == "playlist") {
+        if (type == DwijDestination.OBJECT_TYPE_PLAYLIST) {
             tracksJob = playlistRepo.playlistFlow(value)
                 .onEach { playlist ->
                     Log.d(
@@ -185,7 +185,7 @@ class TracklistModel(
                     _isLoading.value = false
                 }
                 .launchIn(viewModelScope)
-        } else if (type == TRACKLIST) {
+        } else if (type == DwijDestination.OBJECT_TYPE_TRACKLIST) {
             _playlist.value = dSimpleTracklist()
             val allTracksFlow: Flow<List<dYaTrack>> =
                 playlistRepo.playlists.flatMapLatest { playlistList ->

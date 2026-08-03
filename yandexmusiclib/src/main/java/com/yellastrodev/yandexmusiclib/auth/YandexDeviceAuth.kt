@@ -2,6 +2,7 @@ package com.yellastrodev.yandexmusiclib.auth
 
 import android.util.Log
 import com.yellastrodev.yandexmusiclib.BuildConfig
+import com.yellastrodev.yandexmusiclib.YamLogger
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.currentCoroutineContext
 import kotlinx.coroutines.delay
@@ -49,7 +50,7 @@ class YandexDeviceAuth internal constructor(
     private val clientId: String,
     private val clientSecret: String,
     private val deviceName: String,
-    private val logger: DeviceAuthLogger,
+    private val logger: YamLogger,
     private val transport: DeviceAuthTransport,
     private val nowMillis: () -> Long,
     private val delayMillis: suspend (Long) -> Unit,
@@ -61,7 +62,7 @@ class YandexDeviceAuth internal constructor(
         clientId: String = BuildConfig.YANDEX_OAUTH_CLIENT_ID,
         clientSecret: String = BuildConfig.YANDEX_OAUTH_CLIENT_SECRET,
         deviceName: String = DEFAULT_DEVICE_NAME,
-        logger: DeviceAuthLogger = AndroidDeviceAuthLogger
+        logger: YamLogger
     ) : this(
         clientId = clientId,
         clientSecret = clientSecret,
@@ -73,6 +74,8 @@ class YandexDeviceAuth internal constructor(
         deviceIdFactory = { randomDeviceId() }
     )
 
+    val TAG = "YandexDeviceAuth"
+
     /**
      * Запрашивает пользовательский код и параметры ожидания подтверждения.
      */
@@ -83,7 +86,7 @@ class YandexDeviceAuth internal constructor(
             return DeviceAuthResult.Failure(it)
         }
         currentCoroutineContext().ensureActive()
-        logger.debug("[requestDeviceCode] Запрашиваем код устройства")
+        logger.debug(TAG,"[requestDeviceCode] Запрашиваем код устройства")
 
         val response = when (
             val result = postForm(
@@ -101,7 +104,7 @@ class YandexDeviceAuth internal constructor(
 
         parseOAuthError(response)?.let { return DeviceAuthResult.Failure(it) }
         if (response.statusCode !in 200..299) {
-            logger.warning("[requestDeviceCode] Неожиданный HTTP ${response.statusCode}")
+            logger.warning(TAG,"[requestDeviceCode] Неожиданный HTTP ${response.statusCode}")
             return DeviceAuthResult.Failure(DeviceAuthError.Http(response.statusCode))
         }
 
@@ -117,6 +120,7 @@ class YandexDeviceAuth internal constructor(
                     invalidResponse("Некорректные поля device code")
                 } else {
                     logger.debug(
+                        TAG,
                         "[requestDeviceCode] Код получен: expiresIn=${code.expiresIn}, " +
                             "interval=${code.interval}"
                     )
@@ -158,15 +162,15 @@ class YandexDeviceAuth internal constructor(
 
         parseOAuthError(response)?.let { error ->
             if (error.code == AUTHORIZATION_PENDING) {
-                logger.debug("[pollDeviceToken] Подтверждение ещё ожидается")
+                logger.debug(TAG,"[pollDeviceToken] Подтверждение ещё ожидается")
                 return DeviceAuthResult.Success(null)
             }
-            logger.warning("[pollDeviceToken] OAuth-ошибка: ${error.code}")
+            logger.warning(TAG,"[pollDeviceToken] OAuth-ошибка: ${error.code}")
             return DeviceAuthResult.Failure(error)
         }
 
         if (response.statusCode !in 200..299) {
-            logger.warning("[pollDeviceToken] Неожиданный HTTP ${response.statusCode}")
+            logger.warning(TAG,"[pollDeviceToken] Неожиданный HTTP ${response.statusCode}")
             return DeviceAuthResult.Failure(DeviceAuthError.Http(response.statusCode))
         }
 
@@ -175,7 +179,7 @@ class YandexDeviceAuth internal constructor(
                 if (token.accessToken.isBlank()) {
                     invalidResponse("Пустой access token")
                 } else {
-                    logger.debug("[pollDeviceToken] Токен получен")
+                    logger.debug(TAG,"[pollDeviceToken] Токен получен")
                     DeviceAuthResult.Success(token)
                 }
             }
@@ -210,7 +214,7 @@ class YandexDeviceAuth internal constructor(
         while (true) {
             currentCoroutineContext().ensureActive()
             if (shouldCancel()) {
-                logger.debug("[authorize] Авторизация отменена вызывающим кодом")
+                logger.debug(TAG,"[authorize] Авторизация отменена вызывающим кодом")
                 return DeviceAuthResult.Failure(DeviceAuthError.Cancelled)
             }
 
@@ -222,7 +226,7 @@ class YandexDeviceAuth internal constructor(
             }
 
             if (nowMillis() >= deadline) {
-                logger.warning("[authorize] Истёк таймаут ожидания подтверждения")
+                logger.warning(TAG,"[authorize] Истёк таймаут ожидания подтверждения")
                 return DeviceAuthResult.Failure(DeviceAuthError.Timeout(timeout))
             }
 
@@ -239,10 +243,10 @@ class YandexDeviceAuth internal constructor(
         } catch (error: CancellationException) {
             throw error
         } catch (error: IOException) {
-            logger.error("[postForm] Ошибка сети", error)
+            logger.error(TAG,"[postForm] Ошибка сети", error)
             DeviceAuthResult.Failure(DeviceAuthError.Network(error))
         } catch (error: Exception) {
-            logger.error("[postForm] Не удалось выполнить запрос", error)
+            logger.error(TAG,"[postForm] Не удалось выполнить запрос", error)
             DeviceAuthResult.Failure(DeviceAuthError.Network(error))
         }
     }
@@ -253,7 +257,7 @@ class YandexDeviceAuth internal constructor(
         if (clientId.isNotBlank() && (!requireClientSecret || clientSecret.isNotBlank())) {
             return null
         }
-        logger.error("[configuration] OAuth client_id или client_secret не настроены")
+        logger.error(TAG,"[configuration] OAuth client_id или client_secret не настроены")
         return DeviceAuthError.Configuration
     }
 
@@ -261,10 +265,10 @@ class YandexDeviceAuth internal constructor(
         return try {
             DeviceAuthResult.Success(json.decodeFromString<T>(body))
         } catch (error: SerializationException) {
-            logger.error("[decode] Некорректный JSON-ответ OAuth", error)
+            logger.error(TAG,"[decode] Некорректный JSON-ответ OAuth", error)
             DeviceAuthResult.Failure(DeviceAuthError.InvalidResponse(error))
         } catch (error: IllegalArgumentException) {
-            logger.error("[decode] Некорректный ответ OAuth", error)
+            logger.error(TAG,"[decode] Некорректный ответ OAuth", error)
             DeviceAuthResult.Failure(DeviceAuthError.InvalidResponse(error))
         }
     }
@@ -289,7 +293,7 @@ class YandexDeviceAuth internal constructor(
 
     private fun <T> invalidResponse(message: String): DeviceAuthResult<T> {
         val error = IllegalArgumentException(message)
-        logger.error("[validate] $message", error)
+        logger.error(TAG,"[validate] $message", error)
         return DeviceAuthResult.Failure(DeviceAuthError.InvalidResponse(error))
     }
 

@@ -322,7 +322,7 @@ private fun CreatePlaylistDialogButton(
     }
 }
 
-/** Показывает Яндекс-вариант диалога без Fragment и сетевого запроса. */
+/** Показывает Яндекс-вариант диалога без route и сетевого запроса. */
 @Preview(
     name = "Create Yandex playlist",
     widthDp = 390,

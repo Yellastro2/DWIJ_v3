@@ -5,7 +5,7 @@
 - Название репозитория: `DWIJ_v3`.
 - Пользовательское название Android-приложения: `Движ`.
 - Тип проекта: многомодульное Android-приложение — музыкальный клиент и плеер с интеграцией Яндекс Музыки.
-- Основной стек: Kotlin, Java, Android SDK, XML Views, AndroidX Fragments и Navigation, Kotlin Coroutines, Room, Media3 ExoPlayer и MediaSession.
+- Основной стек: Kotlin, Java, Android SDK, Jetpack Compose и Navigation Compose, Kotlin Coroutines, Room, Media3 ExoPlayer и MediaSession.
 - Модуль `:app` содержит приложение, UI, локальное хранилище, репозитории и сервис воспроизведения.
 - Модуль `:yandexmusiclib` содержит клиент и модели интеграции с Яндекс Музыкой и Yandex ID.
 - Основной пакет приложения: `com.yellastrodev.dwij`.
@@ -31,7 +31,7 @@
 
 ## Структура и архитектурные границы
 
-- UI приложения находится в `app/src/main/java/com/yellastrodev/dwij/activities`, `fragments`, `adapters` и в `app/src/main/res`.
+- UI-компоненты приложения находятся в `app/src/main/java/com/yellastrodev/dwij`, а Compose-route и единый `NavHost` — в `app/src/main/java/com/yellastrodev/dwij/navigation`.
 - ViewModel-подобные модели экрана находятся в `app/src/main/java/com/yellastrodev/dwij/models`.
 - Слой данных разделён на `data/source`, `data/repo`, `data/dao` и `data/entities`; сохранять это разделение при добавлении логики.
 - Воспроизведение и MediaSession находятся в `app/src/main/java/com/yellastrodev/dwij/service`.

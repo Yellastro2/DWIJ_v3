@@ -1,6 +1,7 @@
 package com.yellastrodev.yandexmusiclib.network
 
 import android.util.Log
+import com.yellastrodev.yandexmusiclib.YamLogger
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
@@ -51,32 +52,32 @@ internal fun interface YamContentTransport {
     ): YamResult<ByteArray>
 }
 
-internal interface YamNetworkLogger {
-    fun requestStarted(method: YamHttpMethod, path: String)
-    fun requestFinished(method: YamHttpMethod, path: String, statusCode: Int, elapsedMs: Long)
-    fun requestFailed(method: YamHttpMethod, path: String, cause: Throwable)
-}
+//internal interface YamNetworkLogger {
+//    fun requestStarted(method: YamHttpMethod, path: String)
+//    fun requestFinished(method: YamHttpMethod, path: String, statusCode: Int, elapsedMs: Long)
+//    fun requestFailed(method: YamHttpMethod, path: String, cause: Throwable)
+//}
 
-internal object AndroidYamNetworkLogger : YamNetworkLogger {
-    private const val TAG = "YamNetwork"
-
-    override fun requestStarted(method: YamHttpMethod, path: String) {
-        Log.d(TAG, "[execute] Начат запрос $method $path")
-    }
-
-    override fun requestFinished(
-        method: YamHttpMethod,
-        path: String,
-        statusCode: Int,
-        elapsedMs: Long
-    ) {
-        Log.d(TAG, "[execute] $method $path: HTTP $statusCode, ${elapsedMs}мс")
-    }
-
-    override fun requestFailed(method: YamHttpMethod, path: String, cause: Throwable) {
-        Log.e(TAG, "[execute] Ошибка запроса $method $path", cause)
-    }
-}
+//internal object AndroidYamNetworkLogger : YamNetworkLogger {
+//    private const val TAG = "YamNetwork"
+//
+//    override fun requestStarted(method: YamHttpMethod, path: String) {
+//        Log.d(TAG, "[execute] Начат запрос $method $path")
+//    }
+//
+//    override fun requestFinished(
+//        method: YamHttpMethod,
+//        path: String,
+//        statusCode: Int,
+//        elapsedMs: Long
+//    ) {
+//        Log.d(TAG, "[execute] $method $path: HTTP $statusCode, ${elapsedMs}мс")
+//    }
+//
+//    override fun requestFailed(method: YamHttpMethod, path: String, cause: Throwable) {
+//        Log.e(TAG, "[execute] Ошибка запроса $method $path", cause)
+//    }
+//}
 
 /**
  * Внутренний HTTP transport. Не отдаёт JSON наружу и не логирует тело или токен.
@@ -86,7 +87,7 @@ internal class YamHttpTransport(
     private val baseUrl: String = DEFAULT_BASE_URL,
     private val connectTimeoutMillis: Int = 10_000,
     private val readTimeoutMillis: Int = 15_000,
-    private val logger: YamNetworkLogger = AndroidYamNetworkLogger
+    private val logger: YamLogger
 ) : YamTransport, YamContentTransport {
 
     override suspend fun execute(
@@ -98,7 +99,7 @@ internal class YamHttpTransport(
         }
 
         val startedAt = System.nanoTime()
-        logger.requestStarted(request.method, request.path)
+//        logger.requestStarted(request.method, request.path)
 
         try {
             val connection = openConnection(request)
@@ -109,12 +110,12 @@ internal class YamHttpTransport(
                 val statusCode = connection.responseCode
                 val responseBody = readResponseBody(connection, statusCode)
                 val elapsedMs = (System.nanoTime() - startedAt) / NANOS_IN_MILLISECOND
-                logger.requestFinished(
-                    request.method,
-                    request.path,
-                    statusCode,
-                    elapsedMs
-                )
+//                logger.requestFinished(
+//                    request.method,
+//                    request.path,
+//                    statusCode,
+//                    elapsedMs
+//                )
 
                 if (statusCode in 200..299) {
                     YamResult.Success(YamHttpResponse(statusCode, responseBody))
@@ -127,19 +128,19 @@ internal class YamHttpTransport(
         } catch (error: CancellationException) {
             throw error
         } catch (error: SocketTimeoutException) {
-            logger.requestFailed(request.method, request.path, error)
+//            logger.requestFailed(request.method, request.path, error)
             YamResult.Failure(YamError.Timeout)
         } catch (error: UnknownHostException) {
-            logger.requestFailed(request.method, request.path, error)
+//            logger.requestFailed(request.method, request.path, error)
             YamResult.Failure(YamError.NoInternet)
         } catch (error: ConnectException) {
-            logger.requestFailed(request.method, request.path, error)
+//            logger.requestFailed(request.method, request.path, error)
             YamResult.Failure(YamError.NoInternet)
         } catch (error: IOException) {
-            logger.requestFailed(request.method, request.path, error)
+//            logger.requestFailed(request.method, request.path, error)
             YamResult.Failure(YamError.Network(error))
         } catch (error: Exception) {
-            logger.requestFailed(request.method, request.path, error)
+//            logger.requestFailed(request.method, request.path, error)
             YamResult.Failure(YamError.Network(error))
         }
     }
@@ -155,7 +156,7 @@ internal class YamHttpTransport(
 
         val logPath = "/external-content"
         val startedAt = System.nanoTime()
-        logger.requestStarted(YamHttpMethod.GET, logPath)
+//        logger.requestStarted(YamHttpMethod.GET, logPath)
         try {
             val connection = URL(url).openConnection() as HttpURLConnection
             try {
@@ -171,12 +172,12 @@ internal class YamHttpTransport(
                 val statusCode = connection.responseCode
                 val elapsedMs =
                     (System.nanoTime() - startedAt) / NANOS_IN_MILLISECOND
-                logger.requestFinished(
-                    YamHttpMethod.GET,
-                    logPath,
-                    statusCode,
-                    elapsedMs
-                )
+//                logger.requestFinished(
+//                    YamHttpMethod.GET,
+//                    logPath,
+//                    statusCode,
+//                    elapsedMs
+//                )
                 if (statusCode in 200..299) {
                     YamResult.Success(connection.inputStream.use { it.readBytes() })
                 } else {
@@ -192,19 +193,19 @@ internal class YamHttpTransport(
         } catch (error: CancellationException) {
             throw error
         } catch (error: SocketTimeoutException) {
-            logger.requestFailed(YamHttpMethod.GET, logPath, error)
+//            logger.requestFailed(YamHttpMethod.GET, logPath, error)
             YamResult.Failure(YamError.Timeout)
         } catch (error: UnknownHostException) {
-            logger.requestFailed(YamHttpMethod.GET, logPath, error)
+//            logger.requestFailed(YamHttpMethod.GET, logPath, error)
             YamResult.Failure(YamError.NoInternet)
         } catch (error: ConnectException) {
-            logger.requestFailed(YamHttpMethod.GET, logPath, error)
+//            logger.requestFailed(YamHttpMethod.GET, logPath, error)
             YamResult.Failure(YamError.NoInternet)
         } catch (error: IOException) {
-            logger.requestFailed(YamHttpMethod.GET, logPath, error)
+//            logger.requestFailed(YamHttpMethod.GET, logPath, error)
             YamResult.Failure(YamError.Network(error))
         } catch (error: Exception) {
-            logger.requestFailed(YamHttpMethod.GET, logPath, error)
+//            logger.requestFailed(YamHttpMethod.GET, logPath, error)
             YamResult.Failure(YamError.Network(error))
         }
     }

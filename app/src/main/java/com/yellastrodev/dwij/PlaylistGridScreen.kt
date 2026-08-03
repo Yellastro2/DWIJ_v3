@@ -398,7 +398,7 @@ private fun PlaylistGridHeader(
     }
 }
 
-/** Показывает обычное заполненное состояние экрана без Fragment и репозиториев. */
+/** Показывает обычное заполненное состояние экрана без route и репозиториев. */
 @Preview(
     name = "Playlist grid screen",
     widthDp = 360,

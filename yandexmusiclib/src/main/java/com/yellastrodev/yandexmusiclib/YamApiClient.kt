@@ -31,7 +31,8 @@ import com.yellastrodev.yandexmusiclib.tracks.PlayAudioRequest
 class YamApiClient(
     accessToken: String,
     userId: String,
-    login: String = ""
+    login: String = "",
+    val logger: YamLogger
 ) {
     @Volatile
     private var accessToken: String = accessToken
@@ -45,7 +46,7 @@ class YamApiClient(
         private set
 
     private val httpTransport by lazy {
-        YamHttpTransport(accessToken = { accessToken })
+        YamHttpTransport(accessToken = { accessToken }, logger=logger)
     }
     private val accountApi by lazy { AccountApi(httpTransport) }
     private val likesApi by lazy { LikesApi(httpTransport) }
@@ -65,14 +66,14 @@ class YamApiClient(
         accessToken = token
         this.userId = userId
         this.login = login
-        Log.i(TAG, "[updateAuthorization] Авторизация клиента обновлена")
+        logger.info(TAG, "[updateAuthorization] Авторизация клиента обновлена")
     }
 
     fun clearAuthorization() {
         accessToken = ""
         userId = ""
         login = ""
-        Log.i(TAG, "[clearAuthorization] Авторизация клиента очищена")
+        logger.info(TAG, "[clearAuthorization] Авторизация клиента очищена")
     }
 
     suspend fun accountStatus(): YamResult<AccountStatus> =
