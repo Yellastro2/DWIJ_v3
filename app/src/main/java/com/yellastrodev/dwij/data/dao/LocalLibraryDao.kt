@@ -69,8 +69,8 @@ abstract class LocalLibraryDao {
     @Query("DELETE FROM local_tracks")
     abstract suspend fun deleteAllTracks()
 
-    @Query("DELETE FROM local_tracks WHERE instanceId NOT IN (:activeIds)")
-    abstract suspend fun deleteTracksExcept(activeIds: List<String>)
+    @Query("DELETE FROM local_tracks WHERE instanceId IN (:trackIds)")
+    abstract suspend fun deleteTracks(trackIds: List<String>)
 
     @Upsert
     abstract suspend fun upsertPlaylists(playlists: List<LocalPlaylistEntity>)
@@ -103,18 +103,15 @@ abstract class LocalLibraryDao {
 
     /** Применяет только целиком собранный снимок, не оставляя половинчатого индекса. */
     @Transaction
-    open suspend fun replaceMediaSnapshot(
-        tracks: List<LocalTrackEntity>,
+    open suspend fun applyMediaSnapshotDiff(
+        tracksToUpsert: List<LocalTrackEntity>,
+        trackIdsToDelete: List<String>,
         playlists: List<LocalPlaylistEntity>,
         entries: List<LocalPlaylistEntryEntity>,
         generation: String,
     ) {
-        if (tracks.isEmpty()) {
-            deleteAllTracks()
-        } else {
-            upsertTracks(tracks)
-            deleteTracksExcept(tracks.map(LocalTrackEntity::instanceId))
-        }
+        if (tracksToUpsert.isNotEmpty()) upsertTracks(tracksToUpsert)
+        if (trackIdsToDelete.isNotEmpty()) deleteTracks(trackIdsToDelete)
 
         if (playlists.isEmpty()) {
             deleteAllImportedPlaylists()

@@ -18,7 +18,7 @@ class CacheManager(
     private val maxCacheSizeBytes: Long
         get() = prefs.getLong(CACHE_SIZE, DEFAULT_CACHE_SIZE)
 
-    private val cacheDirs: List<File> = listOf(
+    private val cacheDirs: MutableList<File> = mutableListOf(
         File(context.cacheDir, DIR_TRACK_CACHE),
         File(context.cacheDir, DIR_COVER_CACHE)
     ).onEach { if (!it.exists()) it.mkdirs() }
@@ -33,7 +33,8 @@ class CacheManager(
 
     fun registerDir(dir: File) {
         if (!cacheDirs.contains(dir)) {
-            cacheDirs + dir
+            if (!dir.exists()) dir.mkdirs()
+            cacheDirs += dir
         }
     }
 

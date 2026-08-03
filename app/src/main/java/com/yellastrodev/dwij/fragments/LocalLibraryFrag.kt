@@ -46,32 +46,36 @@ class LocalLibraryFrag : Fragment() {
             val mode = arguments?.getString(ARG_MODE) ?: MODE_ALL_TRACKS
             val playlistId = arguments?.getString(ARG_PLAYLIST_ID)
             val repository = app.localMusicRepository
+            val isSynchronizing by repository.isSynchronizing.collectAsState()
             when {
                 mode == MODE_PLAYLISTS -> {
-                    val playlists by repository.playlists.collectAsState(initial = emptyList())
+                    val playlists by repository.playlists.collectAsState(initial = null)
                     LocalLibraryScreen(
                         title = getString(R.string.local_playlists_title),
-                        playlists = playlists,
+                        playlists = playlists.orEmpty(),
                         tracks = null,
                         onPlaylistClick = ::openPlaylist,
                         onTrackClick = { _, _ -> },
                         loadTrackCover = ::loadTrackCover,
+                        isLoading = playlists == null ||
+                            (playlists.isNullOrEmpty() && isSynchronizing),
                         modifier = Modifier.fillMaxSize().background(Color(0xFF101116)),
                     )
                 }
                 mode == MODE_PLAYLIST && playlistId != null -> {
                     val playlist by repository.playlist(playlistId).collectAsState(initial = null)
                     val tracks by repository.playlistSongs(playlistId)
-                        .collectAsState(initial = emptyList())
+                        .collectAsState(initial = null)
+                    val loadedTracks = tracks.orEmpty()
                     val playlistTitle =
                         playlist?.name ?: getString(R.string.local_playlist_title)
                     LocalPlaylistObjectScreen(
                         title = playlistTitle,
-                        tracks = tracks,
+                        tracks = loadedTracks,
                         onBackClick = { findNavController().navigateUp() },
                         onPlayClick = {
                             playTracks(
-                                tracks = tracks,
+                                tracks = loadedTracks,
                                 index = 0,
                                 tracklist = LocalTracklist(
                                     id = playlistId,
@@ -82,7 +86,7 @@ class LocalLibraryFrag : Fragment() {
                         loadTrackCover = ::loadTrackCover,
                         onTrackClick = { index, _ ->
                             playTracks(
-                                tracks = tracks,
+                                tracks = loadedTracks,
                                 index = index,
                                 tracklist = LocalTracklist(
                                     id = playlistId,
@@ -90,20 +94,23 @@ class LocalLibraryFrag : Fragment() {
                                 ),
                             )
                         },
+                        isLoading = tracks == null ||
+                            (tracks.isNullOrEmpty() && isSynchronizing),
                         modifier = Modifier.fillMaxSize().background(Color(0xFF101116)),
                     )
                 }
                 else -> {
-                    val tracks by repository.songs.collectAsState(initial = emptyList())
+                    val tracks by repository.songs.collectAsState(initial = null)
+                    val loadedTracks = tracks.orEmpty()
                     LocalLibraryScreen(
                         title = getString(R.string.local_all_tracks_title),
                         playlists = null,
-                        tracks = tracks,
+                        tracks = loadedTracks,
                         onPlaylistClick = {},
                         loadTrackCover = ::loadTrackCover,
                         onTrackClick = { index, _ ->
                             playTracks(
-                                tracks = tracks,
+                                tracks = loadedTracks,
                                 index = index,
                                 tracklist = LocalTracklist(
                                     id = "local:all",
@@ -111,6 +118,8 @@ class LocalLibraryFrag : Fragment() {
                                 ),
                             )
                         },
+                        isLoading = tracks == null ||
+                            (tracks.isNullOrEmpty() && isSynchronizing),
                         modifier = Modifier.fillMaxSize().background(Color(0xFF101116)),
                     )
                 }

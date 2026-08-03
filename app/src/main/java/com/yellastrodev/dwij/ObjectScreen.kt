@@ -73,6 +73,7 @@ fun ObjectScreen(
     onShareClick: () -> Unit = {},
     onWaveClick: () -> Unit = {},
     emptyMessage: String = "",
+    isLoading: Boolean = false,
     isRefreshing: Boolean = false,
     onRefresh: () -> Unit = {},
 ) {
@@ -98,6 +99,7 @@ fun ObjectScreen(
                 loadCover = loadTrackCover,
                 onItemClick = onTrackClick,
                 emptyMessage = emptyMessage,
+                isLoading = isLoading,
                 header = {
                     ObjectHeader(
                         title = title,

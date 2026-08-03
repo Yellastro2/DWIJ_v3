@@ -28,6 +28,7 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.flatMapLatest
 import kotlinx.coroutines.flow.flowOf
+import kotlinx.coroutines.flow.catch
 import kotlinx.coroutines.flow.onEach
 import kotlinx.coroutines.flow.launchIn
 import kotlinx.coroutines.flow.map
@@ -93,6 +94,8 @@ class TracklistModel(
 
     private val _tracks = MutableStateFlow<List<Song>>(emptyList())
     val tracks: StateFlow<List<Song>> = _tracks
+    private val _isLoading = MutableStateFlow(false)
+    val isLoading: StateFlow<Boolean> = _isLoading
 
     private val _cachedUnavailableSongIds = MutableStateFlow<Set<String>>(emptySet())
     /** Песни с недоступным Яндекс-инстансом, который всё ещё есть в файловом кэше. */
@@ -122,6 +125,7 @@ class TracklistModel(
         listIdentity = newIdentity
         trackList = emptyList()
         _tracks.value = emptyList()
+        _isLoading.value = true
         _cachedUnavailableSongIds.value = emptySet()
         _playlist.value = null
         var resetScrollOnFirstList = true
@@ -151,6 +155,7 @@ class TracklistModel(
                 .mapTo(mutableSetOf(), Song::id)
             trackList = snapshot
             _tracks.value = snapshot
+            _isLoading.value = false
             if (resetScrollOnFirstList) {
                 scrollResetChannel.trySend(Unit)
                 resetScrollOnFirstList = false
@@ -173,6 +178,11 @@ class TracklistModel(
                 .onEach { tracks ->
                     Log.d(TAG, "[setType] Получено треков=${tracks.size}")
                     publishTracks(tracks)
+                }
+                .catch { error ->
+                    if (error is kotlinx.coroutines.CancellationException) throw error
+                    Log.e(TAG, "[setType] Не удалось загрузить треки плейлиста", error)
+                    _isLoading.value = false
                 }
                 .launchIn(viewModelScope)
         } else if (type == TRACKLIST) {
@@ -198,10 +208,16 @@ class TracklistModel(
                     .distinctUntilChanged()
             tracksJob = allTracksFlow
                 .onEach { tracks -> publishTracks(tracks) }
+                .catch { error ->
+                    if (error is kotlinx.coroutines.CancellationException) throw error
+                    Log.e(TAG, "[setType] Не удалось загрузить общий список треков", error)
+                    _isLoading.value = false
+                }
                 .launchIn(viewModelScope)
         } else
         {
             Log.w(TAG, "Неизвестный тип: $type")
+            _isLoading.value = false
         }
     }
 
@@ -254,6 +270,15 @@ class TracklistModel(
             )
         }
         return true
+    }
+
+    /** Обновляет снимок списка после объединения source-инстансов без повторной загрузки объекта. */
+    fun applyMergedSong(sourceSongIds: Set<String>, mergedSong: Song) {
+        if (sourceSongIds.isEmpty()) return
+        trackList = trackList.map { song ->
+            if (song.id in sourceSongIds) mergedSong else song
+        }
+        _tracks.value = trackList
     }
 
     /** Загружает небольшую обложку трека для видимой строки Compose-списка. */

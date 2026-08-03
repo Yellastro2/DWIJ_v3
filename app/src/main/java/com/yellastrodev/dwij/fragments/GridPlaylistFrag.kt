@@ -96,8 +96,11 @@ class GridPlaylistFrag : Fragment() {
         setViewCompositionStrategy(ViewCompositionStrategy.DisposeOnViewTreeLifecycleDestroyed)
         setContent {
             val yandexPlaylists by model.playlists.collectAsState()
-            val localPlaylists by app.localMusicRepository.playlists
-                .collectAsState(initial = emptyList())
+            val yandexInitialLoadComplete by model.initialLoadComplete.collectAsState()
+            val localPlaylistSnapshot by app.localMusicRepository.playlists
+                .collectAsState(initial = null)
+            val isLocalSynchronizing by app.localMusicRepository.isSynchronizing.collectAsState()
+            val localPlaylists = localPlaylistSnapshot.orEmpty()
             val musicSource by selectedMusicSource.collectAsState()
             val pickedTrackId = arguments?.getString(ACTION_DATA)
                 .takeIf { isAddTrackMode() }
@@ -212,7 +215,13 @@ class GridPlaylistFrag : Fragment() {
                         R.string.playlists_empty_yandex
                     },
                 ),
-                isRefreshing = isRefreshing,
+                isLoading = when (musicSource) {
+                    HomeMusicSource.Yandex -> !yandexInitialLoadComplete
+                    HomeMusicSource.Local -> localPlaylistSnapshot == null ||
+                        (localPlaylistSnapshot.isNullOrEmpty() && isLocalSynchronizing)
+                },
+                isRefreshing = isRefreshing ||
+                    (musicSource == HomeMusicSource.Local && isLocalSynchronizing),
                 onRefresh = {
                     if (!isRefreshing) {
                         if (musicSource == HomeMusicSource.Local) {

@@ -24,6 +24,7 @@ class GridPlaylistModel(
 	private val trackRepo: TrackRepository,
 	private val coverRepo: CoverRepository
 ): ViewModel() {
+	val initialLoadComplete: StateFlow<Boolean> = playlistRepo.initialLoadComplete
 
 	class Factory(
 		private val repo: PlaylistRepository,

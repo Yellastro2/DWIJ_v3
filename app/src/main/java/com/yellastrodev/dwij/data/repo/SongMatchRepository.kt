@@ -42,7 +42,10 @@ class SongMatchRepository(
         .observeUnscannedSongCount(CURRENT_RESOLVER_VERSION)
         .distinctUntilChanged()
         .filter { count -> count > 0 }
-        .onEach { scanUnprocessedSongs() }
+        .onEach { count ->
+            Log.d(TAG, "[start] В очереди resolver-а песен=$count")
+            scanUnprocessedSongs()
+        }
         .launchIn(scope)
 
     /** Пост-скан после обновления и инкрементальный скан используют один механизм. */
@@ -55,10 +58,22 @@ class SongMatchRepository(
             )
             if (batch.isEmpty()) break
             val allSongs = songDao.getAllSongs()
+            Log.d(
+                TAG,
+                "[scanUnprocessedSongs] Начата пачка=${batch.size}, " +
+                    "всего песен в снимке=${allSongs.size}",
+            )
+            var batchComparisonCount = 0
+            var batchCandidateCount = 0
             batch.forEach { song ->
                 try {
-                    val candidates = findCandidates(song, allSongs)
-                    matchDao.replacePendingCandidatesForSong(song.song.songId, candidates)
+                    val search = findCandidates(song, allSongs)
+                    batchComparisonCount += search.comparedPairs
+                    batchCandidateCount += search.candidates.size
+                    matchDao.replacePendingCandidatesForSong(
+                        song.song.songId,
+                        search.candidates,
+                    )
                     songDao.markResolverVersionIfUnchanged(
                         songId = song.song.songId,
                         expectedMatchKey = song.song.matchKey,
@@ -80,6 +95,11 @@ class SongMatchRepository(
                     )
                 }
             }
+            Log.d(
+                TAG,
+                "[scanUnprocessedSongs] Пачка завершена: " +
+                    "сравнений=$batchComparisonCount, кандидатов=$batchCandidateCount",
+            )
         }
         val pendingCandidateCount = matchDao.getPendingCandidateCount()
         Log.d(
@@ -94,21 +114,29 @@ class SongMatchRepository(
     private fun findCandidates(
         song: SongWithInstances,
         allSongs: List<SongWithInstances>,
-    ): List<SongMatchCandidateEntity> = allSongs.mapNotNull { other ->
-        if (song.song.songId == other.song.songId || !isCrossSourcePair(song, other)) {
-            return@mapNotNull null
-        }
-        val score = resolver.compare(song.song, other.song) ?: return@mapNotNull null
-        val (firstId, secondId) = orderedIds(song.song.songId, other.song.songId)
-        SongMatchCandidateEntity(
-            firstSongId = firstId,
-            secondSongId = secondId,
-            titleSimilarity = score.titleSimilarity,
-            artistSimilarity = score.artistSimilarity,
-            score = score.total,
-            resolverVersion = CURRENT_RESOLVER_VERSION,
+    ): SongCandidateSearch {
+        var comparedPairs = 0
+        val candidates = allSongs.mapNotNull { other ->
+            if (song.song.songId == other.song.songId || !isCrossSourcePair(song, other)) {
+                return@mapNotNull null
+            }
+            comparedPairs += 1
+            val score = resolver.compare(song.song, other.song) ?: return@mapNotNull null
+            val (firstId, secondId) = orderedIds(song.song.songId, other.song.songId)
+            SongMatchCandidateEntity(
+                firstSongId = firstId,
+                secondSongId = secondId,
+                titleSimilarity = score.titleSimilarity,
+                artistSimilarity = score.artistSimilarity,
+                score = score.total,
+                resolverVersion = CURRENT_RESOLVER_VERSION,
+            )
+        }.distinctBy { candidate -> candidate.firstSongId to candidate.secondSongId }
+        return SongCandidateSearch(
+            candidates = candidates,
+            comparedPairs = comparedPairs,
         )
-    }.distinctBy { candidate -> candidate.firstSongId to candidate.secondSongId }
+    }
 
     /** На первом этапе предлагаем только пары Яндекс ↔ локальный файл. */
     private fun isCrossSourcePair(
@@ -135,3 +163,8 @@ class SongMatchRepository(
         private const val TAG = "SongMatchRepository"
     }
 }
+
+private data class SongCandidateSearch(
+    val candidates: List<SongMatchCandidateEntity>,
+    val comparedPairs: Int,
+)

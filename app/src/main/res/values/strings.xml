@@ -34,6 +34,7 @@
     <string name="home_tracks">Треки</string>
     <string name="track_list_all_title">Все треки</string>
     <string name="track_list_empty">Треков пока нет</string>
+    <string name="list_loading_placeholder">Сейчас загрузится…</string>
     <string name="track_unavailable_indicator">Я</string>
     <string name="track_unavailable_yandex">Трек не доступен в ЯМузыке</string>
     <string name="object_loading_title">Загрузка…</string>
@@ -74,8 +75,14 @@
     <string name="player_no_track">Пока ничего не играет</string>
     <string name="player_source_yandex">ЯНДЕКС МУЗЫКА</string>
     <string name="player_source_local">ЛОКАЛЬНАЯ МУЗЫКА</string>
-    <string name="player_multiple_sources_active_content_description">У трека несколько источников</string>
-    <string name="player_multiple_sources_inactive_content_description">У трека один источник</string>
+    <string name="player_multiple_sources_active_content_description">У трека есть дубли или возможное совпадение</string>
+    <string name="multi_source_dialog_title">найдены варианты сурс трека</string>
+    <string name="multi_source_dialog_empty">Варианты источников пока не найдены</string>
+    <string name="multi_source_dialog_cancel">Отмена</string>
+    <string name="multi_source_dialog_save">Сохранить</string>
+    <string name="multi_source_dialog_saving">Сохраняем…</string>
+    <string name="multi_source_merge_success">Источники объединены в Song %1$s</string>
+    <string name="multi_source_merge_error">Не удалось объединить источники: %1$s</string>
     <string name="player_in_playlists">В ПЛЕЙЛИСТАХ</string>
     <string name="player_add_to_playlist">+ В плейлист</string>
     <string name="player_shuffle_content_description">Перемешать очередь</string>

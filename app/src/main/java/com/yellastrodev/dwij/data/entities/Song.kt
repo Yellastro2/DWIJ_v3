@@ -64,6 +64,7 @@ data class Song(
     val coverUri: String?,
     val instances: List<TrackInstance>,
     val preferredInstanceId: String?,
+    val hasPendingMatchCandidate: Boolean,
 ) {
     val artistNames: List<String>
         get() = artists.map(Artist::name)

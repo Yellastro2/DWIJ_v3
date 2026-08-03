@@ -14,6 +14,7 @@ import com.yellastrodev.dwij.data.repo.CoverRepository
 import com.yellastrodev.dwij.data.repo.PlayerRepository
 import com.yellastrodev.dwij.data.entities.MusicSource
 import com.yellastrodev.dwij.data.entities.Song
+import com.yellastrodev.dwij.data.entities.TrackInstance
 import com.yellastrodev.dwij.data.repo.LocalMusicRepository
 import com.yellastrodev.dwij.data.repo.PlaylistRepository
 import kotlinx.coroutines.flow.StateFlow
@@ -76,6 +77,20 @@ class PlayerModel(
                 localMusicRepo.cover(instance.track)
             } ?: kotlinx.coroutines.flow.emptyFlow()
         }
+    }
+
+    /** Загружает обложку именно выбранного source-инстанса, не учитывая текущий playback. */
+    fun cover(instance: TrackInstance): Flow<Bitmap> = when (instance) {
+        is TrackInstance.Yandex -> coverRepo.getCoverFlow(
+            instance.track,
+            com.yellastrodev.yandexmusiclib.entities.CoverSize.`400x400`,
+        )
+        is TrackInstance.Local -> localMusicRepo.cover(instance.track)
+    }
+
+    /** Обновляет Song-снимки текущей очереди после Room-объединения источников. */
+    fun applyMergedSong(sourceSongIds: Set<String>, mergedSong: Song) {
+        playerRepo.applyMergedSong(sourceSongIds, mergedSong)
     }
 
 

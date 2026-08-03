@@ -13,6 +13,7 @@ import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.WindowInsets
+import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
@@ -25,7 +26,7 @@ import androidx.compose.foundation.lazy.grid.GridCells
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
 import androidx.compose.foundation.lazy.grid.items
 import androidx.compose.foundation.lazy.grid.rememberLazyGridState
-import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.Scaffold
@@ -43,10 +44,12 @@ import androidx.compose.runtime.setValue
 import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.ImageBitmap
 import androidx.compose.ui.graphics.StrokeCap
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.tooling.preview.Preview
@@ -163,15 +166,8 @@ fun PlaylistGridScreen(
                 modifier = Modifier.fillMaxSize(),
             ) {
                 when {
-                    isLoading -> Box(
-                        contentAlignment = Alignment.Center,
-                        modifier = Modifier.fillMaxSize(),
-                    ) {
-                        CircularProgressIndicator(
-                            color = PlaylistScreenPink,
-                            strokeWidth = 2.dp,
-                        )
-                    }
+                    isLoading && items.none { item -> !item.isCreateAction } ->
+                        PlaylistGridLoadingPlaceholder()
 
                     items.isEmpty() -> Box(
                         contentAlignment = Alignment.Center,
@@ -225,6 +221,53 @@ fun PlaylistGridScreen(
                             )
                         }
                     }
+                }
+            }
+        }
+    }
+}
+
+/** Бледные плитки той же геометрии, что и готовые плейлисты. */
+@Composable
+private fun PlaylistGridLoadingPlaceholder() {
+    LazyVerticalGrid(
+        columns = GridCells.Fixed(3),
+        contentPadding = PaddingValues(vertical = 6.dp),
+        horizontalArrangement = Arrangement.spacedBy(6.dp),
+        verticalArrangement = Arrangement.spacedBy(6.dp),
+        modifier = Modifier
+            .fillMaxSize()
+            .navigationBarsPadding()
+            .padding(horizontal = 6.dp),
+    ) {
+        items(
+            count = PLAYLIST_LOADING_PLACEHOLDER_COUNT,
+            key = { index -> "playlist_loading_$index" },
+        ) { index ->
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .aspectRatio(1f)
+                    .clip(RoundedCornerShape(12.dp))
+                    .background(PlaylistLoadingPlaceholder),
+            ) {
+                if (index == 0) {
+                    Text(
+                        text = stringResource(R.string.list_loading_placeholder),
+                        color = Color.White.copy(alpha = 0.52f),
+                        fontSize = 13.sp,
+                        lineHeight = 18.sp,
+                        modifier = Modifier.padding(10.dp),
+                    )
+                } else {
+                    Box(
+                        modifier = Modifier
+                            .padding(10.dp)
+                            .fillMaxWidth(0.72f)
+                            .height(12.dp)
+                            .clip(RoundedCornerShape(4.dp))
+                            .background(Color.White.copy(alpha = 0.09f)),
+                    )
                 }
             }
         }
@@ -394,7 +437,8 @@ private fun PlaylistGridScreenPreview() {
 }
 
 private val PlaylistScreenBackground = Color(0xFF03040F)
-private val PlaylistScreenPink = Color(0xFFFF00BF)
+private val PlaylistLoadingPlaceholder = Color(0xFF202635).copy(alpha = 0.62f)
+private const val PLAYLIST_LOADING_PLACEHOLDER_COUNT = 6
 private const val PLAYLIST_PERFORMANCE_TAG = "PlaylistPerf"
 
 private enum class CoverLoadResult {

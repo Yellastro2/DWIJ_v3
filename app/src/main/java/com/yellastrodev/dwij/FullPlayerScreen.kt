@@ -93,6 +93,7 @@ data class FullPlayerUiState(
     val album: String?,
     val sourceLabel: String?,
     val hasMultipleSources: Boolean,
+    val hasUnresolvedMatchCandidate: Boolean,
     val cover: ImageBitmap?,
     val isPlaying: Boolean,
     val currentPositionMillis: Long,
@@ -113,6 +114,7 @@ data class FullPlayerUiState(
 fun FullPlayerScreen(
     state: FullPlayerUiState,
     playerEvents: Flow<PlayerEvent>,
+    uiMessages: Flow<String>,
     onBackClick: () -> Unit,
     onPlayPauseClick: () -> Unit,
     onPreviousClick: () -> Unit,
@@ -122,6 +124,7 @@ fun FullPlayerScreen(
     onRepeatClick: () -> Unit,
     onLikeClick: () -> Unit,
     onAddToPlaylistClick: () -> Unit,
+    onSourcesClick: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
     val backgroundColor = colorResource(R.color.background)
@@ -133,6 +136,11 @@ fun FullPlayerScreen(
                 is PlayerEvent.ShowError -> event.message
                 is PlayerEvent.TrackListEnd -> event.message
             }
+            snackbarHostState.showSnackbar(message)
+        }
+    }
+    LaunchedEffect(uiMessages) {
+        uiMessages.collect { message ->
             snackbarHostState.showSnackbar(message)
         }
     }
@@ -153,7 +161,9 @@ fun FullPlayerScreen(
             FullPlayerTopBar(
                 queueTitle = state.queueTitle,
                 queuePosition = state.queuePosition,
-                hasMultipleSources = state.hasMultipleSources,
+                showSourcesIndicator = state.hasMultipleSources ||
+                    state.hasUnresolvedMatchCandidate,
+                onSourcesClick = onSourcesClick,
                 onBackClick = onBackClick,
             )
             Column(
@@ -228,7 +238,8 @@ fun FullPlayerScreen(
 private fun FullPlayerTopBar(
     queueTitle: String,
     queuePosition: Int,
-    hasMultipleSources: Boolean,
+    showSourcesIndicator: Boolean,
+    onSourcesClick: () -> Unit,
     onBackClick: () -> Unit,
 ) {
     val backDescription = stringResource(R.string.player_back_content_description)
@@ -303,79 +314,17 @@ private fun FullPlayerTopBar(
                 overflow = TextOverflow.Ellipsis,
             )
         }
-        MultipleSourcesIndicator(
-            isActive = hasMultipleSources,
-            modifier = Modifier.size(46.dp),
-        )
-    }
-}
-
-/** Рисует три сцепленных знака Play и подсвечивает их у песни с несколькими источниками. */
-@Composable
-private fun MultipleSourcesIndicator(
-    isActive: Boolean,
-    modifier: Modifier = Modifier,
-) {
-    val intensity by animateFloatAsState(
-        targetValue = if (isActive) 1f else 0f,
-        animationSpec = tween(durationMillis = 180),
-        label = "multipleSourcesIntensity",
-    )
-    val description = stringResource(
-        if (isActive) {
-            R.string.player_multiple_sources_active_content_description
+        if (showSourcesIndicator) {
+            Box(
+                contentAlignment = Alignment.Center,
+                modifier = Modifier
+                    .size(46.dp)
+                    .clickable(role = Role.Button, onClick = onSourcesClick),
+            ) {
+                MultipleSourcesIndicator(modifier = Modifier.size(34.dp))
+            }
         } else {
-            R.string.player_multiple_sources_inactive_content_description
-        },
-    )
-
-    Canvas(
-        modifier = modifier.semantics {
-            contentDescription = description
-        },
-    ) {
-        val triangleWidth = size.width * 0.29f
-        val triangleHeight = size.height * 0.42f
-        val startX = size.width * 0.18f
-        val stepX = size.width * 0.17f
-        val centerY = size.height * 0.5f
-        val activeColors = listOf(PlayerCyan, PlayerPink, Color.White)
-
-        if (intensity > 0f) {
-            drawCircle(
-                color = PlayerPink.copy(alpha = 0.08f * intensity),
-                radius = size.minDimension * 0.42f,
-                center = center,
-            )
-        }
-
-        repeat(3) { index ->
-            val x = startX + stepX * index
-            val yOffset = when (index) {
-                0 -> size.height * 0.035f
-                1 -> -size.height * 0.035f
-                else -> 0f
-            }
-            val path = Path().apply {
-                moveTo(x, centerY - triangleHeight / 2f + yOffset)
-                lineTo(x + triangleWidth, centerY + yOffset)
-                lineTo(x, centerY + triangleHeight / 2f + yOffset)
-                close()
-            }
-            val color = activeColors[index]
-            drawPath(
-                path = path,
-                color = color.copy(alpha = 0.06f + 0.2f * intensity),
-            )
-            drawPath(
-                path = path,
-                color = if (isActive) {
-                    color.copy(alpha = 0.64f + index * 0.15f)
-                } else {
-                    PlayerSecondary.copy(alpha = 0.2f)
-                },
-                style = Stroke(width = (1.dp + 0.45.dp * intensity).toPx()),
-            )
+            Spacer(modifier = Modifier.width(46.dp))
         }
     }
 }
@@ -1123,6 +1072,7 @@ private fun FullPlayerScreenPreview() {
             album = "Когда ты откроешь глаза",
             sourceLabel = "ЯНДЕКС МУЗЫКА",
             hasMultipleSources = true,
+            hasUnresolvedMatchCandidate = false,
             cover = null,
             isPlaying = true,
             currentPositionMillis = 84_000L,
@@ -1135,6 +1085,7 @@ private fun FullPlayerScreenPreview() {
             playlistTitles = listOf("В дорогу", "Ночное", "Любимое новое"),
         ),
         playerEvents = emptyFlow(),
+        uiMessages = emptyFlow(),
         onBackClick = {},
         onPlayPauseClick = {},
         onPreviousClick = {},
@@ -1144,6 +1095,7 @@ private fun FullPlayerScreenPreview() {
         onRepeatClick = {},
         onLikeClick = {},
         onAddToPlaylistClick = {},
+        onSourcesClick = {},
     )
 }
 

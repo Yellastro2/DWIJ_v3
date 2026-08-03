@@ -2,6 +2,7 @@ package com.yellastrodev.dwij.data.repo
 
 import com.yellastrodev.dwij.data.dao.LocalLibraryDao
 import com.yellastrodev.dwij.data.dao.SongDao
+import com.yellastrodev.dwij.data.dao.SongMatchDao
 import com.yellastrodev.dwij.data.dao.SongWithInstances
 import com.yellastrodev.dwij.data.dao.dTrackDao
 import com.yellastrodev.dwij.data.entities.Album
@@ -15,23 +16,51 @@ import com.yellastrodev.dwij.data.entities.TrackInstance
 import com.yellastrodev.dwij.data.entities.TrackInstanceEntity
 import com.yellastrodev.dwij.data.entities.dYaTrack
 import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.map
 import java.util.UUID
 
-/** Индексирует source-треки и собирает из компактных Room-связей полные [Song]. */
+/**
+ * Индексирует source-треки и собирает из компактных Room-связей полные [Song],
+ * добавляя одним запросом признак ожидающего пользовательского решения о совпадении.
+ */
 class SongRepository(
     private val songDao: SongDao,
+    private val matchDao: SongMatchDao,
     private val yandexTrackDao: dTrackDao,
     private val localTrackDao: LocalLibraryDao,
 ) {
-    val songs: Flow<List<Song>> = songDao.observeSongs().map { relations ->
-        assemble(relations)
+    private val pendingSongIds: Flow<Set<String>> = matchDao
+        .observePendingSongIds()
+        .map { ids -> ids.toSet() }
+        .distinctUntilChanged()
+
+    val songs: Flow<List<Song>> = combine(
+        songDao.observeSongs(),
+        pendingSongIds,
+    ) { relations, pendingSongIds ->
+        assemble(relations, pendingSongIds)
+    }
+
+    /** Локальная библиотека читается из готового индекса и никогда не пишет в Room. */
+    val localSongs: Flow<List<Song>> = combine(
+        songDao.observeSongsForSource(MusicSource.LOCAL.name),
+        pendingSongIds,
+    ) { relations, pendingSongIds ->
+        assemble(relations, pendingSongIds)
     }
 
     /** Индексирует уже сохранённые записи после запуска или миграции приложения. */
     suspend fun indexExistingTracks() {
-        registerYandexTracks(yandexTrackDao.getAllTracks())
-        registerLocalTracks(localTrackDao.getAllTracks(), removeMissing = true)
+        val yandexIds = songDao.getUnindexedYandexTrackIds(MusicSource.YANDEX.name)
+        if (yandexIds.isNotEmpty()) {
+            registerYandexTracks(yandexTrackDao.getTracks(yandexIds))
+        }
+        val localIds = songDao.getUnindexedLocalTrackIds(MusicSource.LOCAL.name)
+        if (localIds.isNotEmpty()) {
+            registerLocalTracks(localTrackDao.getTracks(localIds))
+        }
     }
 
     suspend fun registerYandexTracks(tracks: List<dYaTrack>) {
@@ -50,10 +79,7 @@ class SongRepository(
         songDao.deleteOrphanSongs()
     }
 
-    suspend fun registerLocalTracks(
-        tracks: List<LocalTrackEntity>,
-        removeMissing: Boolean = false,
-    ) {
+    suspend fun registerLocalTracks(tracks: List<LocalTrackEntity>) {
         tracks.distinctBy(LocalTrackEntity::instanceId).forEach { track ->
             val song = track.toSongEntity()
             songDao.link(
@@ -66,13 +92,11 @@ class SongRepository(
                 ),
             )
         }
-        if (removeMissing) {
-            val activeIds = tracks.map(LocalTrackEntity::instanceId)
-            if (activeIds.isEmpty()) {
-                songDao.deleteAllInstances(MusicSource.LOCAL.name)
-            } else {
-                songDao.deleteMissingInstances(MusicSource.LOCAL.name, activeIds)
-            }
+    }
+
+    suspend fun removeLocalTracks(trackIds: List<String>) {
+        if (trackIds.isNotEmpty()) {
+            songDao.deleteInstances(MusicSource.LOCAL.name, trackIds)
             songDao.deleteOrphanSongs()
         }
     }
@@ -80,7 +104,6 @@ class SongRepository(
     /** Возвращает песни в том же порядке и с теми же повторами, что и Яндекс-треки. */
     suspend fun songsForYandexTracks(tracks: List<dYaTrack>): List<Song> {
         if (tracks.isEmpty()) return emptyList()
-        registerYandexTracks(tracks)
         return songsForSourceIds(
             source = MusicSource.YANDEX,
             sourceIds = tracks.map(dYaTrack::id),
@@ -90,10 +113,19 @@ class SongRepository(
     /** Возвращает песни в том же порядке и с теми же повторами, что и локальные файлы. */
     suspend fun songsForLocalTracks(tracks: List<LocalTrackEntity>): List<Song> {
         if (tracks.isEmpty()) return emptyList()
-        registerLocalTracks(tracks)
         return songsForSourceIds(
             source = MusicSource.LOCAL,
             sourceIds = tracks.map(LocalTrackEntity::instanceId),
+        )
+    }
+
+    /** Собирает актуальные Song по ID для диалога возможных source-вариантов. */
+    suspend fun songsByIds(songIds: List<String>): List<Song> {
+        if (songIds.isEmpty()) return emptyList()
+        val relations = songDao.getSongs(songIds.distinct())
+        return assemble(
+            relations = relations,
+            pendingSongIds = matchDao.getPendingSongIds().toSet(),
         )
     }
 
@@ -110,6 +142,13 @@ class SongRepository(
         songDao.updatePreferredInstance(songId, instanceId)
     }
 
+    /**
+     * Объединяет все логические песни, которым принадлежат [instances], в песню первого экземпляра.
+     * Возвращает ID сохранённой песни; операция целиком выполняется в одной Room-транзакции.
+     */
+    suspend fun mergeInstances(instances: List<TrackInstance>): String =
+        songDao.mergeInstances(instances.map(TrackInstance::id))
+
     private suspend fun songsForSourceIds(
         source: MusicSource,
         sourceIds: List<String>,
@@ -117,7 +156,8 @@ class SongRepository(
         val links = songDao.getInstances(source.name, sourceIds)
             .associateBy(TrackInstanceEntity::sourceTrackId)
         val relations = songDao.getSongs(links.values.map(TrackInstanceEntity::songId).distinct())
-        val songsById = assemble(relations).associateBy(Song::id)
+        val pendingSongIds = matchDao.getPendingSongIds().toSet()
+        val songsById = assemble(relations, pendingSongIds).associateBy(Song::id)
         return sourceIds.mapNotNull { sourceId ->
             val link = links[sourceId] ?: return@mapNotNull null
             val song = songsById[link.songId] ?: return@mapNotNull null
@@ -132,7 +172,10 @@ class SongRepository(
         }
     }
 
-    private suspend fun assemble(relations: List<SongWithInstances>): List<Song> {
+    private suspend fun assemble(
+        relations: List<SongWithInstances>,
+        pendingSongIds: Set<String>,
+    ): List<Song> {
         if (relations.isEmpty()) return emptyList()
         val links = relations.flatMap(SongWithInstances::instances)
         val yandexIds = links.filter { it.source == MusicSource.YANDEX.name }
@@ -164,7 +207,10 @@ class SongRepository(
                     else -> null
                 }
             }
-            relation.song.toDomain(instances)
+            relation.song.toDomain(
+                instances = instances,
+                hasPendingMatchCandidate = relation.song.songId in pendingSongIds,
+            )
         }
     }
 
@@ -201,7 +247,10 @@ class SongRepository(
         preferredInstanceId = null,
     )
 
-    private fun SongEntity.toDomain(instances: List<TrackInstance>): Song = Song(
+    private fun SongEntity.toDomain(
+        instances: List<TrackInstance>,
+        hasPendingMatchCandidate: Boolean,
+    ): Song = Song(
         id = songId,
         title = title,
         artists = instances
@@ -248,6 +297,7 @@ class SongRepository(
         coverUri = coverUri,
         instances = instances,
         preferredInstanceId = preferredInstanceId,
+        hasPendingMatchCandidate = hasPendingMatchCandidate,
     )
 
     private fun matchKey(

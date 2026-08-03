@@ -1,6 +1,7 @@
 package com.yellastrodev.dwij
 
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
@@ -9,6 +10,7 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
@@ -37,6 +39,7 @@ fun LocalLibraryScreen(
     onTrackClick: (Int, Song) -> Unit,
     loadTrackCover: suspend (Song) -> ImageBitmap? = { null },
     modifier: Modifier = Modifier,
+    isLoading: Boolean = false,
 ) {
     Column(
         modifier = modifier
@@ -51,8 +54,8 @@ fun LocalLibraryScreen(
         )
         Spacer(modifier = Modifier.height(18.dp))
         when {
-            playlists != null -> LocalPlaylistList(playlists, onPlaylistClick)
-            tracks != null -> LocalTrackList(tracks, onTrackClick, loadTrackCover)
+            playlists != null -> LocalPlaylistList(playlists, isLoading, onPlaylistClick)
+            tracks != null -> LocalTrackList(tracks, isLoading, onTrackClick, loadTrackCover)
         }
     }
 }
@@ -72,6 +75,7 @@ fun LocalPlaylistObjectScreen(
     onTrackClick: (Int, Song) -> Unit,
     loadTrackCover: suspend (Song) -> ImageBitmap?,
     modifier: Modifier = Modifier,
+    isLoading: Boolean = false,
 ) {
     val unknownArtist = stringResource(R.string.home_player_unknown_artist)
     val tracksById = remember(tracks) { tracks.associateBy(Song::id) }
@@ -99,6 +103,7 @@ fun LocalPlaylistObjectScreen(
         showShare = false,
         showWave = false,
         emptyMessage = stringResource(R.string.local_tracks_empty),
+        isLoading = isLoading,
         modifier = modifier,
     )
 }
@@ -106,9 +111,51 @@ fun LocalPlaylistObjectScreen(
 @Composable
 private fun LocalPlaylistList(
     playlists: List<LocalPlaylistEntity>,
+    isLoading: Boolean,
     onClick: (LocalPlaylistEntity) -> Unit,
 ) {
     if (playlists.isEmpty()) {
+        if (isLoading) {
+            LazyColumn(modifier = Modifier.fillMaxSize()) {
+                items(LOCAL_PLAYLIST_PLACEHOLDER_COUNT) { index ->
+                    Column(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(vertical = 14.dp),
+                    ) {
+                        if (index == 0) {
+                            Text(
+                                text = stringResource(R.string.list_loading_placeholder),
+                                color = Color(0xFF969BAD).copy(alpha = 0.72f),
+                                fontSize = 15.sp,
+                            )
+                        } else {
+                            Spacer(
+                                modifier = Modifier
+                                    .fillMaxWidth(0.58f)
+                                    .height(16.dp)
+                                    .background(
+                                        Color(0xFF343846).copy(alpha = 0.5f),
+                                        RoundedCornerShape(4.dp),
+                                    ),
+                            )
+                        }
+                        Spacer(
+                            modifier = Modifier
+                                .padding(top = 7.dp)
+                                .fillMaxWidth(0.34f)
+                                .height(10.dp)
+                                .background(
+                                    Color(0xFF343846).copy(alpha = 0.36f),
+                                    RoundedCornerShape(4.dp),
+                                ),
+                        )
+                    }
+                    HorizontalDivider(color = Color(0xFF282B35).copy(alpha = 0.55f))
+                }
+            }
+            return
+        }
         EmptyLocalLibraryText(stringResource(R.string.local_playlists_empty))
         return
     }
@@ -146,13 +193,10 @@ private fun LocalPlaylistList(
 @Composable
 private fun LocalTrackList(
     tracks: List<Song>,
+    isLoading: Boolean,
     onClick: (Int, Song) -> Unit,
     loadCover: suspend (Song) -> ImageBitmap?,
 ) {
-    if (tracks.isEmpty()) {
-        EmptyLocalLibraryText(stringResource(R.string.local_tracks_empty))
-        return
-    }
     val unknownArtist = stringResource(R.string.home_player_unknown_artist)
     val tracksById = remember(tracks) { tracks.associateBy(Song::id) }
     val items = remember(tracks, unknownArtist) {
@@ -161,6 +205,7 @@ private fun LocalTrackList(
     TrackList(
         items = items,
         emptyMessage = stringResource(R.string.local_tracks_empty),
+        isLoading = isLoading,
         loadCover = { trackId ->
             tracksById[trackId]?.let { track -> loadCover(track) }
         },
@@ -180,6 +225,8 @@ private fun List<Song>.toTrackListItems(
         trackId = song.id,
         title = song.title,
         artist = song.artistNames.joinToString(", ").ifBlank { unknownArtist },
+        hasMultipleSources = song.instances.size > 1,
+        hasUnresolvedMatchCandidate = song.hasPendingMatchCandidate,
     )
 }
 
@@ -191,3 +238,5 @@ private fun EmptyLocalLibraryText(text: String) {
         style = MaterialTheme.typography.bodyLarge,
     )
 }
+
+private const val LOCAL_PLAYLIST_PLACEHOLDER_COUNT = 5

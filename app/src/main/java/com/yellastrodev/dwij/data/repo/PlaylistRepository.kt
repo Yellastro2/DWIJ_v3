@@ -33,24 +33,32 @@ class PlaylistRepository(
 ) {
 
     private val _playlistMap = MutableStateFlow<Map<String, dYaPlaylist>>(emptyMap())
+    private val _initialLoadComplete = MutableStateFlow(false)
+    val initialLoadComplete: StateFlow<Boolean> = _initialLoadComplete
     val playlists: StateFlow<List<dYaPlaylist>> =
         _playlistMap.map { it.values.toList() }
             .stateIn(scope, SharingStarted.Eagerly, emptyList())
 
     init {
         scope.launch {
-            val cached = cache.getAll()
-            if (cached.isNotEmpty()) {
-                Log.d(TAG, "[init] Используем кеш плейлистов, размер=${cached.size}")
-                _playlistMap.value = cached.associateBy { it.playlistUuid }
-            } else {
-                Log.d(TAG, "[init] Загружаем плейлисты из локальной БД")
-                val localData = local.getAlldPlaylists()
-                if (localData.isNotEmpty()) {
-                    cache.putAll(localData)
-                    _playlistMap.value = localData.associateBy { it.playlistUuid }
+            try {
+                val cached = cache.getAll()
+                if (cached.isNotEmpty()) {
+                    Log.d(TAG, "[init] Используем кеш плейлистов, размер=${cached.size}")
+                    _playlistMap.value = cached.associateBy { it.playlistUuid }
+                } else {
+                    Log.d(TAG, "[init] Загружаем плейлисты из локальной БД")
+                    val localData = local.getAlldPlaylists()
+                    if (localData.isNotEmpty()) {
+                        cache.putAll(localData)
+                        _playlistMap.value = localData.associateBy { it.playlistUuid }
+                    }
+                    Log.d(TAG, "[init] Из локальной БД загружено ${localData.size} плейлистов")
                 }
-                Log.d(TAG, "[init] Из локальной БД загружено ${localData.size} плейлистов")
+            } catch (error: CancellationException) {
+                throw error
+            } catch (error: Exception) {
+                Log.e(TAG, "[init] Не удалось прочитать локальные плейлисты", error)
             }
 
             try {
@@ -59,6 +67,8 @@ class PlaylistRepository(
                 throw error
             } catch (error: Exception) {
                 Log.e(TAG, "[init] Ошибка обновления плейлистов", error)
+            } finally {
+                _initialLoadComplete.value = true
             }
         }
     }

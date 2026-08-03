@@ -20,14 +20,26 @@ import androidx.fragment.app.Fragment
 import androidx.navigation.fragment.findNavController
 import com.yellastrodev.dwij.FullPlayerScreen
 import com.yellastrodev.dwij.FullPlayerUiState
+import com.yellastrodev.dwij.MultiSourceDialog
 import com.yellastrodev.dwij.R
+import com.yellastrodev.dwij.TrackListItemUiModel
+import com.yellastrodev.dwij.TrackSourceIndicator
+import com.yellastrodev.dwij.TrackSourceOptionUiModel
 import com.yellastrodev.dwij.activities.MainActivity
 import com.yellastrodev.dwij.data.entities.MusicSource
+import com.yellastrodev.dwij.data.entities.Song
+import com.yellastrodev.dwij.data.entities.SongMatchCandidateEntity
+import com.yellastrodev.dwij.data.entities.TrackInstance
 import com.yellastrodev.dwij.data.entities.dYaLikeTracklist.Companion.KIND_LIKED
+import com.yellastrodev.dwij.yApplication
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.flow.firstOrNull
 import kotlinx.coroutines.flow.flowOn
+import kotlinx.coroutines.flow.flowOf
+import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 
 /**
  * Связывает полноэкранный Compose-плеер с общим activity-scoped [com.yellastrodev.dwij.models.PlayerModel].
@@ -35,6 +47,12 @@ import kotlinx.coroutines.launch
  */
 class BigPlayerFrag : Fragment() {
     private val playerModel by lazy { (requireActivity() as MainActivity).playerModel }
+    private val songMatchRepository by lazy {
+        (requireActivity().application as yApplication).songMatchRepository
+    }
+    private val songRepository by lazy {
+        (requireActivity().application as yApplication).songRepository
+    }
 
     /** Создаёт единственный ComposeView и переводит состояния репозиториев в неизменяемую UI-модель. */
     override fun onCreateView(
@@ -51,6 +69,7 @@ class BigPlayerFrag : Fragment() {
             val shuffleBlocked by playerModel.shuffleBlock.collectAsState()
             val allPlaylists by playerModel.playlistRepo.playlists.collectAsState()
             val scope = rememberCoroutineScope()
+            val uiMessages = remember { MutableSharedFlow<String>(extraBufferCapacity = 1) }
             var cover by remember(track?.id, playbackTrack?.instanceId) {
                 mutableStateOf<ImageBitmap?>(null)
             }
@@ -73,6 +92,42 @@ class BigPlayerFrag : Fragment() {
             }
 
             val currentTrackId = track?.id
+            var showMultiSourceDialog by remember(currentTrackId) { mutableStateOf(false) }
+            var candidateSongs by remember(currentTrackId) { mutableStateOf(emptyList<Song>()) }
+            var isMergingSources by remember(currentTrackId) { mutableStateOf(false) }
+            var mergeSourcesError by remember(currentTrackId) { mutableStateOf<String?>(null) }
+            val pendingMatchCandidates by remember(currentTrackId) {
+                currentTrackId?.let(songMatchRepository::pendingCandidatesForSong)
+                    ?: flowOf(emptyList<SongMatchCandidateEntity>())
+            }.collectAsState(initial = emptyList())
+
+            LaunchedEffect(
+                showMultiSourceDialog,
+                currentTrackId,
+                pendingMatchCandidates,
+            ) {
+                if (!showMultiSourceDialog || currentTrackId == null) return@LaunchedEffect
+                val relatedSongIds = pendingMatchCandidates
+                    .flatMap { candidate ->
+                        listOf(candidate.firstSongId, candidate.secondSongId)
+                    }
+                    .filterNot { songId -> songId == currentTrackId }
+                    .distinct()
+                candidateSongs = try {
+                    withContext(Dispatchers.IO) {
+                        songRepository.songsByIds(relatedSongIds)
+                    }
+                } catch (error: CancellationException) {
+                    throw error
+                } catch (error: Exception) {
+                    Log.w(
+                        TAG,
+                        "[loadMultiSourceCandidates] Не удалось загрузить варианты songId=$currentTrackId",
+                        error,
+                    )
+                    emptyList()
+                }
+            }
             val yandexTrack = track?.yandexInstances?.firstOrNull()?.track
             val yandexTrackId = yandexTrack?.id
             val playlistKeys = yandexTrack?.playlists.orEmpty()
@@ -103,6 +158,40 @@ class BigPlayerFrag : Fragment() {
             }
             val fallbackQueueTitle = getString(R.string.player_current_queue)
             val unknownArtist = getString(R.string.home_player_unknown_artist)
+            val sourceEntries = remember(track, candidateSongs) {
+                (listOfNotNull(track) + candidateSongs)
+                    .distinctBy(Song::id)
+                    .flatMap { song ->
+                        song.instances.map { instance -> SourceDialogEntry(song, instance) }
+                    }
+                    .distinctBy { entry -> entry.instance.id }
+            }
+            val sourceOptions = remember(sourceEntries, unknownArtist) {
+                sourceEntries.map { entry ->
+                    TrackSourceOptionUiModel(
+                        instanceId = entry.instance.id,
+                        item = TrackListItemUiModel(
+                            key = entry.instance.id,
+                            trackId = entry.song.id,
+                            title = entry.song.title,
+                            artist = entry.song.artistNames
+                                .joinToString(", ")
+                                .ifBlank { unknownArtist },
+                            isYandexUnavailable =
+                                (entry.instance as? TrackInstance.Yandex)
+                                    ?.track
+                                    ?.available == false,
+                        ),
+                        sourceIndicator = when (entry.instance) {
+                            is TrackInstance.Yandex -> TrackSourceIndicator.YANDEX
+                            is TrackInstance.Local -> TrackSourceIndicator.LOCAL
+                        },
+                    )
+                }
+            }
+            val sourceInstancesById = remember(sourceEntries) {
+                sourceEntries.associate { entry -> entry.instance.id to entry.instance }
+            }
             val sourceLabel = when (playbackTrack?.source) {
                 MusicSource.YANDEX -> getString(R.string.player_source_yandex)
                 MusicSource.LOCAL -> getString(R.string.player_source_local)
@@ -125,6 +214,7 @@ class BigPlayerFrag : Fragment() {
                     album = album,
                     sourceLabel = sourceLabel,
                     hasMultipleSources = (track?.instances?.size ?: 0) > 1,
+                    hasUnresolvedMatchCandidate = pendingMatchCandidates.isNotEmpty(),
                     cover = cover,
                     isPlaying = playerState.isPlaying,
                     currentPositionMillis = playerState.currentPosition,
@@ -137,6 +227,7 @@ class BigPlayerFrag : Fragment() {
                     playlistTitles = containingPlaylistTitles,
                 ),
                 playerEvents = playerModel.playerEvent,
+                uiMessages = uiMessages,
                 onBackClick = { findNavController().navigateUp() },
                 onPlayPauseClick = playerModel::playAudio,
                 onPreviousClick = {
@@ -160,7 +251,71 @@ class BigPlayerFrag : Fragment() {
                     }
                 },
                 onAddToPlaylistClick = ::openPlaylistPicker,
+                onSourcesClick = {
+                    mergeSourcesError = null
+                    showMultiSourceDialog = true
+                },
             )
+
+            if (showMultiSourceDialog) {
+                MultiSourceDialog(
+                    options = sourceOptions,
+                    loadCover = { instanceId ->
+                        sourceInstancesById[instanceId]
+                            ?.let { instance -> playerModel.cover(instance) }
+                            ?.firstOrNull()
+                            ?.asImageBitmap()
+                    },
+                    onDismiss = { showMultiSourceDialog = false },
+                    onSave = onSave@{ selectedIds ->
+                        val selectedEntries = sourceEntries.filter { entry ->
+                            entry.instance.id in selectedIds
+                        }
+                        if (selectedEntries.size < 2 || isMergingSources) {
+                            return@onSave
+                        }
+                        scope.launch {
+                            isMergingSources = true
+                            mergeSourcesError = null
+                            try {
+                                val sourceSongIds = selectedEntries
+                                    .mapTo(linkedSetOf(), SourceDialogEntry::songId)
+                                val (mergedSongId, mergedSong) = withContext(Dispatchers.IO) {
+                                    val resultId = songRepository.mergeInstances(
+                                        selectedEntries.map(SourceDialogEntry::instance),
+                                    )
+                                    val resultSong = requireNotNull(
+                                        songRepository.songsByIds(listOf(resultId)).firstOrNull()
+                                    ) {
+                                        "Объединённая Song $resultId не найдена"
+                                    }
+                                    resultId to resultSong
+                                }
+                                playerModel.applyMergedSong(sourceSongIds, mergedSong)
+                                showMultiSourceDialog = false
+                                uiMessages.emit(
+                                    getString(
+                                        R.string.multi_source_merge_success,
+                                        mergedSongId,
+                                    )
+                                )
+                            } catch (error: CancellationException) {
+                                throw error
+                            } catch (error: Exception) {
+                                Log.e(TAG, "[mergeSources] Не удалось объединить источники", error)
+                                mergeSourcesError = getString(
+                                    R.string.multi_source_merge_error,
+                                    error.message ?: error.javaClass.simpleName,
+                                )
+                            } finally {
+                                isMergingSources = false
+                            }
+                        }
+                    },
+                    isSaving = isMergingSources,
+                    errorMessage = mergeSourcesError,
+                )
+            }
         }
     }
 
@@ -183,4 +338,13 @@ class BigPlayerFrag : Fragment() {
     private companion object {
         const val TAG = "BigPlayerFrag"
     }
+}
+
+/** Связывает показанный source-инстанс с его исходной Song для последующего объединения. */
+private data class SourceDialogEntry(
+    val song: Song,
+    val instance: TrackInstance,
+) {
+    val songId: String
+        get() = song.id
 }

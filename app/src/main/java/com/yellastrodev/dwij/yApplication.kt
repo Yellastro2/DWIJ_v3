@@ -205,6 +205,7 @@ class yApplication: Application() {
     val songRepository: SongRepository by lazy {
         SongRepository(
             songDao = db.songDao(),
+            matchDao = db.songMatchDao(),
             yandexTrackDao = db.dTrackDao(),
             localTrackDao = db.localLibraryDao(),
         )
@@ -223,6 +224,8 @@ class yApplication: Application() {
             dao = db.localLibraryDao(),
             mediaStore = mediaStoreLocalSource,
             songRepository = songRepository,
+            cacheManager = cacheManager,
+            database = db,
         )
     }
 

@@ -11,6 +11,24 @@ import kotlinx.coroutines.flow.Flow
 
 @Dao
 abstract class SongMatchDao {
+    /** Наблюдает только ID песен, участвующих хотя бы в одном ожидающем решении. */
+    @Query(
+        "SELECT firstSongId AS songId FROM song_match_candidates WHERE status = :status " +
+            "UNION SELECT secondSongId AS songId FROM song_match_candidates WHERE status = :status"
+    )
+    abstract fun observePendingSongIds(
+        status: String = SongMatchCandidateStatus.PENDING.name,
+    ): Flow<List<String>>
+
+    /** Возвращает компактный снимок ID для нереактивной сборки конкретной очереди. */
+    @Query(
+        "SELECT firstSongId AS songId FROM song_match_candidates WHERE status = :status " +
+            "UNION SELECT secondSongId AS songId FROM song_match_candidates WHERE status = :status"
+    )
+    abstract suspend fun getPendingSongIds(
+        status: String = SongMatchCandidateStatus.PENDING.name,
+    ): List<String>
+
     @Query(
         "SELECT * FROM song_match_candidates WHERE status = :status " +
             "ORDER BY score DESC"

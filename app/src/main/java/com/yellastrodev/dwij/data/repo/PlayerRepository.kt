@@ -445,4 +445,19 @@ class PlayerRepository(
         _currentPlaybackTrack.value = current
     }
 
+    /** Заменяет объединённые Song в уже играющей очереди, не перезапуская Media3. */
+    fun applyMergedSong(sourceSongIds: Set<String>, mergedSong: Song) {
+        if (sourceSongIds.isEmpty()) return
+        currentSongQueue = currentSongQueue.map { song ->
+            if (song.id in sourceSongIds) mergedSong else song
+        }
+        currentTrackList = currentTrackList.map { songId ->
+            if (songId in sourceSongIds) mergedSong.id else songId
+        }
+        if (_currentSong.value?.id in sourceSongIds) {
+            _currentSong.value = mergedSong
+            _currentTrack.value = mergedSong.id
+        }
+    }
+
 }

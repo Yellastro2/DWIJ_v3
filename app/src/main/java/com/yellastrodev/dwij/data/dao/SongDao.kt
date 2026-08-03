@@ -29,6 +29,15 @@ abstract class SongDao {
     abstract fun observeSongs(): Flow<List<SongWithInstances>>
 
     @Transaction
+    @Query(
+        "SELECT DISTINCT songs.* FROM songs " +
+            "INNER JOIN track_instances ON track_instances.songId = songs.songId " +
+            "WHERE track_instances.source = :source " +
+            "ORDER BY songs.title COLLATE NOCASE, songs.artistNames COLLATE NOCASE"
+    )
+    abstract fun observeSongsForSource(source: String): Flow<List<SongWithInstances>>
+
+    @Transaction
     @Query("SELECT * FROM songs WHERE songId IN (:songIds)")
     abstract suspend fun getSongs(songIds: List<String>): List<SongWithInstances>
 
@@ -61,8 +70,30 @@ abstract class SongDao {
         sourceTrackIds: List<String>,
     ): List<TrackInstanceEntity>
 
+    @Query(
+        "SELECT tracks.id FROM tracks " +
+            "LEFT JOIN track_instances ON track_instances.source = :source " +
+            "AND track_instances.sourceTrackId = tracks.id " +
+            "WHERE track_instances.instanceId IS NULL"
+    )
+    abstract suspend fun getUnindexedYandexTrackIds(source: String): List<String>
+
+    @Query(
+        "SELECT local_tracks.instanceId FROM local_tracks " +
+            "LEFT JOIN track_instances ON track_instances.source = :source " +
+            "AND track_instances.sourceTrackId = local_tracks.instanceId " +
+            "WHERE track_instances.instanceId IS NULL"
+    )
+    abstract suspend fun getUnindexedLocalTrackIds(source: String): List<String>
+
     @Query("SELECT * FROM track_instances WHERE instanceId = :instanceId LIMIT 1")
     abstract suspend fun getInstance(instanceId: String): TrackInstanceEntity?
+
+    @Query("SELECT * FROM track_instances WHERE instanceId IN (:instanceIds)")
+    abstract suspend fun getInstancesByIds(instanceIds: List<String>): List<TrackInstanceEntity>
+
+    @Query("SELECT * FROM track_instances WHERE songId IN (:songIds)")
+    abstract suspend fun getInstancesForSongs(songIds: List<String>): List<TrackInstanceEntity>
 
     @Query("UPDATE songs SET preferredInstanceId = :instanceId WHERE songId = :songId")
     abstract suspend fun updatePreferredInstance(songId: String, instanceId: String?)
@@ -89,6 +120,15 @@ abstract class SongDao {
     @Upsert
     abstract suspend fun upsertInstance(instance: TrackInstanceEntity)
 
+    @Query("UPDATE track_instances SET songId = :targetSongId WHERE songId IN (:sourceSongIds)")
+    abstract suspend fun moveInstancesToSong(
+        sourceSongIds: List<String>,
+        targetSongId: String,
+    )
+
+    @Query("DELETE FROM songs WHERE songId IN (:songIds)")
+    abstract suspend fun deleteSongs(songIds: List<String>)
+
     @Query(
         "DELETE FROM track_instances " +
             "WHERE source = :source AND sourceTrackId NOT IN (:activeSourceTrackIds)"
@@ -102,6 +142,12 @@ abstract class SongDao {
         "DELETE FROM track_instances WHERE source = :source"
     )
     abstract suspend fun deleteAllInstances(source: String)
+
+    @Query(
+        "DELETE FROM track_instances " +
+            "WHERE source = :source AND sourceTrackId IN (:sourceTrackIds)"
+    )
+    abstract suspend fun deleteInstances(source: String, sourceTrackIds: List<String>)
 
     @Query(
         "DELETE FROM songs WHERE NOT EXISTS (" +
@@ -137,5 +183,55 @@ abstract class SongDao {
         insertSong(song)
         upsertInstance(instance.copy(songId = song.songId))
         return song.songId
+    }
+
+    /**
+     * Объединяет логические песни, которым принадлежат указанные экземпляры.
+     *
+     * Песня первого экземпляра сохраняется вместе со своей канонической метадатой. Все экземпляры
+     * остальных затронутых песен переносятся к ней, а ставшие лишними [SongEntity] удаляются.
+     * Таким образом уже существующая мультисурсная группа никогда не разделяется частично.
+     */
+    @Transaction
+    open suspend fun mergeInstances(instanceIds: List<String>): String {
+        val orderedInstanceIds = instanceIds.distinct()
+        require(orderedInstanceIds.isNotEmpty()) {
+            "Для объединения нужен хотя бы один экземпляр"
+        }
+
+        val requestedInstances = getInstancesByIds(orderedInstanceIds)
+            .associateBy(TrackInstanceEntity::instanceId)
+        val missingInstanceIds = orderedInstanceIds.filterNot(requestedInstances::containsKey)
+        require(missingInstanceIds.isEmpty()) {
+            "Экземпляры не найдены: ${missingInstanceIds.joinToString()}"
+        }
+
+        val targetSongId = requestedInstances.getValue(orderedInstanceIds.first()).songId
+        val sourceSongIds = orderedInstanceIds
+            .map { instanceId -> requestedInstances.getValue(instanceId).songId }
+            .distinct()
+        if (sourceSongIds.size == 1) return targetSongId
+
+        val songsById = sourceSongIds.associateWith { songId ->
+            requireNotNull(getSong(songId)) {
+                "Для песни $songId отсутствует SongEntity"
+            }
+        }
+        val mergedInstanceIds = getInstancesForSongs(sourceSongIds)
+            .mapTo(mutableSetOf(), TrackInstanceEntity::instanceId)
+        val preferredInstanceId = sourceSongIds
+            .asSequence()
+            .mapNotNull { songId -> songsById.getValue(songId).preferredInstanceId }
+            .firstOrNull(mergedInstanceIds::contains)
+
+        moveInstancesToSong(sourceSongIds, targetSongId)
+        updateSong(
+            songsById.getValue(targetSongId).copy(
+                preferredInstanceId = preferredInstanceId,
+                matchResolverVersion = 0,
+            )
+        )
+        deleteSongs(sourceSongIds.filterNot { songId -> songId == targetSongId })
+        return targetSongId
     }
 }

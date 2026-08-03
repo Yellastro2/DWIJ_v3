@@ -26,29 +26,44 @@ import androidx.fragment.app.viewModels
 import androidx.lifecycle.lifecycleScope
 import androidx.navigation.fragment.findNavController
 import com.google.android.material.snackbar.Snackbar
+import com.yellastrodev.dwij.MultiSourceDialog
 import com.yellastrodev.dwij.ObjectScreen
 import com.yellastrodev.dwij.R
 import com.yellastrodev.dwij.TYPE
 import com.yellastrodev.dwij.TrackListItemUiModel
+import com.yellastrodev.dwij.TrackSourceIndicator
+import com.yellastrodev.dwij.TrackSourceOptionUiModel
 import com.yellastrodev.dwij.VALUE
+import com.yellastrodev.dwij.activities.MainActivity
+import com.yellastrodev.dwij.data.entities.SongMatchCandidateEntity
+import com.yellastrodev.dwij.data.entities.TrackInstance
 import com.yellastrodev.dwij.data.entities.dYaPlaylist
 import com.yellastrodev.dwij.data.entities.Song
 import com.yellastrodev.dwij.models.TracklistModel
 import com.yellastrodev.dwij.yApplication
 import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.flow.firstOrNull
+import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 
 /** Полностью Compose-экран абстрактного музыкального объекта и его списка треков. */
 class ObjectFrag : Fragment() {
+    private val app: yApplication
+        get() = requireActivity().application as yApplication
+    private val playerModel by lazy { (requireActivity() as MainActivity).playerModel }
+    private val songMatchRepository by lazy { app.songMatchRepository }
+    private val songRepository by lazy { app.songRepository }
     private val model: TracklistModel by viewModels {
         TracklistModel.Factory(
-            repo = (requireActivity().application as yApplication).playlistRepository,
-            coverRepo = (requireActivity().application as yApplication).coverRepository,
-            trackRepo = (requireActivity().application as yApplication).trackRepository,
-            trackCacheRepo = (requireActivity().application as yApplication).trackCacheRepo,
-            songRepo = (requireActivity().application as yApplication).songRepository,
-            playerRepo = (requireActivity().application as yApplication).playerRepo,
-            waveRepo = (requireActivity().application as yApplication).waveRepository,
+            repo = app.playlistRepository,
+            coverRepo = app.coverRepository,
+            trackRepo = app.trackRepository,
+            trackCacheRepo = app.trackCacheRepo,
+            songRepo = app.songRepository,
+            playerRepo = app.playerRepo,
+            waveRepo = app.waveRepository,
         )
     }
 
@@ -74,6 +89,7 @@ class ObjectFrag : Fragment() {
         setContent {
             val playlist by model.playlist.collectAsState()
             val tracks by model.tracks.collectAsState()
+            val isLoading by model.isLoading.collectAsState()
             val cachedUnavailableSongIds by model.cachedUnavailableSongIds.collectAsState()
             val yandexPlaylist = playlist as? dYaPlaylist
             val objectId = yandexPlaylist?.playlistUuid
@@ -99,6 +115,79 @@ class ObjectFrag : Fragment() {
             val refreshScope = rememberCoroutineScope()
             var objectCover by remember(objectId) { mutableStateOf<ImageBitmap?>(null) }
             var isRefreshing by remember { mutableStateOf(false) }
+            var sourceDialogSongId by remember { mutableStateOf<String?>(null) }
+            var candidateSongs by remember(sourceDialogSongId) {
+                mutableStateOf(emptyList<Song>())
+            }
+            var isMergingSources by remember(sourceDialogSongId) { mutableStateOf(false) }
+            var mergeSourcesError by remember(sourceDialogSongId) { mutableStateOf<String?>(null) }
+            val sourceDialogSong = remember(tracks, sourceDialogSongId) {
+                tracks.firstOrNull { song -> song.id == sourceDialogSongId }
+            }
+            val pendingMatchCandidates by remember(sourceDialogSongId) {
+                sourceDialogSongId?.let(songMatchRepository::pendingCandidatesForSong)
+                    ?: flowOf(emptyList<SongMatchCandidateEntity>())
+            }.collectAsState(initial = emptyList())
+
+            LaunchedEffect(sourceDialogSongId, pendingMatchCandidates) {
+                val currentSongId = sourceDialogSongId ?: return@LaunchedEffect
+                val relatedSongIds = pendingMatchCandidates
+                    .flatMap { candidate ->
+                        listOf(candidate.firstSongId, candidate.secondSongId)
+                    }
+                    .filterNot { songId -> songId == currentSongId }
+                    .distinct()
+                candidateSongs = try {
+                    withContext(Dispatchers.IO) {
+                        songRepository.songsByIds(relatedSongIds)
+                    }
+                } catch (error: CancellationException) {
+                    throw error
+                } catch (error: Exception) {
+                    Log.w(
+                        TAG,
+                        "[loadMultiSourceCandidates] Не удалось загрузить варианты " +
+                            "songId=$currentSongId",
+                        error,
+                    )
+                    emptyList()
+                }
+            }
+
+            val sourceEntries = remember(sourceDialogSong, candidateSongs) {
+                (listOfNotNull(sourceDialogSong) + candidateSongs)
+                    .distinctBy(Song::id)
+                    .flatMap { song ->
+                        song.instances.map { instance -> ObjectSourceDialogEntry(song, instance) }
+                    }
+                    .distinctBy { entry -> entry.instance.id }
+            }
+            val sourceOptions = remember(sourceEntries, unknownArtist) {
+                sourceEntries.map { entry ->
+                    TrackSourceOptionUiModel(
+                        instanceId = entry.instance.id,
+                        item = TrackListItemUiModel(
+                            key = entry.instance.id,
+                            trackId = entry.song.id,
+                            title = entry.song.title,
+                            artist = entry.song.artistNames
+                                .joinToString(", ")
+                                .ifBlank { unknownArtist },
+                            isYandexUnavailable =
+                                (entry.instance as? TrackInstance.Yandex)
+                                    ?.track
+                                    ?.available == false,
+                        ),
+                        sourceIndicator = when (entry.instance) {
+                            is TrackInstance.Yandex -> TrackSourceIndicator.YANDEX
+                            is TrackInstance.Local -> TrackSourceIndicator.LOCAL
+                        },
+                    )
+                }
+            }
+            val sourceInstancesById = remember(sourceEntries) {
+                sourceEntries.associate { entry -> entry.instance.id to entry.instance }
+            }
 
             LaunchedEffect(objectId) {
                 objectCover = null
@@ -134,6 +223,7 @@ class ObjectFrag : Fragment() {
                 showShare = objectType == PLAYLIST,
                 showWave = objectType == PLAYLIST,
                 emptyMessage = stringResource(R.string.track_list_empty),
+                isLoading = isLoading,
                 isRefreshing = isRefreshing,
                 onRefresh = {
                     if (!isRefreshing) {
@@ -169,10 +259,14 @@ class ObjectFrag : Fragment() {
                     }
                 },
                 onTrackClick = { position, item ->
-                    if (item.isPlaybackBlocked) {
-                        showUnavailableTrackSnackbar()
-                    } else {
-                        playTrack(position, item.trackId)
+                    when {
+                        item.isPlaybackBlocked &&
+                            (item.hasMultipleSources || item.hasUnresolvedMatchCandidate) -> {
+                            mergeSourcesError = null
+                            sourceDialogSongId = item.trackId
+                        }
+                        item.isPlaybackBlocked -> showUnavailableTrackSnackbar()
+                        else -> playTrack(position, item.trackId)
                     }
                 },
                 onShareClick = {
@@ -181,6 +275,64 @@ class ObjectFrag : Fragment() {
                 onWaveClick = ::playWave,
                 modifier = Modifier.fillMaxSize(),
             )
+
+            if (sourceDialogSong != null) {
+                MultiSourceDialog(
+                    options = sourceOptions,
+                    loadCover = { instanceId ->
+                        sourceInstancesById[instanceId]
+                            ?.let { instance -> playerModel.cover(instance) }
+                            ?.firstOrNull()
+                            ?.asImageBitmap()
+                    },
+                    onDismiss = { sourceDialogSongId = null },
+                    onSave = onSave@{ selectedIds ->
+                        val selectedEntries = sourceEntries.filter { entry ->
+                            entry.instance.id in selectedIds
+                        }
+                        if (selectedEntries.size < 2 || isMergingSources) return@onSave
+                        refreshScope.launch {
+                            isMergingSources = true
+                            mergeSourcesError = null
+                            try {
+                                val sourceSongIds = selectedEntries
+                                    .mapTo(linkedSetOf(), ObjectSourceDialogEntry::songId)
+                                val (mergedSongId, mergedSong) = withContext(Dispatchers.IO) {
+                                    val resultId = songRepository.mergeInstances(
+                                        selectedEntries.map(ObjectSourceDialogEntry::instance),
+                                    )
+                                    val resultSong = requireNotNull(
+                                        songRepository.songsByIds(listOf(resultId)).firstOrNull()
+                                    ) {
+                                        "Объединённая Song $resultId не найдена"
+                                    }
+                                    resultId to resultSong
+                                }
+                                model.applyMergedSong(sourceSongIds, mergedSong)
+                                playerModel.applyMergedSong(sourceSongIds, mergedSong)
+                                sourceDialogSongId = null
+                                showMultiSourceMergeSuccessSnackbar(mergedSongId)
+                            } catch (error: CancellationException) {
+                                throw error
+                            } catch (error: Exception) {
+                                Log.e(
+                                    TAG,
+                                    "[mergeSources] Не удалось объединить источники",
+                                    error,
+                                )
+                                mergeSourcesError = getString(
+                                    R.string.multi_source_merge_error,
+                                    error.message ?: error.javaClass.simpleName,
+                                )
+                            } finally {
+                                isMergingSources = false
+                            }
+                        }
+                    },
+                    isSaving = isMergingSources,
+                    errorMessage = mergeSourcesError,
+                )
+            }
         }
     }
 
@@ -223,6 +375,8 @@ class ObjectFrag : Fragment() {
                 shouldLoadCover = song.coverUri != null,
                 isYandexUnavailable = yandexUnavailable,
                 isPlaybackBlocked = song.localInstances.isEmpty() && !yandexPlayable,
+                hasMultipleSources = song.instances.size > 1,
+                hasUnresolvedMatchCandidate = song.hasPendingMatchCandidate,
             )
         }
     }
@@ -238,6 +392,17 @@ class ObjectFrag : Fragment() {
         }
     }
 
+    /** Показывает ID сохранённой мультисурсной Song после закрытия диалога. */
+    private fun showMultiSourceMergeSuccessSnackbar(songId: String) {
+        view?.let { root ->
+            Snackbar.make(
+                root,
+                getString(R.string.multi_source_merge_success, songId),
+                Snackbar.LENGTH_LONG,
+            ).show()
+        }
+    }
+
     companion object {
         const val TRACK = "track"
         const val PLAYLIST = "playlist"
@@ -245,4 +410,13 @@ class ObjectFrag : Fragment() {
         const val ARTIST = "artist"
         private const val TAG = "ObjectFrag"
     }
+}
+
+/** Связывает вариант диалога со старой Song, к которой он относился до merge. */
+private data class ObjectSourceDialogEntry(
+    val song: Song,
+    val instance: TrackInstance,
+) {
+    val songId: String
+        get() = song.id
 }
