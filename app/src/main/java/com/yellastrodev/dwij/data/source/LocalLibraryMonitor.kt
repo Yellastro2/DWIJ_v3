@@ -1,5 +1,6 @@
 package com.yellastrodev.dwij.data.source
 
+import android.content.Context
 import android.database.ContentObserver
 import android.net.Uri
 import android.os.Handler
@@ -32,9 +33,27 @@ class LocalLibraryMonitor(
         private const val TAG = "LocalLibraryMonitor"
         private const val DEBOUNCE_MS = 2_000L
 
-        fun observedUris(): List<Uri> = listOf(
-            MediaStore.Audio.Media.EXTERNAL_CONTENT_URI,
-            MediaStore.Files.getContentUri("external"),
-        )
+        /** Наблюдает как общий external URI, так и реальные тома вроде external_primary. */
+        fun observedUris(context: Context): List<Uri> =
+            if (android.os.Build.VERSION.SDK_INT >= 29) {
+                val volumes = buildSet {
+                    add("external")
+                    addAll(
+                        runCatching { MediaStore.getExternalVolumeNames(context) }
+                            .getOrDefault(emptySet())
+                    )
+                }
+                volumes.flatMap { volume ->
+                    listOf(
+                        MediaStore.Audio.Media.getContentUri(volume),
+                        MediaStore.Files.getContentUri(volume),
+                    )
+                }.distinct()
+            } else {
+                listOf(
+                    MediaStore.Audio.Media.EXTERNAL_CONTENT_URI,
+                    MediaStore.Files.getContentUri("external"),
+                )
+            }
     }
 }

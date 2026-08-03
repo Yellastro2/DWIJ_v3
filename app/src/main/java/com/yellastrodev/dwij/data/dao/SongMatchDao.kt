@@ -11,6 +11,15 @@ import kotlinx.coroutines.flow.Flow
 
 @Dao
 abstract class SongMatchDao {
+    /** Наблюдает все решения: ожидающие идут первыми, затем остальные по убыванию score. */
+    @Query(
+        "SELECT * FROM song_match_candidates " +
+            "ORDER BY CASE WHEN status = :pendingStatus THEN 0 ELSE 1 END, score DESC"
+    )
+    abstract fun observeAllCandidates(
+        pendingStatus: String = SongMatchCandidateStatus.PENDING.name,
+    ): Flow<List<SongMatchCandidateEntity>>
+
     /** Наблюдает только ID песен, участвующих хотя бы в одном ожидающем решении. */
     @Query(
         "SELECT firstSongId AS songId FROM song_match_candidates WHERE status = :status " +

@@ -90,6 +90,7 @@ import java.util.Locale
 @Composable
 fun HomeScreen(
     onSettingsClick: () -> Unit,
+    onSongMatchesClick: () -> Unit,
     onPlaylistsClick: () -> Unit,
     onTracksClick: () -> Unit,
     onWaveClick: () -> Unit,
@@ -269,6 +270,20 @@ fun HomeScreen(
                                 onPreviousClick = onPlayerPreviousClick,
                                 onNextClick = onPlayerNextClick,
                                 onDetailsClick = onPlayerOpenClick,
+                                modifier = Modifier.fillMaxSize(),
+                            )
+                        }
+                        IconButton(
+                            onClick = onSongMatchesClick,
+                            modifier = Modifier
+                                .align(Alignment.TopStart)
+                                .padding(top = 15.dp, start = 15.dp)
+                                .size(30.dp),
+                        ) {
+                            MultipleSourcesIndicator(
+                                semanticDescription = stringResource(
+                                    R.string.song_match_candidates_button_content_description,
+                                ),
                                 modifier = Modifier.fillMaxSize(),
                             )
                         }
@@ -1234,6 +1249,7 @@ private fun HomeScreenPreview() {
     HomeScreen(
         modifier = Modifier.fillMaxSize(),
         onSettingsClick = {},
+        onSongMatchesClick = {},
         onPlaylistsClick = {},
         onTracksClick = {},
         onWaveClick = {},

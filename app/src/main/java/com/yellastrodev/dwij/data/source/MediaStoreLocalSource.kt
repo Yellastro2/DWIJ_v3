@@ -14,8 +14,12 @@ import com.yellastrodev.dwij.data.entities.LocalPlaylistEntity
 import com.yellastrodev.dwij.data.entities.LocalPlaylistEntryEntity
 import com.yellastrodev.dwij.data.entities.LocalPlaylistOrigin
 import com.yellastrodev.dwij.data.entities.LocalTrackEntity
+import kotlinx.coroutines.suspendCancellableCoroutine
+import kotlinx.coroutines.withTimeoutOrNull
 import java.io.File
 import java.security.MessageDigest
+import java.util.concurrent.atomic.AtomicInteger
+import kotlin.coroutines.resume
 
 data class LocalMediaSnapshot(
     val tracks: List<LocalTrackEntity>,
@@ -49,6 +53,53 @@ class MediaStoreLocalSource(private val context: Context) {
     }
 
     fun currentGeneration(): String = generationSignature(externalVolumeNames())
+
+    /**
+     * Дешёво сверяет сохранённые MediaStore-атрибуты с файловой системой, не читая аудиотеги.
+     * Это обнаруживает редакторы, которые меняют файл, но не уведомляют MediaStore.
+     */
+    fun findChangedBackingFiles(tracks: List<LocalTrackEntity>): List<LocalTrackEntity> =
+        tracks.filter { track ->
+            val path = track.absolutePath ?: return@filter false
+            val file = File(path)
+            if (!file.isFile) return@filter false
+            val modifiedSeconds = file.lastModified().takeIf { it > 0L }?.div(1_000L)
+            val sizeBytes = file.length()
+            modifiedSeconds != null && modifiedSeconds != track.dateModifiedSeconds ||
+                track.sizeBytes != null && sizeBytes != track.sizeBytes
+        }
+
+    /**
+     * Просит системный MediaScanner перечитать только изменившиеся файлы и ждёт все callback-и.
+     * Таймаут не блокирует последующую обычную синхронизацию MediaStore.
+     */
+    suspend fun rescanTracks(tracks: List<LocalTrackEntity>): Boolean {
+        val paths = tracks.mapNotNull(LocalTrackEntity::absolutePath).distinct()
+        if (paths.isEmpty()) return true
+        val failedScans = AtomicInteger(0)
+        val completed = withTimeoutOrNull(FILE_RESCAN_TIMEOUT_MS) {
+            suspendCancellableCoroutine { continuation ->
+                val remaining = AtomicInteger(paths.size)
+                MediaScannerConnection.scanFile(
+                    context,
+                    paths.toTypedArray(),
+                    null,
+                ) { _, uri ->
+                    if (uri == null) failedScans.incrementAndGet()
+                    if (remaining.decrementAndGet() == 0 && continuation.isActive) {
+                        continuation.resume(Unit)
+                    }
+                }
+            }
+            true
+        } ?: false
+        Log.d(
+            TAG,
+            "[rescanTracks] Запрошено=${paths.size}, ошибок=${failedScans.get()}, " +
+                "завершено=$completed",
+        )
+        return completed
+    }
 
     private fun externalVolumeNames(): Set<String> = if (Build.VERSION.SDK_INT >= 29) {
         MediaStore.getExternalVolumeNames(context).ifEmpty {
@@ -388,5 +439,6 @@ class MediaStoreLocalSource(private val context: Context) {
     companion object {
         private const val TAG = "MediaStoreLocalSource"
         private const val DWIJ_PLAYLIST_RELATIVE_PATH = "Music/DWIJ/Playlists/"
+        private const val FILE_RESCAN_TIMEOUT_MS = 120_000L
     }
 }

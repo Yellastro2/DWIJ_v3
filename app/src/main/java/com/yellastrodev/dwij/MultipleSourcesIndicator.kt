@@ -13,8 +13,11 @@ import androidx.compose.ui.unit.dp
 
 /** Рисует постоянный индикатор из трёх сцепленных знаков Play для песни с дублями. */
 @Composable
-internal fun MultipleSourcesIndicator(modifier: Modifier = Modifier) {
-    val description = stringResource(
+internal fun MultipleSourcesIndicator(
+    modifier: Modifier = Modifier,
+    semanticDescription: String? = null,
+) {
+    val description = semanticDescription ?: stringResource(
         R.string.player_multiple_sources_active_content_description,
     )
     Canvas(

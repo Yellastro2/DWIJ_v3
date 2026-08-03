@@ -259,7 +259,7 @@ class yApplication: Application() {
     override fun onCreate() {
         super.onCreate()
         playerRepo.waveRepository = this@yApplication.waveRepository
-        LocalLibraryMonitor.observedUris().forEach { uri ->
+        LocalLibraryMonitor.observedUris(applicationContext).forEach { uri ->
             contentResolver.registerContentObserver(uri, true, localLibraryMonitor)
         }
         LocalLibrarySyncWorker.schedule(applicationContext)

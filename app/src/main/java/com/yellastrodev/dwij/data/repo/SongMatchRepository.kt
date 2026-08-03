@@ -25,6 +25,10 @@ class SongMatchRepository(
 ) {
     private val scanMutex = Mutex()
 
+    /** Все найденные пары: сначала ожидающие решения, затем уже обработанные. */
+    val candidates: Flow<List<SongMatchCandidateEntity>> =
+        matchDao.observeAllCandidates()
+
     val pendingCandidates: Flow<List<SongMatchCandidateEntity>> =
         matchDao.observePendingCandidates()
 

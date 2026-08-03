@@ -113,6 +113,11 @@ class HomeFrag: Fragment(R.layout.frag_home) {
 							R.id.action_homeFrag_to_settingsAct,
 						)
 					},
+					onSongMatchesClick = {
+						findNavController().navigate(
+							R.id.action_homeFrag_to_songMatchCandidatesFrag,
+						)
+					},
 					onPlaylistsClick = {
 						if (musicSource == HomeMusicSource.Local) {
 							openLocalLibrary(LocalLibraryFrag.MODE_PLAYLISTS)

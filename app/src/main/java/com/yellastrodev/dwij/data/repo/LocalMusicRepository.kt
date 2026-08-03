@@ -8,6 +8,7 @@ import android.graphics.BitmapFactory
 import android.media.MediaMetadataRetriever
 import android.net.Uri
 import android.os.Build
+import android.os.Process
 import android.util.Log
 import android.util.LruCache
 import androidx.core.content.ContextCompat
@@ -27,6 +28,7 @@ import com.yellastrodev.dwij.data.entities.Song
 import com.yellastrodev.dwij.data.source.MediaStoreLocalSource
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.asCoroutineDispatcher
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -35,11 +37,13 @@ import kotlinx.coroutines.flow.flowOn
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
+import kotlinx.coroutines.withContext
 import java.io.File
 import java.io.FileOutputStream
 import java.security.MessageDigest
 import java.util.UUID
 import java.util.concurrent.ConcurrentHashMap
+import java.util.concurrent.Executors
 import java.util.concurrent.atomic.AtomicInteger
 
 data class LocalSyncSummary(
@@ -94,18 +98,40 @@ class LocalMusicRepository(
         requiredAudioPermission(),
     ) == PackageManager.PERMISSION_GRANTED
 
-    suspend fun synchronize(force: Boolean): DataResult<LocalSyncSummary> = syncMutex.withLock {
+    /** Выполняет синхронизацию последовательно на отдельном потоке с минимальным приоритетом. */
+    suspend fun synchronize(force: Boolean): DataResult<LocalSyncSummary> =
+        withContext(LOCAL_LIBRARY_SYNC_DISPATCHER) {
+            syncMutex.withLock {
+                synchronizeLocked(force)
+            }
+        }
+
+    private suspend fun synchronizeLocked(force: Boolean): DataResult<LocalSyncSummary> {
         if (!hasAudioPermission()) return DataResult.Failure(DataError.Unauthorized)
         _isSynchronizing.value = true
-        try {
+        return try {
             val currentGeneration = mediaStore.currentGeneration()
             val savedGeneration = dao.getState(LocalLibraryDao.LAST_GENERATION_KEY)
-            if (!force && currentGeneration == savedGeneration && !currentGeneration.contains(":-1")) {
-                Log.d(TAG, "[synchronize] MediaStore не изменился, сканирование пропущено")
+            val storedTrackList = dao.getAllTracks()
+            val changedBackingFiles = mediaStore.findChangedBackingFiles(storedTrackList)
+            if (changedBackingFiles.isNotEmpty()) {
+                Log.d(
+                    TAG,
+                    "[synchronize] Вне MediaStore изменено файлов=${changedBackingFiles.size}",
+                )
+                mediaStore.rescanTracks(changedBackingFiles)
+            }
+            if (
+                !force &&
+                changedBackingFiles.isEmpty() &&
+                currentGeneration == savedGeneration &&
+                !currentGeneration.contains(":-1")
+            ) {
+                Log.d(TAG, "[synchronize] MediaStore и файлы не изменились, сканирование пропущено")
                 return DataResult.Success(LocalSyncSummary(0, 0, skipped = true))
             }
             val snapshot = mediaStore.scan()
-            val storedTracks = dao.getAllTracks().associateBy(LocalTrackEntity::instanceId)
+            val storedTracks = storedTrackList.associateBy(LocalTrackEntity::instanceId)
             val scannedTracks = snapshot.tracks.associateBy(LocalTrackEntity::instanceId)
             val changedTracks = snapshot.tracks.filter { track ->
                 storedTracks[track.instanceId] != track
@@ -312,6 +338,20 @@ class LocalMusicRepository(
         private const val COVER_MAX_EDGE_PX = 400
         private const val COVER_JPEG_QUALITY = 88
         private const val CACHE_LIMIT_CHECK_INTERVAL = 16
+
+        /** Один медленный worker на всё приложение; его Linux- и Java-приоритеты минимальны. */
+        private val LOCAL_LIBRARY_SYNC_DISPATCHER = Executors.newSingleThreadExecutor { command ->
+            Thread(
+                {
+                    runCatching { Process.setThreadPriority(Process.THREAD_PRIORITY_LOWEST) }
+                    command.run()
+                },
+                "dwij-local-library-sync",
+            ).apply {
+                isDaemon = true
+                priority = Thread.MIN_PRIORITY
+            }
+        }.asCoroutineDispatcher()
 
         fun requiredAudioPermission(): String = if (Build.VERSION.SDK_INT >= 33) {
             Manifest.permission.READ_MEDIA_AUDIO
