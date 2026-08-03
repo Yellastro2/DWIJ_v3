@@ -1,6 +1,7 @@
 package com.yellastrodev.dwij.data.entities
 
 import androidx.room.Entity
+import androidx.room.Embedded
 import androidx.room.ForeignKey
 import androidx.room.Index
 
@@ -58,6 +59,13 @@ data class LocalPlaylistEntity(
     val dateModifiedSeconds: Long,
     val editable: Boolean,
     val exportedHash: String? = null,
+)
+
+/** Локальный плейлист вместе с рассчитанной Room статистикой его строк и длительности. */
+data class LocalPlaylistSummary(
+    @Embedded val playlist: LocalPlaylistEntity,
+    val trackCount: Int,
+    val durationMs: Long,
 )
 
 /**

@@ -38,6 +38,7 @@ import com.yellastrodev.dwij.VALUE
 import com.yellastrodev.dwij.data.DataResult
 import com.yellastrodev.dwij.data.entities.LocalPlaylistEntity
 import com.yellastrodev.dwij.data.entities.LocalPlaylistOrigin
+import com.yellastrodev.dwij.data.entities.LocalPlaylistSummary
 import com.yellastrodev.dwij.data.entities.dYaLikeTracklist.Companion.KIND_LIKED
 import com.yellastrodev.dwij.data.entities.dYaPlaylist
 import com.yellastrodev.dwij.data.entities.dYaTrack
@@ -97,10 +98,13 @@ class GridPlaylistFrag : Fragment() {
         setContent {
             val yandexPlaylists by model.playlists.collectAsState()
             val yandexInitialLoadComplete by model.initialLoadComplete.collectAsState()
-            val localPlaylistSnapshot by app.localMusicRepository.playlists
+            val localPlaylistSummarySnapshot by app.localMusicRepository.playlistSummaries
                 .collectAsState(initial = null)
             val isLocalSynchronizing by app.localMusicRepository.isSynchronizing.collectAsState()
-            val localPlaylists = localPlaylistSnapshot.orEmpty()
+            val localPlaylistSummaries = localPlaylistSummarySnapshot.orEmpty()
+            val localPlaylists = remember(localPlaylistSummaries) {
+                localPlaylistSummaries.map(LocalPlaylistSummary::playlist)
+            }
             val musicSource by selectedMusicSource.collectAsState()
             val pickedTrackId = arguments?.getString(ACTION_DATA)
                 .takeIf { isAddTrackMode() }
@@ -147,7 +151,7 @@ class GridPlaylistFrag : Fragment() {
                 }
             }
             val localScreenItems = remember(
-                localPlaylists,
+                localPlaylistSummaries,
                 showCreateAction,
                 createTitle,
                 localDwij,
@@ -156,7 +160,7 @@ class GridPlaylistFrag : Fragment() {
             ) {
                 val startedNanos = SystemClock.elapsedRealtimeNanos()
                 localItems(
-                    playlists = localPlaylists,
+                    playlists = localPlaylistSummaries,
                     showCreateAction = showCreateAction,
                     createTitle = createTitle,
                     dwijLabel = localDwij,
@@ -217,8 +221,8 @@ class GridPlaylistFrag : Fragment() {
                 ),
                 isLoading = when (musicSource) {
                     HomeMusicSource.Yandex -> !yandexInitialLoadComplete
-                    HomeMusicSource.Local -> localPlaylistSnapshot == null ||
-                        (localPlaylistSnapshot.isNullOrEmpty() && isLocalSynchronizing)
+                    HomeMusicSource.Local -> localPlaylistSummarySnapshot == null ||
+                        (localPlaylistSummarySnapshot.isNullOrEmpty() && isLocalSynchronizing)
                 },
                 isRefreshing = isRefreshing ||
                     (musicSource == HomeMusicSource.Local && isLocalSynchronizing),
@@ -562,7 +566,7 @@ class GridPlaylistFrag : Fragment() {
 
         /** Преобразует локальные записи в те же плитки без сетевой обложки. */
         private fun localItems(
-            playlists: List<LocalPlaylistEntity>,
+            playlists: List<LocalPlaylistSummary>,
             showCreateAction: Boolean,
             createTitle: String,
             dwijLabel: String,
@@ -579,17 +583,24 @@ class GridPlaylistFrag : Fragment() {
                     ),
                 )
             }
-            playlists.forEach { playlist ->
+            playlists.forEach { summary ->
+                val playlist = summary.playlist
+                val formatLabel = when (playlist.origin) {
+                    LocalPlaylistOrigin.DWIJ.name -> dwijLabel
+                    LocalPlaylistOrigin.MEDIA_STORE.name -> mediaStoreLabel
+                    else -> m3uLabel
+                }
+                val duration = formatDuration(
+                    summary.durationMs.coerceAtMost(Int.MAX_VALUE.toLong()).toInt(),
+                )
                 add(
                     PlaylistGridScreenItem(
                         id = playlist.playlistId,
                         title = playlist.name,
                         fallbackCoverResId = R.drawable.logo_lil,
-                        details = when (playlist.origin) {
-                            LocalPlaylistOrigin.DWIJ.name -> dwijLabel
-                            LocalPlaylistOrigin.MEDIA_STORE.name -> mediaStoreLabel
-                            else -> m3uLabel
-                        },
+                        details = "${summary.trackCount} " +
+                            "трек${getNumericPostfix(summary.trackCount)} · $duration\n" +
+                            formatLabel,
                     ),
                 )
             }

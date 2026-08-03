@@ -22,6 +22,7 @@ import com.yellastrodev.dwij.data.dao.LocalLibraryDao
 import com.yellastrodev.dwij.data.entities.LocalPlaylistEntity
 import com.yellastrodev.dwij.data.entities.LocalPlaylistEntryEntity
 import com.yellastrodev.dwij.data.entities.LocalPlaylistOrigin
+import com.yellastrodev.dwij.data.entities.LocalPlaylistSummary
 import com.yellastrodev.dwij.data.entities.LocalTrackEntity
 import com.yellastrodev.dwij.data.entities.LocalTracklist
 import com.yellastrodev.dwij.data.entities.Song
@@ -81,6 +82,7 @@ class LocalMusicRepository(
     val tracks: Flow<List<LocalTrackEntity>> = dao.observeAllTracks()
     val songs: Flow<List<Song>> = songRepository.localSongs
     val playlists: Flow<List<LocalPlaylistEntity>> = dao.observePlaylists()
+    val playlistSummaries: Flow<List<LocalPlaylistSummary>> = dao.observePlaylistSummaries()
 
     fun playlist(playlistId: String): Flow<LocalPlaylistEntity?> =
         dao.observePlaylist(playlistId)

@@ -8,6 +8,7 @@ import com.yellastrodev.dwij.data.entities.LocalLibraryStateEntity
 import com.yellastrodev.dwij.data.entities.LocalPlaylistEntity
 import com.yellastrodev.dwij.data.entities.LocalPlaylistEntryEntity
 import com.yellastrodev.dwij.data.entities.LocalPlaylistOrigin
+import com.yellastrodev.dwij.data.entities.LocalPlaylistSummary
 import com.yellastrodev.dwij.data.entities.LocalTrackEntity
 import kotlinx.coroutines.flow.Flow
 
@@ -21,6 +22,23 @@ abstract class LocalLibraryDao {
 
     @Query("SELECT * FROM local_playlists ORDER BY name COLLATE NOCASE")
     abstract fun observePlaylists(): Flow<List<LocalPlaylistEntity>>
+
+    /** Одним запросом считает строки плейлиста и длительность найденных локальных треков. */
+    @Query(
+        """
+        SELECT local_playlists.*,
+               COUNT(local_playlist_entries.position) AS trackCount,
+               COALESCE(SUM(local_tracks.durationMs), 0) AS durationMs
+        FROM local_playlists
+        LEFT JOIN local_playlist_entries
+            ON local_playlist_entries.playlistId = local_playlists.playlistId
+        LEFT JOIN local_tracks
+            ON local_tracks.instanceId = local_playlist_entries.localTrackId
+        GROUP BY local_playlists.playlistId
+        ORDER BY local_playlists.name COLLATE NOCASE
+        """
+    )
+    abstract fun observePlaylistSummaries(): Flow<List<LocalPlaylistSummary>>
 
     @Query("SELECT * FROM local_playlists WHERE playlistId = :playlistId")
     abstract fun observePlaylist(playlistId: String): Flow<LocalPlaylistEntity?>

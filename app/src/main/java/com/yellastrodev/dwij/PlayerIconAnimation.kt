@@ -4,7 +4,6 @@ import androidx.compose.animation.core.animateFloat
 import androidx.compose.animation.core.spring
 import androidx.compose.animation.core.updateTransition
 import androidx.compose.foundation.ExperimentalFoundationApi
-import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.LocalIndication
 import androidx.compose.foundation.background
@@ -34,7 +33,6 @@ import androidx.compose.ui.draw.clipToBounds
 import androidx.compose.ui.draw.drawWithContent
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Rect
-import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.drawscope.clipPath
 import androidx.compose.ui.graphics.graphicsLayer
@@ -48,14 +46,20 @@ import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import kotlinx.coroutines.delay
+import kotlin.math.atan2
 import kotlin.math.cos
 import kotlin.math.sin
-import kotlin.math.sqrt
 import kotlin.random.Random
 
 private const val GLITCH_CYCLE_DURATION_MILLIS = 60_000
 private const val GLITCH_SEQUENCE_END_MARGIN_MILLIS = 1_000
 private const val PLAYER_ARTWORK_VIEWPORT_WIDTH = 355f
+private const val PLAYER_ARTWORK_VIEWPORT_HEIGHT = 237f
+private const val PLAYER_PROGRESS_CENTER_X = 180f
+private const val PLAYER_PROGRESS_CENTER_Y = 120f
+private const val PLAYER_PROGRESS_RADIUS_X = 81f
+private const val PLAYER_PROGRESS_RADIUS_Y = 88f
+private const val PLAYER_PROGRESS_HEAD_SIZE_DP = 18f
 private const val PLAYER_ACCENT_VISIBLE_RADIUS_X = 85.25f
 private const val PLAYER_ACCENT_VISIBLE_RADIUS_Y = 92.25f
 private val GROUP_A_STRIPE_OFFSETS = listOf(0.12f, 0.29f, 0.46f, 0.63f, 0.80f)
@@ -312,7 +316,7 @@ private fun BoxScope.PlayerProgressRing(
     )
 }
 
-/** Рисует белую головку прогресса с разнесёнными cyan/magenta глич-ореолами. */
+/** Ставит отдельный SVG-маркер на вычисленную точку эллипса и разворачивает его по касательной. */
 @Composable
 private fun BoxScope.PlayerProgressHead(
     progress: Float,
@@ -320,7 +324,31 @@ private fun BoxScope.PlayerProgressHead(
     scaleX: Float,
     scaleY: Float,
 ) {
-    Canvas(
+    val headPainter = painterResource(R.drawable.ic_player_progress_head)
+    val artworkHeight = artworkSize *
+        (PLAYER_ARTWORK_VIEWPORT_HEIGHT / PLAYER_ARTWORK_VIEWPORT_WIDTH)
+    val centerX = artworkSize *
+        (PLAYER_PROGRESS_CENTER_X / PLAYER_ARTWORK_VIEWPORT_WIDTH)
+    val centerY = (artworkSize - artworkHeight) / 2f + artworkSize *
+        (PLAYER_PROGRESS_CENTER_Y / PLAYER_ARTWORK_VIEWPORT_WIDTH)
+    val radiusX = artworkSize *
+        (PLAYER_PROGRESS_RADIUS_X / PLAYER_ARTWORK_VIEWPORT_WIDTH)
+    val radiusY = artworkSize *
+        (PLAYER_PROGRESS_RADIUS_Y / PLAYER_ARTWORK_VIEWPORT_WIDTH)
+    val angleRadians = Math.toRadians((-90f + progress * 360f).toDouble())
+    val cosAngle = cos(angleRadians).toFloat()
+    val sinAngle = sin(angleRadians).toFloat()
+    val headCenterX = centerX + radiusX * cosAngle
+    val headCenterY = centerY + radiusY * sinAngle
+    val tangentAngleDegrees = Math.toDegrees(
+        atan2(
+            y = radiusY.value * cosAngle,
+            x = -radiusX.value * sinAngle,
+        ).toDouble(),
+    ).toFloat()
+    val headSize = PLAYER_PROGRESS_HEAD_SIZE_DP.dp
+
+    Box(
         modifier = Modifier
             .size(artworkSize)
             .graphicsLayer {
@@ -328,55 +356,19 @@ private fun BoxScope.PlayerProgressHead(
                 this.scaleY = scaleY
             },
     ) {
-        val artworkScale = size.width / PLAYER_ARTWORK_VIEWPORT_WIDTH
-        val artworkHeight = 237f * artworkScale
-        val center = Offset(
-            x = 180f * artworkScale,
-            y = (size.height - artworkHeight) / 2f + 120f * artworkScale,
-        )
-        val radiusX = 81f * artworkScale
-        val radiusY = 88f * artworkScale
-        val angleRadians = Math.toRadians((-90f + progress * 360f).toDouble())
-        val cosAngle = cos(angleRadians).toFloat()
-        val sinAngle = sin(angleRadians).toFloat()
-        val headCenter = Offset(
-            x = center.x + radiusX * cosAngle,
-            y = center.y + radiusY * sinAngle,
-        )
-
-        val tangentX = -radiusX * sinAngle
-        val tangentY = radiusY * cosAngle
-        val tangentLength = sqrt(tangentX * tangentX + tangentY * tangentY)
-            .coerceAtLeast(1f)
-        val tangent = Offset(tangentX / tangentLength, tangentY / tangentLength)
-        val glitchShift = 1.7.dp.toPx()
-        val cyanCenter = headCenter - tangent * glitchShift
-        val magentaCenter = headCenter + tangent * glitchShift
-
-        drawCircle(
-            color = Color(0xFF18DFFF).copy(alpha = 0.28f),
-            radius = 6.2.dp.toPx(),
-            center = cyanCenter,
-        )
-        drawCircle(
-            color = Color(0xFFFF168F).copy(alpha = 0.28f),
-            radius = 6.2.dp.toPx(),
-            center = magentaCenter,
-        )
-        drawCircle(
-            color = Color(0xFF18DFFF).copy(alpha = 0.82f),
-            radius = 3.7.dp.toPx(),
-            center = cyanCenter,
-        )
-        drawCircle(
-            color = Color(0xFFFF168F).copy(alpha = 0.82f),
-            radius = 3.7.dp.toPx(),
-            center = magentaCenter,
-        )
-        drawCircle(
-            color = Color(0xFFFFFAFC),
-            radius = 2.5.dp.toPx(),
-            center = headCenter,
+        Image(
+            painter = headPainter,
+            contentDescription = null,
+            contentScale = ContentScale.Fit,
+            modifier = Modifier
+                .offset(
+                    x = headCenterX - headSize / 2f,
+                    y = headCenterY - headSize / 2f,
+                )
+                .size(headSize)
+                .graphicsLayer {
+                    rotationZ = tangentAngleDegrees
+                },
         )
     }
 }
@@ -390,10 +382,11 @@ private fun Modifier.drawWithProgressSector(progress: Float): Modifier =
         }
 
         val artworkScale = size.width / PLAYER_ARTWORK_VIEWPORT_WIDTH
-        val artworkHeight = 237f * artworkScale
+        val artworkHeight = PLAYER_ARTWORK_VIEWPORT_HEIGHT * artworkScale
         val center = Offset(
-            x = 180f * artworkScale,
-            y = (size.height - artworkHeight) / 2f + 120f * artworkScale,
+            x = PLAYER_PROGRESS_CENTER_X * artworkScale,
+            y = (size.height - artworkHeight) / 2f +
+                PLAYER_PROGRESS_CENTER_Y * artworkScale,
         )
         val clipRadius = maxOf(size.width, size.height)
         val sector = Path().apply {

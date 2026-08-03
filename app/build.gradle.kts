@@ -14,6 +14,7 @@ val rasterizedSvgAssets = mapOf(
     "ic_player_play_v2" to "355x237",
     "ic_player_waveform" to "360x32",
     "ic_player_waveform_head" to "12x32",
+    "ic_player_progress_head" to "24x24",
     "bg_drive_texture" to "160x92",
     "bg_focus_texture" to "160x92",
     "bg_calm_texture" to "160x92",

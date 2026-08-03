@@ -119,13 +119,9 @@ class HomeFrag: Fragment(R.layout.frag_home) {
 						)
 					},
 					onPlaylistsClick = {
-						if (musicSource == HomeMusicSource.Local) {
-							openLocalLibrary(LocalLibraryFrag.MODE_PLAYLISTS)
-						} else {
-							(activity as MainActivity).mNavController.navigate(
-								R.id.action_homeFrag_to_gridPlaylistFrag,
-							)
-						}
+						(activity as MainActivity).mNavController.navigate(
+							R.id.action_homeFrag_to_gridPlaylistFrag,
+						)
 					},
 					onTracksClick = {
 						if (musicSource == HomeMusicSource.Local) {
