@@ -145,6 +145,13 @@
     <string name="search_recent_query_synthwave">Synthwave</string>
     <string name="search_results_start_hint">Начните поиск</string>
     <string name="search_results_empty">Ничего не найдено</string>
+    <string name="search_results_loading">Ищу…</string>
+    <string name="search_results_error">Не удалось выполнить поиск</string>
+    <string name="search_album_track_count">Треков: %1$d</string>
+    <string name="search_artist_track_count">Треков исполнителя: %1$d</string>
+    <string name="search_entity_likes_count">Отметок: %1$d</string>
+    <string name="search_entity_album">Альбом</string>
+    <string name="search_entity_artist">Исполнитель</string>
     <string name="search_categories_title">Посмотреть по настроению</string>
     <string name="search_category_new_releases">Новые релизы</string>
     <string name="search_category_electronic">Электроника</string>

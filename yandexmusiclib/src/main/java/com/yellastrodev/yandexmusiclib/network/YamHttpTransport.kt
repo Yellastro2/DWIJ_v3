@@ -86,6 +86,9 @@ internal class YamHttpTransport(
                 val statusCode = connection.responseCode
                 val responseBody = readResponseBody(connection, statusCode)
                 val elapsedMs = (System.nanoTime() - startedAt) / NANOS_IN_MILLISECOND
+                if (request.path == SEARCH_PATH) {
+                    logRawSearchResponse(responseBody)
+                }
                 logger.debug(
                     TAG,
                     "[execute] ${request.method} ${request.path}: HTTP $statusCode, ${elapsedMs}мс",
@@ -300,8 +303,22 @@ internal class YamHttpTransport(
     private fun String.urlEncoded(): String =
         URLEncoder.encode(this, StandardCharsets.UTF_8.name())
 
+    /** Печатает тело ответа поиска полностью, разбивая его на безопасные для Logcat части. */
+    private fun logRawSearchResponse(body: String) {
+        val chunks = body.chunked(SEARCH_LOG_CHUNK_SIZE).ifEmpty { listOf("") }
+        chunks.forEachIndexed { index, chunk ->
+            logger.debug(
+                SEARCH_RAW_TAG,
+                "[searchRawResponse] часть=${index + 1}/${chunks.size}: $chunk",
+            )
+        }
+    }
+
     private companion object {
         const val TAG = "YamNetwork"
+        const val SEARCH_RAW_TAG = "YamSearchRaw"
+        const val SEARCH_PATH = "/search"
+        const val SEARCH_LOG_CHUNK_SIZE = 3_500
         const val DEFAULT_BASE_URL = "https://api.music.yandex.net"
         const val USER_AGENT = "Yandex-Music-API"
         const val YANDEX_MUSIC_CLIENT = "YandexMusicAndroid/24023621"

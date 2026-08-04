@@ -86,6 +86,13 @@ class LocalMusicRepository(
     val playlists: Flow<List<LocalPlaylistEntity>> = dao.observePlaylists()
     val playlistSummaries: Flow<List<LocalPlaylistSummary>> = dao.observePlaylistSummaries()
 
+    /** Ищет локальные медиафайлы в Room и возвращает собранные логические песни. */
+    suspend fun searchSongs(query: String): List<Song> {
+        val normalizedQuery = query.trim()
+        if (normalizedQuery.isBlank()) return emptyList()
+        return songRepository.songsForLocalTracks(dao.searchTracks(normalizedQuery))
+    }
+
     fun playlist(playlistId: String): Flow<LocalPlaylistEntity?> =
         dao.observePlaylist(playlistId)
 

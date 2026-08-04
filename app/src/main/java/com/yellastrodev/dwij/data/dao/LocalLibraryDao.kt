@@ -20,6 +20,16 @@ abstract class LocalLibraryDao {
     )
     abstract fun observeAllTracks(): Flow<List<LocalTrackEntity>>
 
+    /** Находит видимые локальные записи по названию, исполнителю или названию альбома. */
+    @Query(
+        "SELECT * FROM local_tracks WHERE isHidden = 0 AND (" +
+            "title LIKE '%' || :query || '%' COLLATE NOCASE OR " +
+            "COALESCE(artist, '') LIKE '%' || :query || '%' COLLATE NOCASE OR " +
+            "COALESCE(album, '') LIKE '%' || :query || '%' COLLATE NOCASE) " +
+            "ORDER BY title COLLATE NOCASE, artist COLLATE NOCASE"
+    )
+    abstract suspend fun searchTracks(query: String): List<LocalTrackEntity>
+
     /** Полный индекс нужен синхронизации, включая скрытые пользователем записи. */
     @Query("SELECT * FROM local_tracks ORDER BY title COLLATE NOCASE, artist COLLATE NOCASE")
     abstract suspend fun getAllTracks(): List<LocalTrackEntity>

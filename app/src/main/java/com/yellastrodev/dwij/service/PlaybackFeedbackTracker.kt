@@ -161,7 +161,6 @@ class PlaybackFeedbackTracker(
             albumId = albumId,
             playlistId = playlistId,
             source = source,
-            fromCache = isTrackCached(trackId),
             playId = newPlayId(),
             durationMs = resolvedDuration,
             lastPositionMs = currentPositionMs.coerceAtLeast(0L),
@@ -172,6 +171,13 @@ class PlaybackFeedbackTracker(
     private fun MediaItem.toPlaybackMetadata(): PlaybackMetadata? {
         val extras = mediaMetadata.extras
         if (extras?.getString(PLAYBACK_MUSIC_SOURCE) == PLAYBACK_SOURCE_LOCAL) {
+            return null
+        }
+        if (isTrackCached(mediaId)) {
+            Log.d(
+                TAG,
+                "[toPlaybackMetadata] play-audio пропущен: Яндекс-трек в кэше, trackId=$mediaId",
+            )
             return null
         }
         val albumId = extras?.getString(PLAY_AUDIO_ALBUM_ID)
@@ -221,7 +227,6 @@ class PlaybackFeedbackTracker(
         val albumId: String,
         val playlistId: String?,
         val source: String,
-        val fromCache: Boolean,
         val playId: String,
         var durationMs: Long,
         var lastPositionMs: Long,
@@ -310,7 +315,6 @@ class PlaybackFeedbackTracker(
             source = source,
             albumId = albumId,
             playlistId = playlistId,
-            fromCache = fromCache,
             playId = playId,
             trackLengthSeconds = trackLengthSeconds,
             totalPlayedSeconds = totalPlayedSeconds,

@@ -18,16 +18,13 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.saveable.rememberSaveable
-import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.ColorFilter
 import androidx.compose.ui.graphics.SolidColor
+import androidx.compose.ui.graphics.ImageBitmap
 import androidx.compose.ui.res.colorResource
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
@@ -37,6 +34,8 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.yellastrodev.dwij.models.SearchResultItemUiModel
+import com.yellastrodev.dwij.models.SearchUiState
 
 /**
  * Экран поиска: выбор источника, поле запроса, недавние запросы и место для будущей выдачи.
@@ -45,9 +44,13 @@ import androidx.compose.ui.unit.sp
 fun SearchScreen(
     selectedSource: HomeMusicSource,
     onSourceSelected: (HomeMusicSource) -> Unit,
+    state: SearchUiState,
+    onQueryChange: (String) -> Unit,
+    loadTrackCover: suspend (SearchResultItemUiModel.Track) -> ImageBitmap?,
+    loadEntityCover: suspend (key: String, uri: String) -> ImageBitmap?,
+    onResultClick: (SearchResultItemUiModel) -> Unit,
     modifier: Modifier = Modifier,
 ) {
-    var query by rememberSaveable { mutableStateOf("") }
     val recentQueries = listOf(
         stringResource(R.string.search_recent_query_city),
         stringResource(R.string.search_recent_query_road),
@@ -66,20 +69,21 @@ fun SearchScreen(
             modifier = Modifier.padding(top = 4.dp),
         )
         SearchInput(
-            query = query,
-            onQueryChange = { query = it },
+            query = state.query,
+            onQueryChange = onQueryChange,
         )
         RecentQueries(
             queries = recentQueries,
-            onQueryClick = { query = it },
+            onQueryClick = onQueryChange,
         )
         SearchResult(
-            state = if (query.isBlank()) {
-                SearchResultState.AwaitingQuery
-            } else {
-                SearchResultState.NothingFound
-            },
-            modifier = Modifier.padding(top = 10.dp),
+            state = state,
+            loadTrackCover = loadTrackCover,
+            loadEntityCover = loadEntityCover,
+            onItemClick = onResultClick,
+            modifier = Modifier
+                .weight(1f)
+                .padding(top = 10.dp),
         )
     }
 }
@@ -212,6 +216,11 @@ private fun SearchScreenPreview() {
         SearchScreen(
             selectedSource = HomeMusicSource.Yandex,
             onSourceSelected = {},
+            state = SearchUiState(),
+            onQueryChange = {},
+            loadTrackCover = { null },
+            loadEntityCover = { _, _ -> null },
+            onResultClick = {},
         )
     }
 }

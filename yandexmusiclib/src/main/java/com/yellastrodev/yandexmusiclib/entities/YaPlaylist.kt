@@ -1,8 +1,21 @@
 package com.yellastrodev.yandexmusiclib.entities
 
 import com.yellastrodev.yandexmusiclib.yUtils.IntOrStringAsStringSerializer
+import kotlinx.serialization.KSerializer
 import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
+import kotlinx.serialization.builtins.ListSerializer
+import kotlinx.serialization.builtins.serializer
+import kotlinx.serialization.descriptors.SerialDescriptor
+import kotlinx.serialization.encoding.Decoder
+import kotlinx.serialization.encoding.Encoder
+import kotlinx.serialization.json.JsonArray
+import kotlinx.serialization.json.JsonDecoder
+import kotlinx.serialization.json.JsonEncoder
+import kotlinx.serialization.json.JsonObject
+import kotlinx.serialization.json.JsonPrimitive
+import kotlinx.serialization.json.contentOrNull
+import kotlinx.serialization.json.jsonPrimitive
 
 @Serializable()
 open class YaPlaylist(
@@ -24,6 +37,7 @@ open class YaPlaylist(
     @SerialName("ogImage")
 	val ogImageUri: String? = null,
     val tracks: List<TrackShort> = listOf(),
+	@Serializable(with = YaPlaylistTagsSerializer::class)
 	val tags: List<String> = listOf(),
 //	val owner: User? = null,
 //	val cover: YaCover? = null,
@@ -78,6 +92,39 @@ data class TagResult(val tag: Tag, val ids: List<PlaylistId>)
 
 @Serializable
 data class Tag(val id: String, val value: String, val name: String, val ogDescription: String)
+
+/** Принимает как старый массив строк, так и объекты тегов из общего ответа `/search`. */
+object YaPlaylistTagsSerializer : KSerializer<List<String>> {
+    private val fallbackSerializer = ListSerializer(String.serializer())
+
+    override val descriptor: SerialDescriptor = fallbackSerializer.descriptor
+
+    override fun deserialize(decoder: Decoder): List<String> {
+        val jsonDecoder = decoder as? JsonDecoder
+            ?: return decoder.decodeSerializableValue(fallbackSerializer)
+        val element = jsonDecoder.decodeJsonElement()
+        if (element !is JsonArray) return emptyList()
+        return element.mapNotNull { tag ->
+            when (tag) {
+                is JsonPrimitive -> tag.contentOrNull
+                is JsonObject -> listOf("value", "name", "id")
+                    .firstNotNullOfOrNull { field ->
+                        tag[field]?.jsonPrimitive?.contentOrNull
+                    }
+                else -> null
+            }
+        }
+    }
+
+    override fun serialize(encoder: Encoder, value: List<String>) {
+        val jsonEncoder = encoder as? JsonEncoder
+        if (jsonEncoder == null) {
+            encoder.encodeSerializableValue(fallbackSerializer, value)
+            return
+        }
+        jsonEncoder.encodeJsonElement(JsonArray(value.map(::JsonPrimitive)))
+    }
+}
 
 
 @Serializable

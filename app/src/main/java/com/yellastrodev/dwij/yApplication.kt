@@ -47,6 +47,8 @@ import com.yellastrodev.dwij.data.repo.SongMatchRepository
 import com.yellastrodev.dwij.data.source.LocalLibraryMonitor
 import com.yellastrodev.dwij.data.source.MediaStoreLocalSource
 import com.yellastrodev.dwij.data.source.WaveRemoteSource
+import com.yellastrodev.dwij.data.source.SearchRemoteSource
+import com.yellastrodev.dwij.data.repo.SearchRepository
 import com.yellastrodev.dwij.service.PlayerService
 import com.yellastrodev.dwij.service.PlaybackFeedbackTracker
 import com.yellastrodev.yandexmusiclib.YamApiClient
@@ -198,6 +200,10 @@ class yApplication: Application() {
         WaveRemoteSource(yamClient)
     }
 
+    val searchRepository: SearchRepository by lazy {
+        SearchRepository(SearchRemoteSource(yamClient))
+    }
+
     private val mediaStoreLocalSource by lazy {
         MediaStoreLocalSource(applicationContext)
     }
@@ -251,6 +257,7 @@ class yApplication: Application() {
             trackRepository,
             songRepository,
             playerRepo,
+            trackCacheRepo::isCached,
             applicationScope
         )
     }

@@ -77,6 +77,8 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.yellastrodev.dwij.models.SearchResultItemUiModel
+import com.yellastrodev.dwij.models.SearchUiState
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import kotlin.math.abs
@@ -103,6 +105,11 @@ fun HomeScreen(
     player: HomeCompactPlayerUiState?,
     selectedSource: HomeMusicSource,
     onSourceSelected: (HomeMusicSource) -> Unit,
+    searchState: SearchUiState,
+    onSearchQueryChange: (String) -> Unit,
+    loadSearchTrackCover: suspend (SearchResultItemUiModel.Track) -> ImageBitmap?,
+    loadSearchEntityCover: suspend (key: String, uri: String) -> ImageBitmap?,
+    onSearchResultClick: (SearchResultItemUiModel) -> Unit,
     modifier: Modifier = Modifier,
 ) {
     var isRadialMenuVisible by remember { mutableStateOf(false) }
@@ -201,7 +208,6 @@ fun HomeScreen(
             modifier = Modifier
                 .fillMaxSize()
                 .padding(contentPadding)
-                .verticalScroll(rememberScrollState())
                 .drawWithContent {
                     drawContent()
                     navigationTimingTracker.onFirstDraw(selectedTab)
@@ -209,6 +215,11 @@ fun HomeScreen(
         ) {
             when (selectedTab) {
                 HomeNavigationTab.Main -> {
+                    Column(
+                        modifier = Modifier
+                            .fillMaxSize()
+                            .verticalScroll(rememberScrollState()),
+                    ) {
                     Box(
                         modifier = Modifier
                             .fillMaxWidth()
@@ -314,10 +325,17 @@ fun HomeScreen(
                         onAllTracksClick = onAllTracksClick,
                         waveEnabled = selectedSource == HomeMusicSource.Yandex,
                     )
+                    }
                 }
                 HomeNavigationTab.Search -> SearchScreen(
                     selectedSource = selectedSource,
                     onSourceSelected = onSourceSelected,
+                    state = searchState,
+                    onQueryChange = onSearchQueryChange,
+                    loadTrackCover = loadSearchTrackCover,
+                    loadEntityCover = loadSearchEntityCover,
+                    onResultClick = onSearchResultClick,
+                    modifier = Modifier.fillMaxSize(),
                 )
             }
         }
@@ -1264,6 +1282,11 @@ private fun HomeScreenPreview() {
         onPlayerNextClick = {},
         selectedSource = HomeMusicSource.Yandex,
         onSourceSelected = {},
+        searchState = SearchUiState(),
+        onSearchQueryChange = {},
+        loadSearchTrackCover = { null },
+        loadSearchEntityCover = { _, _ -> null },
+        onSearchResultClick = {},
         player = HomeCompactPlayerUiState(
             title = "Ночной город",
             artist = "Три дня дождя",

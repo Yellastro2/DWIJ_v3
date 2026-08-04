@@ -2,6 +2,7 @@ package com.yellastrodev.dwij.data.repo
 
 import android.util.Log
 import com.yellastrodev.dwij.data.entities.dTracklist
+import com.yellastrodev.dwij.data.entities.MusicSource
 import com.yellastrodev.dwij.data.entities.Song
 import com.yellastrodev.dwij.data.entities.dYaWave
 import com.yellastrodev.dwij.data.entities.toEntity
@@ -27,6 +28,7 @@ class WaveRepository(
     val trackRepository: TrackRepository,
     private val songRepository: SongRepository,
     val playerRepository: PlayerRepository,
+    private val isTrackCached: (String) -> Boolean,
     private val scope: CoroutineScope
 ) {
 
@@ -149,6 +151,7 @@ class WaveRepository(
     }
 
     private var lastTrackId: String? = null
+    private var lastTrackFeedbackEnabled = false
     private var lastTrackPosSec: Int = 0
     private var lastTrackDuration: Int = 0
     private val skipOffset = 10
@@ -160,12 +163,12 @@ class WaveRepository(
         observeJob?.cancel()
         observeJob = playerRepository.state
             .onEach { state ->
-
-                val currentId = playerRepository.currentSong.value
-                    ?.yandexInstances
-                    ?.firstOrNull()
-                    ?.track
+                val playbackTrack = playerRepository.currentPlaybackTrack.value
+                val currentId = playbackTrack
+                    ?.takeIf { track -> track.source == MusicSource.YANDEX }
+                    ?.yandexTrack
                     ?.id
+                val shouldSendCurrentFeedback = currentId != null && !isTrackCached(currentId)
 
                 // обновляем позицию для текущего трека
                 if (currentId == lastTrackId) {
@@ -178,11 +181,14 @@ class WaveRepository(
 
                 // трек сменился
                 if (currentId != lastTrackId) {
-                    lastTrackId?.let { prevId ->
+                    lastTrackId?.takeIf { lastTrackFeedbackEnabled }?.let { prevId ->
                         onTrackNext(prevId, lastTrackPosSec, lastTrackDuration)
                     }
-                    currentId?.let { trackId -> onTrackStarted(trackId) }
+                    currentId?.let { trackId ->
+                        onTrackStarted(trackId, sendFeedback = shouldSendCurrentFeedback)
+                    }
                     lastTrackId = currentId
+                    lastTrackFeedbackEnabled = shouldSendCurrentFeedback
                     lastTrackPosSec = 0
                     lastTrackDuration = (state.duration / 1000).toInt()
                 }
@@ -191,10 +197,14 @@ class WaveRepository(
             .launchIn(scope)
     }
 
-    private suspend fun onTrackStarted(trackId: String) {
-        Log.d(TAG, "onTrackStarted: $trackId")
+    private suspend fun onTrackStarted(trackId: String, sendFeedback: Boolean) {
+        Log.d(TAG, "[onTrackStarted] trackId=$trackId, feedback=$sendFeedback")
         curentWave?.let{
-            remote.sendTrackStarted(it, trackId)
+            if (sendFeedback) {
+                remote.sendTrackStarted(it, trackId)
+            } else {
+                Log.d(TAG, "[onTrackStarted] Rotor feedback пропущен: трек в кэше")
+            }
             // Следующую пачку запрашиваем при старте последнего трека очереди.
             if (it.tracks.lastOrNull()?.id == trackId) {
                 updateWave(it, trackId)

@@ -21,9 +21,9 @@
         android:dataExtractionRules="@xml/data_extraction_rules"
         android:enableOnBackInvokedCallback="true"
         android:fullBackupContent="@xml/backup_rules"
-        android:icon="@drawable/ic_play_logo"
+        android:icon="@mipmap/ic_logo_glich"
         android:label="@string/app_name"
-        android:roundIcon="@drawable/ic_play_logo"
+        android:roundIcon="@mipmap/ic_logo_glich_round"
         android:supportsRtl="true"
         android:theme="@style/AppTheme"
         tools:targetApi="31" >

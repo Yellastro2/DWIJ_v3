@@ -22,6 +22,7 @@ import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
 import androidx.core.content.ContextCompat
+import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.navigation.NavHostController
 import com.yellastrodev.dwij.HomeCompactPlayerUiState
 import com.yellastrodev.dwij.HomeMusicSource
@@ -30,11 +31,17 @@ import com.yellastrodev.dwij.MusicSourceSelectionStore
 import com.yellastrodev.dwij.R
 import com.yellastrodev.dwij.data.repo.LocalMusicRepository
 import com.yellastrodev.dwij.models.PlayerModel
+import com.yellastrodev.dwij.models.SearchModel
+import com.yellastrodev.dwij.models.SearchResultItemUiModel
+import com.yellastrodev.dwij.models.SearchTrackSource
 import com.yellastrodev.dwij.work.LocalLibrarySyncWorker
 import com.yellastrodev.dwij.yApplication
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.flowOn
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
+import com.yellastrodev.yandexmusiclib.entities.CoverSize
 
 /**
  * Связывает домашний экран с общим плеером, разрешением локальной медиатеки и Compose-навигацией.
@@ -49,6 +56,16 @@ fun HomeRoute(
     val application = context.applicationContext as yApplication
     val coroutineScope = rememberCoroutineScope()
     val selectedSource by MusicSourceSelectionStore.selectedSource.collectAsState()
+    val searchModel = viewModel<SearchModel>(
+        factory = SearchModel.Factory(
+            repository = application.searchRepository,
+            localMusicRepository = application.localMusicRepository,
+            trackRepository = application.trackRepository,
+            songRepository = application.songRepository,
+            playerRepository = application.playerRepo,
+        ),
+    )
+    val searchState by searchModel.state.collectAsState()
     val track by playerModel.track.collectAsState()
     val playbackTrack by playerModel.playbackTrack.collectAsState()
     val playerState by playerModel.playerState.collectAsState()
@@ -88,6 +105,10 @@ fun HomeRoute(
         ) {
             MusicSourceSelectionStore.select(context, HomeMusicSource.Yandex)
         }
+    }
+
+    LaunchedEffect(selectedSource) {
+        searchModel.setYandexEnabled(selectedSource == HomeMusicSource.Yandex)
     }
 
     LaunchedEffect(track?.id, playbackTrack?.instanceId) {
@@ -160,6 +181,36 @@ fun HomeRoute(
         },
         selectedSource = selectedSource,
         onSourceSelected = ::selectMusicSource,
+        searchState = searchState,
+        onSearchQueryChange = searchModel::updateQuery,
+        loadSearchTrackCover = { item ->
+            withContext(Dispatchers.IO) {
+                when (val source = item.source) {
+                    is SearchTrackSource.Yandex -> application.coverRepository
+                        .getCover(source.track, CoverSize.`100x100`)
+                        .asImageBitmap()
+                    is SearchTrackSource.Local -> source.song.localInstances.firstOrNull()
+                        ?.track
+                        ?.let { track -> application.localMusicRepository.cover(track).first() }
+                        ?.asImageBitmap()
+                }
+            }
+        },
+        loadSearchEntityCover = { key, uri ->
+            withContext(Dispatchers.IO) {
+                application.coverRepository
+                    .getCover("search_$key", uri, CoverSize.`100x100`)
+                    .asImageBitmap()
+            }
+        },
+        onSearchResultClick = { item ->
+            if (item is SearchResultItemUiModel.Track) {
+                searchModel.playTrack(item)
+                navController.navigate(DwijDestination.PLAYER)
+            } else {
+                Log.d(TAG, "[onSearchResultClick] Нажат результат key=${item.key}")
+            }
+        },
     )
 }
 
