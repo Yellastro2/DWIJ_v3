@@ -2,7 +2,6 @@ package com.yellastrodev.dwij.data.repo
 
 import com.yellastrodev.dwij.data.entities.SONG_ARTIST_SEPARATOR
 import com.yellastrodev.dwij.data.entities.SongEntity
-import com.yellastrodev.dwij.utils.DwLogger
 import com.yellastrodev.yandexmusiclib.YamLogger
 import java.text.Normalizer
 import java.util.Locale

@@ -1,26 +1,22 @@
 package com.yellastrodev.dwij
 
-import android.content.Context
-import android.preference.PreferenceManager
-import android.util.Log
+import com.yellastrodev.yandexmusiclib.YamLogger
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import java.io.File
 
 class CacheManager(
-    private val context: Context
+    private val trackDir: File,
+    private val coverDir: File,
+    private val maxCacheSizeBytes: () -> Long,
+    private val logger: YamLogger
 ) {
 
     private val mutex = Mutex()
 
-    private val prefs = PreferenceManager.getDefaultSharedPreferences(context)
-
-    private val maxCacheSizeBytes: Long
-        get() = prefs.getLong(CACHE_SIZE, DEFAULT_CACHE_SIZE)
-
     private val cacheDirs: MutableList<File> = mutableListOf(
-        File(context.cacheDir, DIR_TRACK_CACHE),
-        File(context.cacheDir, DIR_COVER_CACHE)
+        trackDir,
+        coverDir
     ).onEach { if (!it.exists()) it.mkdirs() }
 
 
@@ -42,24 +38,25 @@ class CacheManager(
         val files = cacheDirs.flatMap { it.listFiles()?.toList() ?: emptyList() }
             .filter { it.isFile }
         var totalSize = files.sumOf { it.length() }
-        Log.d("CacheManager", "Кэш ${totalSize / 1024 / 1024}MB из ${maxCacheSizeBytes / 1024 / 1024}MB")
+        val limit = maxCacheSizeBytes()
+        logger.debug("CacheManager", "Кэш ${totalSize / 1024 / 1024}MB из ${limit / 1024 / 1024}MB")
 
-        if (totalSize > maxCacheSizeBytes) {
-            Log.d(
+        if (totalSize > limit) {
+            logger.debug(
                 "CacheManager",
-                "Cache ${totalSize / 1024 / 1024}MB > limit ${maxCacheSizeBytes / 1024 / 1024}MB"
+                "Cache ${totalSize / 1024 / 1024}MB > limit ${limit / 1024 / 1024}MB"
             )
             files.sortedBy { it.lastModified() }.forEach { f ->
-                if (totalSize <= maxCacheSizeBytes) return
+                if (totalSize <= limit) return
                 val size = f.length()
                 if (f.delete()) {
                     totalSize -= size
-                    Log.d(
+                    logger.debug(
                         "CacheManager",
                         "Удалён ${f.name} (-${size / 1024}KB), осталось ${totalSize / 1024 / 1024}MB"
                     )
                 } else {
-                    Log.w("CacheManager", "Не удалось удалить ${f.name}")
+                    logger.warning("CacheManager", "Не удалось удалить ${f.name}")
                 }
             }
         }

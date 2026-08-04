@@ -43,6 +43,7 @@ import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.launch
 import java.lang.ref.WeakReference
 import com.yellastrodev.dwij.work.LocalLibrarySyncWorker
+import java.io.File
 
 @UnstableApi
 class yApplication: Application() {
@@ -139,7 +140,14 @@ class yApplication: Application() {
     }
 
     val cacheManager: CacheManager by lazy{
-        CacheManager(applicationContext)
+        CacheManager(
+            trackDir = File(cacheDir, DIR_TRACK_CACHE),
+            coverDir = File(cacheDir, DIR_TRACK_CACHE),
+            {
+                PreferenceManager.getDefaultSharedPreferences(this)
+                    .getLong(CACHE_SIZE, DEFAULT_CACHE_SIZE)},
+            logger = logger
+        )
     }
 
     val trackCacheRepo: TrackCacheRepository by lazy {
@@ -176,7 +184,7 @@ class yApplication: Application() {
     }
 
     val searchRepository: SearchRepository by lazy {
-        SearchRepository(SearchRemoteSource(yamClient))
+        SearchRepository(SearchRemoteSource(yamClient), logger)
     }
 
     private val mediaStoreLocalSource by lazy {

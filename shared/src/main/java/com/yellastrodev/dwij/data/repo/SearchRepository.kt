@@ -1,21 +1,22 @@
 package com.yellastrodev.dwij.data.repo
 
-import android.util.Log
 import com.yellastrodev.dwij.data.DataResult
 import com.yellastrodev.dwij.data.source.SearchRemoteSource
+import com.yellastrodev.yandexmusiclib.YamLogger
 import com.yellastrodev.yandexmusiclib.search.SearchResponse
 
 /** Репозиторий общего поиска и диагностической сводки декодированного ответа. */
 class SearchRepository(
     private val remote: SearchRemoteSource,
+    private val logger: YamLogger
 ) {
     /** Возвращает общий ответ поиска и пишет краткое число декодированных сущностей. */
     suspend fun searchAll(query: String): DataResult<SearchResponse> {
-        Log.d(TAG, "[searchAll] Запрос=\"$query\", категория=ALL")
+        logger.debug(TAG, "[searchAll] Запрос=\"$query\", категория=ALL")
         val result = remote.searchAll(query)
         if (result is DataResult.Success) {
             val response = result.value
-            Log.d(
+            logger.debug(
                 TAG,
                 "[searchAll] Получено: треки=${response.tracks?.results?.size ?: 0}/" +
                     "${response.tracks?.total ?: 0}, альбомы=" +
@@ -24,7 +25,7 @@ class SearchRepository(
                     "${response.artists?.total ?: 0}",
             )
         } else if (result is DataResult.Failure) {
-            Log.w(TAG, "[searchAll] Поиск не выполнен: ${result.error}")
+            logger.warning(TAG, "[searchAll] Поиск не выполнен: ${result.error}")
         }
         return result
     }

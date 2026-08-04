@@ -1,0 +1,50 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" width="256" height="256" viewBox="0 0 256 256" fill="none">
+    <defs>
+        <clipPath id="coreClipA">
+            <circle cx="128" cy="128" r="22"/>
+        </clipPath>
+    </defs>
+
+    <!-- minimal radio core -->
+    <circle cx="123" cy="128" r="22" fill="#20E2FF" fill-opacity="0.86"/>
+    <circle cx="133" cy="128" r="22" fill="#FF0A84" fill-opacity="0.90"/>
+    <circle cx="128" cy="128" r="22" fill="#FBF8FC"/>
+
+    <g clip-path="url(#coreClipA)">
+        <rect x="107" y="112" width="42" height="3.2" fill="#D8D4E2" fill-opacity="0.85"/>
+        <rect x="107" y="120" width="42" height="3.2" fill="#D8D4E2" fill-opacity="0.85"/>
+        <rect x="107" y="128" width="42" height="3.2" fill="#D8D4E2" fill-opacity="0.85"/>
+        <rect x="107" y="136" width="42" height="3.2" fill="#D8D4E2" fill-opacity="0.85"/>
+        <rect x="107" y="144" width="42" height="3.2" fill="#D8D4E2" fill-opacity="0.85"/>
+        <rect x="112" y="118" width="12" height="3" fill="#20E2FF" fill-opacity="0.46"/>
+        <rect x="121" y="135" width="18" height="3" fill="#FF49B9" fill-opacity="0.54"/>
+    </g>
+
+    <!-- main waves -->
+    <path d="M92 98A44 44 0 0 0 92 158" stroke="#20E2FF" stroke-width="9" stroke-linecap="round" stroke-opacity="0.86"/>
+    <path d="M97 95A48 48 0 0 0 97 161" stroke="#FF0A84" stroke-width="9" stroke-linecap="round" stroke-opacity="0.92"/>
+    <path d="M164 98A44 44 0 0 1 164 158" stroke="#6C44F0" stroke-width="9" stroke-linecap="round" stroke-opacity="0.78"/>
+    <path d="M159 95A48 48 0 0 1 159 161" stroke="#FF2AA1" stroke-width="9" stroke-linecap="round" stroke-opacity="0.9"/>
+
+    <path d="M66 73A79 79 0 0 0 66 183" stroke="#20E2FF" stroke-width="11" stroke-linecap="round" stroke-opacity="0.76"/>
+    <path d="M72 67A85 85 0 0 0 72 189" stroke="#FF0A84" stroke-width="11" stroke-linecap="round" stroke-opacity="0.90"/>
+    <path d="M190 73A79 79 0 0 1 190 183" stroke="#6C44F0" stroke-width="11" stroke-linecap="round" stroke-opacity="0.72"/>
+    <path d="M184 67A85 85 0 0 1 184 189" stroke="#FF158E" stroke-width="11" stroke-linecap="round" stroke-opacity="0.88"/>
+
+    <!-- white guides -->
+    <path d="M81 85A59 59 0 0 0 81 171" stroke="#FFF9FC" stroke-width="3" stroke-linecap="round" stroke-opacity="0.96"/>
+    <path d="M175 85A59 59 0 0 1 175 171" stroke="#FFF9FC" stroke-width="3" stroke-linecap="round" stroke-opacity="0.96"/>
+
+    <!-- tiny clean glitch accents -->
+    <rect x="34" y="100" width="22" height="4" fill="#20E2FF" fill-opacity="0.84"/>
+    <rect x="28" y="151" width="34" height="4" fill="#FF2AA1" fill-opacity="0.86"/>
+    <rect x="200" y="92" width="28" height="4" fill="#20E2FF" fill-opacity="0.84"/>
+    <rect x="194" y="145" width="34" height="4" fill="#FF0A84" fill-opacity="0.86"/>
+    <rect x="100" y="26" width="56" height="4" fill="#FF0A84" fill-opacity="0.76"/>
+    <rect x="108" y="232" width="40" height="3" fill="#6C44F0" fill-opacity="0.68"/>
+
+    <!-- white ticks -->
+    <rect x="68" y="127" width="10" height="3" fill="#FFF9FC" fill-opacity="0.96"/>
+    <rect x="178" y="127" width="10" height="3" fill="#FFF9FC" fill-opacity="0.96"/>
+</svg>
