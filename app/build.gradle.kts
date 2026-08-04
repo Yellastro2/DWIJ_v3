@@ -126,6 +126,7 @@ androidComponents {
 }
 
 dependencies {
+    implementation(project(":shared"))
     implementation(project(mapOf("path" to ":yandexmusiclib")))
 
     implementation(libs.androidx.core.ktx)

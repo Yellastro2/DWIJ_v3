@@ -108,4 +108,4 @@ sealed interface TrackInstance {
     ) : TrackInstance
 }
 
-internal const val SONG_ARTIST_SEPARATOR = "\u001F"
+const val SONG_ARTIST_SEPARATOR = "\u001F"

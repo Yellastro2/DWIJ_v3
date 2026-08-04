@@ -4,6 +4,7 @@ import androidx.room.Entity
 import androidx.room.Embedded
 import androidx.room.ForeignKey
 import androidx.room.Index
+import androidx.room.PrimaryKey
 
 /** Источник локального плейлиста, сохранённого в индексе приложения. */
 enum class LocalPlaylistOrigin {
@@ -21,7 +22,7 @@ enum class LocalPlaylistOrigin {
     ],
 )
 data class LocalTrackEntity(
-    @androidx.room.PrimaryKey
+    @PrimaryKey
     val instanceId: String,
     val mediaStoreId: Long,
     val volumeName: String,
@@ -52,7 +53,7 @@ data class LocalTrackEntity(
     ],
 )
 data class LocalPlaylistEntity(
-    @androidx.room.PrimaryKey
+    @PrimaryKey
     val playlistId: String,
     val name: String,
     val origin: String,
@@ -103,7 +104,7 @@ data class LocalPlaylistEntryEntity(
 /** Служебные метки последней успешной синхронизации MediaStore. */
 @Entity(tableName = "local_library_state")
 data class LocalLibraryStateEntity(
-    @androidx.room.PrimaryKey
+    @PrimaryKey
     val key: String,
     val value: String,
 )

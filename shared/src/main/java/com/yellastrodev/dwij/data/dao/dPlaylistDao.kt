@@ -1,6 +1,5 @@
 package com.yellastrodev.dwij.data.dao
 
-import android.util.Log
 import androidx.room.Dao
 import androidx.room.Insert
 import androidx.room.OnConflictStrategy
@@ -8,6 +7,7 @@ import androidx.room.Query
 import androidx.room.Transaction
 import com.yellastrodev.dwij.data.entities.dPlaylistTrack
 import com.yellastrodev.dwij.data.entities.dYaPlaylist
+import kotlin.collections.forEach
 
 @Dao
 interface dPlaylistDao {
@@ -68,10 +68,8 @@ interface dPlaylistDao {
     @Transaction
     suspend fun getAlldPlaylists(): List<dYaPlaylist> {
         val playlists = getAlldPlaylistsDump()
-        Log.d(TAG, "getAlldPlaylists: $playlists")
         return playlists.map { pl ->
             pl.tracks = getTracksForPlaylist(pl.playlistUuid)
-            Log.d(TAG, "getAlldPlaylists.tracks: ${pl.tracks.size}")
             pl
         }
     }

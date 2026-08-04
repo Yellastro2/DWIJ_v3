@@ -8,6 +8,7 @@ import androidx.room.Transaction
 import com.yellastrodev.dwij.data.entities.SongMatchCandidateEntity
 import com.yellastrodev.dwij.data.entities.SongMatchCandidateStatus
 import kotlinx.coroutines.flow.Flow
+import kotlin.collections.forEach
 
 @Dao
 abstract class SongMatchDao {

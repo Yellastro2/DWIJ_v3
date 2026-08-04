@@ -1,6 +1,5 @@
 package com.yellastrodev.dwij.data.dao
 
-import android.util.Log
 import androidx.room.Dao
 import androidx.room.Insert
 import androidx.room.OnConflictStrategy
@@ -12,6 +11,7 @@ import com.yellastrodev.dwij.data.entities.dTrackArtistCrossRef
 import com.yellastrodev.dwij.data.entities.dYaAlbum
 import com.yellastrodev.dwij.data.entities.dYaArtist
 import com.yellastrodev.dwij.data.entities.dYaTrack
+import kotlin.collections.forEach
 
 @Dao
 interface dTrackDao {
@@ -158,7 +158,6 @@ interface dTrackDao {
         val albums = getAlbumsForTrack(id)
         val artists = getArtistsForTrack(id)
         val playlists = getPlaylistsForTrack(id)
-        Log.d("dTrackDao", "getTrack: id=$id, playlists=${playlists.size}")
         return track.apply { this.albums = albums; this.artists = artists; this.playlists = playlists }
     }
 
@@ -172,7 +171,6 @@ interface dTrackDao {
             track.artists = getArtistsForTrack(track.id)
             track.albums = getAlbumsForTrack(track.id)
             track.playlists = getPlaylistsForTrack(track.id)
-            Log.d("dTrackDao", "getAllTracks: id=${track.id}, playlists=${track.playlists.size}")
         }
         return tracks
     }
@@ -189,7 +187,6 @@ interface dTrackDao {
             track.artists = getArtistsForTrack(track.id)
             track.albums = getAlbumsForTrack(track.id)
             track.playlists = getPlaylistsForTrack(track.id)
-            Log.d("dTrackDao", "getTracks: id=${track.id}, playlists=${track.playlists.size}")
         }
         return tracks
     }
@@ -197,5 +194,5 @@ interface dTrackDao {
 
 
     @Query("DELETE FROM tracks WHERE id = :string")
-    fun delete(string: String)
+    suspend fun delete(string: String)
 }

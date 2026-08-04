@@ -21,5 +21,5 @@ dependencyResolutionManagement {
 
 rootProject.name = "DWIJ_v3"
 include(":app")
+include(":shared")
 include(":yandexmusiclib")
- 
