@@ -1,6 +1,7 @@
 package com.yellastrodev.dwij
 
 import androidx.compose.foundation.background
+import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
@@ -16,9 +17,13 @@ import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Text
+import androidx.compose.material3.DropdownMenu
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.Immutable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -50,12 +55,19 @@ data class TrackListItemUiModel(
 
 /**
  * Линейный ленивый список треков для плейлистов, каталога и локальной медиатеки.
- * Обложки запрашиваются только для скомпонованных строк.
+ * Обложки запрашиваются только для скомпонованных строк. Если задан [contextMenuContent],
+ * long tap открывает привязанное к строке выпадающее меню.
  */
 @Composable
+@OptIn(ExperimentalFoundationApi::class)
 fun TrackList(
     items: List<TrackListItemUiModel>,
     onItemClick: (index: Int, item: TrackListItemUiModel) -> Unit,
+    contextMenuContent: (@Composable (
+        index: Int,
+        item: TrackListItemUiModel,
+        onDismiss: () -> Unit,
+    ) -> Unit)? = null,
     loadCover: suspend (trackId: String) -> ImageBitmap? = { null },
     modifier: Modifier = Modifier,
     state: LazyListState = rememberLazyListState(),
@@ -108,6 +120,7 @@ fun TrackList(
                 val coverState = remember(item.key) {
                     coverStates.getOrPut(item.key) { TrackCoverState() }
                 }
+                var isContextMenuExpanded by remember(item.key) { mutableStateOf(false) }
                 if (item.shouldLoadCover) {
                     TrackCoverLoader(
                         trackId = item.trackId,
@@ -115,11 +128,25 @@ fun TrackList(
                         loadCover = loadCover,
                     )
                 }
-                TrackListItem(
-                    item = item,
-                    coverState = coverState,
-                    onClick = { onItemClick(index, item) },
-                )
+                Box {
+                    TrackListItem(
+                        item = item,
+                        coverState = coverState,
+                        onClick = { onItemClick(index, item) },
+                        onLongClick = contextMenuContent?.let {
+                            { isContextMenuExpanded = true }
+                        },
+                    )
+                    contextMenuContent?.let { menuContent ->
+                        DropdownMenu(
+                            expanded = isContextMenuExpanded,
+                            onDismissRequest = { isContextMenuExpanded = false },
+                            modifier = Modifier.align(Alignment.TopEnd),
+                        ) {
+                            menuContent(index, item) { isContextMenuExpanded = false }
+                        }
+                    }
+                }
             }
         }
     }

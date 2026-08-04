@@ -13,6 +13,7 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.remember
@@ -37,6 +38,7 @@ fun LocalLibraryScreen(
     tracks: List<Song>?,
     onPlaylistClick: (LocalPlaylistEntity) -> Unit,
     onTrackClick: (Int, Song) -> Unit,
+    onTrackHideRequest: (Song) -> Unit = {},
     loadTrackCover: suspend (Song) -> ImageBitmap? = { null },
     modifier: Modifier = Modifier,
     isLoading: Boolean = false,
@@ -55,7 +57,13 @@ fun LocalLibraryScreen(
         Spacer(modifier = Modifier.height(18.dp))
         when {
             playlists != null -> LocalPlaylistList(playlists, isLoading, onPlaylistClick)
-            tracks != null -> LocalTrackList(tracks, isLoading, onTrackClick, loadTrackCover)
+            tracks != null -> LocalTrackList(
+                tracks = tracks,
+                isLoading = isLoading,
+                onClick = onTrackClick,
+                onTrackHideRequest = onTrackHideRequest,
+                loadCover = loadTrackCover,
+            )
         }
     }
 }
@@ -73,6 +81,7 @@ fun LocalPlaylistObjectScreen(
     onBackClick: () -> Unit,
     onPlayClick: () -> Unit,
     onTrackClick: (Int, Song) -> Unit,
+    onTrackHideRequest: (Song) -> Unit = {},
     loadTrackCover: suspend (Song) -> ImageBitmap?,
     modifier: Modifier = Modifier,
     isLoading: Boolean = false,
@@ -96,6 +105,15 @@ fun LocalPlaylistObjectScreen(
         onPlayClick = onPlayClick,
         onTrackClick = { index, _ ->
             tracks.getOrNull(index)?.let { track -> onTrackClick(index, track) }
+        },
+        trackContextMenuContent = { index, _, onDismiss ->
+            DropdownMenuItem(
+                text = { Text(stringResource(R.string.local_track_hide_action)) },
+                onClick = {
+                    onDismiss()
+                    tracks.getOrNull(index)?.let(onTrackHideRequest)
+                },
+            )
         },
         loadTrackCover = { trackId ->
             tracksById[trackId]?.let { track -> loadTrackCover(track) }
@@ -195,6 +213,7 @@ private fun LocalTrackList(
     tracks: List<Song>,
     isLoading: Boolean,
     onClick: (Int, Song) -> Unit,
+    onTrackHideRequest: (Song) -> Unit,
     loadCover: suspend (Song) -> ImageBitmap?,
 ) {
     val unknownArtist = stringResource(R.string.home_player_unknown_artist)
@@ -211,6 +230,15 @@ private fun LocalTrackList(
         },
         onItemClick = { index, _ ->
             tracks.getOrNull(index)?.let { track -> onClick(index, track) }
+        },
+        contextMenuContent = { index, _, onDismiss ->
+            DropdownMenuItem(
+                text = { Text(stringResource(R.string.local_track_hide_action)) },
+                onClick = {
+                    onDismiss()
+                    tracks.getOrNull(index)?.let(onTrackHideRequest)
+                },
+            )
         },
         modifier = Modifier.fillMaxSize(),
     )

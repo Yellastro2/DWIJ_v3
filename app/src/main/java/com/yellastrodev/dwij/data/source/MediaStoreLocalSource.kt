@@ -139,17 +139,37 @@ class MediaStoreLocalSource(private val context: Context) {
         val selection = buildString {
             append("${MediaStore.Audio.Media.IS_MUSIC} != 0")
             append(" AND ${MediaStore.Audio.Media.DURATION} > 0")
+            append(
+                " AND (${MediaStore.Audio.Media.MIME_TYPE} LIKE ? OR " +
+                    "${MediaStore.Audio.Media.MIME_TYPE} IN (?, ?))",
+            )
+            append(" AND ${MediaStore.Audio.Media.IS_RINGTONE} = 0")
+            append(" AND ${MediaStore.Audio.Media.IS_NOTIFICATION} = 0")
+            append(" AND ${MediaStore.Audio.Media.IS_ALARM} = 0")
             if (Build.VERSION.SDK_INT >= 29) {
                 append(" AND ${MediaStore.Audio.Media.IS_PENDING} = 0")
             }
         }
         val result = mutableListOf<LocalTrackEntity>()
-        val cursor = resolver.query(uri, projection, selection, null, null)
+        var skippedVideoFiles = 0
+        val cursor = resolver.query(
+            uri,
+            projection,
+            selection,
+            ACCEPTED_AUDIO_MIME_SELECTION_ARGS,
+            null,
+        )
             ?: error("MediaStore вернул null-cursor для volume=$volumeName")
         cursor.use {
             val idColumn = cursor.getColumnIndexOrThrow(MediaStore.Audio.Media._ID)
             while (cursor.moveToNext()) {
                 val mediaId = cursor.getLong(idColumn)
+                val displayName = cursor.stringOrNull(MediaStore.Audio.Media.DISPLAY_NAME)
+                    ?: "track-$mediaId"
+                if (displayName.hasVideoExtension()) {
+                    skippedVideoFiles++
+                    continue
+                }
                 val actualVolume = cursor.stringOrNull(MediaStore.Audio.Media.VOLUME_NAME)
                     ?: volumeName
                 val contentUri = ContentUris.withAppendedId(uri, mediaId).toString()
@@ -158,8 +178,7 @@ class MediaStoreLocalSource(private val context: Context) {
                     mediaStoreId = mediaId,
                     volumeName = actualVolume,
                     contentUri = contentUri,
-                    displayName = cursor.stringOrNull(MediaStore.Audio.Media.DISPLAY_NAME)
-                        ?: "track-$mediaId",
+                    displayName = displayName,
                     title = cursor.stringOrNull(MediaStore.Audio.Media.TITLE)
                         ?.takeIf(String::isNotBlank)
                         ?: cursor.stringOrNull(MediaStore.Audio.Media.DISPLAY_NAME)
@@ -184,7 +203,11 @@ class MediaStoreLocalSource(private val context: Context) {
                 )
             }
         }
-        Log.d(TAG, "[scanTracks] volume=$volumeName, найдено=${result.size}")
+        Log.d(
+            TAG,
+            "[scanTracks] volume=$volumeName, найдено=${result.size}, " +
+                "отсеяноВидео=$skippedVideoFiles",
+        )
         return result
     }
 
@@ -383,16 +406,21 @@ class MediaStoreLocalSource(private val context: Context) {
         return M3uExportResult(targetUri.toString(), M3uCodec.hash(text))
     }
 
-    private fun generationSignature(volumes: Set<String>): String = volumes
-        .sorted()
-        .joinToString("|") { volume ->
+    private fun generationSignature(volumes: Set<String>): String = buildString {
+        append("filter:")
+        append(LOCAL_TRACK_FILTER_VERSION)
+        volumes.sorted().forEach { volume ->
             val generation = if (Build.VERSION.SDK_INT >= 30) {
                 runCatching { MediaStore.getGeneration(context, volume) }.getOrDefault(-1L)
             } else {
                 -1L
             }
-            "$volume:$generation"
+            append('|')
+            append(volume)
+            append(':')
+            append(generation)
         }
+    }
 
     private fun resolveTrack(
         reference: String,
@@ -420,6 +448,10 @@ class MediaStoreLocalSource(private val context: Context) {
         ?.trim()
         ?.lowercase()
 
+    /** Защита от прошивок, которые ошибочно добавляют MP4/MKV в Audio.Media. */
+    private fun String.hasVideoExtension(): Boolean =
+        substringAfterLast('.', missingDelimiterValue = "").lowercase() in VIDEO_EXTENSIONS
+
     private fun stableKey(value: String): String = MessageDigest.getInstance("SHA-1")
         .digest(value.toByteArray(Charsets.UTF_8))
         .joinToString("") { byte -> "%02x".format(byte) }
@@ -439,6 +471,26 @@ class MediaStoreLocalSource(private val context: Context) {
     companion object {
         private const val TAG = "MediaStoreLocalSource"
         private const val DWIJ_PLAYLIST_RELATIVE_PATH = "Music/DWIJ/Playlists/"
+        /** Изменяется, когда критерий того, что считать музыкальным файлом, становится строже. */
+        private const val LOCAL_TRACK_FILTER_VERSION = 2
+        private val ACCEPTED_AUDIO_MIME_SELECTION_ARGS = arrayOf(
+            "audio/%",
+            "application/ogg",
+            "application/x-ogg",
+        )
+        private val VIDEO_EXTENSIONS = setOf(
+            "3gp",
+            "3g2",
+            "avi",
+            "mkv",
+            "mov",
+            "mp4",
+            "mpeg",
+            "mpg",
+            "m4v",
+            "ts",
+            "webm",
+        )
         private const val FILE_RESCAN_TIMEOUT_MS = 120_000L
     }
 }

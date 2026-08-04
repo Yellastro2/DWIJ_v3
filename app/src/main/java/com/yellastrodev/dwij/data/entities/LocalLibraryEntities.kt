@@ -40,6 +40,8 @@ data class LocalTrackEntity(
     val dateModifiedSeconds: Long,
     val relativePath: String?,
     val absolutePath: String?,
+    /** Пользователь скрыл запись в Движе; MediaStore и сам файл не изменяются. */
+    val isHidden: Boolean = false,
 )
 
 /** Плейлист из Движа, старого MediaStore API или M3U-файла. */

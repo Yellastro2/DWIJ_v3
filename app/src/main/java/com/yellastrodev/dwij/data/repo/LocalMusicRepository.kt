@@ -80,6 +80,8 @@ class LocalMusicRepository(
     }
 
     val tracks: Flow<List<LocalTrackEntity>> = dao.observeAllTracks()
+    /** Скрытые записи не теряются из индекса и доступны будущему экрану управления. */
+    val hiddenTracks: Flow<List<LocalTrackEntity>> = dao.observeHiddenTracks()
     val songs: Flow<List<Song>> = songRepository.localSongs
     val playlists: Flow<List<LocalPlaylistEntity>> = dao.observePlaylists()
     val playlistSummaries: Flow<List<LocalPlaylistSummary>> = dao.observePlaylistSummaries()
@@ -99,6 +101,42 @@ class LocalMusicRepository(
         context,
         requiredAudioPermission(),
     ) == PackageManager.PERMISSION_GRANTED
+
+    /** Скрывает или возвращает локальный трек только в каталоге Движа, не меняя файл устройства. */
+    suspend fun setTrackHidden(instanceId: String, isHidden: Boolean): DataResult<Unit> =
+        setTracksHidden(listOf(instanceId), isHidden)
+
+    /** Атомарно меняет видимость всех локальных вариантов выбранной логической песни. */
+    suspend fun setTracksHidden(
+        instanceIds: List<String>,
+        isHidden: Boolean,
+    ): DataResult<Unit> {
+        val distinctIds = instanceIds.distinct()
+        if (distinctIds.isEmpty()) {
+            return DataResult.Failure(DataError.InvalidData("Не переданы локальные треки"))
+        }
+        return try {
+            database.withTransaction {
+                val existingIds = dao.getTracks(distinctIds)
+                    .mapTo(mutableSetOf(), LocalTrackEntity::instanceId)
+                val missingIds = distinctIds.filterNot(existingIds::contains)
+                if (missingIds.isNotEmpty()) {
+                    return@withTransaction DataResult.Failure(
+                        DataError.NotFound("Локальный трек", missingIds.first()),
+                    )
+                }
+                dao.setTracksHidden(distinctIds, isHidden)
+                Log.d(
+                    TAG,
+                    "[setTracksHidden] tracks=${distinctIds.size}, hidden=$isHidden",
+                )
+                DataResult.Success(Unit)
+            }
+        } catch (error: Exception) {
+            Log.e(TAG, "[setTracksHidden] Не удалось изменить видимость локальных треков", error)
+            DataResult.Failure(DataError.Storage(error))
+        }
+    }
 
     /** Выполняет синхронизацию последовательно на отдельном потоке с минимальным приоритетом. */
     suspend fun synchronize(force: Boolean): DataResult<LocalSyncSummary> =
@@ -134,8 +172,14 @@ class LocalMusicRepository(
             }
             val snapshot = mediaStore.scan()
             val storedTracks = storedTrackList.associateBy(LocalTrackEntity::instanceId)
-            val scannedTracks = snapshot.tracks.associateBy(LocalTrackEntity::instanceId)
-            val changedTracks = snapshot.tracks.filter { track ->
+            val scannedTracks = snapshot.tracks
+                .map { scanned ->
+                    scanned.copy(
+                        isHidden = storedTracks[scanned.instanceId]?.isHidden ?: false,
+                    )
+                }
+                .associateBy(LocalTrackEntity::instanceId)
+            val changedTracks = scannedTracks.values.filter { track ->
                 storedTracks[track.instanceId] != track
             }
             val removedTrackIds = storedTracks.keys.minus(scannedTracks.keys).toList()
@@ -146,8 +190,8 @@ class LocalMusicRepository(
                 it.origin == LocalPlaylistOrigin.M3U.name && it.externalUri in dwijExternalUris
             }
             val importedIds = importedPlaylists.map(LocalPlaylistEntity::playlistId).toSet()
-            val tracksByUri = snapshot.tracks.associateBy(LocalTrackEntity::contentUri)
-            val tracksByPath = snapshot.tracks
+            val tracksByUri = scannedTracks.values.associateBy(LocalTrackEntity::contentUri)
+            val tracksByPath = scannedTracks.values
                 .mapNotNull { track -> track.absolutePath?.let { it.normalizedPath() to track } }
                 .toMap()
             database.withTransaction {
@@ -261,7 +305,7 @@ class LocalMusicRepository(
                 )?.use(BitmapFactory::decodeStream)
             }.getOrNull()
         } ?: embeddedCover(track)
-            ?: BitmapFactory.decodeResource(context.resources, R.drawable.logo2)
+            ?: BitmapFactory.decodeResource(context.resources, R.drawable.ic_player_play_v2)
         return original.downscaled(COVER_MAX_EDGE_PX)
     }
 

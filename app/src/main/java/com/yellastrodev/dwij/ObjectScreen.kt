@@ -65,6 +65,11 @@ fun ObjectScreen(
     onBackClick: () -> Unit,
     onPlayClick: () -> Unit,
     onTrackClick: (index: Int, item: TrackListItemUiModel) -> Unit,
+    trackContextMenuContent: (@Composable (
+        index: Int,
+        item: TrackListItemUiModel,
+        onDismiss: () -> Unit,
+    ) -> Unit)? = null,
     loadTrackCover: suspend (trackId: String) -> ImageBitmap?,
     modifier: Modifier = Modifier,
     listState: LazyListState = rememberLazyListState(),
@@ -98,6 +103,7 @@ fun ObjectScreen(
                 state = listState,
                 loadCover = loadTrackCover,
                 onItemClick = onTrackClick,
+                contextMenuContent = trackContextMenuContent,
                 emptyMessage = emptyMessage,
                 isLoading = isLoading,
                 header = {

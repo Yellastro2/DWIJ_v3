@@ -486,7 +486,7 @@ private fun buildYandexItems(
                     details = "$trackCount трек${getNumericPostfix(trackCount)}\n" +
                         formatDuration(playlist.durationMs ?: 0),
                     shouldLoadCover = !isLikedPlaylist && !playlist.ogImageUri.isNullOrBlank(),
-                    fallbackCoverResId = if (isLikedPlaylist) null else R.drawable.logo_lil,
+                    fallbackCoverResId = if (isLikedPlaylist) null else R.drawable.ic_player_play_v2,
                     artworkResId = if (isLikedPlaylist) R.drawable.ic_playlist_liked else null,
                     highlighted = pickedTrackId != null &&
                         playlist.tracks.any { it.trackId == pickedTrackId },
@@ -528,7 +528,7 @@ private fun buildLocalItems(
             PlaylistGridScreenItem(
                 id = playlist.playlistId,
                 title = playlist.name,
-                fallbackCoverResId = R.drawable.logo_lil,
+                fallbackCoverResId = R.drawable.ic_player_play_v2,
                 details = "${summary.trackCount} " +
                     "трек${getNumericPostfix(summary.trackCount)} · $duration\n$formatLabel",
             ),

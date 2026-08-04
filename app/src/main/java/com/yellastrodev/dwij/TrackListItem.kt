@@ -4,7 +4,8 @@ import android.util.Log
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
-import androidx.compose.foundation.clickable
+import androidx.compose.foundation.ExperimentalFoundationApi
+import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -45,14 +46,17 @@ enum class TrackSourceIndicator {
 
 /**
  * Универсальная строка трека. В обычном списке показывает доступность и дубли,
- * а в диалоге источников — тип источника и галочку локального выбора.
+ * а в диалоге источников — тип источника и галочку локального выбора. [onLongClick]
+ * используется только родительским списком для открытия контекстного меню.
  */
 @Composable
+@OptIn(ExperimentalFoundationApi::class)
 fun TrackListItem(
     item: TrackListItemUiModel,
     coverState: TrackCoverState,
     onClick: () -> Unit,
     modifier: Modifier = Modifier,
+    onLongClick: (() -> Unit)? = null,
     sourceIndicator: TrackSourceIndicator? = null,
     isSelected: Boolean = false,
 ) {
@@ -81,7 +85,10 @@ fun TrackListItem(
         modifier = modifier
             .fillMaxWidth()
             .height(72.dp)
-            .clickable(onClick = onClick),
+            .combinedClickable(
+                onClick = onClick,
+                onLongClick = onLongClick,
+            ),
     ) {
         Row(
             verticalAlignment = Alignment.CenterVertically,

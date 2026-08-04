@@ -37,6 +37,17 @@ abstract class SongDao {
     )
     abstract fun observeSongsForSource(source: String): Flow<List<SongWithInstances>>
 
+    /** Локальный каталог не показывает экземпляры, скрытые пользователем в Движе. */
+    @Transaction
+    @Query(
+        "SELECT DISTINCT songs.* FROM songs " +
+            "INNER JOIN track_instances ON track_instances.songId = songs.songId " +
+            "INNER JOIN local_tracks ON local_tracks.instanceId = track_instances.sourceTrackId " +
+            "WHERE track_instances.source = :source AND local_tracks.isHidden = 0 " +
+            "ORDER BY songs.title COLLATE NOCASE, songs.artistNames COLLATE NOCASE"
+    )
+    abstract fun observeSongsForVisibleLocalTracks(source: String): Flow<List<SongWithInstances>>
+
     @Transaction
     @Query("SELECT * FROM songs WHERE songId IN (:songIds)")
     abstract suspend fun getSongs(songIds: List<String>): List<SongWithInstances>

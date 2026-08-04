@@ -14,11 +14,21 @@ import kotlinx.coroutines.flow.Flow
 
 @Dao
 abstract class LocalLibraryDao {
-    @Query("SELECT * FROM local_tracks ORDER BY title COLLATE NOCASE, artist COLLATE NOCASE")
+    @Query(
+        "SELECT * FROM local_tracks WHERE isHidden = 0 " +
+            "ORDER BY title COLLATE NOCASE, artist COLLATE NOCASE"
+    )
     abstract fun observeAllTracks(): Flow<List<LocalTrackEntity>>
 
+    /** Полный индекс нужен синхронизации, включая скрытые пользователем записи. */
     @Query("SELECT * FROM local_tracks ORDER BY title COLLATE NOCASE, artist COLLATE NOCASE")
     abstract suspend fun getAllTracks(): List<LocalTrackEntity>
+
+    @Query(
+        "SELECT * FROM local_tracks WHERE isHidden = 1 " +
+            "ORDER BY title COLLATE NOCASE, artist COLLATE NOCASE"
+    )
+    abstract fun observeHiddenTracks(): Flow<List<LocalTrackEntity>>
 
     @Query("SELECT * FROM local_playlists ORDER BY name COLLATE NOCASE")
     abstract fun observePlaylists(): Flow<List<LocalPlaylistEntity>>
@@ -27,8 +37,19 @@ abstract class LocalLibraryDao {
     @Query(
         """
         SELECT local_playlists.*,
-               COUNT(local_playlist_entries.position) AS trackCount,
-               COALESCE(SUM(local_tracks.durationMs), 0) AS durationMs
+               COUNT(
+                   CASE WHEN COALESCE(local_tracks.isHidden, 0) = 0
+                       THEN local_playlist_entries.position
+                   END
+               ) AS trackCount,
+               COALESCE(
+                   SUM(
+                       CASE WHEN local_tracks.isHidden = 0
+                           THEN local_tracks.durationMs
+                       END
+                   ),
+                   0
+               ) AS durationMs
         FROM local_playlists
         LEFT JOIN local_playlist_entries
             ON local_playlist_entries.playlistId = local_playlists.playlistId
@@ -57,6 +78,7 @@ abstract class LocalLibraryDao {
         INNER JOIN local_tracks
             ON local_tracks.instanceId = local_playlist_entries.localTrackId
         WHERE local_playlist_entries.playlistId = :playlistId
+          AND local_tracks.isHidden = 0
         ORDER BY local_playlist_entries.position
         """
     )
@@ -80,6 +102,12 @@ abstract class LocalLibraryDao {
 
     @Query("SELECT * FROM local_tracks WHERE instanceId IN (:trackIds)")
     abstract suspend fun getTracks(trackIds: List<String>): List<LocalTrackEntity>
+
+    @Query("UPDATE local_tracks SET isHidden = :isHidden WHERE instanceId = :instanceId")
+    abstract suspend fun setTrackHidden(instanceId: String, isHidden: Boolean): Int
+
+    @Query("UPDATE local_tracks SET isHidden = :isHidden WHERE instanceId IN (:instanceIds)")
+    abstract suspend fun setTracksHidden(instanceIds: List<String>, isHidden: Boolean): Int
 
     @Upsert
     abstract suspend fun upsertTracks(tracks: List<LocalTrackEntity>)

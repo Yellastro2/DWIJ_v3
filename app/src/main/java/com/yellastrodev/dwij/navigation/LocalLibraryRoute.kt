@@ -2,16 +2,23 @@ package com.yellastrodev.dwij.navigation
 
 import android.graphics.Bitmap
 import android.util.Log
+import android.widget.Toast
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.safeDrawing
 import androidx.compose.foundation.layout.windowInsetsPadding
+import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.ImageBitmap
@@ -25,11 +32,13 @@ import androidx.navigation.NavHostController
 import com.yellastrodev.dwij.LocalLibraryScreen
 import com.yellastrodev.dwij.LocalPlaylistObjectScreen
 import com.yellastrodev.dwij.R
+import com.yellastrodev.dwij.data.DataResult
 import com.yellastrodev.dwij.data.entities.LocalPlaylistEntity
 import com.yellastrodev.dwij.data.entities.LocalTracklist
 import com.yellastrodev.dwij.data.entities.Song
 import com.yellastrodev.dwij.work.LocalLibrarySyncWorker
 import com.yellastrodev.dwij.yApplication
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
@@ -50,6 +59,7 @@ fun LocalLibraryRoute(
     val isSynchronizing by repository.isSynchronizing.collectAsState()
     val coroutineScope = rememberCoroutineScope()
     val allTracksTitle = stringResource(R.string.local_all_tracks_title)
+    var hideConfirmationTrack by remember { mutableStateOf<Song?>(null) }
 
     DisposableEffect(lifecycleOwner, context) {
         val observer = LifecycleEventObserver { _, event ->
@@ -102,6 +112,46 @@ fun LocalLibraryRoute(
         }
     }
 
+    fun requestTrackHide(song: Song) {
+        if (song.localInstances.isEmpty()) {
+            Log.w(TAG, "[requestTrackHide] У Song ${song.id} нет локального экземпляра")
+            return
+        }
+        hideConfirmationTrack = song
+    }
+
+    fun hideTrack(song: Song) {
+        val localInstanceIds = song.localInstances.map { instance -> instance.id }
+        if (localInstanceIds.isEmpty()) return
+        coroutineScope.launch {
+            try {
+                when (val result = repository.setTracksHidden(localInstanceIds, isHidden = true)) {
+                    is DataResult.Success -> Log.d(
+                        TAG,
+                        "[hideTrack] Скрыт '${song.title}', instances=${localInstanceIds.size}",
+                    )
+                    is DataResult.Failure -> {
+                        Log.e(TAG, "[hideTrack] Не удалось скрыть '${song.title}': ${result.error}")
+                        Toast.makeText(
+                            context,
+                            R.string.local_track_hide_failed,
+                            Toast.LENGTH_SHORT,
+                        ).show()
+                    }
+                }
+            } catch (error: CancellationException) {
+                throw error
+            } catch (error: Exception) {
+                Log.e(TAG, "[hideTrack] Непредвиденная ошибка для '${song.title}'", error)
+                Toast.makeText(
+                    context,
+                    R.string.local_track_hide_failed,
+                    Toast.LENGTH_SHORT,
+                ).show()
+            }
+        }
+    }
+
     when {
         mode == DwijDestination.LOCAL_MODE_PLAYLISTS -> {
             val playlists by repository.playlists.collectAsState(initial = null)
@@ -111,6 +161,7 @@ fun LocalLibraryRoute(
                 tracks = null,
                 onPlaylistClick = ::openPlaylist,
                 onTrackClick = { _, _ -> },
+                onTrackHideRequest = {},
                 loadTrackCover = ::loadTrackCover,
                 isLoading = playlists == null ||
                     (playlists.isNullOrEmpty() && isSynchronizing),
@@ -144,6 +195,7 @@ fun LocalLibraryRoute(
                         tracklist = LocalTracklist(id = playlistId, name = playlistTitle),
                     )
                 },
+                onTrackHideRequest = ::requestTrackHide,
                 isLoading = tracks == null ||
                     (tracks.isNullOrEmpty() && isSynchronizing),
                 modifier = modifier
@@ -168,6 +220,7 @@ fun LocalLibraryRoute(
                         tracklist = LocalTracklist(id = "local:all", name = allTracksTitle),
                     )
                 },
+                onTrackHideRequest = ::requestTrackHide,
                 isLoading = tracks == null ||
                     (tracks.isNullOrEmpty() && isSynchronizing),
                 modifier = modifier
@@ -176,6 +229,36 @@ fun LocalLibraryRoute(
                     .background(LocalLibraryBackground),
             )
         }
+    }
+
+    hideConfirmationTrack?.let { track ->
+        AlertDialog(
+            onDismissRequest = { hideConfirmationTrack = null },
+            title = { Text(stringResource(R.string.local_track_hide_confirm_title)) },
+            text = {
+                Text(
+                    stringResource(
+                        R.string.local_track_hide_confirm_message,
+                        track.title,
+                    ),
+                )
+            },
+            confirmButton = {
+                TextButton(
+                    onClick = {
+                        hideConfirmationTrack = null
+                        hideTrack(track)
+                    },
+                ) {
+                    Text(stringResource(R.string.local_track_hide_action))
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { hideConfirmationTrack = null }) {
+                    Text(stringResource(R.string.playlists_cancel))
+                }
+            },
+        )
     }
 }
 

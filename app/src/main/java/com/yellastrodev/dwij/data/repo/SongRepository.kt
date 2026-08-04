@@ -45,7 +45,7 @@ class SongRepository(
 
     /** Локальная библиотека читается из готового индекса и никогда не пишет в Room. */
     val localSongs: Flow<List<Song>> = combine(
-        songDao.observeSongsForSource(MusicSource.LOCAL.name),
+        songDao.observeSongsForVisibleLocalTracks(MusicSource.LOCAL.name),
         pendingSongIds,
     ) { relations, pendingSongIds ->
         assemble(relations, pendingSongIds)

@@ -315,7 +315,10 @@ fun HomeScreen(
                         waveEnabled = selectedSource == HomeMusicSource.Yandex,
                     )
                 }
-                HomeNavigationTab.Search -> SearchPlaceholderScreen()
+                HomeNavigationTab.Search -> SearchScreen(
+                    selectedSource = selectedSource,
+                    onSourceSelected = onSourceSelected,
+                )
             }
         }
     }

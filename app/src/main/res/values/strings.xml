@@ -103,6 +103,10 @@
     <string name="local_playlist_title">Локальный плейлист</string>
     <string name="local_playlists_empty">Плейлисты появятся после синхронизации MediaStore или M3U</string>
     <string name="local_tracks_empty">Локальные треки пока не найдены</string>
+    <string name="local_track_hide_action">Скрыть трек</string>
+    <string name="local_track_hide_confirm_title">Скрыть трек?</string>
+    <string name="local_track_hide_confirm_message">«%1$s» пропадёт из локальных списков Движа. Сам файл останется на устройстве.</string>
+    <string name="local_track_hide_failed">Не удалось скрыть трек</string>
     <string name="local_playlist_dwij">Плейлист Движа · M3U</string>
     <string name="local_playlist_media_store">Системный плейлист</string>
     <string name="local_playlist_m3u">M3U-плейлист</string>
@@ -139,6 +143,8 @@
     <string name="search_recent_query_city">Ночной город</string>
     <string name="search_recent_query_road">Для дороги</string>
     <string name="search_recent_query_synthwave">Synthwave</string>
+    <string name="search_results_start_hint">Начните поиск</string>
+    <string name="search_results_empty">Ничего не найдено</string>
     <string name="search_categories_title">Посмотреть по настроению</string>
     <string name="search_category_new_releases">Новые релизы</string>
     <string name="search_category_electronic">Электроника</string>

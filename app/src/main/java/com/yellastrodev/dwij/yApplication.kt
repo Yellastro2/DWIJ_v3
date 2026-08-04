@@ -97,7 +97,7 @@ class yApplication: Application() {
             TrackInstanceEntity::class,
             SongMatchCandidateEntity::class,
                    ],
-        version = 8
+        version = 9
     )
 //    @TypeConverters(StringListConverter::class) // если у тебя есть поля List<String>
     abstract class AppDatabase : RoomDatabase() {
@@ -135,6 +135,7 @@ class yApplication: Application() {
                 MIGRATION_5_6,
                 MIGRATION_6_7,
                 MIGRATION_7_8,
+                MIGRATION_8_9,
             )
             .fallbackToDestructiveMigration()
             .build()
@@ -642,6 +643,15 @@ class yApplication: Application() {
                 db.execSQL(
                     "CREATE INDEX IF NOT EXISTS index_song_match_candidates_status " +
                         "ON song_match_candidates(status)"
+                )
+            }
+        }
+
+        /** Пользовательская видимость хранится вместе с локальным индексом и переживает sync. */
+        val MIGRATION_8_9 = object : Migration(8, 9) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL(
+                    "ALTER TABLE local_tracks ADD COLUMN isHidden INTEGER NOT NULL DEFAULT 0"
                 )
             }
         }

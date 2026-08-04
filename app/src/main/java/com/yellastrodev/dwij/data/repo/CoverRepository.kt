@@ -47,11 +47,11 @@ class CoverRepository(
                     result.value.size
                 ) ?: BitmapFactory.decodeResource(
                     context.resources,
-                    R.drawable.logo2
+                    R.drawable.ic_player_play_v2
                 )
             }
             else -> {
-                return BitmapFactory.decodeResource(context.resources, R.drawable.logo2)
+                return BitmapFactory.decodeResource(context.resources, R.drawable.ic_player_play_v2)
             }
         }
 //        return stream.use {
@@ -66,7 +66,7 @@ class CoverRepository(
 
         track.getCoverUriAny()?. let {
             return getCover(keyForSize(track.id, size), it, size)
-        }?: return BitmapFactory.decodeResource(context.resources, R.drawable.logo2)
+        }?: return BitmapFactory.decodeResource(context.resources, R.drawable.ic_player_play_v2)
 
     }
 
@@ -75,7 +75,7 @@ class CoverRepository(
             val key = "playlist_" + keyForSize(playlist.playlistUuid,size)
             return getCover(key, playlist.ogImageUri!!, size)
         }
-        return BitmapFactory.decodeResource(context.resources, R.drawable.logo2)
+        return BitmapFactory.decodeResource(context.resources, R.drawable.ic_player_play_v2)
     }
 
     suspend fun getCover(playlist: dYaPlaylist, size: CoverSize = CoverSize.`200x200`): Bitmap {
@@ -126,7 +126,7 @@ class CoverRepository(
                     bitmap.compress(Bitmap.CompressFormat.JPEG, 100, out)
                 }
             }
-        } ?: emit(BitmapFactory.decodeResource(context.resources, R.drawable.logo2))
+        } ?: emit(BitmapFactory.decodeResource(context.resources, R.drawable.ic_player_play_v2))
     }
 
     private fun findSmallerCachedVersion(trackId: String, size: CoverSize): Bitmap? {

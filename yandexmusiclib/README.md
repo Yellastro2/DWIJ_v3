@@ -74,7 +74,7 @@ git clone https://github.com/MarshalX/yandex-music-api.git C:\path\to\yandex-mus
 - `network/` — типизированные результаты и новый сетевой transport;
 - `auth/YandexDeviceAuth.kt` — OAuth Device Flow;
 - `account/` — типизированные модели и операции аккаунта;
-- `likes/`, `playlists/`, `tracks/`, `rotor/` — типизированные API-срезы;
+- `likes/`, `playlists/`, `tracks/`, `search/`, `rotor/` — типизированные API-срезы;
 - `download/` и `covers/` — ссылки воспроизведения и бинарный контент;
 - `entities/` — модели данных;
 

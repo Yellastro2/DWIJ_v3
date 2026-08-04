@@ -19,11 +19,15 @@ import com.yellastrodev.yandexmusiclib.playlists.PlaylistVisibility
 import com.yellastrodev.yandexmusiclib.rotor.RotorApi
 import com.yellastrodev.yandexmusiclib.rotor.RotorBatch
 import com.yellastrodev.yandexmusiclib.rotor.RotorFeedbackType
+import com.yellastrodev.yandexmusiclib.search.SearchApi
+import com.yellastrodev.yandexmusiclib.search.SearchResponse
+import com.yellastrodev.yandexmusiclib.search.SearchSuggestions
+import com.yellastrodev.yandexmusiclib.search.SearchType
 import com.yellastrodev.yandexmusiclib.tracks.TrackApi
 import com.yellastrodev.yandexmusiclib.tracks.PlayAudioRequest
 
 /**
- * Корутино-ориентированный клиент API Яндекс Музыки для Android/Kotlin.
+ * Корутино-ориентированный клиент API Яндекс Музыки для Kotlin/JVM.
  *
  * Публичные сетевые операции возвращают [YamResult] и не отдают JSON наружу.
  */
@@ -51,6 +55,7 @@ class YamApiClient(
     private val likesApi by lazy { LikesApi(httpTransport) }
     private val playlistApi by lazy { PlaylistApi(httpTransport) }
     private val trackApi by lazy { TrackApi(httpTransport) }
+    private val searchApi by lazy { SearchApi(httpTransport) }
     private val rotorApi by lazy { RotorApi(httpTransport) }
     private val downloadApi by lazy {
         DownloadApi(httpTransport, httpTransport)
@@ -159,6 +164,25 @@ class YamApiClient(
         withPositions: Boolean = true
     ): YamResult<List<YaTrack>> =
         trackApi.tracks(trackIds, withPositions)
+
+    /** Выполняет поиск по Яндекс Музыке и возвращает типизированные известные разделы выдачи. */
+    suspend fun search(
+        text: String,
+        nocorrect: Boolean = false,
+        type: SearchType = SearchType.ALL,
+        page: Int = 0,
+        playlistInBest: Boolean = true,
+    ): YamResult<SearchResponse> = searchApi.search(
+        text = text,
+        nocorrect = nocorrect,
+        type = type,
+        page = page,
+        playlistInBest = playlistInBest,
+    )
+
+    /** Возвращает подсказки для введённой части поискового запроса. */
+    suspend fun searchSuggestions(part: String): YamResult<SearchSuggestions> =
+        searchApi.suggestions(part)
 
     /**
      * Отправляет универсальную телеметрию прослушивания трека.
