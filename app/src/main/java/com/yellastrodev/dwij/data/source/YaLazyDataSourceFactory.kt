@@ -11,6 +11,7 @@ import androidx.media3.datasource.TransferListener
 import com.yellastrodev.dwij.data.repo.TrackCacheRepository
 import kotlinx.coroutines.runBlocking
 import java.io.IOException
+import androidx.core.net.toUri
 
 @OptIn(UnstableApi::class)
 class YaLazyDataSourceFactory(
@@ -31,22 +32,28 @@ class YaLazyDataSourceFactory(
 
             override fun open(dataSpec: DataSpec): Long {
                 return try {
-
                     val uri = dataSpec.uri
+
                     if (uri.scheme == "ya") {
                         val trackId = uri.authority
-                        val realUri = runBlocking {
-                            trackCacheRepo.getOrDownload(trackId.toString())
+                            ?: throw IOException("Track ID отсутствует в URI: $uri")
+
+                        val realUriString = runBlocking {
+                            trackCacheRepo.getOrDownload(trackId)
                         }
+
+                        val realUri = realUriString.toUri()
                         val newSpec = dataSpec.withUri(realUri)
+
                         actual = upstream
-                        return actual!!.open(newSpec)
+                        upstream.open(newSpec)
                     } else {
                         actual = upstream
-                        return actual!!.open(dataSpec)
+                        upstream.open(dataSpec)
                     }
-                }catch (e: IOException) {
+                } catch (e: IOException) {
                     actual?.close()
+                    actual = null
                     throw e
                 }
             }

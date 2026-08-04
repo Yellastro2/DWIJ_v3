@@ -151,8 +151,12 @@ class yApplication: Application() {
     }
 
     val trackCacheRepo: TrackCacheRepository by lazy {
+
+         val cacheDir = File(cacheDir, DIR_TRACK_CACHE).apply {
+            if (!exists()) mkdirs()
+        }
         TrackCacheRepository(
-            applicationContext,
+            cacheDir,
             trackRepository,
             cacheManager
         )
