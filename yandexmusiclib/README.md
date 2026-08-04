@@ -1,6 +1,6 @@
 # yandexmusiclib
 
-`yandexmusiclib` — самостоятельная Android/Kotlin-библиотека для работы с API
+`yandexmusiclib` — самостоятельная Kotlin-JRE-библиотека для работы с API
 Яндекс Музыки, созданная на основе знаний и контрактов, собранных в
 [MarshalX/yandex-music-api](https://github.com/MarshalX/yandex-music-api).
 
@@ -43,34 +43,18 @@ endpoint-адресов, параметров запросов, моделей �
 `yandexmusiclib/local.properties`:
 
 ```properties
-LOCAL_CLONE=C\:\\Users\\Turbo\\StudioProjects\\yandex-music-api
-YANDEX_OAUTH_CLIENT_ID=<client_id>
-YANDEX_OAUTH_CLIENT_SECRET=<client_secret>
+LOCAL_CLONE=C\:\\path\\to\\yandex-music-api
 ```
 
-После разбора Java properties значение переменной соответствует пути:
-
-```text
-C:\Users\Turbo\StudioProjects\yandex-music-api
-```
-
-У каждого разработчика путь может быть своим. `local.properties` содержит
-локальную конфигурацию, исключён из Git и не должен коммититься. `LOCAL_CLONE`
+У каждого разработчика путь может быть своим. `LOCAL_CLONE`
 служит ориентиром для локальной разработки и сравнения реализаций; клон Python
 SDK не является зависимостью Android-сборки.
-
-`YANDEX_OAUTH_CLIENT_ID` и `YANDEX_OAUTH_CLIENT_SECRET` используются только
-OAuth Device Flow. Значения следует брать из локальной реализации Python SDK;
-в репозитории Kotlin-модуля они намеренно не хранятся.
 
 Если клона ещё нет, его можно подготовить отдельно:
 
 ```powershell
 git clone https://github.com/MarshalX/yandex-music-api.git C:\path\to\yandex-music-api
 ```
-
-Затем следует записать фактический путь в `yandexmusiclib/local.properties`,
-экранировав обратные слеши в формате Java properties.
 
 ## Как использовать оригинал
 
