@@ -6,9 +6,7 @@ import android.preference.PreferenceManager
 import android.util.Log
 import android.util.LruCache
 import androidx.media3.common.util.UnstableApi
-import androidx.room.Database
 import androidx.room.Room
-import androidx.room.RoomDatabase
 import com.yellastrodev.dwij.data.repo.CoverRepository
 import com.yellastrodev.dwij.data.repo.PlayerRepository
 import com.yellastrodev.dwij.data.repo.PlaylistRepository
@@ -19,27 +17,9 @@ import com.yellastrodev.dwij.data.source.PlaylistLocalSource
 import com.yellastrodev.dwij.data.source.PlaylistRemoteSource
 import com.yellastrodev.dwij.data.source.PlaybackRemoteSource
 import com.yellastrodev.dwij.data.source.TrackRemoteSource
-import com.yellastrodev.dwij.data.dao.dPlaylistDao
-import com.yellastrodev.dwij.data.dao.dTrackDao
-import com.yellastrodev.dwij.data.dao.LocalLibraryDao
-import com.yellastrodev.dwij.data.dao.SongDao
-import com.yellastrodev.dwij.data.dao.SongMatchDao
 import com.yellastrodev.dwij.data.db.DwijDatabase
 import com.yellastrodev.dwij.data.db.buildDwijDatabase
-import com.yellastrodev.dwij.data.entities.LocalLibraryStateEntity
-import com.yellastrodev.dwij.data.entities.LocalPlaylistEntity
-import com.yellastrodev.dwij.data.entities.LocalPlaylistEntryEntity
-import com.yellastrodev.dwij.data.entities.LocalTrackEntity
-import com.yellastrodev.dwij.data.entities.SongEntity
-import com.yellastrodev.dwij.data.entities.SongMatchCandidateEntity
-import com.yellastrodev.dwij.data.entities.TrackInstanceEntity
-import com.yellastrodev.dwij.data.entities.dPlaylistTrack
-import com.yellastrodev.dwij.data.entities.dTrackAlbumCrossRef
-import com.yellastrodev.dwij.data.entities.dTrackArtistCrossRef
-import com.yellastrodev.dwij.data.entities.dYaAlbum
-import com.yellastrodev.dwij.data.entities.dYaArtist
 import com.yellastrodev.dwij.data.entities.dYaPlaylist
-import com.yellastrodev.dwij.data.entities.dYaTrack
 import com.yellastrodev.dwij.data.repo.WaveRepository
 import com.yellastrodev.dwij.data.repo.LocalMusicRepository
 import com.yellastrodev.dwij.data.repo.SongRepository
@@ -51,6 +31,7 @@ import com.yellastrodev.dwij.data.source.SearchRemoteSource
 import com.yellastrodev.dwij.data.repo.SearchRepository
 import com.yellastrodev.dwij.service.PlayerService
 import com.yellastrodev.dwij.service.PlaybackFeedbackTracker
+import com.yellastrodev.dwij.utils.DwLruCache
 import com.yellastrodev.yandexmusiclib.YamApiClient
 import com.yellastrodev.yandexmusiclib.network.YamError
 import com.yellastrodev.yandexmusiclib.network.YamResult
@@ -68,11 +49,13 @@ class yApplication: Application() {
 
     private val applicationScope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
 
+    val logger = YamLoggerAndroid()
+
     val yamClient: YamApiClient by lazy {
         runBlocking(Dispatchers.IO) {
             val result = initYaM(applicationContext)
             when (result) {
-                is ClientResult.Error -> YamApiClient("", "", logger = YamLoggerAndroid())
+                is ClientResult.Error -> YamApiClient("", "", logger = logger)
                 is ClientResult.Success -> result.client
             }
         }
@@ -122,6 +105,7 @@ class yApplication: Application() {
             db.dTrackDao(),
             songRepository,
             applicationScope,
+            logger = logger
             )
     }
 
@@ -141,16 +125,16 @@ class yApplication: Application() {
 
 
     val playlistRepository: PlaylistRepository by lazy {
-        val lruCache = object : LruCache<Int, dYaPlaylist>(50) {
+        val lruCache = object : DwLruCache<Int, dYaPlaylist>(50) {
             override fun sizeOf(key: Int, value: dYaPlaylist) = 1
         }
         PlaylistRepository(
             cache = PlaylistCacheSource(lruCache),
-            remote = PlaylistRemoteSource(yamClient),
+            remote = PlaylistRemoteSource(yamClient, logger),
             scope = applicationScope,
             trackRepo = trackRepository,
-            local = db.dPlaylistDao()
-
+            local = db.dPlaylistDao(),
+            logger = logger
         )
     }
 
@@ -212,6 +196,7 @@ class yApplication: Application() {
         SongMatchRepository(
             songDao = db.songDao(),
             matchDao = db.songMatchDao(),
+            logger = logger
         )
     }
 
@@ -304,7 +289,7 @@ class yApplication: Application() {
             }
             var userId = sharedPref.getString(YA_ID, null)
             if (userId == null) {
-                val bootstrapClient = YamApiClient(token, "", logger = YamLoggerAndroid())
+                val bootstrapClient = YamApiClient(token, "", logger = logger)
                 when (val statusResult = bootstrapClient.accountStatus()) {
                     is YamResult.Success -> {
                         val account = statusResult.value.account
@@ -335,7 +320,7 @@ class yApplication: Application() {
             }
             val resolvedUserId = userId
                 ?: return ClientResult.Error(ClientResult.Reason.UNKNOWN)
-            return ClientResult.Success(YamApiClient(token, resolvedUserId, logger = YamLoggerAndroid()))
+            return ClientResult.Success(YamApiClient(token, resolvedUserId, logger = logger))
         }?: run {
             Log.i("DWIJ_TAG", "[initYaM] Нет авторизации Яндекс Музыки")
             return ClientResult.Error(ClientResult.Reason.NO_TOKEN)

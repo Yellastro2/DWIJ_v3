@@ -49,7 +49,10 @@ class YamApiClient(
         private set
 
     private val httpTransport by lazy {
-        YamHttpTransport(accessToken = { accessToken }, logger=logger)
+        YamHttpTransport(
+            accessToken = { this@YamApiClient.accessToken },
+            logger = logger,
+        )
     }
     private val accountApi by lazy { AccountApi(httpTransport) }
     private val likesApi by lazy { LikesApi(httpTransport) }

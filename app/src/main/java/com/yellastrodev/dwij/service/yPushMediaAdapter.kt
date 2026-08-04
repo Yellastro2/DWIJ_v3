@@ -4,10 +4,8 @@ import android.app.PendingIntent
 import android.content.Intent
 import android.graphics.Bitmap
 import android.util.Log
-import androidx.media3.common.MediaMetadata
 import androidx.media3.common.Player
 import androidx.media3.common.util.UnstableApi
-import androidx.media3.session.legacy.MediaMetadataCompat
 import androidx.media3.ui.PlayerNotificationManager
 import com.yellastrodev.dwij.activities.MainActivity
 import com.yellastrodev.dwij.data.DataResult
@@ -16,8 +14,6 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
-import java.io.ByteArrayOutputStream
-import kotlin.collections.get
 
 @UnstableApi
 class yPushMediaAdapterobject(

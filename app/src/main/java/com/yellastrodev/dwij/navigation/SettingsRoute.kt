@@ -38,6 +38,7 @@ import com.yellastrodev.dwij.YA_REFRESH_TOKEN
 import com.yellastrodev.dwij.YA_TOKEN
 import com.yellastrodev.dwij.YA_TOKEN_EXPIRES_AT
 import com.yellastrodev.dwij.YamLoggerAndroid
+import com.yellastrodev.dwij.data.DataResult
 import com.yellastrodev.dwij.yApplication
 import com.yellastrodev.dwij.BuildConfig
 import com.yellastrodev.yandexmusiclib.YamApiClient
@@ -159,7 +160,30 @@ fun SettingsRoute(
                 login = login,
             )
             Log.i(TAG, "[saveToken] Авторизация сохранена")
+            try {
+                when (val refreshResult = application.playlistRepository.refreshPlaylists()) {
+                    is DataResult.Success -> Log.i(
+                        TAG,
+                        "[saveToken] Данные Яндекс Музыки обновлены после авторизации",
+                    )
+                    is DataResult.Failure -> Log.w(
+                        TAG,
+                        "[saveToken] Авторизация сохранена, но данные Яндекс Музыки не обновлены: " +
+                            refreshResult.error,
+                    )
+                }
+            } catch (error: CancellationException) {
+                throw error
+            } catch (error: Exception) {
+                Log.e(
+                    TAG,
+                    "[saveToken] Авторизация сохранена, но обновление данных завершилось с ошибкой",
+                    error,
+                )
+            }
             SettingsAccountSaveResult.Success(login)
+        } catch (error: CancellationException) {
+            throw error
         } catch (error: Exception) {
             Log.e(TAG, "[saveToken] Некорректный ответ account/status", error)
             SettingsAccountSaveResult.Failure

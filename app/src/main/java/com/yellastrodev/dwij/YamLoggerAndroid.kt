@@ -1,9 +1,10 @@
 package com.yellastrodev.dwij
 
 import android.util.Log
+import com.yellastrodev.dwij.utils.DwLogger
 import com.yellastrodev.yandexmusiclib.YamLogger
 
-class YamLoggerAndroid : YamLogger {
+class YamLoggerAndroid : YamLogger, DwLogger {
 
     override fun info(tag: String, message: String) {
         Log.i(tag, message)
