@@ -123,20 +123,25 @@ fun SongMatchCandidatesRoute(
         }
     }
 
-    suspend fun loadListCover(song: Song): ImageBitmap? = withContext(Dispatchers.IO) {
-        song.yandexInstances.firstOrNull()?.let { instance ->
-            return@withContext application.coverRepository
-                .getCover(instance.track, CoverSize.`100x100`)
-                .asImageBitmap()
-        }
-        val source = song.localInstances.firstOrNull()
-            ?.let { instance ->
-                application.coverRepository.getCoverFlow(instance.track).firstOrNull()
-            }
+    suspend fun loadListCover(
+        song: Song,
+    ): ImageBitmap? = withContext(Dispatchers.IO) {
+        val instance = song.yandexInstances.firstOrNull()
+            ?: song.localInstances.firstOrNull()
             ?: return@withContext null
-        val largestSide = maxOf(source.width, source.height)
+
+        val source = playerModel.cover(instance)
+            .firstOrNull()
+            ?: return@withContext null
+
+        val largestSide = maxOf(
+            source.width,
+            source.height,
+        )
+
         val bitmap = if (largestSide > LIST_COVER_SIZE_PX) {
             val scale = LIST_COVER_SIZE_PX.toFloat() / largestSide
+
             Bitmap.createScaledBitmap(
                 source,
                 (source.width * scale).toInt().coerceAtLeast(1),
@@ -146,6 +151,7 @@ fun SongMatchCandidatesRoute(
         } else {
             source
         }
+
         bitmap.asImageBitmap()
     }
 

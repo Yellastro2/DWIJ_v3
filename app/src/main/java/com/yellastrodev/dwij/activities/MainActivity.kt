@@ -15,6 +15,7 @@ class MainActivity : ComponentActivity() {
     val playerModel: PlayerModel by viewModels {
         val application = application as yApplication
         PlayerModel.Factory(
+            context = application.applicationContext,
             playerRepo = application.playerRepo,
             coverRepo = application.coverRepository,
             playlistRepo = application.playlistRepository,

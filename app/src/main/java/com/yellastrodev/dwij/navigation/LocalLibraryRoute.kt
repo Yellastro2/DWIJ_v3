@@ -1,6 +1,9 @@
 package com.yellastrodev.dwij.navigation
 
 import android.graphics.Bitmap
+import android.graphics.BitmapFactory
+import android.media.MediaMetadataRetriever
+import android.net.Uri
 import android.util.Log
 import android.widget.Toast
 import androidx.compose.foundation.background
@@ -25,6 +28,8 @@ import androidx.compose.ui.graphics.ImageBitmap
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
+import androidx.core.content.ContextCompat
+import androidx.core.graphics.drawable.toBitmap
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleEventObserver
 import androidx.lifecycle.compose.LocalLifecycleOwner
@@ -71,14 +76,70 @@ fun LocalLibraryRoute(
         onDispose { lifecycleOwner.lifecycle.removeObserver(observer) }
     }
 
-    suspend fun loadTrackCover(song: Song): ImageBitmap = withContext(Dispatchers.IO) {
-        val track = requireNotNull(song.localInstances.firstOrNull()?.track) {
+    suspend fun loadTrackCover(
+        song: Song,
+    ): ImageBitmap = withContext(Dispatchers.IO) {
+        val track = requireNotNull(
+            song.localInstances.firstOrNull()?.track,
+        ) {
             "У песни ${song.id} отсутствует локальный экземпляр"
         }
-        val source = application.coverRepository.getCoverFlow(track).first()
-        val largestSide = maxOf(source.width, source.height)
+
+        val albumCover = track.albumId?.let { albumId ->
+            runCatching {
+                context.contentResolver.openInputStream(
+                    Uri.parse(
+                        "content://media/external/audio/albumart/$albumId",
+                    ),
+                )?.use { input ->
+                    BitmapFactory.decodeStream(input)
+                }
+            }.getOrNull()
+        }
+
+        val source = albumCover ?: run {
+            val retriever = MediaMetadataRetriever()
+
+            try {
+                retriever.setDataSource(
+                    context,
+                    Uri.parse(track.contentUri),
+                )
+
+                retriever.embeddedPicture?.let { bytes ->
+                    BitmapFactory.decodeByteArray(
+                        bytes,
+                        0,
+                        bytes.size,
+                    )
+                }
+            } catch (error: Exception) {
+                Log.d(
+                    TAG,
+                    "[loadTrackCover] Не удалось прочитать обложку ${track.instanceId}",
+                    error,
+                )
+                null
+            } finally {
+                runCatching {
+                    retriever.release()
+                }
+            }
+        } ?: requireNotNull(
+            ContextCompat.getDrawable(
+                context,
+                R.drawable.ic_player_play_v2,
+            ),
+        ).toBitmap()
+
+        val largestSide = maxOf(
+            source.width,
+            source.height,
+        )
+
         val displayBitmap = if (largestSide > TRACK_COVER_SIZE_PX) {
             val scale = TRACK_COVER_SIZE_PX.toFloat() / largestSide
+
             Bitmap.createScaledBitmap(
                 source,
                 (source.width * scale).toInt().coerceAtLeast(1),
@@ -88,6 +149,7 @@ fun LocalLibraryRoute(
         } else {
             source
         }
+
         displayBitmap.asImageBitmap()
     }
 

@@ -2,6 +2,7 @@ package com.yellastrodev.dwij.models
 
 import android.util.Log
 import android.graphics.Bitmap
+import android.graphics.BitmapFactory
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.viewModelScope
@@ -288,14 +289,43 @@ class TracklistModel(
             ?.firstOrNull()
             ?.track
             ?: return null
+
         return withContext(Dispatchers.IO) {
-            coverRepo.getCover(track, CoverSize.`100x100`)
+            val coverData = coverRepo.getTrackCover(
+                track = track,
+                size = CoverSize.`100x100`,
+            ) ?: return@withContext null
+
+            BitmapFactory.decodeByteArray(
+                coverData.bytes,
+                0,
+                coverData.bytes.size,
+            )
         }
     }
 
     /** Загружает обложку текущего плейлиста для Compose-шапки объекта. */
-    suspend fun getPlaylistCover(playlist: dYaPlaylist): Bitmap = withContext(Dispatchers.IO) {
-        coverRepo.getCover(playlist, CoverSize.`200x200`)
+    suspend fun getPlaylistCover(
+        playlist: dYaPlaylist,
+    ): Bitmap = withContext(Dispatchers.IO) {
+        val coverData = requireNotNull(
+            coverRepo.getPlaylistCover(
+                playlist = playlist,
+                size = CoverSize.`200x200`,
+            ),
+        ) {
+            "Не удалось получить обложку плейлиста ${playlist.playlistUuid}"
+        }
+
+        requireNotNull(
+            BitmapFactory.decodeByteArray(
+                coverData.bytes,
+                0,
+                coverData.bytes.size,
+            ),
+        ) {
+            "Не удалось декодировать обложку плейлиста ${playlist.playlistUuid}"
+        }
     }
 
 

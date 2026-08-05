@@ -3,6 +3,7 @@ package com.yellastrodev.dwij.service
 import android.app.PendingIntent
 import android.content.Intent
 import android.graphics.Bitmap
+import android.graphics.BitmapFactory
 import android.util.Log
 import androidx.media3.common.Player
 import androidx.media3.common.util.UnstableApi
@@ -109,19 +110,41 @@ class yPushMediaAdapterobject(
      * Загружает обложку текущего трека через AlbumCoverRepository
      * @return Bitmap текущей обложки или null
      */
-    private suspend fun getCurrentTrackCoverBitmap(trackId: String): Bitmap? {
-
+    private suspend fun getCurrentTrackCoverBitmap(
+        trackId: String,
+    ): Bitmap? {
         Log.d(TAG, "getCurrentTrackCoverBitmap: trackId=$trackId")
-        val track = when (val result = playerService.trackRepo.getTrack(trackId)) {
+
+        val track = when (
+            val result = playerService.trackRepo.getTrack(trackId)
+        ) {
             is DataResult.Success -> result.value
+
             is DataResult.Failure -> {
-                Log.w(TAG, "[getCurrentTrackCoverBitmap] Трек не загружен: ${result.error}")
+                Log.w(
+                    TAG,
+                    "[getCurrentTrackCoverBitmap] Трек не загружен: ${result.error}",
+                )
                 return null
             }
         }
+
         Log.d(TAG, "Track found in repo: $track")
-        return playerService.coverRepo.getCover(track, CoverSize.`100x100`).also {
-            Log.d(TAG, "Bitmap loaded for trackId=$trackId, size=${it.width}x${it.height}")
+
+        val coverData = playerService.coverRepo.getTrackCover(
+            track = track,
+            size = CoverSize.`100x100`,
+        ) ?: return null
+
+        return BitmapFactory.decodeByteArray(
+            coverData.bytes,
+            0,
+            coverData.bytes.size,
+        )?.also { bitmap ->
+            Log.d(
+                TAG,
+                "Bitmap loaded for trackId=$trackId, size=${bitmap.width}x${bitmap.height}",
+            )
         }
     }
 }

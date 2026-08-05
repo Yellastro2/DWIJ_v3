@@ -71,13 +71,13 @@ fun PlaylistGridRoute(
     val application = context.applicationContext as yApplication
     val coroutineScope = rememberCoroutineScope()
     val snackbarHostState = remember { SnackbarHostState() }
-    val model = viewModel<GridPlaylistModel>(
-        factory = GridPlaylistModel.Factory(
-            repo = application.playlistRepository,
+    val model = viewModel {
+        GridPlaylistModel(
+            playlistRepo = application.playlistRepository,
             trackRepo = application.trackRepository,
             coverRepo = application.coverRepository,
-        ),
-    )
+        )
+    }
     val yandexPlaylists by model.playlists.collectAsState()
     val yandexInitialLoadComplete by model.initialLoadComplete.collectAsState()
     val localPlaylistSummarySnapshot by application.localMusicRepository.playlistSummaries

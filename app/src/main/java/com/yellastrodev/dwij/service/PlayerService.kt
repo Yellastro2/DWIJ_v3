@@ -212,29 +212,27 @@ class PlayerService : MediaSessionService() {
                             return@launch
                         }
                     }
-                    val bitmap = coverRepo.getCover(track, CoverSize.`400x400`) // твой метод
-                    if (bitmap != null) {
-                        val byteArray = ByteArrayOutputStream().apply {
-                            bitmap.compress(Bitmap.CompressFormat.JPEG, 90, this)
-                        }.toByteArray()
+                    val coverData = coverRepo.getTrackCover(
+                        track = track,
+                        size = CoverSize.`400x400`,
+                    ) ?: return@launch
 
-                        val newMetadata = mediaItem.mediaMetadata.buildUpon()
-                            .setArtworkData(byteArray, MediaMetadata.PICTURE_TYPE_FRONT_COVER)
-                            .build()
+                    val newMetadata = mediaItem.mediaMetadata.buildUpon()
+                        .setArtworkData(
+                            coverData.bytes,
+                            MediaMetadata.PICTURE_TYPE_FRONT_COVER,
+                        )
+                        .build()
 
-                        val newItem = mediaItem.buildUpon()
-                            .setMediaMetadata(newMetadata)
-                            .build()
+                    val newItem = mediaItem.buildUpon()
+                        .setMediaMetadata(newMetadata)
+                        .build()
 
-                        withContext(Dispatchers.Main) {
-                            // обновляем MediaSession метаданные
-//                            mediaSession.setMediaMetadata(newMetadata)
+                    withContext(Dispatchers.Main) {
+                        val index = player.currentMediaItemIndex
 
-                            // если хочешь, можно и в плеере заменить текущий item:
-                            val index = player.currentMediaItemIndex
-                            if (index != C.INDEX_UNSET) {
-                                player.replaceMediaItem(index, newItem)
-                            }
+                        if (index != C.INDEX_UNSET) {
+                            player.replaceMediaItem(index, newItem)
                         }
                     }
                 }

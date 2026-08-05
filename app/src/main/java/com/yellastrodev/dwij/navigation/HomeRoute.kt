@@ -35,6 +35,7 @@ import com.yellastrodev.dwij.models.PlayerModel
 import com.yellastrodev.dwij.models.SearchModel
 import com.yellastrodev.dwij.models.SearchResultItemUiModel
 import com.yellastrodev.dwij.models.SearchTrackSource
+import com.yellastrodev.dwij.ui.toImageBitmapOrNull
 import com.yellastrodev.dwij.work.LocalLibrarySyncWorker
 import com.yellastrodev.dwij.yApplication
 import kotlinx.coroutines.Dispatchers
@@ -187,21 +188,37 @@ fun HomeRoute(
         loadSearchTrackCover = { item ->
             withContext(Dispatchers.IO) {
                 when (val source = item.source) {
-                    is SearchTrackSource.Yandex -> application.coverRepository
-                        .getCover(source.track, CoverSize.`100x100`)
-                        .asImageBitmap()
-                    is SearchTrackSource.Local -> source.song.localInstances.firstOrNull()
-                        ?.track
-                        ?.let { track -> application.coverRepository.getCoverFlow(track).first() }
-                        ?.asImageBitmap()
+                    is SearchTrackSource.Yandex -> {
+                        application.coverRepository
+                            .getTrackCover(
+                                track = source.track,
+                                size = CoverSize.`100x100`,
+                            )
+                            ?.toImageBitmapOrNull()
+                    }
+
+                    is SearchTrackSource.Local -> {
+                        source.song.localInstances
+                            .firstOrNull()
+                            ?.let { instance ->
+                                playerModel.cover(instance)
+                                    .first()
+                                    .asImageBitmap()
+                            }
+                    }
                 }
             }
         },
         loadSearchEntityCover = { key, uri ->
             withContext(Dispatchers.IO) {
                 application.coverRepository
-                    .getCover("search_$key", uri, CoverSize.`100x100`)
-                    .asImageBitmap()
+                    .getRemoteCover(
+                        entityType = "search",
+                        entityId = key,
+                        url = uri,
+                        size = CoverSize.`100x100`,
+                    )
+                    ?.toImageBitmapOrNull()
             }
         },
         onSearchResultClick = { item ->

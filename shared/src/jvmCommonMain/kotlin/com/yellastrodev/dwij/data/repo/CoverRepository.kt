@@ -63,7 +63,7 @@ class CoverRepository(
         )
     }
 
-    private suspend fun getRemoteCover(
+    suspend fun getRemoteCover(
         entityType: String,
         entityId: String,
         url: String,
