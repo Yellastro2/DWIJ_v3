@@ -198,6 +198,7 @@ class yApplication: Application() {
             continueWave = { tracklist ->
                 waveRepository.playWave(tracklist)
             },
+            logger
         )
     }
 

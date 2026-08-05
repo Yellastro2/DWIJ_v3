@@ -1,6 +1,6 @@
 package com.yellastrodev.dwij.data.repo
 
-import android.util.Log
+
 import com.yellastrodev.dwij.data.entities.LocalTracklist
 import com.yellastrodev.dwij.data.entities.PlaybackTrack
 import com.yellastrodev.dwij.data.entities.Song
@@ -12,6 +12,7 @@ import com.yellastrodev.dwij.playback.PlayerEngine
 import com.yellastrodev.dwij.playback.RepeatMode
 import com.yellastrodev.dwij.utils.PlayerEvent
 import com.yellastrodev.dwij.utils.PlayerState
+import com.yellastrodev.yandexmusiclib.YamLogger
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableSharedFlow
@@ -31,6 +32,7 @@ class PlayerRepository(
     private val scope: CoroutineScope,
     private val isTrackCached: (trackId: String) -> Boolean,
     private val continueWave: suspend (dTracklist) -> Unit,
+    private val logger: YamLogger
 ) : PlaybackQueue {
 
     private val mutableState = MutableStateFlow(PlayerState())
@@ -89,7 +91,7 @@ class PlayerRepository(
 
             if (
                 tracklist != null &&
-                tracklist.getType() != LocalTracklist.TYPE
+                tracklist.getType() != LocalTracklist.Companion.TYPE
             ) {
                 continueWave(tracklist)
                 return
@@ -112,7 +114,7 @@ class PlayerRepository(
         tracklist: dTracklist,
     ) {
         if (songs.isEmpty() || startIndex !in songs.indices) {
-            Log.w(
+            logger.warning(
                 TAG,
                 "[playQueue] Некорректная исходная очередь: " +
                         "size=${songs.size}, startIndex=$startIndex",
@@ -132,7 +134,7 @@ class PlayerRepository(
         }
 
         if (playableSongs.isEmpty()) {
-            Log.w(
+            logger.warning(
                 TAG,
                 "[playQueue] В очереди нет воспроизводимых экземпляров",
             )
@@ -154,7 +156,7 @@ class PlayerRepository(
         val skippedCount = songs.size - playableSongs.size
 
         if (skippedCount > 0) {
-            Log.d(
+            logger.debug(
                 TAG,
                 "[playQueue] Пропущено песен без воспроизводимых " +
                         "экземпляров=$skippedCount, исходный index=$startIndex, " +
@@ -181,7 +183,7 @@ class PlayerRepository(
         tracklist: dTracklist,
     ) {
         if (tracks.isEmpty() || startIndex !in tracks.indices) {
-            Log.w(
+            logger.warning(
                 TAG,
                 "[playQueue] Некорректная подготовленная очередь: " +
                         "size=${tracks.size}, startIndex=$startIndex",
@@ -189,12 +191,12 @@ class PlayerRepository(
             return
         }
 
-        Log.d(TAG, "[playQueue] Подготовка очереди")
+        logger.debug(TAG, "[playQueue] Подготовка очереди")
 
         engine.prepare()
 
         if (dtracklist.value?.getdId() == tracklist.getdId()) {
-            Log.d(TAG, "[playQueue] Треклист не изменился")
+            logger.debug(TAG, "[playQueue] Треклист не изменился")
 
             val newSongIds = songs.map(Song::id)
 
@@ -207,7 +209,7 @@ class PlayerRepository(
                 sameInstances
             ) {
                 if (state.value.currentIndex == startIndex) {
-                    Log.d(
+                    logger.debug(
                         TAG,
                         "[playQueue] Выбранная позиция очереди уже играет",
                     )
@@ -223,7 +225,7 @@ class PlayerRepository(
 
                 engine.playTrack(startIndex)
 
-                Log.d(
+                logger.debug(
                     TAG,
                     "[playQueue] Переключаем текущую очередь на " +
                             "index=$startIndex, songId=${songs[startIndex].id}",
@@ -231,14 +233,14 @@ class PlayerRepository(
                 return
             }
 
-            Log.d(
+            logger.debug(
                 TAG,
                 "[playQueue] Состав текущего треклиста изменился",
             )
         }
 
         blockShuffle(
-            isWave = tracklist.getType() == dYaWave.YA_WAVE,
+            isWave = tracklist.getType() == dYaWave.Companion.YA_WAVE,
         )
 
         currentTrackList = songs.map(Song::id)
@@ -252,7 +254,7 @@ class PlayerRepository(
 
         relativeIndex = startIndex
 
-        Log.d(
+        logger.debug(
             TAG,
             "[playQueue] Формируем очередь: size=${tracks.size}, " +
                     "startIndex=$startIndex, songId=${songs[startIndex].id}, " +
@@ -265,7 +267,7 @@ class PlayerRepository(
             tracklist = tracklist,
         )
 
-        Log.d(
+        logger.debug(
             TAG,
             "[playQueue] Очередь передана в engine",
         )
@@ -301,7 +303,7 @@ class PlayerRepository(
 
         val skippedCount = songs.size - resolved.size
 
-        Log.d(
+        logger.debug(
             TAG,
             "[addTracks] Получено=${songs.size}, " +
                     "добавляем=${resolved.size}, пропущено=$skippedCount",
@@ -443,7 +445,7 @@ class PlayerRepository(
             }
         }
 
-        if (currentSong.value?.id in sourceSongIds) {
+        if (currentSong.value?.id contains sourceSongIds) {
             mutableCurrentSong.value = mergedSong
             mutableCurrentTrack.value = mergedSong.id
         }
