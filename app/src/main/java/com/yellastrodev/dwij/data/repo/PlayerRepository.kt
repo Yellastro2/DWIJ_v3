@@ -1,208 +1,136 @@
 package com.yellastrodev.dwij.data.repo
 
-import android.content.ComponentName
-import android.content.Context
-import android.content.Intent
-import android.content.ServiceConnection
-import android.os.Bundle
-import android.os.IBinder
-import android.preference.PreferenceManager
 import android.util.Log
-import androidx.annotation.OptIn
-import androidx.media3.common.MediaItem
-import androidx.media3.common.MediaMetadata
-import androidx.media3.common.Player
-import androidx.media3.common.util.UnstableApi
-import com.yellastrodev.dwij.TRACK_ID
-import com.yellastrodev.dwij.data.entities.dTracklist
-import com.yellastrodev.dwij.data.entities.dYaPlaylist
-import com.yellastrodev.dwij.data.entities.dYaWave
 import com.yellastrodev.dwij.data.entities.LocalTracklist
-import com.yellastrodev.dwij.data.entities.MusicSource
 import com.yellastrodev.dwij.data.entities.PlaybackTrack
 import com.yellastrodev.dwij.data.entities.Song
+import com.yellastrodev.dwij.data.entities.dTracklist
+import com.yellastrodev.dwij.data.entities.dYaWave
 import com.yellastrodev.dwij.data.entities.toPlaybackTrack
-import com.yellastrodev.dwij.service.DEFAULT_PLAY_AUDIO_SOURCE
-import com.yellastrodev.dwij.service.PLAY_AUDIO_ALBUM_ID
-import com.yellastrodev.dwij.service.PLAY_AUDIO_DURATION_MS
-import com.yellastrodev.dwij.service.PLAY_AUDIO_ITEM_ID
-import com.yellastrodev.dwij.service.PLAY_AUDIO_PLAYLIST_ID
-import com.yellastrodev.dwij.service.PLAY_AUDIO_SOURCE
-import com.yellastrodev.dwij.service.PLAYBACK_MUSIC_SOURCE
-import com.yellastrodev.dwij.service.PLAYBACK_SOURCE_LOCAL
-import com.yellastrodev.dwij.service.PLAYBACK_SOURCE_YANDEX
-import com.yellastrodev.dwij.service.PlayerService
+import com.yellastrodev.dwij.playback.PlaybackSettings
+import com.yellastrodev.dwij.playback.PlayerEngine
+import com.yellastrodev.dwij.playback.RepeatMode
 import com.yellastrodev.dwij.utils.PlayerEvent
 import com.yellastrodev.dwij.utils.PlayerState
-import com.yellastrodev.dwij.yApplication
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharedFlow
 import kotlinx.coroutines.flow.StateFlow
-import kotlinx.coroutines.flow.onEach
+import kotlinx.coroutines.flow.asSharedFlow
+import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.launchIn
+import kotlinx.coroutines.flow.onEach
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
-import java.util.UUID
 
-@OptIn(UnstableApi::class)
 class PlayerRepository(
-    private val context: Context,
+    private val engine: PlayerEngine,
+    private val settings: PlaybackSettings,
     private val scope: CoroutineScope,
     private val isTrackCached: (trackId: String) -> Boolean,
-): PlaybackQueue  {
-    val TAG = "PlayerRepository"
+    private val continueWave: suspend (dTracklist) -> Unit,
+) : PlaybackQueue {
 
-    private var service: PlayerService? = null
+    private val mutableState = MutableStateFlow(PlayerState())
+    override val state: StateFlow<PlayerState> = mutableState.asStateFlow()
 
-    private val playerService: PlayerService?
-        get() = (context.applicationContext as yApplication).playerServiceRef?.get()
+    private val mutableTracklist = MutableStateFlow<dTracklist?>(null)
+    val dtracklist: StateFlow<dTracklist?> = mutableTracklist.asStateFlow()
 
-    lateinit var waveRepository: WaveRepository
+    var currentTrackList: List<String> = emptyList()
+        private set
 
-    private val prefs by lazy {
-        PreferenceManager.getDefaultSharedPreferences(context)
-    }
-
-    // это пошлый дубликат стейта из PlayerService, но подругому я не придумал потому что здесь в репо
-    // мне надо сравнивать их currentIndex что бы менять есличо _currentTrack,
-    // а PlayerService.state еще и не сразу доступен
-    private val _state = MutableStateFlow(PlayerState())
-    override val state: StateFlow<PlayerState> = _state
-
-    private val _dtracklist = MutableStateFlow(null as dTracklist?)
-    val dtracklist: StateFlow<dTracklist?> = _dtracklist
-
-    var currentTrackList: List<String> = listOf()
     private var currentSongQueue: List<Song> = emptyList()
     private var currentPlaybackQueue: List<PlaybackTrack> = emptyList()
 
-    private val _currentTrack = MutableStateFlow<String?>(null)
-    val currentTrack: StateFlow<String?> = _currentTrack
+    private val mutableCurrentTrack = MutableStateFlow<String?>(null)
+    val currentTrack: StateFlow<String?> = mutableCurrentTrack.asStateFlow()
 
-    private val _currentSong = MutableStateFlow<Song?>(null)
-    val currentSong: StateFlow<Song?> = _currentSong
+    private val mutableCurrentSong = MutableStateFlow<Song?>(null)
+    val currentSong: StateFlow<Song?> = mutableCurrentSong.asStateFlow()
 
-    private val _currentPlaybackTrack = MutableStateFlow<PlaybackTrack?>(null)
-    override val currentPlaybackTrack: StateFlow<PlaybackTrack?> = _currentPlaybackTrack
+    private val mutableCurrentPlaybackTrack =
+        MutableStateFlow<PlaybackTrack?>(null)
 
-    private val _events = MutableSharedFlow<PlayerEvent>()
-    override val events: SharedFlow<PlayerEvent> = _events
+    override val currentPlaybackTrack: StateFlow<PlaybackTrack?> =
+        mutableCurrentPlaybackTrack.asStateFlow()
 
-    private val serviceConnection = object : ServiceConnection {
-        override fun onServiceConnected(name: ComponentName?, binder: IBinder?) {
-            service = (binder as PlayerService.PlayerBinder).getService()
-            applySavedModes()
-            // Подписываемся на state сервиса
-            service?.state?.onEach { playerState ->
-                if (playerState.currentIndex != _state.value.currentIndex) {
-                    updateCurrentTrack(playerState.currentIndex)
-//                    loanNextTracks(playerState, _state.value.currentIndex - playerState.currentIndex)
-                }
-                _state.value = playerState
-            }
-                ?.launchIn(scope)
-            service?.events
-                ?.onEach { event ->
-                if (event is PlayerEvent.TrackListEnd){
-                    val tracklist = dtracklist.value
-                    if (tracklist != null && tracklist.getType() != LocalTracklist.TYPE) {
-                        waveRepository.playWave(tracklist)
-                    } else {
-                        _events.emit(event)
-                    }
-                    }else
-                        _events.emit(event) // пробрасываем в репозиторий
-                }
-                ?.launchIn(scope)
-        }
+    private val mutableEvents = MutableSharedFlow<PlayerEvent>()
+    override val events: SharedFlow<PlayerEvent> = mutableEvents.asSharedFlow()
 
+    private val mutableIsShuffleBlock = MutableStateFlow(false)
+    override val isShuffleBlock: StateFlow<Boolean> =
+        mutableIsShuffleBlock.asStateFlow()
 
+    var relativeIndex: Int = 0
+        private set
 
-        override fun onServiceDisconnected(name: ComponentName?) {
-            service = null
-        }
-    }
-
-    suspend fun waitForService(): PlayerService {
-        while (true) {
-            val service = (context.applicationContext as yApplication).playerServiceRef?.get()
-            if (service != null) return service
-            delay(100) // не заблокирует основной поток
-        }
-    }
-
-    suspend fun bind() {
-        Log.d(TAG, "bind called")
-        val intent = Intent(context, PlayerService::class.java)
-//        ContextCompat.startForegroundService(context, intent)
-        context.startService(intent)
-//        context.bindService(intent, serviceConnection, Context.BIND_AUTO_CREATE)
-
-            Log.d(TAG, "waitForService called")
-            service = waitForService()
-            Log.d(TAG, "waitForService returned")
-            service?.let { service ->
-                Log.d(TAG, "waitForService returned ненулевой плеер, привязываем флоуы")
-            service.state.onEach { playerState ->
-                if (playerState.currentIndex != _state.value.currentIndex) {
+    init {
+        engine.state
+            .onEach { playerState ->
+                if (playerState.currentIndex != mutableState.value.currentIndex) {
                     updateCurrentTrack(playerState.currentIndex)
                 }
-                _state.value = playerState
-            }.launchIn(scope)
 
-            service.events.onEach { event ->
-                if (event is PlayerEvent.TrackListEnd) {
-                    val tracklist = dtracklist.value
-                    if (tracklist != null && tracklist.getType() != LocalTracklist.TYPE) {
-                        waveRepository.playWave(tracklist)
-                    } else {
-                        _events.emit(event)
-                    }
-                } else {
-                    _events.emit(event)
-                }
-            }.launchIn(scope)
-
-                withContext(Dispatchers.Main) {
-                    applySavedModes()
-                }
+                mutableState.value = playerState
             }
+            .launchIn(scope)
+
+        engine.events
+            .onEach(::handleEngineEvent)
+            .launchIn(scope)
     }
 
-    fun unbind() {
-        context.unbindService(serviceConnection)
-    }
+    private suspend fun handleEngineEvent(event: PlayerEvent) {
+        if (event is PlayerEvent.TrackListEnd) {
+            val tracklist = dtracklist.value
 
-//    var tracksAndUrls: Map<String,dYaTrack> = mapOf()
-    var relativeIndex = 0
+            if (
+                tracklist != null &&
+                tracklist.getType() != LocalTracklist.TYPE
+            ) {
+                continueWave(tracklist)
+                return
+            }
+        }
+
+        mutableEvents.emit(event)
+    }
 
     /**
-     * Запускает очередь логических песен, выбирая для каждой воспроизводимый экземпляр.
-     * [startIndex] переводится из исходного списка в индекс уже отфильтрованной очереди.
+     * Запускает очередь логических песен, выбирая для каждой
+     * воспроизводимый экземпляр.
+     *
+     * [startIndex] переводится из индекса исходного списка
+     * в индекс уже отфильтрованной воспроизводимой очереди.
      */
     override suspend fun playQueue(
         songs: List<Song>,
         startIndex: Int,
-        tracklist: dTracklist
+        tracklist: dTracklist,
     ) {
         if (songs.isEmpty() || startIndex !in songs.indices) {
             Log.w(
                 TAG,
-                "[playQueue] Некорректная исходная очередь: size=${songs.size}, " +
-                    "startIndex=$startIndex",
+                "[playQueue] Некорректная исходная очередь: " +
+                        "size=${songs.size}, startIndex=$startIndex",
             )
             return
         }
+
         val playableSongs = withContext(Dispatchers.IO) {
             songs.mapIndexedNotNull { index, song ->
-                song.toPlaybackTrack(isTrackCached)?.let { track ->
-                    IndexedValue(index, song to track)
+                song.toPlaybackTrack(isTrackCached)?.let { playbackTrack ->
+                    IndexedValue(
+                        index = index,
+                        value = song to playbackTrack,
+                    )
                 }
             }
         }
+
         if (playableSongs.isEmpty()) {
             Log.w(
                 TAG,
@@ -210,23 +138,37 @@ class PlayerRepository(
             )
             return
         }
+
         val resolvedStartIndex = playableSongs
-            .indexOfFirst { indexedSong -> indexedSong.index == startIndex }
+            .indexOfFirst { indexedSong ->
+                indexedSong.index == startIndex
+            }
             .takeIf { index -> index >= 0 }
-            ?: playableSongs.indexOfFirst { indexedSong -> indexedSong.index > startIndex }
+            ?: playableSongs
+                .indexOfFirst { indexedSong ->
+                    indexedSong.index > startIndex
+                }
                 .takeIf { index -> index >= 0 }
             ?: 0
+
         val skippedCount = songs.size - playableSongs.size
+
         if (skippedCount > 0) {
             Log.d(
                 TAG,
-                "[playQueue] Пропущено песен без воспроизводимых экземпляров=$skippedCount, " +
-                    "исходный index=$startIndex, итоговый index=$resolvedStartIndex",
+                "[playQueue] Пропущено песен без воспроизводимых " +
+                        "экземпляров=$skippedCount, исходный index=$startIndex, " +
+                        "итоговый index=$resolvedStartIndex",
             )
         }
+
         playPreparedQueue(
-            songs = playableSongs.map { it.value.first },
-            tracks = playableSongs.map { it.value.second },
+            songs = playableSongs.map { indexedSong ->
+                indexedSong.value.first
+            },
+            tracks = playableSongs.map { indexedSong ->
+                indexedSong.value.second
+            },
             startIndex = resolvedStartIndex,
             tracklist = tracklist,
         )
@@ -241,221 +183,273 @@ class PlayerRepository(
         if (tracks.isEmpty() || startIndex !in tracks.indices) {
             Log.w(
                 TAG,
-                "[playQueue] Некорректная очередь: size=${tracks.size}, " +
-                    "startIndex=$startIndex"
+                "[playQueue] Некорректная подготовленная очередь: " +
+                        "size=${tracks.size}, startIndex=$startIndex",
             )
             return
         }
+
         Log.d(TAG, "[playQueue] Подготовка очереди")
 
-        if (service == null){
+        engine.prepare()
 
-            Log.d(TAG, "[playQueue] Сервис плеера ещё не подключён")
-            bind()
-        }
-
-        if (dtracklist.value?.getdId() == tracklist.getdId()){
+        if (dtracklist.value?.getdId() == tracklist.getdId()) {
             Log.d(TAG, "[playQueue] Треклист не изменился")
-            val newIds = songs.map { it.id }
-            val sameInstances = currentPlaybackQueue.map(PlaybackTrack::instanceId) ==
-                tracks.map(PlaybackTrack::instanceId)
-            if (currentTrackList == newIds && sameInstances) {
-                if (_state.value.currentIndex == startIndex) {
-                    Log.d(TAG, "[playQueue] Выбранная позиция очереди уже играет")
+
+            val newSongIds = songs.map(Song::id)
+
+            val sameInstances =
+                currentPlaybackQueue.map(PlaybackTrack::instanceId) ==
+                        tracks.map(PlaybackTrack::instanceId)
+
+            if (
+                currentTrackList == newSongIds &&
+                sameInstances
+            ) {
+                if (state.value.currentIndex == startIndex) {
+                    Log.d(
+                        TAG,
+                        "[playQueue] Выбранная позиция очереди уже играет",
+                    )
                     return
                 }
-                _currentTrack.value = songs[startIndex].id
-                _currentSong.value = songs[startIndex]
-                _currentPlaybackTrack.value = currentPlaybackQueue.getOrNull(startIndex)
+
+                mutableCurrentTrack.value = songs[startIndex].id
+                mutableCurrentSong.value = songs[startIndex]
+                mutableCurrentPlaybackTrack.value =
+                    currentPlaybackQueue.getOrNull(startIndex)
+
                 relativeIndex = startIndex
-                service?.playTrack(startIndex)
+
+                engine.playTrack(startIndex)
+
                 Log.d(
                     TAG,
-                    "[playQueue] Переключаем текущую очередь на index=$startIndex, " +
-                        "songId=${songs[startIndex].id}"
+                    "[playQueue] Переключаем текущую очередь на " +
+                            "index=$startIndex, songId=${songs[startIndex].id}",
                 )
                 return
             }
-            Log.d(TAG, "[playQueue] Состав текущего треклиста изменился")
+
+            Log.d(
+                TAG,
+                "[playQueue] Состав текущего треклиста изменился",
+            )
         }
-        // сюда доходит логика ток если треклист сменился.
-        blockShuffle(tracklist.getType() == dYaWave.YA_WAVE)
+
+        blockShuffle(
+            isWave = tracklist.getType() == dYaWave.YA_WAVE,
+        )
 
         currentTrackList = songs.map(Song::id)
         currentSongQueue = songs
         currentPlaybackQueue = tracks
-        _currentTrack.value = songs[startIndex].id
-        _currentSong.value = songs[startIndex]
-        _currentPlaybackTrack.value = tracks[startIndex]
-        _dtracklist.value = tracklist
+
+        mutableCurrentTrack.value = songs[startIndex].id
+        mutableCurrentSong.value = songs[startIndex]
+        mutableCurrentPlaybackTrack.value = tracks[startIndex]
+        mutableTracklist.value = tracklist
 
         relativeIndex = startIndex
 
         Log.d(
             TAG,
             "[playQueue] Формируем очередь: size=${tracks.size}, " +
-                "startIndex=$startIndex, songId=${songs[startIndex].id}, " +
-                "instanceId=${tracks[startIndex].instanceId}"
+                    "startIndex=$startIndex, songId=${songs[startIndex].id}, " +
+                    "instanceId=${tracks[startIndex].instanceId}",
         )
 
-        val mediaItems = tracks.map { track ->
-            track.toMediaItem(tracklist)
-        }
+        engine.setQueue(
+            tracks = tracks,
+            startIndex = startIndex,
+            tracklist = tracklist,
+        )
 
-        Log.d(TAG, "[playQueue] Очередь готова, передаём в сервис")
-
-        service?.playQueue(mediaItems, startIndex)
-    }
-
-//    var isShuffleBlock = false
-    private val _isShuffleBlock = MutableStateFlow(false)
-    override val isShuffleBlock: StateFlow<Boolean> = _isShuffleBlock
-    private fun blockShuffle(isWave: Boolean) {
-        if (isShuffleBlock.value != isWave) {
-            _isShuffleBlock.value = isWave
-            if (isWave) {
-                service?.player?.shuffleModeEnabled = false
-                service?.player?.repeatMode = Player.REPEAT_MODE_OFF
-            } else {
-                applySavedModes()
-            }
-        }
-    }
-
-
-    /** Догружает в текущую очередь песни, для которых удалось выбрать экземпляр. */
-    override suspend fun addTracks(songs: List<Song>) {
-        val resolved = withContext(Dispatchers.IO) {
-            songs.mapNotNull { song ->
-                song.toPlaybackTrack(isTrackCached)?.let { track -> song to track }
-            }
-        }
-        val skippedCount = songs.size - resolved.size
         Log.d(
             TAG,
-            "[addTracks] Получено=${songs.size}, добавляем=${resolved.size}, " +
-                "пропущено=$skippedCount",
+            "[playQueue] Очередь передана в engine",
         )
-        if (resolved.isEmpty()) return
-        val resolvedSongs = resolved.map { it.first }
-        val playbackTracks = resolved.map { it.second }
-        currentTrackList = currentTrackList + resolvedSongs.map(Song::id)
-        currentSongQueue = currentSongQueue + resolvedSongs
+    }
 
-        currentPlaybackQueue = currentPlaybackQueue + playbackTracks
-        val mediaItems = playbackTracks.map { track ->
-            track.toMediaItem(_dtracklist.value)
-        }
+    private suspend fun blockShuffle(
+        isWave: Boolean,
+    ) {
+        mutableIsShuffleBlock.value = isWave
 
-        withContext(Dispatchers.Main) {
-            service?.addTracks(mediaItems)
+        if (isWave) {
+            engine.setShuffleEnabled(false)
+            engine.setRepeatMode(RepeatMode.OFF)
+        } else {
+            applySavedModes()
         }
     }
 
-    fun pause() = service?.pause()
+    /**
+     * Догружает в текущую очередь песни,
+     * для которых удалось выбрать воспроизводимый экземпляр.
+     */
+    override suspend fun addTracks(
+        songs: List<Song>,
+    ) {
+        val resolved = withContext(Dispatchers.IO) {
+            songs.mapNotNull { song ->
+                song.toPlaybackTrack(isTrackCached)?.let { playbackTrack ->
+                    song to playbackTrack
+                }
+            }
+        }
+
+        val skippedCount = songs.size - resolved.size
+
+        Log.d(
+            TAG,
+            "[addTracks] Получено=${songs.size}, " +
+                    "добавляем=${resolved.size}, пропущено=$skippedCount",
+        )
+
+        if (resolved.isEmpty()) {
+            return
+        }
+
+        val resolvedSongs = resolved.map { pair ->
+            pair.first
+        }
+
+        val playbackTracks = resolved.map { pair ->
+            pair.second
+        }
+
+        currentTrackList =
+            currentTrackList + resolvedSongs.map(Song::id)
+
+        currentSongQueue =
+            currentSongQueue + resolvedSongs
+
+        currentPlaybackQueue =
+            currentPlaybackQueue + playbackTracks
+
+        engine.appendTracks(
+            tracks = playbackTracks,
+            tracklist = dtracklist.value,
+        )
+    }
+
+    fun pause() {
+        scope.launch {
+            engine.togglePlayPause()
+        }
+    }
+
     suspend fun skipNext() {
-//        loanNextTracks(1)
-        withContext(Dispatchers.Main) {
-            service?.skipNext()
-        }
-    }
-    suspend fun skipPrev() {
-//        loanNextTracks(-1)
-        service?.skipPrev()
+        engine.skipNext()
     }
 
-    fun seekTo(lng: Long) {
-        service?.seekTo(lng)
+    suspend fun skipPrev() {
+        engine.skipPrevious()
+    }
+
+    fun seekTo(
+        positionMs: Long,
+    ) {
+        scope.launch {
+            engine.seekTo(positionMs)
+        }
     }
 
     fun shuffle() {
-        service?.player?.let { player ->
-            val newValue = !player.shuffleModeEnabled
-            player.shuffleModeEnabled = newValue
-            prefs.edit().putBoolean("shuffle_mode", newValue).apply()
+        if (isShuffleBlock.value) {
+            return
+        }
+
+        val newValue = !state.value.isShuffle
+
+        settings.shuffleEnabled = newValue
+
+        scope.launch {
+            engine.setShuffleEnabled(newValue)
         }
     }
 
     fun rotate() {
-        service?.player?.let { player ->
-            val newMode = when (player.repeatMode) {
-                Player.REPEAT_MODE_ALL -> Player.REPEAT_MODE_OFF
-                else -> Player.REPEAT_MODE_ALL
-            }
-            player.repeatMode = newMode
-            prefs.edit().putInt("repeat_mode", newMode).apply()
+        if (isShuffleBlock.value) {
+            return
+        }
+
+        val newMode = if (state.value.isRepeatAll) {
+            RepeatMode.OFF
+        } else {
+            RepeatMode.ALL
+        }
+
+        settings.repeatMode = newMode
+
+        scope.launch {
+            engine.setRepeatMode(newMode)
         }
     }
 
-    fun applySavedModes() {
-        service?.player?.let { player ->
-            player.shuffleModeEnabled = prefs.getBoolean("shuffle_mode", false)
-            player.repeatMode = prefs.getInt("repeat_mode", Player.REPEAT_MODE_OFF)
+    private suspend fun applySavedModes() {
+        engine.setShuffleEnabled(
+            settings.shuffleEnabled,
+        )
+
+        engine.setRepeatMode(
+            settings.repeatMode,
+        )
+    }
+
+    fun List<Song>.stableHash(): Int {
+        return fold(1) { accumulator, song ->
+            31 * accumulator + song.id.hashCode()
         }
     }
 
-    fun List<Song>.stableHash(): Int =
-        fold(1) { acc, song -> 31 * acc + song.id.hashCode() }
-
-    /** Добавляет source-aware метаданные и только для Яндекса — данные `/play-audio`. */
-    private fun PlaybackTrack.toMediaItem(tracklist: dTracklist?): MediaItem {
-        val extras = Bundle().apply {
-            putString(TRACK_ID, id)
-            putString(
-                PLAYBACK_MUSIC_SOURCE,
-                if (source == MusicSource.LOCAL) PLAYBACK_SOURCE_LOCAL else PLAYBACK_SOURCE_YANDEX,
-            )
-            if (source == MusicSource.YANDEX) {
-                putString(PLAY_AUDIO_ITEM_ID, UUID.randomUUID().toString())
-                yandexTrack?.albums?.firstOrNull()?.id?.let {
-                    putString(PLAY_AUDIO_ALBUM_ID, it.toString())
-                }
-                durationMs?.let { putLong(PLAY_AUDIO_DURATION_MS, it) }
-                (tracklist as? dYaPlaylist)?.playlistUuid?.let {
-                    putString(PLAY_AUDIO_PLAYLIST_ID, it)
-                }
-                putString(PLAY_AUDIO_SOURCE, DEFAULT_PLAY_AUDIO_SOURCE)
-            }
-        }
-        return MediaItem.Builder()
-            .setMediaId(id)
-            .setUri(playbackUri)
-            .setMediaMetadata(
-                MediaMetadata.Builder()
-                    .setExtras(extras)
-                    .setTitle(title)
-                    .setArtist(artistNames.joinToString(", "))
-                    .apply {
-                        if (source == MusicSource.LOCAL) {
-                            artworkUri?.let { setArtworkUri(android.net.Uri.parse(it)) }
-                        }
-                    }
-                    .build()
-            )
-            .build()
-    }
-
-    private fun updateCurrentTrack(index: Int) {
+    private fun updateCurrentTrack(
+        index: Int,
+    ) {
         val song = currentSongQueue.getOrNull(index)
-        val current = currentPlaybackQueue.getOrNull(index)
-        _currentTrack.value = song?.id
-        _currentSong.value = song
-        _currentPlaybackTrack.value = current
+        val playbackTrack = currentPlaybackQueue.getOrNull(index)
+
+        mutableCurrentTrack.value = song?.id
+        mutableCurrentSong.value = song
+        mutableCurrentPlaybackTrack.value = playbackTrack
     }
 
-    /** Заменяет объединённые Song в уже играющей очереди, не перезапуская Media3. */
-    fun applyMergedSong(sourceSongIds: Set<String>, mergedSong: Song) {
-        if (sourceSongIds.isEmpty()) return
+    /**
+     * Заменяет объединённые Song в уже играющей очереди,
+     * не перезапуская платформенный плеер.
+     */
+    fun applyMergedSong(
+        sourceSongIds: Set<String>,
+        mergedSong: Song,
+    ) {
+        if (sourceSongIds.isEmpty()) {
+            return
+        }
+
         currentSongQueue = currentSongQueue.map { song ->
-            if (song.id in sourceSongIds) mergedSong else song
+            if (song.id in sourceSongIds) {
+                mergedSong
+            } else {
+                song
+            }
         }
+
         currentTrackList = currentTrackList.map { songId ->
-            if (songId in sourceSongIds) mergedSong.id else songId
+            if (songId in sourceSongIds) {
+                mergedSong.id
+            } else {
+                songId
+            }
         }
-        if (_currentSong.value?.id in sourceSongIds) {
-            _currentSong.value = mergedSong
-            _currentTrack.value = mergedSong.id
+
+        if (currentSong.value?.id in sourceSongIds) {
+            mutableCurrentSong.value = mergedSong
+            mutableCurrentTrack.value = mergedSong.id
         }
     }
 
+    private companion object {
+        const val TAG = "PlayerRepository"
+    }
 }

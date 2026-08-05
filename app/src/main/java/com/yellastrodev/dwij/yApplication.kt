@@ -30,6 +30,11 @@ import com.yellastrodev.dwij.data.source.hasAudioPermission
 import com.yellastrodev.dwij.data.source.WaveRemoteSource
 import com.yellastrodev.dwij.data.source.SearchRemoteSource
 import com.yellastrodev.dwij.data.repo.SearchRepository
+import com.yellastrodev.dwij.playback.AndroidMediaItemMapper
+import com.yellastrodev.dwij.playback.AndroidPlaybackSettings
+import com.yellastrodev.dwij.playback.AndroidPlayerEngine
+import com.yellastrodev.dwij.playback.PlaybackSettings
+import com.yellastrodev.dwij.playback.PlayerEngine
 import com.yellastrodev.dwij.service.PlayerService
 import com.yellastrodev.dwij.service.PlaybackFeedbackTracker
 import com.yellastrodev.dwij.utils.DwLruCache
@@ -164,15 +169,36 @@ class yApplication: Application() {
         )
     }
 
-    val playerRepo: PlayerRepository by lazy {
-        PlayerRepository(
+    val playbackSettings: PlaybackSettings by lazy {
+        AndroidPlaybackSettings(
+            context = applicationContext,
+        )
+    }
+
+    val mediaItemMapper: AndroidMediaItemMapper by lazy {
+        AndroidMediaItemMapper()
+    }
+
+    val playerEngine: PlayerEngine by lazy {
+        AndroidPlayerEngine(
             context = applicationContext,
             scope = applicationScope,
-            isTrackCached = trackCacheRepo::isCached,
-        ).apply {
-//            bind()
+            mediaItemMapper = mediaItemMapper,
+        )
+    }
 
-        }
+    val playerRepo: PlayerRepository by lazy {
+        PlayerRepository(
+            engine = playerEngine,
+            settings = playbackSettings,
+            scope = applicationScope,
+
+            isTrackCached = trackCacheRepo::isCached,
+
+            continueWave = { tracklist ->
+                waveRepository.playWave(tracklist)
+            },
+        )
     }
 
     val coverFileCache: FileCacheStore by lazy {
@@ -260,7 +286,6 @@ class yApplication: Application() {
 
     override fun onCreate() {
         super.onCreate()
-        playerRepo.waveRepository = this@yApplication.waveRepository
         LocalLibraryMonitor.observedUris(applicationContext).forEach { uri ->
             contentResolver.registerContentObserver(uri, true, localLibraryMonitor)
         }
