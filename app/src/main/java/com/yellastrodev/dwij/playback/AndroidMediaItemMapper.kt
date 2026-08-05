@@ -9,15 +9,7 @@ import com.yellastrodev.dwij.data.entities.MusicSource
 import com.yellastrodev.dwij.data.entities.PlaybackTrack
 import com.yellastrodev.dwij.data.entities.dTracklist
 import com.yellastrodev.dwij.data.entities.dYaPlaylist
-import com.yellastrodev.dwij.service.DEFAULT_PLAY_AUDIO_SOURCE
-import com.yellastrodev.dwij.service.PLAYBACK_MUSIC_SOURCE
-import com.yellastrodev.dwij.service.PLAYBACK_SOURCE_LOCAL
-import com.yellastrodev.dwij.service.PLAYBACK_SOURCE_YANDEX
-import com.yellastrodev.dwij.service.PLAY_AUDIO_ALBUM_ID
-import com.yellastrodev.dwij.service.PLAY_AUDIO_DURATION_MS
-import com.yellastrodev.dwij.service.PLAY_AUDIO_ITEM_ID
-import com.yellastrodev.dwij.service.PLAY_AUDIO_PLAYLIST_ID
-import com.yellastrodev.dwij.service.PLAY_AUDIO_SOURCE
+import com.yellastrodev.dwij.playback.feedback.PlaybackMetadataKeys
 import java.util.UUID
 
 class AndroidMediaItemMapper {
@@ -30,17 +22,17 @@ class AndroidMediaItemMapper {
             putString(TRACK_ID, track.id)
 
             putString(
-                PLAYBACK_MUSIC_SOURCE,
+                PlaybackMetadataKeys.MUSIC_SOURCE,
                 if (track.source == MusicSource.LOCAL) {
-                    PLAYBACK_SOURCE_LOCAL
+                    PlaybackMetadataKeys.SOURCE_LOCAL
                 } else {
-                    PLAYBACK_SOURCE_YANDEX
+                    PlaybackMetadataKeys.SOURCE_YANDEX
                 },
             )
 
             if (track.source == MusicSource.YANDEX) {
                 putString(
-                    PLAY_AUDIO_ITEM_ID,
+                    PlaybackMetadataKeys.PLAY_ITEM_ID,
                     UUID.randomUUID().toString(),
                 )
 
@@ -50,14 +42,14 @@ class AndroidMediaItemMapper {
                     ?.id
                     ?.let { albumId ->
                         putString(
-                            PLAY_AUDIO_ALBUM_ID,
+                            PlaybackMetadataKeys.PLAY_ALBUM_ID,
                             albumId.toString(),
                         )
                     }
 
                 track.durationMs?.let { durationMs ->
                     putLong(
-                        PLAY_AUDIO_DURATION_MS,
+                        PlaybackMetadataKeys.PLAY_DURATION_MS,
                         durationMs,
                     )
                 }
@@ -66,14 +58,14 @@ class AndroidMediaItemMapper {
                     ?.playlistUuid
                     ?.let { playlistUuid ->
                         putString(
-                            PLAY_AUDIO_PLAYLIST_ID,
+                            PlaybackMetadataKeys.PLAY_PLAYLIST_ID,
                             playlistUuid,
                         )
                     }
 
                 putString(
-                    PLAY_AUDIO_SOURCE,
-                    DEFAULT_PLAY_AUDIO_SOURCE,
+                    PlaybackMetadataKeys.PLAY_SOURCE,
+                    ANDROID_PLAYBACK_REPORT_SOURCE,
                 )
             }
         }
@@ -96,5 +88,9 @@ class AndroidMediaItemMapper {
             .setUri(track.playbackUri)
             .setMediaMetadata(metadata)
             .build()
+    }
+
+    private companion object {
+        const val ANDROID_PLAYBACK_REPORT_SOURCE = "dwij-android"
     }
 }

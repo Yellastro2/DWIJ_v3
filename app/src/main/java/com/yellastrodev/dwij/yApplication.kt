@@ -31,12 +31,13 @@ import com.yellastrodev.dwij.data.source.WaveRemoteSource
 import com.yellastrodev.dwij.data.source.SearchRemoteSource
 import com.yellastrodev.dwij.data.repo.SearchRepository
 import com.yellastrodev.dwij.playback.AndroidMediaItemMapper
+import com.yellastrodev.dwij.playback.AndroidPlaybackFeedbackAdapter
 import com.yellastrodev.dwij.playback.AndroidPlaybackSettings
 import com.yellastrodev.dwij.playback.AndroidPlayerEngine
 import com.yellastrodev.dwij.playback.PlaybackSettings
 import com.yellastrodev.dwij.playback.PlayerEngine
+import com.yellastrodev.dwij.playback.feedback.PlaybackFeedbackTracker
 import com.yellastrodev.dwij.service.PlayerService
-import com.yellastrodev.dwij.service.PlaybackFeedbackTracker
 import com.yellastrodev.dwij.utils.DwLruCache
 import com.yellastrodev.yandexmusiclib.YamApiClient
 import com.yellastrodev.yandexmusiclib.network.YamError
@@ -261,14 +262,24 @@ class yApplication: Application() {
     }
 
     private val playbackRemoteSource: PlaybackRemoteSource by lazy {
-        PlaybackRemoteSource(yamClient)
+        PlaybackRemoteSource(
+            client = yamClient,
+            logger = logger,
+        )
     }
 
     val playbackFeedbackTracker: PlaybackFeedbackTracker by lazy {
         PlaybackFeedbackTracker(
             remote = playbackRemoteSource,
             scope = applicationScope,
-            isTrackCached = trackCacheRepo::isCached
+            isTrackCached = trackCacheRepo::isCached,
+            logger = logger
+        )
+    }
+
+    val playbackFeedbackAdapter: AndroidPlaybackFeedbackAdapter by lazy {
+        AndroidPlaybackFeedbackAdapter(
+            tracker = playbackFeedbackTracker,
         )
     }
 

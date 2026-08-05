@@ -37,6 +37,8 @@ import com.yellastrodev.dwij.data.repo.PlayerRepository
 import com.yellastrodev.dwij.data.repo.TrackCacheRepository
 import com.yellastrodev.dwij.data.repo.TrackRepository
 import com.yellastrodev.dwij.data.source.YaLazyDataSourceFactory
+import com.yellastrodev.dwij.playback.AndroidPlaybackFeedbackAdapter
+import com.yellastrodev.dwij.playback.feedback.PlaybackMetadataKeys
 import com.yellastrodev.dwij.utils.PlayerEvent
 import com.yellastrodev.dwij.utils.PlayerState
 import com.yellastrodev.dwij.yApplication
@@ -80,8 +82,8 @@ class PlayerService : MediaSessionService() {
     val trackCacheRepo: TrackCacheRepository by lazy {
         (application as yApplication).trackCacheRepo
     }
-    private val playbackFeedbackTracker: PlaybackFeedbackTracker by lazy {
-        (application as yApplication).playbackFeedbackTracker
+    private val playbackFeedbackTracker: AndroidPlaybackFeedbackAdapter by lazy {
+        (application as yApplication).playbackFeedbackAdapter
     }
 
     /** Горячие стримы состояния плеера для UI или наблюдения */
@@ -186,8 +188,9 @@ class PlayerService : MediaSessionService() {
                 if (mediaItem == null) return
                 val trackId = mediaItem.mediaId
                 if (
-                    mediaItem.mediaMetadata.extras?.getString(PLAYBACK_MUSIC_SOURCE) ==
-                    PLAYBACK_SOURCE_LOCAL
+                    mediaItem.mediaMetadata.extras?.getString(
+                        PlaybackMetadataKeys.MUSIC_SOURCE,
+                    ) == PlaybackMetadataKeys.SOURCE_LOCAL
                 ) {
                     Log.d(TAG, "[onMediaItemTransition] Локальный трек, сетевую обложку не загружаем")
                     return

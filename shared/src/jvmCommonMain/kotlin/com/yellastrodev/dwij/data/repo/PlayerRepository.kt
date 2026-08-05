@@ -445,7 +445,9 @@ class PlayerRepository(
             }
         }
 
-        if (currentSong.value?.id contains sourceSongIds) {
+        val currentSongId = currentSong.value?.id
+
+        if (currentSongId != null && currentSongId in sourceSongIds) {
             mutableCurrentSong.value = mergedSong
             mutableCurrentTrack.value = mergedSong.id
         }
