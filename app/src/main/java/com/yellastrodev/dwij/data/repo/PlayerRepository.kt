@@ -31,9 +31,9 @@ import com.yellastrodev.dwij.service.PLAY_AUDIO_SOURCE
 import com.yellastrodev.dwij.service.PLAYBACK_MUSIC_SOURCE
 import com.yellastrodev.dwij.service.PLAYBACK_SOURCE_LOCAL
 import com.yellastrodev.dwij.service.PLAYBACK_SOURCE_YANDEX
-import com.yellastrodev.dwij.service.PlayerEvent
 import com.yellastrodev.dwij.service.PlayerService
-import com.yellastrodev.dwij.service.PlayerState
+import com.yellastrodev.dwij.utils.PlayerEvent
+import com.yellastrodev.dwij.utils.PlayerState
 import com.yellastrodev.dwij.yApplication
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -52,7 +52,7 @@ class PlayerRepository(
     private val context: Context,
     private val scope: CoroutineScope,
     private val isTrackCached: (trackId: String) -> Boolean,
-) {
+): PlaybackQueue  {
     val TAG = "PlayerRepository"
 
     private var service: PlayerService? = null
@@ -70,7 +70,7 @@ class PlayerRepository(
     // мне надо сравнивать их currentIndex что бы менять есличо _currentTrack,
     // а PlayerService.state еще и не сразу доступен
     private val _state = MutableStateFlow(PlayerState())
-    val state: StateFlow<PlayerState> = _state
+    override val state: StateFlow<PlayerState> = _state
 
     private val _dtracklist = MutableStateFlow(null as dTracklist?)
     val dtracklist: StateFlow<dTracklist?> = _dtracklist
@@ -86,10 +86,10 @@ class PlayerRepository(
     val currentSong: StateFlow<Song?> = _currentSong
 
     private val _currentPlaybackTrack = MutableStateFlow<PlaybackTrack?>(null)
-    val currentPlaybackTrack: StateFlow<PlaybackTrack?> = _currentPlaybackTrack
+    override val currentPlaybackTrack: StateFlow<PlaybackTrack?> = _currentPlaybackTrack
 
     private val _events = MutableSharedFlow<PlayerEvent>()
-    val events: SharedFlow<PlayerEvent> = _events
+    override val events: SharedFlow<PlayerEvent> = _events
 
     private val serviceConnection = object : ServiceConnection {
         override fun onServiceConnected(name: ComponentName?, binder: IBinder?) {
@@ -183,9 +183,9 @@ class PlayerRepository(
      * Запускает очередь логических песен, выбирая для каждой воспроизводимый экземпляр.
      * [startIndex] переводится из исходного списка в индекс уже отфильтрованной очереди.
      */
-    suspend fun playQueue(
+    override suspend fun playQueue(
         songs: List<Song>,
-        startIndex: Int = 0,
+        startIndex: Int,
         tracklist: dTracklist
     ) {
         if (songs.isEmpty() || startIndex !in songs.indices) {
@@ -309,7 +309,7 @@ class PlayerRepository(
 
 //    var isShuffleBlock = false
     private val _isShuffleBlock = MutableStateFlow(false)
-    val isShuffleBlock: StateFlow<Boolean> = _isShuffleBlock
+    override val isShuffleBlock: StateFlow<Boolean> = _isShuffleBlock
     private fun blockShuffle(isWave: Boolean) {
         if (isShuffleBlock.value != isWave) {
             _isShuffleBlock.value = isWave
@@ -324,7 +324,7 @@ class PlayerRepository(
 
 
     /** Догружает в текущую очередь песни, для которых удалось выбрать экземпляр. */
-    suspend fun addTracks(songs: List<Song>) {
+    override suspend fun addTracks(songs: List<Song>) {
         val resolved = withContext(Dispatchers.IO) {
             songs.mapNotNull { song ->
                 song.toPlaybackTrack(isTrackCached)?.let { track -> song to track }

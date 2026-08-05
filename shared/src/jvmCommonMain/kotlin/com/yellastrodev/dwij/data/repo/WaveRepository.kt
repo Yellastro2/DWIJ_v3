@@ -1,12 +1,12 @@
 package com.yellastrodev.dwij.data.repo
 
-import android.util.Log
 import com.yellastrodev.dwij.data.entities.dTracklist
 import com.yellastrodev.dwij.data.entities.MusicSource
 import com.yellastrodev.dwij.data.entities.Song
 import com.yellastrodev.dwij.data.entities.dYaWave
 import com.yellastrodev.dwij.data.entities.toEntity
 import com.yellastrodev.dwij.data.source.WaveRemoteSource
+import com.yellastrodev.yandexmusiclib.YamLogger
 import com.yellastrodev.yandexmusiclib.entities.TrackShort
 import com.yellastrodev.yandexmusiclib.network.YamResult
 import kotlinx.coroutines.CoroutineScope
@@ -27,9 +27,10 @@ class WaveRepository(
     val remote: WaveRemoteSource,
     val trackRepository: TrackRepository,
     private val songRepository: SongRepository,
-    val playerRepository: PlayerRepository,
+    val playerRepository: PlaybackQueue,
     private val isTrackCached: (String) -> Boolean,
-    private val scope: CoroutineScope
+    private val scope: CoroutineScope,
+    private val logger: YamLogger
 ) {
 
     val TAG = "WaveRepository"
@@ -64,7 +65,7 @@ class WaveRepository(
             }
 
             is YamResult.Failure -> {
-                Log.e(TAG, "[getWave] Волну загрузить не удалось: ${result.error}")
+                logger.error(TAG, "[getWave] Волну загрузить не удалось: ${result.error}")
                 emptyList()
             }
         }
@@ -87,7 +88,7 @@ class WaveRepository(
             } catch (error: CancellationException) {
                 throw error
             } catch (error: Exception) {
-                Log.e(TAG, "[requestWave] Не удалось запустить волну", error)
+                logger.error(TAG, "[requestWave] Не удалось запустить волну", error)
             } finally {
                 finishLoading()
             }
@@ -98,7 +99,7 @@ class WaveRepository(
     /**
      * Загружает и запускает первую пачку в coroutine вызывающего слоя.
      *
-     * Этот вариант нужен автоматическому продолжению волны в [PlayerRepository].
+     * Этот вариант нужен автоматическому продолжению волны в [com.yellastrodev.dwij.data.repo.PlayerRepository].
      */
     suspend fun playWave(dtrackList: dTracklist? = null) {
         if (!tryStartLoading()) return
@@ -111,10 +112,10 @@ class WaveRepository(
 
     /** Выполняет сетевую загрузку и публикует подготовленную очередь в общем репозитории плеера. */
     private suspend fun loadAndPlayWave(dtrackList: dTracklist?) {
-        Log.d(TAG, "[loadAndPlayWave] Запрашиваем ${dtrackList?.getWaveId() ?: "свою"} волну")
+        logger.debug(TAG, "[loadAndPlayWave] Запрашиваем ${dtrackList?.getWaveId() ?: "свою"} волну")
         val waveList = getWave(dtrackList)
         if (waveList.isEmpty()) {
-            Log.w(TAG, "[loadAndPlayWave] Сервер не вернул треки волны")
+            logger.warning(TAG, "[loadAndPlayWave] Сервер не вернул треки волны")
             return
         }
         withContext(Dispatchers.Main) {
@@ -124,7 +125,7 @@ class WaveRepository(
                 requireNotNull(curentWave),
             )
         }
-        Log.d(TAG, "[loadAndPlayWave] Очередь волны запущена: треков=${waveList.size}")
+        logger.debug(TAG, "[loadAndPlayWave] Очередь волны запущена: треков=${waveList.size}")
         observePlayerState()
         scope.launch {
             playerRepository.isShuffleBlock
@@ -139,7 +140,7 @@ class WaveRepository(
         if (accepted) {
             mutableIsLoading.value = true
         } else {
-            Log.d(TAG, "[tryStartLoading] Загрузка волны уже идёт")
+            logger.debug(TAG, "[tryStartLoading] Загрузка волны уже идёт")
         }
         return accepted
     }
@@ -198,12 +199,12 @@ class WaveRepository(
     }
 
     private suspend fun onTrackStarted(trackId: String, sendFeedback: Boolean) {
-        Log.d(TAG, "[onTrackStarted] trackId=$trackId, feedback=$sendFeedback")
+        logger.debug(TAG, "[onTrackStarted] trackId=$trackId, feedback=$sendFeedback")
         curentWave?.let{
             if (sendFeedback) {
                 remote.sendTrackStarted(it, trackId)
             } else {
-                Log.d(TAG, "[onTrackStarted] Rotor feedback пропущен: трек в кэше")
+                logger.debug(TAG, "[onTrackStarted] Rotor feedback пропущен: трек в кэше")
             }
             // Следующую пачку запрашиваем при старте последнего трека очереди.
             if (it.tracks.lastOrNull()?.id == trackId) {
@@ -214,7 +215,7 @@ class WaveRepository(
 
 
     suspend fun onTrackNext(trackId: String, position: Int, duration: Int) {
-        Log.d(TAG, "onTrackNext: $trackId $position of $duration")
+        logger.debug(TAG, "onTrackNext: $trackId $position of $duration")
         curentWave?.let{
             if (position + skipOffset < duration)
                 remote.sendTrackSkip(it, trackId, position)
@@ -226,7 +227,7 @@ class WaveRepository(
     }
 
     private suspend fun updateWave(wave: dYaWave, lastTrackId: String) {
-        Log.d(TAG, "updateWave: $lastTrackId")
+        logger.debug(TAG, "updateWave: $lastTrackId")
         val result = remote.getNextTracks(wave, lastTrackId)
         when(result){
             is YamResult.Success -> {
@@ -237,11 +238,11 @@ class WaveRepository(
                 wave.tracks = wave.tracks +
                     result.value.tracks.map { TrackShort(it.id) }
                 playerRepository.addTracks(songs)
-                Log.d(TAG, "updateWave: ${wave.tracks.size}")
+                logger.debug(TAG, "updateWave: ${wave.tracks.size}")
             }
 
             is YamResult.Failure -> {
-                Log.e(TAG, "[updateWave] Новые треки не загружены: ${result.error}")
+                logger.error(TAG, "[updateWave] Новые треки не загружены: ${result.error}")
             }
         }
     }

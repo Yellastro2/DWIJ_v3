@@ -1,17 +1,17 @@
 package com.yellastrodev.dwij.data.source
 
-import android.util.Log
 import com.yellastrodev.dwij.data.entities.dYaWave
 import com.yellastrodev.yandexmusiclib.YamApiClient
+import com.yellastrodev.yandexmusiclib.YamLogger
 import com.yellastrodev.yandexmusiclib.network.YamResult
 import com.yellastrodev.yandexmusiclib.rotor.RotorBatch
 
-class WaveRemoteSource(private val client: YamApiClient) {
+class WaveRemoteSource(private val client: YamApiClient, val logger: YamLogger) {
 
     val TAG = "WaveRemoteSource"
 
     suspend fun getWave(tag: String = "user:onyourwave"): YamResult<RotorBatch> {
-        Log.d(TAG, "getWave: $tag")
+        logger.debug(TAG, "getWave: $tag")
         return client.startWave(tag)
     }
 
@@ -104,11 +104,11 @@ class WaveRemoteSource(private val client: YamApiClient) {
         result: YamResult<Unit>
     ) {
         when (result) {
-            is YamResult.Success -> Log.d(
+            is YamResult.Success -> logger.debug(
                 TAG,
                 "[$function] Фидбек type=$type успешно отправлен: $context"
             )
-            is YamResult.Failure -> Log.e(
+            is YamResult.Failure -> logger.error(
                 TAG,
                 "[$function] Фидбек type=$type не отправлен: " +
                     "$context, error=${result.error}"

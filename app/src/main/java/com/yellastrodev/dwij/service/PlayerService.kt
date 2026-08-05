@@ -37,6 +37,8 @@ import com.yellastrodev.dwij.data.repo.PlayerRepository
 import com.yellastrodev.dwij.data.repo.TrackCacheRepository
 import com.yellastrodev.dwij.data.repo.TrackRepository
 import com.yellastrodev.dwij.data.source.YaLazyDataSourceFactory
+import com.yellastrodev.dwij.utils.PlayerEvent
+import com.yellastrodev.dwij.utils.PlayerState
 import com.yellastrodev.dwij.yApplication
 import com.yellastrodev.yandexmusiclib.entities.CoverSize
 import kotlinx.coroutines.CoroutineScope
@@ -559,20 +561,9 @@ class PlayerService : MediaSessionService() {
 
 }
 
-data class PlayerState(
-    val isPlaying: Boolean = false,
-    val currentIndex: Int = 0,
-    val currentPosition: Long = 0,
-    val duration: Long = 0,
-    val isShuffle: Boolean = false,
-    val isRepeatAll: Boolean = false
-)
 
 
-sealed class PlayerEvent {
-    data class ShowError(val message: String) : PlayerEvent()
-    data class TrackListEnd(val message: String) : PlayerEvent()
-    // можно добавить другие события: SkipNext, SkipPrev и т.д.
-}
+
+
 
 

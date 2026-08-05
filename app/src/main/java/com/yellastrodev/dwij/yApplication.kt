@@ -190,7 +190,7 @@ class yApplication: Application() {
     }
 
     val waveRemoteSource: WaveRemoteSource by lazy {
-        WaveRemoteSource(yamClient)
+        WaveRemoteSource(yamClient, logger)
     }
 
     val searchRepository: SearchRepository by lazy {
@@ -252,7 +252,8 @@ class yApplication: Application() {
             songRepository,
             playerRepo,
             trackCacheRepo::isCached,
-            applicationScope
+            applicationScope,
+            logger
         )
     }
 
