@@ -70,41 +70,6 @@ class yApplication: Application() {
     }
 
 
-
-
-//
-//    @Database(
-//        entities = [
-//            dYaPlaylist::class,
-//            dPlaylistTrack::class,
-//            dYaTrack::class,
-//            dYaAlbum::class,
-//            dYaArtist::class,
-//            dTrackAlbumCrossRef::class,
-//            dTrackArtistCrossRef::class,
-//            LocalTrackEntity::class,
-//            LocalPlaylistEntity::class,
-//            LocalPlaylistEntryEntity::class,
-//            LocalLibraryStateEntity::class,
-//            SongEntity::class,
-//            TrackInstanceEntity::class,
-//            SongMatchCandidateEntity::class,
-//                   ],
-//        version = 9
-//    )
-//    @TypeConverters(StringListConverter::class) // если у тебя есть поля List<String>
-//    abstract class AppDatabase : RoomDatabase() {
-//        abstract fun dPlaylistDao(): dPlaylistDao
-//        abstract fun dTrackDao(): dTrackDao
-//        abstract fun localLibraryDao(): LocalLibraryDao
-//        abstract fun songDao(): SongDao
-//        abstract fun songMatchDao(): SongMatchDao
-//    }
-
-//    val trackLocalSource by lazy {
-//        TrackLocalSource(db.dTrackDao())
-//    }
-
     var playerServiceRef: WeakReference<PlayerService>? = null
 
     val trackRepository: TrackRepository by lazy {
@@ -178,6 +143,18 @@ class yApplication: Application() {
 
     val mediaItemMapper: AndroidMediaItemMapper by lazy {
         AndroidMediaItemMapper()
+    }
+
+    val musicSourceSettings: MusicSourceSettings by lazy {
+        AndroidMusicSourceSettings(
+            context = applicationContext,
+        )
+    }
+
+    val musicSourceSelectionStore: MusicSourceSelectionStore by lazy {
+        MusicSourceSelectionStore(
+            settings = musicSourceSettings,
+        )
     }
 
     val playerEngine: PlayerEngine by lazy {

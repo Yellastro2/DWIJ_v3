@@ -4,8 +4,8 @@ import android.content.pm.PackageManager
 import android.util.Log
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
-import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.WindowInsets
+import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.safeDrawing
 import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.runtime.Composable
@@ -27,7 +27,6 @@ import androidx.navigation.NavHostController
 import com.yellastrodev.dwij.HomeCompactPlayerUiState
 import com.yellastrodev.dwij.HomeMusicSource
 import com.yellastrodev.dwij.HomeScreen
-import com.yellastrodev.dwij.MusicSourceSelectionStore
 import com.yellastrodev.dwij.R
 import com.yellastrodev.dwij.data.source.requiredAudioPermission
 import com.yellastrodev.dwij.data.source.requiredLocalMediaPermissions
@@ -38,15 +37,16 @@ import com.yellastrodev.dwij.models.SearchTrackSource
 import com.yellastrodev.dwij.ui.toImageBitmapOrNull
 import com.yellastrodev.dwij.work.LocalLibrarySyncWorker
 import com.yellastrodev.dwij.yApplication
+import com.yellastrodev.yandexmusiclib.entities.CoverSize
 import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.flow.flowOn
 import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.flow.flowOn
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
-import com.yellastrodev.yandexmusiclib.entities.CoverSize
 
 /**
- * Связывает домашний экран с общим плеером, разрешением локальной медиатеки и Compose-навигацией.
+ * Связывает домашний экран с общим плеером,
+ * разрешением локальной медиатеки и Compose-навигацией.
  */
 @Composable
 fun HomeRoute(
@@ -55,49 +55,111 @@ fun HomeRoute(
     modifier: Modifier = Modifier,
 ) {
     val context = LocalContext.current
-    val application = context.applicationContext as yApplication
-    val coroutineScope = rememberCoroutineScope()
-    val selectedSource by MusicSourceSelectionStore.selectedSource.collectAsState()
+
+    val application =
+        context.applicationContext as yApplication
+
+    val musicSourceSelectionStore =
+        application.musicSourceSelectionStore
+
+    val coroutineScope =
+        rememberCoroutineScope()
+
+    val selectedSource by
+    musicSourceSelectionStore
+        .selectedSource
+        .collectAsState()
+
     val searchModel = viewModel<SearchModel>(
         factory = SearchModel.Factory(
-            repository = application.searchRepository,
-            localMusicRepository = application.localMusicRepository,
-            trackRepository = application.trackRepository,
-            songRepository = application.songRepository,
-            playerRepository = application.playerRepo,
+            repository =
+                application.searchRepository,
+            localMusicRepository =
+                application.localMusicRepository,
+            trackRepository =
+                application.trackRepository,
+            songRepository =
+                application.songRepository,
+            playerRepository =
+                application.playerRepo,
         ),
     )
-    val searchState by searchModel.state.collectAsState()
-    val track by playerModel.track.collectAsState()
-    val playbackTrack by playerModel.playbackTrack.collectAsState()
-    val playerState by playerModel.playerState.collectAsState()
-    var permissionRequestInFlight by remember { mutableStateOf(false) }
-    var cover by remember(track?.id, playbackTrack?.instanceId) {
+
+    val searchState by
+    searchModel.state.collectAsState()
+
+    val track by
+    playerModel.track.collectAsState()
+
+    val playbackTrack by
+    playerModel.playbackTrack.collectAsState()
+
+    val playerState by
+    playerModel.playerState.collectAsState()
+
+    var permissionRequestInFlight by remember {
+        mutableStateOf(false)
+    }
+
+    var cover by remember(
+        track?.id,
+        playbackTrack?.instanceId,
+    ) {
         mutableStateOf<ImageBitmap?>(null)
     }
-    val unknownArtist = stringResource(R.string.home_player_unknown_artist)
 
-    val audioPermissionLauncher = rememberLauncherForActivityResult(
-        ActivityResultContracts.RequestMultiplePermissions(),
-    ) { permissions ->
-        permissionRequestInFlight = false
-        val granted = requiredLocalMediaPermissions().all { permission ->
-            permissions[permission] == true || ContextCompat.checkSelfPermission(
-                context,
-                permission,
-            ) == PackageManager.PERMISSION_GRANTED
+    val unknownArtist = stringResource(
+        R.string.home_player_unknown_artist,
+    )
+
+    val audioPermissionLauncher =
+        rememberLauncherForActivityResult(
+            ActivityResultContracts
+                .RequestMultiplePermissions(),
+        ) { permissions ->
+
+            permissionRequestInFlight = false
+
+            val granted =
+                requiredLocalMediaPermissions()
+                    .all { permission ->
+                        permissions[permission] == true ||
+                                ContextCompat
+                                    .checkSelfPermission(
+                                        context,
+                                        permission,
+                                    ) ==
+                                PackageManager
+                                    .PERMISSION_GRANTED
+                    }
+
+            if (granted) {
+                musicSourceSelectionStore.select(
+                    HomeMusicSource.Local,
+                )
+
+                LocalLibrarySyncWorker
+                    .enqueueImmediate(
+                        context.applicationContext,
+                    )
+            } else {
+                Log.w(
+                    TAG,
+                    "[audioPermissionLauncher] " +
+                            "Доступ к локальной музыке " +
+                            "не выдан",
+                )
+
+                musicSourceSelectionStore.select(
+                    HomeMusicSource.Yandex,
+                )
+            }
         }
-        if (granted) {
-            MusicSourceSelectionStore.select(context, HomeMusicSource.Local)
-            LocalLibrarySyncWorker.enqueueImmediate(context.applicationContext)
-        } else {
-            Log.w(TAG, "[audioPermissionLauncher] Доступ к локальной музыке не выдан")
-            MusicSourceSelectionStore.select(context, HomeMusicSource.Yandex)
-        }
-    }
 
     LaunchedEffect(Unit) {
-        val restored = MusicSourceSelectionStore.restore(context)
+        val restored =
+            musicSourceSelectionStore.restore()
+
         if (
             restored == HomeMusicSource.Local &&
             ContextCompat.checkSelfPermission(
@@ -105,103 +167,218 @@ fun HomeRoute(
                 requiredAudioPermission(),
             ) != PackageManager.PERMISSION_GRANTED
         ) {
-            MusicSourceSelectionStore.select(context, HomeMusicSource.Yandex)
+            musicSourceSelectionStore.select(
+                HomeMusicSource.Yandex,
+            )
         }
     }
 
     LaunchedEffect(selectedSource) {
-        searchModel.setYandexEnabled(selectedSource == HomeMusicSource.Yandex)
+        searchModel.setYandexEnabled(
+            selectedSource ==
+                    HomeMusicSource.Yandex,
+        )
     }
 
-    LaunchedEffect(track?.id, playbackTrack?.instanceId) {
+    LaunchedEffect(
+        track?.id,
+        playbackTrack?.instanceId,
+    ) {
         cover = null
+
         track?.let { currentTrack ->
-            playerModel.cover(currentTrack)
+            playerModel
+                .cover(currentTrack)
                 .flowOn(Dispatchers.IO)
-                .collect { bitmap -> cover = bitmap.asImageBitmap() }
+                .collect { bitmap ->
+                    cover = bitmap.asImageBitmap()
+                }
         }
     }
 
-    fun selectMusicSource(source: HomeMusicSource) {
-        if (source == selectedSource) return
-        if (source == HomeMusicSource.Yandex) {
-            MusicSourceSelectionStore.select(context, source)
+    fun selectMusicSource(
+        source: HomeMusicSource,
+    ) {
+        if (source == selectedSource) {
             return
         }
-        val permissions = requiredLocalMediaPermissions()
-        if (permissions.all { permission ->
-                ContextCompat.checkSelfPermission(context, permission) ==
-                    PackageManager.PERMISSION_GRANTED
+
+        if (source == HomeMusicSource.Yandex) {
+            musicSourceSelectionStore.select(source)
+            return
+        }
+
+        val permissions =
+            requiredLocalMediaPermissions()
+
+        val alreadyGranted =
+            permissions.all { permission ->
+                ContextCompat.checkSelfPermission(
+                    context,
+                    permission,
+                ) == PackageManager.PERMISSION_GRANTED
             }
-        ) {
-            MusicSourceSelectionStore.select(context, source)
-            LocalLibrarySyncWorker.enqueueImmediate(context.applicationContext)
+
+        if (alreadyGranted) {
+            musicSourceSelectionStore.select(source)
+
+            LocalLibrarySyncWorker
+                .enqueueImmediate(
+                    context.applicationContext,
+                )
         } else if (!permissionRequestInFlight) {
             permissionRequestInFlight = true
-            MusicSourceSelectionStore.preview(HomeMusicSource.Local)
-            audioPermissionLauncher.launch(permissions)
+
+            musicSourceSelectionStore.preview(
+                HomeMusicSource.Local,
+            )
+
+            audioPermissionLauncher.launch(
+                permissions,
+            )
         }
     }
 
     HomeScreen(
         modifier = modifier
             .fillMaxSize()
-            .windowInsetsPadding(WindowInsets.safeDrawing),
-        onSettingsClick = { navController.navigate(DwijDestination.SETTINGS) },
-        onSongMatchesClick = { navController.navigate(DwijDestination.SONG_MATCHES) },
-        onPlaylistsClick = { navController.navigate(DwijDestination.PLAYLISTS) },
+            .windowInsetsPadding(
+                WindowInsets.safeDrawing,
+            ),
+
+        onSettingsClick = {
+            navController.navigate(
+                DwijDestination.SETTINGS,
+            )
+        },
+
+        onSongMatchesClick = {
+            navController.navigate(
+                DwijDestination.SONG_MATCHES,
+            )
+        },
+
+        onPlaylistsClick = {
+            navController.navigate(
+                DwijDestination.PLAYLISTS,
+            )
+        },
+
         onTracksClick = {
-            if (selectedSource == HomeMusicSource.Local) {
+            if (
+                selectedSource ==
+                HomeMusicSource.Local
+            ) {
                 navController.navigate(
-                    DwijDestination.localLibraryRoute(DwijDestination.LOCAL_MODE_ALL_TRACKS),
+                    DwijDestination
+                        .localLibraryRoute(
+                            DwijDestination
+                                .LOCAL_MODE_ALL_TRACKS,
+                        ),
                 )
             } else {
                 navController.navigate(
-                    DwijDestination.objectRoute(DwijDestination.OBJECT_TYPE_TRACKLIST),
+                    DwijDestination.objectRoute(
+                        DwijDestination
+                            .OBJECT_TYPE_TRACKLIST,
+                    ),
                 )
             }
         },
+
         onWaveClick = {
-            application.waveRepository.requestWave()
-            navController.navigate(DwijDestination.PLAYER)
+            application
+                .waveRepository
+                .requestWave()
+
+            navController.navigate(
+                DwijDestination.PLAYER,
+            )
         },
+
         onAllTracksClick = {},
-        onCatalogClick = { navController.navigate(DwijDestination.PLAYLISTS) },
-        onPlayerOpenClick = { navController.navigate(DwijDestination.PLAYER) },
-        onPlayerPlayPauseClick = playerModel::playAudio,
-        onPlayerPreviousClick = { coroutineScope.launch { playerModel.prevTrack() } },
-        onPlayerNextClick = { coroutineScope.launch { playerModel.nextTrack() } },
+
+        onCatalogClick = {
+            navController.navigate(
+                DwijDestination.PLAYLISTS,
+            )
+        },
+
+        onPlayerOpenClick = {
+            navController.navigate(
+                DwijDestination.PLAYER,
+            )
+        },
+
+        onPlayerPlayPauseClick =
+            playerModel::playAudio,
+
+        onPlayerPreviousClick = {
+            coroutineScope.launch {
+                playerModel.prevTrack()
+            }
+        },
+
+        onPlayerNextClick = {
+            coroutineScope.launch {
+                playerModel.nextTrack()
+            }
+        },
+
         player = track?.let { currentTrack ->
             HomeCompactPlayerUiState(
                 title = currentTrack.title,
-                artist = currentTrack.artistNames.joinToString(", ").ifBlank { unknownArtist },
+                artist = currentTrack
+                    .artistNames
+                    .joinToString(", ")
+                    .ifBlank {
+                        unknownArtist
+                    },
                 cover = cover,
-                isPlaying = playerState.isPlaying,
-                currentPositionMillis = playerState.currentPosition,
-                durationMillis = playerState.duration,
+                isPlaying =
+                    playerState.isPlaying,
+                currentPositionMillis =
+                    playerState.currentPosition,
+                durationMillis =
+                    playerState.duration,
             )
         },
+
         selectedSource = selectedSource,
-        onSourceSelected = ::selectMusicSource,
+
+        onSourceSelected =
+            ::selectMusicSource,
+
         searchState = searchState,
-        onSearchQueryChange = searchModel::updateQuery,
+
+        onSearchQueryChange =
+            searchModel::updateQuery,
+
         loadSearchTrackCover = { item ->
             withContext(Dispatchers.IO) {
-                when (val source = item.source) {
+                when (
+                    val source = item.source
+                ) {
                     is SearchTrackSource.Yandex -> {
-                        application.coverRepository
+                        application
+                            .coverRepository
                             .getTrackCover(
-                                track = source.track,
-                                size = CoverSize.`100x100`,
+                                track =
+                                    source.track,
+                                size =
+                                    CoverSize
+                                        .`100x100`,
                             )
                             ?.toImageBitmapOrNull()
                     }
 
                     is SearchTrackSource.Local -> {
-                        source.song.localInstances
+                        source.song
+                            .localInstances
                             .firstOrNull()
                             ?.let { instance ->
-                                playerModel.cover(instance)
+                                playerModel
+                                    .cover(instance)
                                     .first()
                                     .asImageBitmap()
                             }
@@ -209,24 +386,43 @@ fun HomeRoute(
                 }
             }
         },
-        loadSearchEntityCover = { key, uri ->
+
+        loadSearchEntityCover = {
+                key,
+                uri,
+            ->
+
             withContext(Dispatchers.IO) {
-                application.coverRepository
+                application
+                    .coverRepository
                     .getRemoteCover(
                         entityType = "search",
                         entityId = key,
                         url = uri,
-                        size = CoverSize.`100x100`,
+                        size =
+                            CoverSize.`100x100`,
                     )
                     ?.toImageBitmapOrNull()
             }
         },
+
         onSearchResultClick = { item ->
-            if (item is SearchResultItemUiModel.Track) {
+            if (
+                item is
+                        SearchResultItemUiModel.Track
+            ) {
                 searchModel.playTrack(item)
-                navController.navigate(DwijDestination.PLAYER)
+
+                navController.navigate(
+                    DwijDestination.PLAYER,
+                )
             } else {
-                Log.d(TAG, "[onSearchResultClick] Нажат результат key=${item.key}")
+                Log.d(
+                    TAG,
+                    "[onSearchResultClick] " +
+                            "Нажат результат " +
+                            "key=${item.key}",
+                )
             }
         },
     )

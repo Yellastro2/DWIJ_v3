@@ -69,6 +69,8 @@ fun PlaylistGridRoute(
 ) {
     val context = LocalContext.current
     val application = context.applicationContext as yApplication
+    val musicSourceSelectionStore =
+        application.musicSourceSelectionStore
     val coroutineScope = rememberCoroutineScope()
     val snackbarHostState = remember { SnackbarHostState() }
     val model = viewModel {
@@ -83,7 +85,10 @@ fun PlaylistGridRoute(
     val localPlaylistSummarySnapshot by application.localMusicRepository.playlistSummaries
         .collectAsState(initial = null)
     val isLocalSynchronizing by application.localMusicRepository.isSynchronizing.collectAsState()
-    val musicSource by MusicSourceSelectionStore.selectedSource.collectAsState()
+    val musicSource by
+    musicSourceSelectionStore
+        .selectedSource
+        .collectAsState()
     val localPlaylistSummaries = localPlaylistSummarySnapshot.orEmpty()
     val localPlaylists = remember(localPlaylistSummaries) {
         localPlaylistSummaries.map(LocalPlaylistSummary::playlist)
@@ -115,18 +120,18 @@ fun PlaylistGridRoute(
             ) == PackageManager.PERMISSION_GRANTED
         }
         if (granted) {
-            MusicSourceSelectionStore.select(context, HomeMusicSource.Local)
+            musicSourceSelectionStore.select( HomeMusicSource.Local)
             LocalLibrarySyncWorker.enqueueImmediate(context.applicationContext)
         } else {
             Log.w(TAG, "[audioPermissionLauncher] Доступ к локальной музыке не выдан")
-            MusicSourceSelectionStore.select(context, HomeMusicSource.Yandex)
+            musicSourceSelectionStore.select( HomeMusicSource.Yandex)
         }
     }
 
     fun selectMusicSource(source: HomeMusicSource) {
         if (source == musicSource) return
         if (source == HomeMusicSource.Yandex) {
-            MusicSourceSelectionStore.select(context, source)
+            musicSourceSelectionStore.select( source)
             return
         }
         val permissions = requiredLocalMediaPermissions()
@@ -135,17 +140,17 @@ fun PlaylistGridRoute(
                     PackageManager.PERMISSION_GRANTED
             }
         ) {
-            MusicSourceSelectionStore.select(context, source)
+            musicSourceSelectionStore.select( source)
             LocalLibrarySyncWorker.enqueueImmediate(context.applicationContext)
         } else if (!permissionRequestInFlight) {
             permissionRequestInFlight = true
-            MusicSourceSelectionStore.preview(HomeMusicSource.Local)
+            musicSourceSelectionStore.preview(HomeMusicSource.Local)
             audioPermissionLauncher.launch(permissions)
         }
     }
 
     LaunchedEffect(Unit) {
-        val restored = MusicSourceSelectionStore.restore(context)
+        val restored = musicSourceSelectionStore.restore()
         if (
             restored == HomeMusicSource.Local &&
             ContextCompat.checkSelfPermission(
@@ -153,7 +158,7 @@ fun PlaylistGridRoute(
                 requiredAudioPermission(),
             ) != PackageManager.PERMISSION_GRANTED
         ) {
-            MusicSourceSelectionStore.select(context, HomeMusicSource.Yandex)
+            musicSourceSelectionStore.select( HomeMusicSource.Yandex)
         }
     }
     LaunchedEffect(trackToAdd) {

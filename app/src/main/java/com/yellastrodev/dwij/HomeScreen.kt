@@ -965,10 +965,6 @@ private data class HomeSourceOption(
     val source: HomeMusicSource,
 )
 
-enum class HomeMusicSource {
-    Local,
-    Yandex,
-}
 
 /** Собирает локализованные заглушки источников музыки. */
 @Composable
