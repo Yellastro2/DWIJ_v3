@@ -6,6 +6,7 @@ import android.preference.PreferenceManager
 import android.util.Log
 import androidx.media3.common.util.UnstableApi
 import androidx.room.Room
+import com.yellastrodev.dwij.data.cache.FileCacheStore
 import com.yellastrodev.dwij.data.repo.CoverRepository
 import com.yellastrodev.dwij.data.repo.PlayerRepository
 import com.yellastrodev.dwij.data.repo.PlaylistRepository
@@ -158,7 +159,8 @@ class yApplication: Application() {
         TrackCacheRepository(
             cacheDir,
             trackRepository,
-            cacheManager
+            cacheManager,
+            logger
         )
     }
 
@@ -173,13 +175,17 @@ class yApplication: Application() {
         }
     }
 
-    val coverRepository: CoverRepository by lazy {
+    val coverFileCache: FileCacheStore by lazy {
+        FileCacheStore(
+            directory = File(cacheDir, DIR_COVER_CACHE),
+            cacheManager = cacheManager,
+        )
+    }
 
+    val coverRepository: CoverRepository by lazy {
         CoverRepository(
-            applicationContext,
-            yamClient,
-            cacheManager,
-            applicationScope
+            yamClient = yamClient,
+            fileCache = coverFileCache,
         )
     }
 

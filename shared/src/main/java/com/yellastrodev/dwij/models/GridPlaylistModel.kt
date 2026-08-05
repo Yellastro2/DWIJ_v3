@@ -1,14 +1,13 @@
 package com.yellastrodev.dwij.models
 
-import android.graphics.Bitmap
 import androidx.lifecycle.ViewModel
-import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.viewModelScope
 import com.yellastrodev.dwij.data.DataError
 import com.yellastrodev.dwij.data.DataResult
 import com.yellastrodev.dwij.data.entities.dYaPlaylist
 import com.yellastrodev.dwij.data.entities.dYaTrack
 import com.yellastrodev.dwij.data.entities.iPlaylist
+import com.yellastrodev.dwij.data.repo.CoverData
 import com.yellastrodev.dwij.data.repo.CoverRepository
 import com.yellastrodev.dwij.data.repo.PlaylistRepository
 import com.yellastrodev.dwij.data.repo.TrackRepository
@@ -17,29 +16,17 @@ import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
+import kotlin.collections.emptyList
 
 /** Хранит данные Compose-экрана плейлистов и выполняет операции над выбранным списком. */
 class GridPlaylistModel(
-	private val playlistRepo: PlaylistRepository,
-	private val trackRepo: TrackRepository,
-	private val coverRepo: CoverRepository
+    private val playlistRepo: PlaylistRepository,
+    private val trackRepo: TrackRepository,
+    private val coverRepo: CoverRepository
 ): ViewModel() {
 	val initialLoadComplete: StateFlow<Boolean> = playlistRepo.initialLoadComplete
 
-	class Factory(
-		private val repo: PlaylistRepository,
-		private val trackRepo: TrackRepository,
-		private val coverRepo: CoverRepository
-	) : ViewModelProvider.Factory
-	{
-		@Suppress("UNCHECKED_CAST")
-		override fun <T : ViewModel> create(modelClass: Class<T>): T {
-			if (modelClass.isAssignableFrom(GridPlaylistModel::class.java)) {
-				return GridPlaylistModel(repo, trackRepo, coverRepo) as T
-			}
-			throw IllegalArgumentException("Unknown ViewModel class")
-		}
-	}
+
 
 
 	/** Отсортированные плейлисты для Compose-сетки: лайки первыми, затем новые списки. */
@@ -57,8 +44,17 @@ class GridPlaylistModel(
 		)
 
 	/** Загружает квадратную обложку плейлиста через общий кеш обложек. */
-	suspend fun getCover(playlist: iPlaylist): Bitmap =
-		coverRepo.getCover(playlist, CoverSize.`200x200`)
+    suspend fun getCover(
+        playlist: iPlaylist,
+    ): CoverData? {
+        val yandexPlaylist = playlist as? dYaPlaylist
+            ?: return null
+
+        return coverRepo.getPlaylistCover(
+            playlist = yandexPlaylist,
+            size = CoverSize.`200x200`,
+        )
+    }
 
 	/** Принудительно обновляет Яндекс-плейлисты и возвращает ошибку вызывающему экрану. */
 	suspend fun refreshPlaylists(): DataResult<Unit> = playlistRepo.refreshPlaylists()
@@ -70,8 +66,8 @@ class GridPlaylistModel(
 	): DataResult<dYaPlaylist> = playlistRepo.createPlaylist(title, isPublic)
 
 	suspend fun addTrackToPlaylist(
-		playlist: iPlaylist,
-		trackId: String
+        playlist: iPlaylist,
+        trackId: String
 	): DataResult<Unit> {
         return if (playlist is dYaPlaylist) {
             playlistRepo.addTrackToPlaylist(playlist, trackId)
@@ -87,8 +83,8 @@ class GridPlaylistModel(
 	}
 
 	suspend fun removeTrackFromPlaylist(
-		playlist: iPlaylist,
-		track: dYaTrack
+        playlist: iPlaylist,
+        track: dYaTrack
 	): DataResult<Unit> {
         return if (playlist is dYaPlaylist) {
             playlistRepo.removeTrackFromPlaylist(playlist, track)

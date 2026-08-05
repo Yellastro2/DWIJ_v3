@@ -23,7 +23,6 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
@@ -46,6 +45,7 @@ import com.yellastrodev.dwij.data.entities.dYaTrack
 import com.yellastrodev.dwij.data.source.requiredAudioPermission
 import com.yellastrodev.dwij.data.source.requiredLocalMediaPermissions
 import com.yellastrodev.dwij.models.GridPlaylistModel
+import com.yellastrodev.dwij.ui.toImageBitmapOrNull
 import com.yellastrodev.dwij.utils.DurationFormat.Companion.formatDuration
 import com.yellastrodev.dwij.utils.LangFormats.Companion.getNumericPostfix
 import com.yellastrodev.dwij.work.LocalLibrarySyncWorker
@@ -54,6 +54,7 @@ import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
+import kotlin.collections.orEmpty
 
 /**
  * Compose-route общей сетки Яндекс- и локальных плейлистов.
@@ -346,7 +347,8 @@ fun PlaylistGridRoute(
                 } else {
                     try {
                         withContext(Dispatchers.IO) {
-                            model.getCover(playlist).asImageBitmap()
+                            model.getCover(playlist)
+                                ?.toImageBitmapOrNull()
                         }
                     } catch (error: CancellationException) {
                         throw error
