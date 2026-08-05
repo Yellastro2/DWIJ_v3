@@ -194,6 +194,14 @@ class yApplication: Application() {
         )
     }
 
+    val trackCoverLoader: TrackCoverLoader by lazy {
+        TrackCoverLoader(
+            trackRepository = trackRepository,
+            coverRepository = coverRepository,
+            logger = logger,
+        )
+    }
+
     val waveRemoteSource: WaveRemoteSource by lazy {
         WaveRemoteSource(yamClient, logger)
     }

@@ -8,143 +8,186 @@ import android.util.Log
 import androidx.media3.common.Player
 import androidx.media3.common.util.UnstableApi
 import androidx.media3.ui.PlayerNotificationManager
+import com.yellastrodev.dwij.TRACK_ID
 import com.yellastrodev.dwij.activities.MainActivity
-import com.yellastrodev.dwij.data.DataResult
+import com.yellastrodev.dwij.playback.TrackCoverLoader
+import com.yellastrodev.dwij.yApplication
 import com.yellastrodev.yandexmusiclib.entities.CoverSize
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 
-@UnstableApi
+@OptIn(UnstableApi::class)
 class yPushMediaAdapterobject(
-    val playerService: PlayerService
+    private val playerService: PlayerService,
 ) : PlayerNotificationManager.MediaDescriptionAdapter {
 
-    val TAG = "yPushMediaAdapter"
+    private val trackCoverLoader: TrackCoverLoader by lazy {
+        val application =
+            playerService.application as yApplication
+
+        application.trackCoverLoader
+    }
 
     private var coverJob: Job? = null
 
-    // Внутри PlayerService
-    private val coverCache = LinkedHashMap<String, Bitmap>(5, 0.75f, true) // LRU с порядком доступа
-    private val COVER_CACHE_LIMIT = 5
+    override fun getCurrentContentTitle(
+        player: Player,
+    ): CharSequence {
+        val title =
+            player.currentMediaItem
+                ?.mediaMetadata
+                ?.title
+                ?: UNKNOWN_TITLE
 
-    override fun getCurrentContentTitle(player: Player): CharSequence {
-        val title = player.currentMediaItem?.mediaMetadata?.title ?: "Unknown"
-        Log.d(TAG, "getCurrentContentTitle: $title")
+        Log.d(
+            TAG,
+            "[getCurrentContentTitle] title=$title",
+        )
+
         return title
     }
 
-    override fun createCurrentContentIntent(player: Player): PendingIntent? {
-        Log.d(TAG, "createCurrentContentIntent called")
-        return PendingIntent.getActivity(
-            playerService,
-            0,
-            Intent(playerService, MainActivity::class.java),
-            PendingIntent.FLAG_IMMUTABLE
+    override fun getCurrentContentText(
+        player: Player,
+    ): CharSequence? {
+        val artist =
+            player.currentMediaItem
+                ?.mediaMetadata
+                ?.artist
+
+        Log.d(
+            TAG,
+            "[getCurrentContentText] artist=$artist",
         )
+
+        return artist
     }
 
-    override fun getCurrentContentText(player: Player): CharSequence? {
-        val artist = player.currentMediaItem?.mediaMetadata?.artist
-        Log.d(TAG, "getCurrentContentText: $artist")
-        return artist
+    override fun createCurrentContentIntent(
+        player: Player,
+    ): PendingIntent {
+        val intent = Intent(
+            playerService,
+            MainActivity::class.java,
+        ).apply {
+            flags =
+                Intent.FLAG_ACTIVITY_SINGLE_TOP or
+                        Intent.FLAG_ACTIVITY_CLEAR_TOP
+        }
+
+        return PendingIntent.getActivity(
+            playerService,
+            CONTENT_INTENT_REQUEST_CODE,
+            intent,
+            PendingIntent.FLAG_IMMUTABLE or
+                    PendingIntent.FLAG_UPDATE_CURRENT,
+        )
     }
 
     override fun getCurrentLargeIcon(
         player: Player,
-        callback: PlayerNotificationManager.BitmapCallback
+        callback: PlayerNotificationManager.BitmapCallback,
     ): Bitmap? {
-        // Отменяем предыдущую загрузку
         coverJob?.cancel()
-        val mediaItem = player.currentMediaItem
-        val trackId = mediaItem?.mediaMetadata?.extras?.getString("track_id")
-        Log.d(TAG, "getCurrentLargeIcon called: trackId=$trackId")
 
-//        // Проверяем кеш
-//        coverCache[trackId]?.let {
-//            Log.d(TAG, "Есть кеш кавера trackId=$trackId")
-//            callback.onBitmap(it)
-//            return it
-//        }
+        val mediaItem =
+            player.currentMediaItem
+                ?: return null
 
-        if (trackId == null) return null
-        coverJob = playerService.serviceScope.launch(Dispatchers.IO) {
-            val bitmap = getCurrentTrackCoverBitmap(trackId)
-            if (bitmap != null) {
-                withContext(Dispatchers.Main) {
-                    Log.d(TAG, "onBitmap callback отправлен для trackId=$trackId")
-                    callback.onBitmap(bitmap)
-                    // ⚡ Дополнительно обновляем MediaSession
+        val trackId =
+            mediaItem.mediaMetadata
+                .extras
+                ?.getString(TRACK_ID)
+                ?.takeIf(String::isNotBlank)
+                ?: mediaItem.mediaId
+                    .takeIf(String::isNotBlank)
+                ?: return null
 
-//                    val mediaMetadata = MediaMetadata.Builder()
-//                        .setTitle(player.currentMediaItem?.mediaMetadata?.title)
-//                        .setArtist(player.currentMediaItem?.mediaMetadata?.artist)
-//                        .setArtworkData(
-//                            ByteArrayOutputStream().apply {
-//                                bitmap.compress(Bitmap.CompressFormat.JPEG, 90, this)
-//                            }.toByteArray(),
-//                            MediaMetadata.PICTURE_TYPE_FRONT_COVER
-//                        )
-//                        .build()
-//
-//                    playerService.mediaSession.setMediaMetadata(mediaMetadata)
-                }
-                // Добавляем в кеш с ограничением размера
-//                synchronized(coverCache) {
-//                    if (coverCache.size >= COVER_CACHE_LIMIT) {
-//                        val firstKey = coverCache.keys.first()
-//                        coverCache.remove(firstKey)
-//                    }
-//                    coverCache[trackId] = bitmap
-//                }
-            } else {
-                Log.d(TAG, "Cover bitmap null for trackId=$trackId")
-            }
-        }
+        Log.d(
+            TAG,
+            "[getCurrentLargeIcon] trackId=$trackId",
+        )
 
-        return null // уведомление подождёт callback
-    }
-
-    /**
-     * Загружает обложку текущего трека через AlbumCoverRepository
-     * @return Bitmap текущей обложки или null
-     */
-    private suspend fun getCurrentTrackCoverBitmap(
-        trackId: String,
-    ): Bitmap? {
-        Log.d(TAG, "getCurrentTrackCoverBitmap: trackId=$trackId")
-
-        val track = when (
-            val result = playerService.trackRepo.getTrack(trackId)
+        coverJob = playerService.serviceScope.launch(
+            Dispatchers.IO,
         ) {
-            is DataResult.Success -> result.value
+            val coverBytes = trackCoverLoader.load(
+                trackId = trackId,
+                size = CoverSize.`100x100`,
+            ) ?: run {
+                Log.d(
+                    TAG,
+                    "[getCurrentLargeIcon] " +
+                            "Обложка отсутствует, trackId=$trackId",
+                )
+                return@launch
+            }
 
-            is DataResult.Failure -> {
+            val bitmap = BitmapFactory.decodeByteArray(
+                coverBytes,
+                0,
+                coverBytes.size,
+            ) ?: run {
                 Log.w(
                     TAG,
-                    "[getCurrentTrackCoverBitmap] Трек не загружен: ${result.error}",
+                    "[getCurrentLargeIcon] " +
+                            "Не удалось декодировать обложку, " +
+                            "trackId=$trackId",
                 )
-                return null
+                return@launch
             }
-        }
 
-        Log.d(TAG, "Track found in repo: $track")
+            /*
+             * Пока загружалась обложка, пользователь мог
+             * переключить трек.
+             */
+            val actualTrackId =
+                player.currentMediaItem
+                    ?.mediaMetadata
+                    ?.extras
+                    ?.getString(TRACK_ID)
+                    ?.takeIf(String::isNotBlank)
+                    ?: player.currentMediaItem
+                        ?.mediaId
+                        ?.takeIf(String::isNotBlank)
 
-        val coverData = playerService.coverRepo.getTrackCover(
-            track = track,
-            size = CoverSize.`100x100`,
-        ) ?: return null
+            if (actualTrackId != trackId) {
+                Log.d(
+                    TAG,
+                    "[getCurrentLargeIcon] " +
+                            "Трек уже изменился: " +
+                            "requested=$trackId, actual=$actualTrackId",
+                )
+                return@launch
+            }
 
-        return BitmapFactory.decodeByteArray(
-            coverData.bytes,
-            0,
-            coverData.bytes.size,
-        )?.also { bitmap ->
+            withContext(Dispatchers.Main) {
+                callback.onBitmap(bitmap)
+            }
+
             Log.d(
                 TAG,
-                "Bitmap loaded for trackId=$trackId, size=${bitmap.width}x${bitmap.height}",
+                "[getCurrentLargeIcon] " +
+                        "Обложка передана в уведомление, " +
+                        "trackId=$trackId, " +
+                        "size=${bitmap.width}x${bitmap.height}",
             )
         }
+
+        /*
+         * Уведомление создаётся сразу, а обложка
+         * будет передана позже через callback.
+         */
+        return null
+    }
+
+    private companion object {
+        const val TAG = "yPushMediaAdapter"
+
+        const val UNKNOWN_TITLE = "Unknown"
+
+        const val CONTENT_INTENT_REQUEST_CODE = 0
     }
 }

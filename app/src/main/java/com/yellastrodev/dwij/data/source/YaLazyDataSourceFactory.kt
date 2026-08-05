@@ -1,71 +1,147 @@
 package com.yellastrodev.dwij.data.source
 
+import android.annotation.SuppressLint
 import android.content.Context
 import android.net.Uri
-import androidx.annotation.OptIn
+import androidx.core.net.toUri
 import androidx.media3.common.util.UnstableApi
 import androidx.media3.datasource.DataSource
 import androidx.media3.datasource.DataSpec
 import androidx.media3.datasource.DefaultDataSource
 import androidx.media3.datasource.TransferListener
 import com.yellastrodev.dwij.data.repo.TrackCacheRepository
+import com.yellastrodev.dwij.playback.PlaybackUriResolver
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.runBlocking
 import java.io.IOException
-import androidx.core.net.toUri
 
+/**
+ * Media3 DataSource, который перед открытием ресурса
+ * преобразует внутренние URI вида ya://trackId
+ * в реальные локальные или сетевые URI.
+ */
+@SuppressLint("UnsafeOptInUsageError")
 @OptIn(UnstableApi::class)
 class YaLazyDataSourceFactory(
-    private val context: Context,
-    private val trackCacheRepo: TrackCacheRepository
+    context: Context,
+    trackCacheRepository: TrackCacheRepository,
 ) : DataSource.Factory {
 
-    private val defaultFactory = DefaultDataSource.Factory(context)
+    private val defaultFactory =
+        DefaultDataSource.Factory(
+            context.applicationContext,
+        )
 
+    private val uriResolver =
+        PlaybackUriResolver(
+            trackCacheRepository =
+                trackCacheRepository,
+        )
 
     override fun createDataSource(): DataSource {
-        val upstream = defaultFactory.createDataSource()
+        val upstream =
+            defaultFactory.createDataSource()
+
         return object : DataSource {
+
             private var actual: DataSource? = null
-            override fun addTransferListener(transferListener: TransferListener) {
-                upstream.addTransferListener(transferListener)
+
+            override fun addTransferListener(
+                transferListener: TransferListener,
+            ) {
+                upstream.addTransferListener(
+                    transferListener,
+                )
             }
 
-            override fun open(dataSpec: DataSpec): Long {
+            override fun open(
+                dataSpec: DataSpec,
+            ): Long {
                 return try {
-                    val uri = dataSpec.uri
+                    val resolvedUri =
+                        resolveUri(dataSpec.uri)
 
-                    if (uri.scheme == "ya") {
-                        val trackId = uri.authority
-                            ?: throw IOException("Track ID отсутствует в URI: $uri")
-
-                        val realUriString = runBlocking {
-                            trackCacheRepo.getOrDownload(trackId)
+                    val resolvedDataSpec =
+                        if (resolvedUri == dataSpec.uri) {
+                            dataSpec
+                        } else {
+                            dataSpec.withUri(
+                                resolvedUri,
+                            )
                         }
 
-                        val realUri = realUriString.toUri()
-                        val newSpec = dataSpec.withUri(realUri)
+                    actual = upstream
 
-                        actual = upstream
-                        upstream.open(newSpec)
-                    } else {
-                        actual = upstream
-                        upstream.open(dataSpec)
-                    }
-                } catch (e: IOException) {
-                    actual?.close()
-                    actual = null
-                    throw e
+                    upstream.open(
+                        resolvedDataSpec,
+                    )
+                } catch (
+                    error: CancellationException,
+                ) {
+                    closeActual()
+                    throw error
+                } catch (
+                    error: IOException,
+                ) {
+                    closeActual()
+                    throw error
+                } catch (
+                    error: Exception,
+                ) {
+                    closeActual()
+
+                    throw IOException(
+                        "Не удалось разрешить URI: " +
+                                dataSpec.uri,
+                        error,
+                    )
                 }
             }
 
-            override fun read(buffer: ByteArray, offset: Int, readLength: Int): Int {
-                return actual!!.read(buffer, offset, readLength)
+            override fun read(
+                buffer: ByteArray,
+                offset: Int,
+                readLength: Int,
+            ): Int {
+                val currentDataSource =
+                    requireNotNull(actual) {
+                        "DataSource.read() вызван до open()"
+                    }
+
+                return currentDataSource.read(
+                    buffer,
+                    offset,
+                    readLength,
+                )
             }
 
-            override fun getUri(): Uri? = actual?.uri
+            override fun getUri(): Uri? {
+                return actual?.uri
+            }
 
             override fun close() {
-                actual?.close()
+                closeActual()
+            }
+
+            private fun resolveUri(
+                originalUri: Uri,
+            ): Uri {
+                val resolvedUriString =
+                    runBlocking {
+                        uriResolver.resolve(
+                            originalUri.toString(),
+                        )
+                    }
+
+                return resolvedUriString.toUri()
+            }
+
+            private fun closeActual() {
+                runCatching {
+                    actual?.close()
+                }
+
+                actual = null
             }
         }
     }
