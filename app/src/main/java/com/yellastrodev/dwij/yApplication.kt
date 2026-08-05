@@ -36,6 +36,7 @@ import com.yellastrodev.dwij.playback.AndroidPlaybackSettings
 import com.yellastrodev.dwij.playback.AndroidPlayerEngine
 import com.yellastrodev.dwij.playback.PlaybackSettings
 import com.yellastrodev.dwij.playback.PlayerEngine
+import com.yellastrodev.dwij.playback.TrackCoverLoader
 import com.yellastrodev.dwij.playback.feedback.PlaybackFeedbackTracker
 import com.yellastrodev.dwij.service.PlayerService
 import com.yellastrodev.dwij.utils.DwLruCache

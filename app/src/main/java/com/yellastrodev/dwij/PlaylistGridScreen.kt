@@ -1,35 +1,42 @@
 package com.yellastrodev.dwij
 
 import androidx.annotation.DrawableRes
+import androidx.compose.foundation.Image
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.Immutable
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.ImageBitmap
+import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.tooling.preview.Preview
+import com.yellastrodev.dwij.ui.playlist.PlaylistCoverState
+import com.yellastrodev.dwij.ui.playlist.PlaylistGridEntry
+import com.yellastrodev.dwij.ui.playlist.PlaylistGridItem as SharedPlaylistGridItem
+import com.yellastrodev.dwij.ui.playlist.PlaylistGridItemUiModel
 import com.yellastrodev.dwij.ui.playlist.PlaylistGridScreen as SharedPlaylistGridScreen
 
 /**
  * Android-модель плитки.
  *
- * Resource ID остаются в app, поскольку desktop
- * использует другую систему ресурсов.
+ * Общие признаки элемента реализуют PlaylistGridEntry.
+ * Android resource ID остаются только в app.
  */
 @Immutable
 data class PlaylistGridScreenItem(
-    val id: String,
+    override val id: String,
     val title: String,
     val details: String = "",
-    val shouldLoadCover: Boolean = false,
+    override val shouldLoadCover: Boolean = false,
     @DrawableRes
     val fallbackCoverResId: Int? = null,
     @DrawableRes
     val artworkResId: Int? = null,
     val highlighted: Boolean = false,
-    val isCreateAction: Boolean = false,
-)
+    override val isCreateAction: Boolean = false,
+) : PlaylistGridEntry
 
 /**
  * Тонкий Android-адаптер общего экрана.
@@ -74,20 +81,6 @@ fun PlaylistGridScreen(
         onItemClick = onItemClick,
         onItemLongClick =
             onItemLongClick,
-
-        itemId =
-            PlaylistGridScreenItem::id,
-
-        itemIsCreateAction = {
-                item ->
-            item.isCreateAction
-        },
-
-        itemShouldLoadCover = {
-                item ->
-            item.shouldLoadCover
-        },
-
         emptyMessage = emptyMessage,
         loadingMessage = loadingMessage,
 
@@ -113,17 +106,8 @@ fun PlaylistGridScreen(
                 itemModifier,
             ->
 
-            PlaylistGridItem(
-                item = PlaylistGridItemUiModel(
-                    title = item.title,
-                    details = item.details,
-                    fallbackCoverResId =
-                        item.fallbackCoverResId,
-                    artworkResId =
-                        item.artworkResId,
-                    highlighted =
-                        item.highlighted,
-                ),
+            AndroidPlaylistGridItem(
+                item = item,
                 coverState = coverState,
                 onClick = itemOnClick,
                 onLongClick =
@@ -139,6 +123,61 @@ fun PlaylistGridScreen(
         isLoading = isLoading,
         isRefreshing = isRefreshing,
         onRefresh = onRefresh,
+    )
+}
+
+/**
+ * Единственный Android-мост для drawable resource ID.
+ *
+ * Отдельный app/PlaylistGridItem.kt больше не нужен:
+ * этот адаптер используется только данным экраном.
+ */
+@Composable
+private fun AndroidPlaylistGridItem(
+    item: PlaylistGridScreenItem,
+    coverState: PlaylistCoverState,
+    onClick: () -> Unit,
+    onLongClick: (() -> Unit)?,
+    modifier: Modifier = Modifier,
+) {
+    val fallbackContent:
+            (@Composable () -> Unit)? =
+        item.fallbackCoverResId?.let { resourceId ->
+            {
+                Image(
+                    painter = painterResource(resourceId),
+                    contentDescription = null,
+                    contentScale = ContentScale.Crop,
+                    modifier = Modifier.fillMaxSize(),
+                )
+            }
+        }
+
+    val artworkContent:
+            (@Composable () -> Unit)? =
+        item.artworkResId?.let { resourceId ->
+            {
+                Image(
+                    painter = painterResource(resourceId),
+                    contentDescription = null,
+                    contentScale = ContentScale.Fit,
+                    modifier = Modifier.fillMaxSize(),
+                )
+            }
+        }
+
+    SharedPlaylistGridItem(
+        item = PlaylistGridItemUiModel(
+            title = item.title,
+            details = item.details,
+            highlighted = item.highlighted,
+        ),
+        coverState = coverState,
+        onClick = onClick,
+        onLongClick = onLongClick,
+        fallbackContent = fallbackContent,
+        artworkContent = artworkContent,
+        modifier = modifier,
     )
 }
 

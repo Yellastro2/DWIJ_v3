@@ -44,6 +44,14 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.yellastrodev.dwij.HomeMusicSource
+import androidx.compose.runtime.getValue
+
+/** Минимальный общий контракт элемента сетки плейлистов. */
+interface PlaylistGridEntry {
+    val id: String
+    val isCreateAction: Boolean
+    val shouldLoadCover: Boolean
+}
 
 /**
  * Общий экран сетки плейлистов.
@@ -61,7 +69,7 @@ import com.yellastrodev.dwij.HomeMusicSource
  */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun <T> PlaylistGridScreen(
+fun <T : PlaylistGridEntry> PlaylistGridScreen(
     title: String,
     items: List<T>,
     selectedSource: HomeMusicSource,
@@ -69,9 +77,6 @@ fun <T> PlaylistGridScreen(
     onBackClick: () -> Unit,
     onItemClick: (T) -> Unit,
     onItemLongClick: (T) -> Unit,
-    itemId: (T) -> String,
-    itemIsCreateAction: (T) -> Boolean,
-    itemShouldLoadCover: (T) -> Boolean,
     emptyMessage: String,
     loadingMessage: String,
     sourceSelector: @Composable (
@@ -137,7 +142,7 @@ fun <T> PlaylistGridScreen(
                 when {
                     isLoading &&
                             items.none { item ->
-                                !itemIsCreateAction(item)
+                                !item.isCreateAction
                             } -> {
                         PlaylistGridLoadingPlaceholder(
                             loadingMessage = loadingMessage,
@@ -168,13 +173,13 @@ fun <T> PlaylistGridScreen(
                         ) {
                             items(
                                 items = items,
-                                key = itemId,
+                                key = { item -> item.id },
                                 contentType = { item ->
                                     when {
-                                        itemIsCreateAction(item) ->
+                                        item.isCreateAction ->
                                             ITEM_TYPE_CREATE
 
-                                        itemShouldLoadCover(item) ->
+                                        item.shouldLoadCover ->
                                             ITEM_TYPE_REMOTE
 
                                         else ->
@@ -184,11 +189,11 @@ fun <T> PlaylistGridScreen(
                             ) { item ->
                                 SharedLazyPlaylistGridItem(
                                     item = item,
-                                    itemId = itemId(item),
+                                    itemId = item.id,
                                     isCreateAction =
-                                        itemIsCreateAction(item),
+                                        item.isCreateAction,
                                     shouldLoadCover =
-                                        itemShouldLoadCover(item),
+                                        item.shouldLoadCover,
                                     screenCoverStates =
                                         screenCoverStates,
                                     loadCover = loadCover,
