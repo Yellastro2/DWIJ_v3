@@ -1,15 +1,18 @@
 package com.yellastrodev.dwij.data.source
 
+import android.Manifest
 import android.content.ContentResolver
 import android.content.ContentUris
 import android.content.ContentValues
 import android.content.Context
+import android.content.pm.PackageManager
 import android.media.MediaScannerConnection
 import android.net.Uri
 import android.os.Build
 import android.os.Environment
 import android.provider.MediaStore
 import android.util.Log
+import androidx.core.content.ContextCompat
 import com.yellastrodev.dwij.data.entities.LocalPlaylistEntity
 import com.yellastrodev.dwij.data.entities.LocalPlaylistEntryEntity
 import com.yellastrodev.dwij.data.entities.LocalPlaylistOrigin
@@ -21,23 +24,34 @@ import java.security.MessageDigest
 import java.util.concurrent.atomic.AtomicInteger
 import kotlin.coroutines.resume
 
-data class LocalMediaSnapshot(
-    val tracks: List<LocalTrackEntity>,
-    val playlists: List<LocalPlaylistEntity>,
-    val entries: List<LocalPlaylistEntryEntity>,
-    val generation: String,
-)
+/** Разрешение Android, необходимое для чтения аудио на текущей версии ОС. */
+fun requiredAudioPermission(): String = if (Build.VERSION.SDK_INT >= 33) {
+    Manifest.permission.READ_MEDIA_AUDIO
+} else {
+    Manifest.permission.READ_EXTERNAL_STORAGE
+}
 
-data class M3uExportResult(
-    val uri: String,
-    val hash: String,
-)
+/** Набор разрешений Android для чтения и, на старых версиях, записи локальной медиатеки. */
+fun requiredLocalMediaPermissions(): Array<String> = if (Build.VERSION.SDK_INT <= 28) {
+    arrayOf(
+        Manifest.permission.READ_EXTERNAL_STORAGE,
+        Manifest.permission.WRITE_EXTERNAL_STORAGE,
+    )
+} else {
+    arrayOf(requiredAudioPermission())
+}
+
+/** Проверяет доступ приложения к локальным аудиофайлам. */
+fun hasAudioPermission(context: Context): Boolean = ContextCompat.checkSelfPermission(
+    context,
+    requiredAudioPermission(),
+) == PackageManager.PERMISSION_GRANTED
 
 /** Выполняет все медленные обращения к MediaStore и публичным M3U-файлам. */
-class MediaStoreLocalSource(private val context: Context) {
+class MediaStoreLocalSource(private val context: Context): LocalMediaSource {
     private val resolver: ContentResolver = context.contentResolver
 
-    fun scan(): LocalMediaSnapshot {
+    override fun scan(): LocalMediaSnapshot {
         val volumes = externalVolumeNames()
         val tracks = volumes.flatMap(::scanTracks).distinctBy(LocalTrackEntity::instanceId)
         val mediaStorePlaylists = scanLegacyPlaylists(tracks)
@@ -52,13 +66,13 @@ class MediaStoreLocalSource(private val context: Context) {
         )
     }
 
-    fun currentGeneration(): String = generationSignature(externalVolumeNames())
+    override fun currentGeneration(): String = generationSignature(externalVolumeNames())
 
     /**
      * Дешёво сверяет сохранённые MediaStore-атрибуты с файловой системой, не читая аудиотеги.
      * Это обнаруживает редакторы, которые меняют файл, но не уведомляют MediaStore.
      */
-    fun findChangedBackingFiles(tracks: List<LocalTrackEntity>): List<LocalTrackEntity> =
+    override fun findChangedBackingFiles(tracks: List<LocalTrackEntity>): List<LocalTrackEntity> =
         tracks.filter { track ->
             val path = track.absolutePath ?: return@filter false
             val file = File(path)
@@ -73,7 +87,7 @@ class MediaStoreLocalSource(private val context: Context) {
      * Просит системный MediaScanner перечитать только изменившиеся файлы и ждёт все callback-и.
      * Таймаут не блокирует последующую обычную синхронизацию MediaStore.
      */
-    suspend fun rescanTracks(tracks: List<LocalTrackEntity>): Boolean {
+    override suspend fun rescanTracks(tracks: List<LocalTrackEntity>): Boolean {
         val paths = tracks.mapNotNull(LocalTrackEntity::absolutePath).distinct()
         if (paths.isEmpty()) return true
         val failedScans = AtomicInteger(0)
@@ -359,7 +373,7 @@ class MediaStoreLocalSource(private val context: Context) {
         return playlists to entries
     }
 
-    fun exportM3u(
+    override fun exportM3u(
         name: String,
         tracks: List<LocalTrackEntity>,
         existingUri: String?,

@@ -29,7 +29,8 @@ import com.yellastrodev.dwij.HomeMusicSource
 import com.yellastrodev.dwij.HomeScreen
 import com.yellastrodev.dwij.MusicSourceSelectionStore
 import com.yellastrodev.dwij.R
-import com.yellastrodev.dwij.data.repo.LocalMusicRepository
+import com.yellastrodev.dwij.data.source.requiredAudioPermission
+import com.yellastrodev.dwij.data.source.requiredLocalMediaPermissions
 import com.yellastrodev.dwij.models.PlayerModel
 import com.yellastrodev.dwij.models.SearchModel
 import com.yellastrodev.dwij.models.SearchResultItemUiModel
@@ -79,7 +80,7 @@ fun HomeRoute(
         ActivityResultContracts.RequestMultiplePermissions(),
     ) { permissions ->
         permissionRequestInFlight = false
-        val granted = LocalMusicRepository.requiredPermissions().all { permission ->
+        val granted = requiredLocalMediaPermissions().all { permission ->
             permissions[permission] == true || ContextCompat.checkSelfPermission(
                 context,
                 permission,
@@ -100,7 +101,7 @@ fun HomeRoute(
             restored == HomeMusicSource.Local &&
             ContextCompat.checkSelfPermission(
                 context,
-                LocalMusicRepository.requiredAudioPermission(),
+                requiredAudioPermission(),
             ) != PackageManager.PERMISSION_GRANTED
         ) {
             MusicSourceSelectionStore.select(context, HomeMusicSource.Yandex)
@@ -126,7 +127,7 @@ fun HomeRoute(
             MusicSourceSelectionStore.select(context, source)
             return
         }
-        val permissions = LocalMusicRepository.requiredPermissions()
+        val permissions = requiredLocalMediaPermissions()
         if (permissions.all { permission ->
                 ContextCompat.checkSelfPermission(context, permission) ==
                     PackageManager.PERMISSION_GRANTED
@@ -191,7 +192,7 @@ fun HomeRoute(
                         .asImageBitmap()
                     is SearchTrackSource.Local -> source.song.localInstances.firstOrNull()
                         ?.track
-                        ?.let { track -> application.localMusicRepository.cover(track).first() }
+                        ?.let { track -> application.coverRepository.getCoverFlow(track).first() }
                         ?.asImageBitmap()
                 }
             }

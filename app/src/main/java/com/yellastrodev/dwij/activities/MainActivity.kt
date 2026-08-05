@@ -18,7 +18,6 @@ class MainActivity : ComponentActivity() {
             playerRepo = application.playerRepo,
             coverRepo = application.coverRepository,
             playlistRepo = application.playlistRepository,
-            localMusicRepo = application.localMusicRepository,
         )
     }
 

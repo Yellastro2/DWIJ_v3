@@ -75,7 +75,7 @@ fun LocalLibraryRoute(
         val track = requireNotNull(song.localInstances.firstOrNull()?.track) {
             "У песни ${song.id} отсутствует локальный экземпляр"
         }
-        val source = repository.cover(track).first()
+        val source = application.coverRepository.getCoverFlow(track).first()
         val largestSide = maxOf(source.width, source.height)
         val displayBitmap = if (largestSide > TRACK_COVER_SIZE_PX) {
             val scale = TRACK_COVER_SIZE_PX.toFloat() / largestSide

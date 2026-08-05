@@ -17,7 +17,6 @@ import com.yellastrodev.dwij.data.repo.PlayerRepository
 import com.yellastrodev.dwij.data.entities.MusicSource
 import com.yellastrodev.dwij.data.entities.Song
 import com.yellastrodev.dwij.data.entities.TrackInstance
-import com.yellastrodev.dwij.data.repo.LocalMusicRepository
 import com.yellastrodev.dwij.data.repo.PlaylistRepository
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.Flow
@@ -27,7 +26,6 @@ class PlayerModel(
     private val playerRepo: PlayerRepository,
     val coverRepo: CoverRepository,
     val playlistRepo: PlaylistRepository,
-    private val localMusicRepo: LocalMusicRepository,
 )  : ViewModel() {
 
     /**
@@ -37,7 +35,6 @@ class PlayerModel(
         private val playerRepo: PlayerRepository,
         val coverRepo: CoverRepository,
         val playlistRepo: PlaylistRepository,
-        private val localMusicRepo: LocalMusicRepository,
     ) : ViewModelProvider.Factory
     {
         @Suppress("UNCHECKED_CAST")
@@ -48,7 +45,6 @@ class PlayerModel(
                     playerRepo,
                     coverRepo,
                     playlistRepo,
-                    localMusicRepo,
                 ) as T
             }
             throw IllegalArgumentException("Unknown ViewModel class")
@@ -69,14 +65,14 @@ class PlayerModel(
                 requireNotNull(playback.yandexTrack),
                 com.yellastrodev.yandexmusiclib.entities.CoverSize.`400x400`,
             )
-            MusicSource.LOCAL -> localMusicRepo.cover(requireNotNull(playback.localTrack))
+            MusicSource.LOCAL -> coverRepo.getCoverFlow(requireNotNull(playback.localTrack))
             null -> song.yandexInstances.firstOrNull()?.let { instance ->
                 coverRepo.getCoverFlow(
                     instance.track,
                     com.yellastrodev.yandexmusiclib.entities.CoverSize.`400x400`,
                 )
             } ?: song.localInstances.firstOrNull()?.let { instance ->
-                localMusicRepo.cover(instance.track)
+                coverRepo.getCoverFlow(instance.track)
             } ?: kotlinx.coroutines.flow.emptyFlow()
         }
     }
@@ -87,7 +83,7 @@ class PlayerModel(
             instance.track,
             com.yellastrodev.yandexmusiclib.entities.CoverSize.`400x400`,
         )
-        is TrackInstance.Local -> localMusicRepo.cover(instance.track)
+        is TrackInstance.Local -> coverRepo.getCoverFlow(instance.track)
     }
 
     /** Обновляет Song-снимки текущей очереди после Room-объединения источников. */

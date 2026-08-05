@@ -131,7 +131,7 @@ fun SongMatchCandidatesRoute(
         }
         val source = song.localInstances.firstOrNull()
             ?.let { instance ->
-                application.localMusicRepository.cover(instance.track).firstOrNull()
+                application.coverRepository.getCoverFlow(instance.track).firstOrNull()
             }
             ?: return@withContext null
         val largestSide = maxOf(source.width, source.height)

@@ -1,21 +1,8 @@
 package com.yellastrodev.dwij.data.repo
 
-import android.Manifest
-import android.content.Context
-import android.content.pm.PackageManager
-import android.graphics.Bitmap
-import android.graphics.BitmapFactory
-import android.media.MediaMetadataRetriever
-import android.net.Uri
-import android.os.Build
-import android.os.Process
-import android.util.Log
-import android.util.LruCache
-import androidx.core.content.ContextCompat
 import androidx.room.RoomDatabase
-import androidx.room.withTransaction
-import com.yellastrodev.dwij.CacheManager
-import com.yellastrodev.dwij.R
+import androidx.room.immediateTransaction
+import androidx.room.useWriterConnection
 import com.yellastrodev.dwij.data.DataError
 import com.yellastrodev.dwij.data.DataResult
 import com.yellastrodev.dwij.data.dao.LocalLibraryDao
@@ -26,26 +13,19 @@ import com.yellastrodev.dwij.data.entities.LocalPlaylistSummary
 import com.yellastrodev.dwij.data.entities.LocalTrackEntity
 import com.yellastrodev.dwij.data.entities.LocalTracklist
 import com.yellastrodev.dwij.data.entities.Song
-import com.yellastrodev.dwij.data.source.MediaStoreLocalSource
+import com.yellastrodev.dwij.data.source.LocalMediaSource
+import com.yellastrodev.yandexmusiclib.YamLogger
 import kotlinx.coroutines.CancellationException
-import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.asCoroutineDispatcher
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
-import kotlinx.coroutines.flow.flow
-import kotlinx.coroutines.flow.flowOn
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
-import java.io.File
-import java.io.FileOutputStream
-import java.security.MessageDigest
 import java.util.UUID
-import java.util.concurrent.ConcurrentHashMap
 import java.util.concurrent.Executors
-import java.util.concurrent.atomic.AtomicInteger
 
 data class LocalSyncSummary(
     val tracks: Int,
@@ -55,29 +35,17 @@ data class LocalSyncSummary(
 
 /** Room-backed локальная медиатека; MediaStore используется только для синхронизации. */
 class LocalMusicRepository(
-    private val context: Context,
     private val dao: LocalLibraryDao,
-    private val mediaStore: MediaStoreLocalSource,
+    private val mediaStore: LocalMediaSource,
     private val songRepository: SongRepository,
-    private val cacheManager: CacheManager,
     private val database: RoomDatabase,
+    private val canReadAudio: () -> Boolean,
+    private val logger: YamLogger,
 ) {
     private val syncMutex = Mutex()
     private val _isSynchronizing = MutableStateFlow(false)
     /** Истина только во время фактического чтения MediaStore и применения снимка. */
     val isSynchronizing: StateFlow<Boolean> = _isSynchronizing
-    private val coverCacheDirectory = File(context.cacheDir, LOCAL_COVER_CACHE_DIR).apply {
-        if (!exists()) mkdirs()
-    }
-    private val coverMemoryCache = object : LruCache<String, Bitmap>(COVER_MEMORY_CACHE_BYTES) {
-        override fun sizeOf(key: String, value: Bitmap): Int = value.allocationByteCount
-    }
-    private val coverLocks = ConcurrentHashMap<String, Mutex>()
-    private val coverWrites = AtomicInteger()
-
-    init {
-        cacheManager.registerDir(coverCacheDirectory)
-    }
 
     val tracks: Flow<List<LocalTrackEntity>> = dao.observeAllTracks()
     /** Скрытые записи не теряются из индекса и доступны будущему экрану управления. */
@@ -104,10 +72,7 @@ class LocalMusicRepository(
             songRepository.songsForLocalTracks(sourceTracks)
         }
 
-    fun hasAudioPermission(): Boolean = ContextCompat.checkSelfPermission(
-        context,
-        requiredAudioPermission(),
-    ) == PackageManager.PERMISSION_GRANTED
+    fun hasAudioPermission(): Boolean = canReadAudio()
 
     /** Скрывает или возвращает локальный трек только в каталоге Движа, не меняя файл устройства. */
     suspend fun setTrackHidden(instanceId: String, isHidden: Boolean): DataResult<Unit> =
@@ -123,24 +88,26 @@ class LocalMusicRepository(
             return DataResult.Failure(DataError.InvalidData("Не переданы локальные треки"))
         }
         return try {
-            database.withTransaction {
-                val existingIds = dao.getTracks(distinctIds)
-                    .mapTo(mutableSetOf(), LocalTrackEntity::instanceId)
-                val missingIds = distinctIds.filterNot(existingIds::contains)
-                if (missingIds.isNotEmpty()) {
-                    return@withTransaction DataResult.Failure(
-                        DataError.NotFound("Локальный трек", missingIds.first()),
+            database.useWriterConnection { connection ->
+                connection.immediateTransaction transaction@{
+                    val existingIds = dao.getTracks(distinctIds)
+                        .mapTo(mutableSetOf(), LocalTrackEntity::instanceId)
+                    val missingIds = distinctIds.filterNot(existingIds::contains)
+                    if (missingIds.isNotEmpty()) {
+                        return@transaction DataResult.Failure(
+                            DataError.NotFound("Локальный трек", missingIds.first()),
+                        )
+                    }
+                    dao.setTracksHidden(distinctIds, isHidden)
+                    logger.debug(
+                        TAG,
+                        "[setTracksHidden] tracks=${distinctIds.size}, hidden=$isHidden",
                     )
+                    DataResult.Success(Unit)
                 }
-                dao.setTracksHidden(distinctIds, isHidden)
-                Log.d(
-                    TAG,
-                    "[setTracksHidden] tracks=${distinctIds.size}, hidden=$isHidden",
-                )
-                DataResult.Success(Unit)
             }
         } catch (error: Exception) {
-            Log.e(TAG, "[setTracksHidden] Не удалось изменить видимость локальных треков", error)
+            logger.error(TAG, "[setTracksHidden] Не удалось изменить видимость локальных треков", error)
             DataResult.Failure(DataError.Storage(error))
         }
     }
@@ -162,7 +129,7 @@ class LocalMusicRepository(
             val storedTrackList = dao.getAllTracks()
             val changedBackingFiles = mediaStore.findChangedBackingFiles(storedTrackList)
             if (changedBackingFiles.isNotEmpty()) {
-                Log.d(
+                logger.debug(
                     TAG,
                     "[synchronize] Вне MediaStore изменено файлов=${changedBackingFiles.size}",
                 )
@@ -174,7 +141,7 @@ class LocalMusicRepository(
                 currentGeneration == savedGeneration &&
                 !currentGeneration.contains(":-1")
             ) {
-                Log.d(TAG, "[synchronize] MediaStore и файлы не изменились, сканирование пропущено")
+                logger.debug(TAG, "[synchronize] MediaStore и файлы не изменились, сканирование пропущено")
                 return DataResult.Success(LocalSyncSummary(0, 0, skipped = true))
             }
             val snapshot = mediaStore.scan()
@@ -201,26 +168,28 @@ class LocalMusicRepository(
             val tracksByPath = scannedTracks.values
                 .mapNotNull { track -> track.absolutePath?.let { it.normalizedPath() to track } }
                 .toMap()
-            database.withTransaction {
-                dao.applyMediaSnapshotDiff(
-                    tracksToUpsert = changedTracks,
-                    trackIdsToDelete = removedTrackIds,
-                    playlists = importedPlaylists,
-                    entries = snapshot.entries.filter { it.playlistId in importedIds },
-                    generation = snapshot.generation,
-                )
-                songRepository.registerLocalTracks(changedTracks)
-                songRepository.removeLocalTracks(removedTrackIds)
-                val resolvedDwijEntries = dao.getUnresolvedDwijEntries().mapNotNull { entry ->
-                    val reference = entry.rawReference ?: return@mapNotNull null
-                    val track = tracksByUri[reference] ?: tracksByPath[reference.normalizedPath()]
-                    track?.let { entry.copy(localTrackId = it.instanceId) }
-                }
-                if (resolvedDwijEntries.isNotEmpty()) {
-                    dao.upsertPlaylistEntries(resolvedDwijEntries)
+            database.useWriterConnection { connection ->
+                connection.immediateTransaction {
+                    dao.applyMediaSnapshotDiff(
+                        tracksToUpsert = changedTracks,
+                        trackIdsToDelete = removedTrackIds,
+                        playlists = importedPlaylists,
+                        entries = snapshot.entries.filter { it.playlistId in importedIds },
+                        generation = snapshot.generation,
+                    )
+                    songRepository.registerLocalTracks(changedTracks)
+                    songRepository.removeLocalTracks(removedTrackIds)
+                    val resolvedDwijEntries = dao.getUnresolvedDwijEntries().mapNotNull { entry ->
+                        val reference = entry.rawReference ?: return@mapNotNull null
+                        val track = tracksByUri[reference] ?: tracksByPath[reference.normalizedPath()]
+                        track?.let { entry.copy(localTrackId = it.instanceId) }
+                    }
+                    if (resolvedDwijEntries.isNotEmpty()) {
+                        dao.upsertPlaylistEntries(resolvedDwijEntries)
+                    }
                 }
             }
-            Log.d(
+            logger.debug(
                 TAG,
                 "[synchronize] Всего tracks=${snapshot.tracks.size}, " +
                     "изменено=${changedTracks.size}, удалено=${removedTrackIds.size}, " +
@@ -234,12 +203,12 @@ class LocalMusicRepository(
                 )
             )
         } catch (error: SecurityException) {
-            Log.w(TAG, "[synchronize] Нет доступа к MediaStore", error)
+            logger.warning(TAG, "[synchronize] Нет доступа к MediaStore: ${error.message}")
             DataResult.Failure(DataError.Unauthorized)
         } catch (error: CancellationException) {
             throw error
         } catch (error: Exception) {
-            Log.e(TAG, "[synchronize] Сканирование MediaStore завершилось ошибкой", error)
+            logger.error(TAG, "[synchronize] Сканирование MediaStore завершилось ошибкой", error)
             DataResult.Failure(DataError.Storage(error))
         } finally {
             _isSynchronizing.value = false
@@ -278,148 +247,28 @@ class LocalMusicRepository(
                 )
             },
         )
-        Log.d(TAG, "[saveDwijPlaylist] Сохранён '${playlist.name}', tracks=${trackIds.size}")
+        logger.debug(TAG, "[saveDwijPlaylist] Сохранён '${playlist.name}', tracks=${trackIds.size}")
         DataResult.Success(playlist)
     } catch (error: Exception) {
-        Log.e(TAG, "[saveDwijPlaylist] Не удалось сохранить плейлист", error)
+        logger.error(TAG, "[saveDwijPlaylist] Не удалось сохранить плейлист", error)
         DataResult.Failure(DataError.Storage(error))
-    }
-
-    /** Возвращает миниатюру из LRU/диска либо один раз извлекает её из локального файла. */
-    fun cover(track: LocalTrackEntity): Flow<Bitmap> = flow {
-        val key = coverKey(track)
-        coverMemoryCache.get(key)?.let { cached ->
-            emit(cached)
-            return@flow
-        }
-
-        val lock = coverLocks.getOrPut(key, ::Mutex)
-        val bitmap = lock.withLock {
-            coverMemoryCache.get(key) ?: readDiskCover(key) ?: loadCover(track).also { loaded ->
-                coverMemoryCache.put(key, loaded)
-                writeDiskCover(key, loaded)
-            }
-        }
-        coverLocks.remove(key, lock)
-        emit(bitmap)
-    }.flowOn(Dispatchers.IO)
-
-    private fun loadCover(track: LocalTrackEntity): Bitmap {
-        val original = track.albumId?.let { albumId ->
-            runCatching {
-                context.contentResolver.openInputStream(
-                    Uri.parse("content://media/external/audio/albumart/$albumId")
-                )?.use(BitmapFactory::decodeStream)
-            }.getOrNull()
-        } ?: embeddedCover(track)
-            ?: BitmapFactory.decodeResource(context.resources, R.drawable.ic_player_play_v2)
-        return original.downscaled(COVER_MAX_EDGE_PX)
-    }
-
-    private fun readDiskCover(key: String): Bitmap? {
-        val file = File(coverCacheDirectory, "$key.jpg")
-        if (!file.isFile) return null
-        return BitmapFactory.decodeFile(file.absolutePath)?.also { bitmap ->
-            file.setLastModified(System.currentTimeMillis())
-            coverMemoryCache.put(key, bitmap)
-        } ?: run {
-            file.delete()
-            null
-        }
-    }
-
-    private suspend fun writeDiskCover(key: String, bitmap: Bitmap) {
-        val target = File(coverCacheDirectory, "$key.jpg")
-        if (target.isFile) return
-        val temporary = File.createTempFile("local-cover-", ".tmp", coverCacheDirectory)
-        try {
-            FileOutputStream(temporary).use { output ->
-                bitmap.compress(Bitmap.CompressFormat.JPEG, COVER_JPEG_QUALITY, output)
-            }
-            if (!temporary.renameTo(target)) {
-                temporary.copyTo(target, overwrite = true)
-                temporary.delete()
-            }
-            if (coverWrites.incrementAndGet() % CACHE_LIMIT_CHECK_INTERVAL == 0) {
-                cacheManager.ensureWithinLimit()
-            }
-        } finally {
-            if (temporary.exists()) temporary.delete()
-        }
-    }
-
-    private fun coverKey(track: LocalTrackEntity): String {
-        val raw = "${track.instanceId}|${track.dateModifiedSeconds}|${track.sizeBytes ?: -1L}"
-        return MessageDigest.getInstance("SHA-256")
-            .digest(raw.toByteArray(Charsets.UTF_8))
-            .joinToString("") { byte -> "%02x".format(byte) }
-    }
-
-    private fun Bitmap.downscaled(maxEdge: Int): Bitmap {
-        val largestEdge = maxOf(width, height)
-        if (largestEdge <= maxEdge || largestEdge <= 0) return this
-        val scale = maxEdge.toFloat() / largestEdge
-        return Bitmap.createScaledBitmap(
-            this,
-            (width * scale).toInt().coerceAtLeast(1),
-            (height * scale).toInt().coerceAtLeast(1),
-            true,
-        ).also { scaled ->
-            if (scaled !== this) recycle()
-        }
-    }
-
-    private fun embeddedCover(track: LocalTrackEntity): Bitmap? {
-        val retriever = MediaMetadataRetriever()
-        return try {
-            retriever.setDataSource(context, Uri.parse(track.contentUri))
-            retriever.embeddedPicture?.let { BitmapFactory.decodeByteArray(it, 0, it.size) }
-        } catch (error: Exception) {
-            Log.d(TAG, "[embeddedCover] Встроенная обложка недоступна: ${track.instanceId}")
-            null
-        } finally {
-            runCatching { retriever.release() }
-        }
     }
 
     private fun String.normalizedPath(): String = replace('\\', '/').trim().lowercase()
 
     companion object {
         private const val TAG = "LocalMusicRepository"
-        private const val LOCAL_COVER_CACHE_DIR = "local_cover_cache"
-        private const val COVER_MEMORY_CACHE_BYTES = 16 * 1024 * 1024
-        private const val COVER_MAX_EDGE_PX = 400
-        private const val COVER_JPEG_QUALITY = 88
-        private const val CACHE_LIMIT_CHECK_INTERVAL = 16
 
-        /** Один медленный worker на всё приложение; его Linux- и Java-приоритеты минимальны. */
+        /** Один медленный worker на всё приложение с минимальным Java-приоритетом. */
         private val LOCAL_LIBRARY_SYNC_DISPATCHER = Executors.newSingleThreadExecutor { command ->
             Thread(
-                {
-                    runCatching { Process.setThreadPriority(Process.THREAD_PRIORITY_LOWEST) }
-                    command.run()
-                },
+                command,
                 "dwij-local-library-sync",
             ).apply {
                 isDaemon = true
                 priority = Thread.MIN_PRIORITY
             }
         }.asCoroutineDispatcher()
-
-        fun requiredAudioPermission(): String = if (Build.VERSION.SDK_INT >= 33) {
-            Manifest.permission.READ_MEDIA_AUDIO
-        } else {
-            Manifest.permission.READ_EXTERNAL_STORAGE
-        }
-
-        fun requiredPermissions(): Array<String> = if (Build.VERSION.SDK_INT <= 28) {
-            arrayOf(
-                Manifest.permission.READ_EXTERNAL_STORAGE,
-                Manifest.permission.WRITE_EXTERNAL_STORAGE,
-            )
-        } else {
-            arrayOf(requiredAudioPermission())
-        }
 
         fun tracklist(id: String, name: String): LocalTracklist = LocalTracklist(id, name)
     }

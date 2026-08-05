@@ -4,7 +4,6 @@ import android.app.Application
 import android.content.Context
 import android.preference.PreferenceManager
 import android.util.Log
-import android.util.LruCache
 import androidx.media3.common.util.UnstableApi
 import androidx.room.Room
 import com.yellastrodev.dwij.data.repo.CoverRepository
@@ -26,6 +25,7 @@ import com.yellastrodev.dwij.data.repo.SongRepository
 import com.yellastrodev.dwij.data.repo.SongMatchRepository
 import com.yellastrodev.dwij.data.source.LocalLibraryMonitor
 import com.yellastrodev.dwij.data.source.MediaStoreLocalSource
+import com.yellastrodev.dwij.data.source.hasAudioPermission
 import com.yellastrodev.dwij.data.source.WaveRemoteSource
 import com.yellastrodev.dwij.data.source.SearchRemoteSource
 import com.yellastrodev.dwij.data.repo.SearchRepository
@@ -142,7 +142,7 @@ class yApplication: Application() {
     val cacheManager: CacheManager by lazy{
         CacheManager(
             trackDir = File(cacheDir, DIR_TRACK_CACHE),
-            coverDir = File(cacheDir, DIR_TRACK_CACHE),
+            coverDir = File(cacheDir, DIR_COVER_CACHE),
             {
                 PreferenceManager.getDefaultSharedPreferences(this)
                     .getLong(CACHE_SIZE, DEFAULT_CACHE_SIZE)},
@@ -214,12 +214,12 @@ class yApplication: Application() {
 
     val localMusicRepository: LocalMusicRepository by lazy {
         LocalMusicRepository(
-            context = applicationContext,
             dao = db.localLibraryDao(),
             mediaStore = mediaStoreLocalSource,
             songRepository = songRepository,
-            cacheManager = cacheManager,
             database = db,
+            canReadAudio = { hasAudioPermission(applicationContext) },
+            logger = logger,
         )
     }
 

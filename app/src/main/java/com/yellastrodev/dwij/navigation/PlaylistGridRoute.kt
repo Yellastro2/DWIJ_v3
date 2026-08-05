@@ -43,7 +43,8 @@ import com.yellastrodev.dwij.data.entities.LocalPlaylistSummary
 import com.yellastrodev.dwij.data.entities.dYaLikeTracklist.Companion.KIND_LIKED
 import com.yellastrodev.dwij.data.entities.dYaPlaylist
 import com.yellastrodev.dwij.data.entities.dYaTrack
-import com.yellastrodev.dwij.data.repo.LocalMusicRepository
+import com.yellastrodev.dwij.data.source.requiredAudioPermission
+import com.yellastrodev.dwij.data.source.requiredLocalMediaPermissions
 import com.yellastrodev.dwij.models.GridPlaylistModel
 import com.yellastrodev.dwij.utils.DurationFormat.Companion.formatDuration
 import com.yellastrodev.dwij.utils.LangFormats.Companion.getNumericPostfix
@@ -106,7 +107,7 @@ fun PlaylistGridRoute(
         ActivityResultContracts.RequestMultiplePermissions(),
     ) { permissions ->
         permissionRequestInFlight = false
-        val granted = LocalMusicRepository.requiredPermissions().all { permission ->
+        val granted = requiredLocalMediaPermissions().all { permission ->
             permissions[permission] == true || ContextCompat.checkSelfPermission(
                 context,
                 permission,
@@ -127,7 +128,7 @@ fun PlaylistGridRoute(
             MusicSourceSelectionStore.select(context, source)
             return
         }
-        val permissions = LocalMusicRepository.requiredPermissions()
+        val permissions = requiredLocalMediaPermissions()
         if (permissions.all { permission ->
                 ContextCompat.checkSelfPermission(context, permission) ==
                     PackageManager.PERMISSION_GRANTED
@@ -148,7 +149,7 @@ fun PlaylistGridRoute(
             restored == HomeMusicSource.Local &&
             ContextCompat.checkSelfPermission(
                 context,
-                LocalMusicRepository.requiredAudioPermission(),
+                requiredAudioPermission(),
             ) != PackageManager.PERMISSION_GRANTED
         ) {
             MusicSourceSelectionStore.select(context, HomeMusicSource.Yandex)
