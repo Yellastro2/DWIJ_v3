@@ -360,7 +360,12 @@ class MediaStoreLocalSource(private val context: Context): LocalMediaSource {
                             entries += LocalPlaylistEntryEntity(
                                 playlistId = playlistId,
                                 position = position,
-                                localTrackId = resolveTrack(reference, absolutePath, tracks)?.instanceId,
+                                localTrackId =
+                                    M3uTrackMatcher.resolve(
+                                        reference = reference,
+                                        playlistAbsolutePath = absolutePath,
+                                        tracks = tracks,
+                                    )?.instanceId,
                                 rawReference = reference,
                             )
                         }
@@ -434,27 +439,6 @@ class MediaStoreLocalSource(private val context: Context): LocalMediaSource {
             append(':')
             append(generation)
         }
-    }
-
-    private fun resolveTrack(
-        reference: String,
-        playlistAbsolutePath: String?,
-        tracks: List<LocalTrackEntity>,
-    ): LocalTrackEntity? {
-        tracks.firstOrNull { it.contentUri == reference }?.let { return it }
-        val normalized = normalizePath(reference)
-        tracks.firstOrNull { normalizePath(it.absolutePath) == normalized }?.let { return it }
-        if (playlistAbsolutePath != null && !File(reference).isAbsolute) {
-            val resolved = runCatching {
-                File(File(playlistAbsolutePath).parentFile, reference).canonicalPath
-            }.getOrNull()
-            tracks.firstOrNull { normalizePath(it.absolutePath) == normalizePath(resolved) }
-                ?.let { return it }
-        }
-        val filenameMatches = tracks.filter {
-            it.displayName.equals(File(reference).name, ignoreCase = true)
-        }
-        return filenameMatches.singleOrNull()
     }
 
     private fun normalizePath(value: String?): String? = value
