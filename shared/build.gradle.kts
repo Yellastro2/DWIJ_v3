@@ -42,6 +42,7 @@ kotlin {
 
             dependencies {
                 implementation(libs.androidx.lifecycle.viewmodel)
+                implementation(libs.androidx.lifecycle.viewmodel.compose)
                 implementation(libs.androidx.room.runtime)
                 implementation(libs.androidx.sqlite.bundled)
                 implementation(project(":yandexmusiclib"))
