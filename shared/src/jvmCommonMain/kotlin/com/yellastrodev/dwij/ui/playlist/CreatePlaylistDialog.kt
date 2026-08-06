@@ -1,4 +1,4 @@
-package com.yellastrodev.dwij
+package com.yellastrodev.dwij.ui.playlist
 
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
@@ -34,18 +34,20 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.layout.ContentScale
-import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.style.TextAlign
-import androidx.compose.ui.tooling.preview.Preview
+import org.jetbrains.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
+import com.yellastrodev.dwij.HomeMusicSource
 import com.yellastrodev.dwij.resources.*
+import com.yellastrodev.dwij.ui.theme.DwijColors
 import org.jetbrains.compose.resources.painterResource
+import org.jetbrains.compose.resources.stringResource
 
 /**
  * Неоновый диалог создания плейлиста для выбранного музыкального источника.
@@ -81,10 +83,10 @@ fun CreatePlaylistDialog(
                 .widthIn(max = 360.dp)
                 .height(dialogHeight)
                 .clip(RoundedCornerShape(20.dp))
-                .background(CreateDialogBackground)
+                .background(DwijColors.CreateDialogBackground)
                 .border(
                     width = 1.dp,
-                    color = CreateDialogPink.copy(alpha = 0.8f),
+                    color = DwijColors.Pink.copy(alpha = 0.8f),
                     shape = RoundedCornerShape(20.dp),
                 ),
         ) {
@@ -98,24 +100,24 @@ fun CreatePlaylistDialog(
             Column(
                 modifier = Modifier
                     .fillMaxSize()
-                    .background(Color.Black.copy(alpha = 0.38f))
+                    .background(DwijColors.Black.copy(alpha = 0.38f))
                     .padding(horizontal = 20.dp, vertical = 18.dp),
             ) {
                 Text(
-                    text = stringResource(R.string.playlists_create_dialog_title),
-                    color = Color.White,
+                    text = stringResource(Res.string.playlists_create_dialog_title),
+                    color = DwijColors.White,
                     fontSize = 23.sp,
                     fontWeight = FontWeight.Bold,
                 )
                 Text(
                     text = stringResource(
                         if (source == HomeMusicSource.Yandex) {
-                            R.string.home_source_yandex_music
+                            Res.string.home_source_yandex_music
                         } else {
-                            R.string.home_source_local
+                            Res.string.home_source_local
                         },
                     ),
-                    color = CreateDialogCyan,
+                    color = DwijColors.CyanBright,
                     fontSize = 12.sp,
                     letterSpacing = 1.1.sp,
                     modifier = Modifier.padding(top = 2.dp),
@@ -144,15 +146,15 @@ fun CreatePlaylistDialog(
                     modifier = Modifier.fillMaxWidth(),
                 ) {
                     CreatePlaylistDialogButton(
-                        text = stringResource(R.string.playlists_cancel),
-                        accent = CreateDialogCyan,
+                        text = stringResource(Res.string.playlists_cancel),
+                        accent = DwijColors.CyanBright,
                         enabled = !isCreating,
                         onClick = onDismiss,
                     )
                     Spacer(modifier = Modifier.width(12.dp))
                     CreatePlaylistDialogButton(
-                        text = stringResource(R.string.playlists_create_confirm),
-                        accent = CreateDialogPink,
+                        text = stringResource(Res.string.playlists_create_confirm),
+                        accent = DwijColors.Pink,
                         enabled = canCreate,
                         isLoading = isCreating,
                         onClick = { onCreate(normalizedTitle, isPublic) },
@@ -172,8 +174,8 @@ private fun CreatePlaylistNameField(
 ) {
     Column {
         Text(
-            text = stringResource(R.string.playlists_create_name_label),
-            color = Color(0xFFD7DAE7),
+            text = stringResource(Res.string.playlists_create_name_label),
+            color = DwijColors.CreateDialogLabel,
             fontSize = 12.sp,
         )
         Box(
@@ -183,18 +185,22 @@ private fun CreatePlaylistNameField(
                 .padding(top = 6.dp)
                 .height(52.dp)
                 .clip(RoundedCornerShape(10.dp))
-                .background(Color(0xD9070A14))
+                .background(DwijColors.CreateDialogFieldBackground)
                 .border(
                     width = 1.dp,
-                    color = if (enabled) CreateDialogCyan.copy(alpha = 0.72f) else Color.DarkGray,
+                    color = if (enabled) {
+                        DwijColors.CyanBright.copy(alpha = 0.72f)
+                    } else {
+                        DwijColors.Disabled
+                    },
                     shape = RoundedCornerShape(10.dp),
                 )
                 .padding(horizontal = 13.dp),
         ) {
             if (value.isEmpty()) {
                 Text(
-                    text = stringResource(R.string.playlists_create_name_hint),
-                    color = Color(0xFF73798B),
+                    text = stringResource(Res.string.playlists_create_name_hint),
+                    color = DwijColors.CreateDialogHint,
                     fontSize = 15.sp,
                 )
             }
@@ -204,10 +210,10 @@ private fun CreatePlaylistNameField(
                 enabled = enabled,
                 singleLine = true,
                 textStyle = TextStyle(
-                    color = Color.White,
+                    color = DwijColors.White,
                     fontSize = 16.sp,
                 ),
-                cursorBrush = SolidColor(CreateDialogPink),
+                cursorBrush = SolidColor(DwijColors.Pink),
                 keyboardOptions = KeyboardOptions(imeAction = ImeAction.Done),
                 modifier = Modifier.fillMaxWidth(),
             )
@@ -234,24 +240,24 @@ private fun CreatePlaylistVisibilityToggle(
             Text(
                 text = stringResource(
                     if (isPublic) {
-                        R.string.playlists_create_public
+                        Res.string.playlists_create_public
                     } else {
-                        R.string.playlists_create_private
+                        Res.string.playlists_create_private
                     },
                 ),
-                color = Color.White,
+                color = DwijColors.White,
                 fontSize = 15.sp,
                 fontWeight = FontWeight.SemiBold,
             )
             Text(
                 text = stringResource(
                     if (isPublic) {
-                        R.string.playlists_create_public_description
+                        Res.string.playlists_create_public_description
                     } else {
-                        R.string.playlists_create_private_description
+                        Res.string.playlists_create_private_description
                     },
                 ),
-                color = Color(0xFF9297A8),
+                color = DwijColors.CreateDialogSecondary,
                 fontSize = 11.sp,
                 lineHeight = 14.sp,
             )
@@ -263,12 +269,12 @@ private fun CreatePlaylistVisibilityToggle(
                 .clip(CircleShape)
                 .background(
                     if (isPublic) {
-                        CreateDialogPink.copy(alpha = 0.72f)
+                        DwijColors.Pink.copy(alpha = 0.72f)
                     } else {
-                        Color(0xFF242938)
+                        DwijColors.CreateDialogToggleBackground
                     },
                 )
-                .border(1.dp, CreateDialogCyan.copy(alpha = 0.65f), CircleShape),
+                .border(1.dp, DwijColors.CyanBright.copy(alpha = 0.65f), CircleShape),
         ) {
             Box(
                 modifier = Modifier
@@ -276,7 +282,9 @@ private fun CreatePlaylistVisibilityToggle(
                     .offset(x = if (isPublic) (-4).dp else 4.dp)
                     .size(20.dp)
                     .clip(CircleShape)
-                    .background(if (isPublic) Color.White else Color(0xFF8F96A9)),
+                    .background(
+                        if (isPublic) DwijColors.White else DwijColors.CreateDialogToggleKnob,
+                    ),
             )
         }
     }
@@ -297,7 +305,7 @@ private fun CreatePlaylistDialogButton(
             .width(128.dp)
             .height(46.dp)
             .clip(RoundedCornerShape(11.dp))
-            .background(Color(0xD90A0D18))
+            .background(DwijColors.CreateDialogButtonBackground)
             .border(
                 width = 1.dp,
                 color = accent.copy(alpha = if (enabled || isLoading) 0.85f else 0.25f),
@@ -314,7 +322,7 @@ private fun CreatePlaylistDialogButton(
         } else {
             Text(
                 text = text,
-                color = Color.White.copy(alpha = if (enabled) 1f else 0.38f),
+                color = DwijColors.White.copy(alpha = if (enabled) 1f else 0.38f),
                 fontSize = 13.sp,
                 fontWeight = FontWeight.SemiBold,
                 textAlign = TextAlign.Center,
@@ -329,7 +337,7 @@ private fun CreatePlaylistDialogButton(
     widthDp = 390,
     heightDp = 720,
     showBackground = true,
-    backgroundColor = 0xFF03040F,
+    backgroundColor = DwijColors.BackgroundArgb,
 )
 @Composable
 private fun CreatePlaylistDialogPreview() {
@@ -342,6 +350,3 @@ private fun CreatePlaylistDialogPreview() {
 }
 
 private const val CREATE_PLAYLIST_TITLE_MAX_LENGTH = 80
-private val CreateDialogBackground = Color(0xFF050711)
-private val CreateDialogPink = Color(0xFFFF00BF)
-private val CreateDialogCyan = Color(0xFF00DFFF)

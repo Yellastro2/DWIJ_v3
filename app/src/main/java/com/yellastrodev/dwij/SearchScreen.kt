@@ -37,6 +37,7 @@ import com.yellastrodev.dwij.resources.*
 import org.jetbrains.compose.resources.painterResource
 import com.yellastrodev.dwij.models.SearchResultItemUiModel
 import com.yellastrodev.dwij.models.SearchUiState
+import com.yellastrodev.dwij.ui.MusicSourceSelector
 
 /**
  * Экран поиска: выбор источника, поле запроса, недавние запросы и место для будущей выдачи.

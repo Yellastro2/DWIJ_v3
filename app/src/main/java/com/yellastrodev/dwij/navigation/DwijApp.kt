@@ -19,7 +19,6 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.ImageBitmap
-import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.res.colorResource
 import androidx.compose.ui.res.stringResource
 import androidx.navigation.NavType
@@ -28,8 +27,8 @@ import androidx.navigation.compose.composable
 import androidx.navigation.compose.currentBackStackEntryAsState
 import androidx.navigation.compose.rememberNavController
 import androidx.navigation.navArgument
-import com.yellastrodev.dwij.HomeCompactPlayer
-import com.yellastrodev.dwij.HomeCompactPlayerUiState
+import com.yellastrodev.dwij.ui.HomeCompactPlayer
+import com.yellastrodev.dwij.ui.HomeCompactPlayerUiState
 import com.yellastrodev.dwij.R
 import com.yellastrodev.dwij.models.PlayerModel
 import kotlinx.coroutines.Dispatchers

@@ -1,6 +1,5 @@
 package com.yellastrodev.dwij.ui
 
-import android.util.Log
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
@@ -37,6 +36,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.yellastrodev.dwij.TrackListItemUiModel
 import com.yellastrodev.dwij.resources.*
+import com.yellastrodev.dwij.ui.theme.DwijColors
 import kotlinx.coroutines.CancellationException
 import org.jetbrains.compose.resources.painterResource
 
@@ -73,14 +73,14 @@ fun TrackListItem(
     ).count { it }
     val hasRightDecoration = topIndicatorCount > 0 || isSelected
     val titleColor = if (item.isPlaybackBlocked) {
-        Color.White.copy(alpha = 0.34f)
+        DwijColors.White.copy(alpha = 0.34f)
     } else {
-        Color.White
+        DwijColors.White
     }
     val artistColor = if (item.isPlaybackBlocked) {
-        TrackSecondaryText.copy(alpha = 0.38f)
+        DwijColors.SecondaryText.copy(alpha = 0.38f)
     } else {
-        TrackSecondaryText
+        DwijColors.SecondaryText
     }
 
     Box(
@@ -179,7 +179,7 @@ private fun YandexSourceIndicator(
             Canvas(modifier = Modifier.fillMaxSize()) {
                 val inset = 3.dp.toPx()
                 drawLine(
-                    color = TrackUnavailableYellow,
+                    color = DwijColors.TrackUnavailable,
                     start = Offset(inset, size.height - inset),
                     end = Offset(size.width - inset, inset),
                     strokeWidth = 1.7.dp.toPx(),
@@ -206,28 +206,28 @@ private fun TrackSelectionIndicator(modifier: Modifier = Modifier) {
     Canvas(modifier = modifier.size(18.dp)) {
         val stroke = 2.dp.toPx()
         drawLine(
-            color = Color(0xFF00DFFF),
+            color = DwijColors.CyanBright,
             start = Offset(size.width * 0.16f, size.height * 0.52f),
             end = Offset(size.width * 0.42f, size.height * 0.78f),
             strokeWidth = stroke,
             cap = StrokeCap.Square,
         )
         drawLine(
-            color = Color(0xFFFF00BF),
+            color = DwijColors.Pink,
             start = Offset(size.width * 0.42f, size.height * 0.78f),
             end = Offset(size.width * 0.86f, size.height * 0.2f),
             strokeWidth = stroke,
             cap = StrokeCap.Square,
         )
         drawLine(
-            color = Color.White,
+            color = DwijColors.White,
             start = Offset(size.width * 0.18f, size.height * 0.48f),
             end = Offset(size.width * 0.43f, size.height * 0.71f),
             strokeWidth = 1.dp.toPx(),
             cap = StrokeCap.Square,
         )
         drawLine(
-            color = Color.White,
+            color = DwijColors.White,
             start = Offset(size.width * 0.43f, size.height * 0.71f),
             end = Offset(size.width * 0.82f, size.height * 0.22f),
             strokeWidth = 1.dp.toPx(),
@@ -277,7 +277,7 @@ fun TrackCoverLoader(
             } catch (error: CancellationException) {
                 throw error
             } catch (error: Exception) {
-                Log.w(
+                uiLogWarning(
                     TRACK_LIST_ITEM_TAG,
                     "[TrackCoverLoader] Не удалось загрузить обложку trackId=$trackId",
                     error,
@@ -316,7 +316,7 @@ private fun TrackCover(
 private fun TrackCoverPlaceholder(modifier: Modifier = Modifier) {
     Box(
         contentAlignment = Alignment.Center,
-        modifier = modifier.background(TrackCoverBackground),
+        modifier = modifier.background(DwijColors.TrackCoverBackground),
     ) {
         Canvas(modifier = Modifier.size(27.dp)) {
             val stroke = 2.2.dp.toPx()
@@ -342,14 +342,11 @@ private fun TrackCoverPlaceholder(modifier: Modifier = Modifier) {
                     center = Offset(size.width * 0.29f + offsetX, size.height * 0.76f),
                 )
             }
-            drawNote(Color(0xFF00C8F0), cyanOffset)
-            drawNote(Color(0xFFFF1694), -cyanOffset)
-            drawNote(Color.White, 0f)
+            drawNote(DwijColors.TrackGlitchCyan, cyanOffset)
+            drawNote(DwijColors.TrackGlitchPink, -cyanOffset)
+            drawNote(DwijColors.White, 0f)
         }
     }
 }
 
-internal val TrackSecondaryText = Color(0xFFA7AABC)
-private val TrackCoverBackground = Color(0xFF101522)
-private val TrackUnavailableYellow = Color(0xFFFFD54A)
 private const val TRACK_LIST_ITEM_TAG = "TrackListItem"

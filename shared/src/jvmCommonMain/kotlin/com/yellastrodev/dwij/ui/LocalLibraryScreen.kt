@@ -18,7 +18,6 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.ImageBitmap
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
@@ -30,6 +29,7 @@ import com.yellastrodev.dwij.data.entities.LocalPlaylistOrigin
 import com.yellastrodev.dwij.data.entities.Song
 import com.yellastrodev.dwij.resources.Res
 import com.yellastrodev.dwij.resources.*
+import com.yellastrodev.dwij.ui.theme.DwijColors
 import org.jetbrains.compose.resources.pluralStringResource
 import org.jetbrains.compose.resources.stringResource
 
@@ -53,7 +53,7 @@ fun LocalLibraryScreen(
     ) {
         Text(
             text = title,
-            color = Color.White,
+            color = DwijColors.White,
             fontSize = 26.sp,
             fontWeight = FontWeight.Bold,
         )
@@ -147,7 +147,7 @@ private fun LocalPlaylistList(
                         if (index == 0) {
                             Text(
                                 text = stringResource(Res.string.list_loading_placeholder),
-                                color = Color(0xFF969BAD).copy(alpha = 0.72f),
+                                color = DwijColors.ListSecondaryText.copy(alpha = 0.72f),
                                 fontSize = 15.sp,
                             )
                         } else {
@@ -156,7 +156,7 @@ private fun LocalPlaylistList(
                                     .fillMaxWidth(0.58f)
                                     .height(16.dp)
                                     .background(
-                                        Color(0xFF343846).copy(alpha = 0.5f),
+                                        DwijColors.LocalLibraryProgress.copy(alpha = 0.5f),
                                         RoundedCornerShape(4.dp),
                                     ),
                             )
@@ -167,12 +167,14 @@ private fun LocalPlaylistList(
                                 .fillMaxWidth(0.34f)
                                 .height(10.dp)
                                 .background(
-                                    Color(0xFF343846).copy(alpha = 0.36f),
+                                    DwijColors.LocalLibraryProgress.copy(alpha = 0.36f),
                                     RoundedCornerShape(4.dp),
                                 ),
                         )
                     }
-                    HorizontalDivider(color = Color(0xFF282B35).copy(alpha = 0.55f))
+                    HorizontalDivider(
+                        color = DwijColors.LocalLibraryDivider.copy(alpha = 0.55f),
+                    )
                 }
             }
             return
@@ -190,7 +192,7 @@ private fun LocalPlaylistList(
             ) {
                 Text(
                     text = playlist.name,
-                    color = Color.White,
+                    color = DwijColors.White,
                     fontSize = 17.sp,
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis,
@@ -202,11 +204,11 @@ private fun LocalPlaylistList(
                             stringResource(Res.string.local_playlist_media_store)
                         else -> stringResource(Res.string.local_playlist_m3u)
                     },
-                    color = Color(0xFF969BAD),
+                    color = DwijColors.ListSecondaryText,
                     fontSize = 12.sp,
                 )
             }
-            HorizontalDivider(color = Color(0xFF282B35))
+            HorizontalDivider(color = DwijColors.LocalLibraryDivider)
         }
     }
 }
@@ -265,7 +267,7 @@ private fun List<Song>.toTrackListItems(
 private fun EmptyLocalLibraryText(text: String) {
     Text(
         text = text,
-        color = Color(0xFF969BAD),
+        color = DwijColors.ListSecondaryText,
         style = MaterialTheme.typography.bodyLarge,
     )
 }

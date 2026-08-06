@@ -32,6 +32,7 @@ import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalViewConfiguration
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.yellastrodev.dwij.ui.RadialMenuItem
 import kotlinx.coroutines.delay
 import kotlin.math.atan2
 import kotlin.math.cos
@@ -39,13 +40,6 @@ import kotlin.math.min
 import kotlin.math.roundToLong
 import kotlin.math.sin
 import kotlin.random.Random
-
-/** Один сектор кругового меню домашнего экрана. */
-data class RadialMenuItem(
-    val id: String,
-    val title: String,
-    val color: Color,
-)
 
 /** Доступные способы появления и исчезновения секторов кругового меню. */
 enum class RadialMenuAnimationStyle {

@@ -3,7 +3,6 @@ package com.yellastrodev.dwij.ui
 import androidx.compose.foundation.Canvas
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.semantics.contentDescription
@@ -11,6 +10,7 @@ import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.unit.dp
 import com.yellastrodev.dwij.resources.Res
 import com.yellastrodev.dwij.resources.*
+import com.yellastrodev.dwij.ui.theme.DwijColors
 import org.jetbrains.compose.resources.stringResource
 
 /** Рисует постоянный индикатор из трёх сцепленных знаков Play для песни с дублями. */
@@ -32,7 +32,7 @@ fun MultipleSourcesIndicator(
         val startX = size.width * 0.14f
         val stepX = size.width * 0.18f
         val centerY = size.height * 0.5f
-        val colors = listOf(MultipleSourcesCyan, MultipleSourcesPink, Color.White)
+        val colors = listOf(DwijColors.Cyan, DwijColors.Pink, DwijColors.White)
 
         repeat(3) { index ->
             val x = startX + stepX * index
@@ -59,6 +59,3 @@ fun MultipleSourcesIndicator(
         }
     }
 }
-
-private val MultipleSourcesPink = Color(0xFFFF00BF)
-private val MultipleSourcesCyan = Color(0xFF00BBEB)

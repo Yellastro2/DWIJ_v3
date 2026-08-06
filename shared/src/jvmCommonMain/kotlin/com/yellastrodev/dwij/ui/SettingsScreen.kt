@@ -1,4 +1,4 @@
-package com.yellastrodev.dwij
+package com.yellastrodev.dwij.ui
 
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.Image
@@ -9,7 +9,6 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
@@ -38,16 +37,17 @@ import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.layout.ContentScale
-import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
-import androidx.compose.ui.tooling.preview.Preview
+import org.jetbrains.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.yellastrodev.dwij.resources.*
+import com.yellastrodev.dwij.ui.theme.DwijColors
 import kotlinx.coroutines.launch
 import org.jetbrains.compose.resources.DrawableResource
 import org.jetbrains.compose.resources.painterResource
+import org.jetbrains.compose.resources.stringResource
 import kotlin.math.roundToInt
 
 /**
@@ -71,12 +71,12 @@ fun SettingsScreen(
 ) {
     val snackbarHostState = remember { SnackbarHostState() }
     val snackbarScope = rememberCoroutineScope()
-    val shrinkWarning = stringResource(R.string.settings_cache_shrink_warning)
+    val shrinkWarning = stringResource(Res.string.settings_cache_shrink_warning)
 
     Box(
         modifier = modifier
             .fillMaxSize()
-            .background(SettingsBackground)
+            .background(DwijColors.Background)
             .navigationBarsPadding(),
     ) {
         Column(
@@ -142,28 +142,28 @@ private fun SettingsHeader(onBackClick: () -> Unit) {
             Canvas(modifier = Modifier.size(25.dp)) {
                 val stroke = 2.dp.toPx()
                 drawLine(
-                    color = SettingsCyan,
+                    color = DwijColors.CyanBright,
                     start = Offset(size.width * 0.72f + 1.2.dp.toPx(), size.height * 0.17f),
                     end = Offset(size.width * 0.29f + 1.2.dp.toPx(), size.height * 0.5f),
                     strokeWidth = stroke,
                     cap = StrokeCap.Square,
                 )
                 drawLine(
-                    color = SettingsPink,
+                    color = DwijColors.Pink,
                     start = Offset(size.width * 0.72f - 1.2.dp.toPx(), size.height * 0.83f),
                     end = Offset(size.width * 0.29f - 1.2.dp.toPx(), size.height * 0.5f),
                     strokeWidth = stroke,
                     cap = StrokeCap.Square,
                 )
                 drawLine(
-                    color = Color.White,
+                    color = DwijColors.White,
                     start = Offset(size.width * 0.72f, size.height * 0.17f),
                     end = Offset(size.width * 0.29f, size.height * 0.5f),
                     strokeWidth = stroke,
                     cap = StrokeCap.Square,
                 )
                 drawLine(
-                    color = Color.White,
+                    color = DwijColors.White,
                     start = Offset(size.width * 0.29f, size.height * 0.5f),
                     end = Offset(size.width * 0.72f, size.height * 0.83f),
                     strokeWidth = stroke,
@@ -172,8 +172,8 @@ private fun SettingsHeader(onBackClick: () -> Unit) {
             }
         }
         Text(
-            text = stringResource(R.string.settings_title),
-            color = Color.White,
+            text = stringResource(Res.string.settings_title),
+            color = DwijColors.White,
             fontSize = 27.sp,
             fontWeight = FontWeight.Bold,
             letterSpacing = 0.6.sp,
@@ -191,7 +191,7 @@ private fun SettingsYandexCard(
 ) {
     SettingsTextureCard(
         textureRes = Res.drawable.bg_party_texture,
-        accent = SettingsPink,
+        accent = DwijColors.Pink,
         modifier = Modifier.height(142.dp),
     ) {
         Row(
@@ -214,14 +214,14 @@ private fun SettingsYandexCard(
                     .padding(horizontal = 14.dp),
             ) {
                 Text(
-                    text = stringResource(R.string.settings_yandex_music),
-                    color = Color.White,
+                    text = stringResource(Res.string.settings_yandex_music),
+                    color = DwijColors.White,
                     fontSize = 19.sp,
                     fontWeight = FontWeight.Bold,
                 )
                 Text(
-                    text = login ?: stringResource(R.string.no_auth),
-                    color = if (login == null) SettingsSecondaryText else SettingsCyan,
+                    text = login ?: stringResource(Res.string.no_auth),
+                    color = if (login == null) DwijColors.SecondaryText else DwijColors.CyanBright,
                     fontSize = 13.sp,
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis,
@@ -231,14 +231,14 @@ private fun SettingsYandexCard(
             SettingsActionButton(
                 text = stringResource(
                     when {
-                        isAuthInProgress -> R.string.auth_btn_waiting
-                        login != null -> R.string.auth_btn_exit
-                        else -> R.string.auth_btn
+                        isAuthInProgress -> Res.string.auth_btn_waiting
+                        login != null -> Res.string.auth_btn_exit
+                        else -> Res.string.auth_btn
                     },
                 ),
                 enabled = !isAuthInProgress,
                 isLoading = isAuthInProgress,
-                accent = SettingsPink,
+                accent = DwijColors.Pink,
                 onClick = onAuthClick,
             )
         }
@@ -262,7 +262,7 @@ private fun SettingsCacheCard(
 
     SettingsTextureCard(
         textureRes = Res.drawable.bg_focus_texture,
-        accent = SettingsCyan,
+        accent = DwijColors.CyanBright,
         modifier = Modifier.height(248.dp),
     ) {
         Column(
@@ -271,14 +271,14 @@ private fun SettingsCacheCard(
                 .padding(horizontal = 18.dp, vertical = 17.dp),
         ) {
             Text(
-                text = stringResource(R.string.settings_cache_title),
-                color = Color.White,
+                text = stringResource(Res.string.settings_cache_title),
+                color = DwijColors.White,
                 fontSize = 21.sp,
                 fontWeight = FontWeight.Bold,
             )
             Text(
-                text = stringResource(R.string.settings_cache_description),
-                color = SettingsSecondaryText,
+                text = stringResource(Res.string.settings_cache_description),
+                color = DwijColors.SecondaryText,
                 fontSize = 12.sp,
                 lineHeight = 17.sp,
                 modifier = Modifier.padding(top = 4.dp),
@@ -290,14 +290,14 @@ private fun SettingsCacheCard(
                     .padding(top = 16.dp),
             ) {
                 SettingsCacheValue(
-                    label = stringResource(R.string.settings_cache_limit),
+                    label = stringResource(Res.string.settings_cache_limit),
                     value = formatCacheMegabytes(sliderValue.roundToInt()),
-                    accent = SettingsPink,
+                    accent = DwijColors.Pink,
                 )
                 SettingsCacheValue(
-                    label = stringResource(R.string.settings_cache_occupied),
+                    label = stringResource(Res.string.settings_cache_occupied),
                     value = occupiedCacheSize,
-                    accent = SettingsCyan,
+                    accent = DwijColors.CyanBright,
                     alignEnd = true,
                 )
             }
@@ -309,9 +309,9 @@ private fun SettingsCacheCard(
                 },
                 valueRange = minCacheMb.toFloat()..safeMaxMb.toFloat(),
                 colors = SliderDefaults.colors(
-                    thumbColor = Color.White,
-                    activeTrackColor = SettingsPink,
-                    inactiveTrackColor = SettingsCyan.copy(alpha = 0.28f),
+                    thumbColor = DwijColors.White,
+                    activeTrackColor = DwijColors.Pink,
+                    inactiveTrackColor = DwijColors.CyanBright.copy(alpha = 0.28f),
                 ),
                 modifier = Modifier
                     .fillMaxWidth()
@@ -323,12 +323,12 @@ private fun SettingsCacheCard(
             ) {
                 Text(
                     text = formatCacheMegabytes(minCacheMb),
-                    color = SettingsSecondaryText,
+                    color = DwijColors.SecondaryText,
                     fontSize = 11.sp,
                 )
                 Text(
                     text = formatCacheMegabytes(safeMaxMb),
-                    color = SettingsSecondaryText,
+                    color = DwijColors.SecondaryText,
                     fontSize = 11.sp,
                 )
             }
@@ -347,7 +347,7 @@ private fun SettingsCacheValue(
     Column(horizontalAlignment = if (alignEnd) Alignment.End else Alignment.Start) {
         Text(
             text = label,
-            color = SettingsSecondaryText,
+            color = DwijColors.SecondaryText,
             fontSize = 10.sp,
             letterSpacing = 0.8.sp,
         )
@@ -373,7 +373,7 @@ private fun SettingsTextureCard(
         modifier = modifier
             .fillMaxWidth()
             .clip(RoundedCornerShape(18.dp))
-            .background(Color(0xFF080B15))
+            .background(DwijColors.SettingsCardBackground)
             .border(1.dp, accent.copy(alpha = 0.72f), RoundedCornerShape(18.dp)),
     ) {
         Image(
@@ -386,7 +386,7 @@ private fun SettingsTextureCard(
         Box(
             modifier = Modifier
                 .fillMaxSize()
-                .background(Color.Black.copy(alpha = 0.28f)),
+                .background(DwijColors.Black.copy(alpha = 0.28f)),
         ) {
             content()
         }
@@ -408,7 +408,7 @@ private fun SettingsActionButton(
             .width(92.dp)
             .height(44.dp)
             .clip(RoundedCornerShape(11.dp))
-            .background(Color(0xD9070911))
+            .background(DwijColors.SettingsActionBackground)
             .border(1.dp, accent.copy(alpha = if (enabled) 0.85f else 0.32f), RoundedCornerShape(11.dp))
             .clickable(enabled = enabled, onClick = onClick),
     ) {
@@ -421,7 +421,7 @@ private fun SettingsActionButton(
         } else {
             Text(
                 text = text,
-                color = Color.White.copy(alpha = if (enabled) 1f else 0.42f),
+                color = DwijColors.White.copy(alpha = if (enabled) 1f else 0.42f),
                 fontSize = 12.sp,
                 fontWeight = FontWeight.SemiBold,
                 maxLines = 1,
@@ -433,9 +433,9 @@ private fun SettingsActionButton(
 /** Форматирует предел слайдера компактно в МБ или ГБ. */
 @Composable
 private fun formatCacheMegabytes(megabytes: Int): String = if (megabytes >= 1024) {
-    stringResource(R.string.settings_cache_size_gb, megabytes / 1024f)
+    stringResource(Res.string.settings_cache_size_gb, megabytes / 1024f)
 } else {
-    stringResource(R.string.settings_cache_size_mb, megabytes)
+    stringResource(Res.string.settings_cache_size_mb, megabytes)
 }
 
 /** Показывает экран без Activity, SharedPreferences и реальной авторизации. */
@@ -444,7 +444,7 @@ private fun formatCacheMegabytes(megabytes: Int): String = if (megabytes >= 1024
     widthDp = 360,
     heightDp = 780,
     showBackground = true,
-    backgroundColor = 0xFF03040F,
+    backgroundColor = DwijColors.BackgroundArgb,
 )
 @Composable
 private fun SettingsScreenPreview() {
@@ -460,8 +460,3 @@ private fun SettingsScreenPreview() {
         onCacheLimitCommitted = {},
     )
 }
-
-private val SettingsBackground = Color(0xFF03040F)
-private val SettingsSecondaryText = Color(0xFFA7AABC)
-private val SettingsPink = Color(0xFFFF00BF)
-private val SettingsCyan = Color(0xFF00DFFF)

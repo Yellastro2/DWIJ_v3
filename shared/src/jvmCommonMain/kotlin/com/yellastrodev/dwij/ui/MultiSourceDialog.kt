@@ -27,17 +27,17 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.paint
-import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.ImageBitmap
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.tooling.preview.Preview
+import org.jetbrains.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
 import com.yellastrodev.dwij.TrackListItemUiModel
 import com.yellastrodev.dwij.resources.*
+import com.yellastrodev.dwij.ui.theme.DwijColors
 import org.jetbrains.compose.resources.painterResource
 import org.jetbrains.compose.resources.stringResource
 
@@ -89,7 +89,7 @@ fun MultiSourceDialog(
                 .widthIn(max = 520.dp)
                 .fillMaxWidth()
                 .clip(RoundedCornerShape(18.dp))
-                .background(MultiSourceBackground)
+            .background(DwijColors.MultiSourceBackground)
                 .paint(
                     painter = painterResource(Res.drawable.bg_player_glitch_v2),
                     sizeToIntrinsics = false,
@@ -100,7 +100,7 @@ fun MultiSourceDialog(
             Column(modifier = Modifier.padding(vertical = 18.dp)) {
                 Text(
                     text = stringResource(Res.string.multi_source_dialog_title),
-                    color = Color.White,
+                    color = DwijColors.White,
                     fontSize = 20.sp,
                     fontWeight = FontWeight.SemiBold,
                     modifier = Modifier.padding(horizontal = 18.dp, vertical = 6.dp),
@@ -115,7 +115,7 @@ fun MultiSourceDialog(
                         item(key = "multi_source_empty") {
                             Text(
                                 text = stringResource(Res.string.multi_source_dialog_empty),
-                                color = MultiSourceSecondary,
+                                color = DwijColors.SecondaryText,
                                 modifier = Modifier.padding(horizontal = 18.dp, vertical = 24.dp),
                             )
                         }
@@ -151,7 +151,7 @@ fun MultiSourceDialog(
                                         }
                                     }
                                 },
-                                modifier = Modifier.background(Color.Black.copy(alpha = 0.16f)),
+                                modifier = Modifier.background(DwijColors.Black.copy(alpha = 0.16f)),
                             )
                         }
                     }
@@ -170,7 +170,7 @@ fun MultiSourceDialog(
                     TextButton(onClick = onDismiss, enabled = !isSaving) {
                         Text(
                             text = stringResource(Res.string.multi_source_dialog_cancel),
-                            color = MultiSourceSecondary,
+                            color = DwijColors.SecondaryText,
                         )
                     }
                     if (selectedIds.size > 1) {
@@ -186,7 +186,7 @@ fun MultiSourceDialog(
                                         Res.string.multi_source_dialog_save
                                     },
                                 ),
-                                color = MultiSourcePink,
+                                color = DwijColors.Pink,
                                 fontWeight = FontWeight.Bold,
                             )
                         }
@@ -197,7 +197,7 @@ fun MultiSourceDialog(
     }
 }
 
-@Preview(showBackground = true, backgroundColor = 0xFF03040F)
+@Preview(showBackground = true, backgroundColor = DwijColors.BackgroundArgb)
 @Composable
 private fun MultiSourceDialogPreview() {
     MultiSourceDialog(
@@ -230,7 +230,3 @@ private fun MultiSourceDialogPreview() {
         onSave = {},
     )
 }
-
-private val MultiSourceBackground = Color(0xFF080A16)
-private val MultiSourceSecondary = Color(0xFFA7AABC)
-private val MultiSourcePink = Color(0xFFFF00BF)

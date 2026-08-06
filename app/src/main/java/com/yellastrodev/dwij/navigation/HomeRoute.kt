@@ -23,9 +23,12 @@ import androidx.compose.ui.res.stringResource
 import androidx.core.content.ContextCompat
 import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.navigation.NavHostController
-import com.yellastrodev.dwij.HomeCompactPlayerUiState
+import com.yellastrodev.dwij.ui.HomeCompactPlayerUiState
 import com.yellastrodev.dwij.HomeMusicSource
-import com.yellastrodev.dwij.HomeScreen
+import com.yellastrodev.dwij.ui.HomeScreen
+import com.yellastrodev.dwij.RadialMenu
+import com.yellastrodev.dwij.RadialMenuAnimationStyle
+import com.yellastrodev.dwij.SearchScreen
 import com.yellastrodev.dwij.R
 import com.yellastrodev.dwij.data.source.requiredAudioPermission
 import com.yellastrodev.dwij.data.source.requiredLocalMediaPermissions
@@ -348,83 +351,82 @@ fun HomeRoute(
         onSourceSelected =
             ::selectMusicSource,
 
-        searchState = searchState,
+        radialMenuContent = { state, radialModifier ->
+            RadialMenu(
+                items = state.items,
+                visible = state.visible,
+                onPrimaryClick = state.onPrimaryClick,
+                onVisualActivation = state.onVisualActivation,
+                onPressChange = state.onPressChange,
+                onItemClick = state.onItemClick,
+                onDismiss = state.onDismiss,
+                outerRadiusFraction = state.outerRadiusFraction,
+                animationStyle = RadialMenuAnimationStyle.GlitchFlicker,
+                modifier = radialModifier,
+            )
+        },
 
-        onSearchQueryChange =
-            searchModel::updateQuery,
+        searchContent = { searchModifier ->
+            SearchScreen(
+                selectedSource = selectedSource,
+                onSourceSelected = ::selectMusicSource,
+                state = searchState,
+                onQueryChange = searchModel::updateQuery,
+                loadTrackCover = { item ->
+                    withContext(Dispatchers.IO) {
+                        when (val source = item.source) {
+                            is SearchTrackSource.Yandex -> {
+                                application
+                                    .coverRepository
+                                    .getTrackCover(
+                                        track = source.track,
+                                        size = CoverSize.`100x100`,
+                                    )
+                                    ?.toImageBitmapOrNull()
+                            }
 
-        loadSearchTrackCover = { item ->
-            withContext(Dispatchers.IO) {
-                when (
-                    val source = item.source
-                ) {
-                    is SearchTrackSource.Yandex -> {
+                            is SearchTrackSource.Local -> {
+                                source.song
+                                    .localInstances
+                                    .firstOrNull()
+                                    ?.let { instance ->
+                                        playerModel
+                                            .cover(
+                                                instance = instance,
+                                                maxEdgePx = 100,
+                                            )
+                                            .first()
+                                    }
+                            }
+                        }
+                    }
+                },
+                loadEntityCover = { key, uri ->
+                    withContext(Dispatchers.IO) {
                         application
                             .coverRepository
-                            .getTrackCover(
-                                track =
-                                    source.track,
-                                size =
-                                    CoverSize
-                                        .`100x100`,
+                            .getRemoteCover(
+                                entityType = "search",
+                                entityId = key,
+                                url = uri,
+                                size = CoverSize.`100x100`,
                             )
                             ?.toImageBitmapOrNull()
                     }
-
-                    is SearchTrackSource.Local -> {
-                        source.song
-                            .localInstances
-                            .firstOrNull()
-                            ?.let { instance ->
-                                playerModel
-                                    .cover(
-                                        instance = instance,
-                                        maxEdgePx = 100,
-                                    )
-                                    .first()
-                            }
+                },
+                onResultClick = { item ->
+                    if (item is SearchResultItemUiModel.Track) {
+                        searchModel.playTrack(item)
+                        navController.navigate(DwijDestination.PLAYER)
+                    } else {
+                        Log.d(
+                            TAG,
+                            "[onSearchResultClick] Нажат результат key=${item.key}",
+                        )
                     }
-                }
-            }
-        },
-
-        loadSearchEntityCover = {
-                key,
-                uri,
-            ->
-
-            withContext(Dispatchers.IO) {
-                application
-                    .coverRepository
-                    .getRemoteCover(
-                        entityType = "search",
-                        entityId = key,
-                        url = uri,
-                        size =
-                            CoverSize.`100x100`,
-                    )
-                    ?.toImageBitmapOrNull()
-            }
-        },
-
-        onSearchResultClick = { item ->
-            if (
-                item is
-                        SearchResultItemUiModel.Track
-            ) {
-                searchModel.playTrack(item)
-
-                navController.navigate(
-                    DwijDestination.PLAYER,
-                )
-            } else {
-                Log.d(
-                    TAG,
-                    "[onSearchResultClick] " +
-                            "Нажат результат " +
-                            "key=${item.key}",
-                )
-            }
+                },
+                modifier = searchModifier,
+            )
         },
     )
 }

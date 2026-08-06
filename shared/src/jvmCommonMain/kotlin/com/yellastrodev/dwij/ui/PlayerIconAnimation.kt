@@ -1,4 +1,4 @@
-package com.yellastrodev.dwij
+package com.yellastrodev.dwij.ui
 
 import androidx.compose.animation.core.animateFloat
 import androidx.compose.animation.core.spring
@@ -38,15 +38,15 @@ import androidx.compose.ui.graphics.drawscope.clipPath
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.painter.Painter
 import androidx.compose.ui.layout.ContentScale
-import androidx.compose.ui.res.colorResource
-import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.Role
-import androidx.compose.ui.tooling.preview.Preview
+import org.jetbrains.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import com.yellastrodev.dwij.resources.*
+import com.yellastrodev.dwij.ui.theme.DwijColors
 import kotlinx.coroutines.delay
 import org.jetbrains.compose.resources.painterResource
+import org.jetbrains.compose.resources.stringResource
 import kotlin.math.atan2
 import kotlin.math.cos
 import kotlin.math.sin
@@ -251,9 +251,9 @@ fun PlayerIconButton(
             painter = playPainter,
             contentDescription = stringResource(
                 if (isPlaying) {
-                    R.string.home_player_pause_content_description
+                    Res.string.home_player_pause_content_description
                 } else {
-                    R.string.home_player_play_content_description
+                    Res.string.home_player_play_content_description
                 },
             ),
             contentScale = ContentScale.Fit,
@@ -502,7 +502,7 @@ private fun PlayerIconButtonPreview() {
     Box(
         modifier = Modifier
             .size(512.dp)
-            .background(colorResource(R.color.background)),
+            .background(DwijColors.Background),
     ) {
         PlayerIconButton(modifier = Modifier.fillMaxSize(), onClick = {})
     }
@@ -515,7 +515,7 @@ private fun PlayerIconButtonGlitchFramePreview() {
     Box(
         modifier = Modifier
             .size(512.dp)
-            .background(colorResource(R.color.background)),
+            .background(DwijColors.Background),
     ) {
         PlayerIconButton(
             modifier = Modifier.fillMaxSize(),

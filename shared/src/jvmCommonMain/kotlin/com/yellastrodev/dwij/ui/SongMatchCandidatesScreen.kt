@@ -15,11 +15,10 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
-import androidx.compose.ui.tooling.preview.Preview
+import org.jetbrains.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.Offset
-import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.ImageBitmap
 import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.text.font.FontWeight
@@ -29,6 +28,7 @@ import com.yellastrodev.dwij.TrackListItemUiModel
 import com.yellastrodev.dwij.resources.Res
 import com.yellastrodev.dwij.resources.song_match_candidates_empty
 import com.yellastrodev.dwij.resources.song_match_candidates_title
+import com.yellastrodev.dwij.ui.theme.DwijColors
 import org.jetbrains.compose.resources.stringResource
 
 /**
@@ -47,7 +47,7 @@ fun SongMatchCandidatesScreen(
     Column(
         modifier = modifier
             .fillMaxSize()
-            .background(SongMatchBackground)
+            .background(DwijColors.Background)
             .navigationBarsPadding()
             .statusBarsPadding(),
     ) {
@@ -82,28 +82,28 @@ private fun SongMatchCandidatesHeader(onBackClick: () -> Unit) {
             Canvas(modifier = Modifier.size(25.dp)) {
                 val stroke = 2.dp.toPx()
                 drawLine(
-                    color = SongMatchCyan,
+                    color = DwijColors.CyanBright,
                     start = Offset(size.width * 0.72f + 1.2.dp.toPx(), size.height * 0.17f),
                     end = Offset(size.width * 0.29f + 1.2.dp.toPx(), size.height * 0.5f),
                     strokeWidth = stroke,
                     cap = StrokeCap.Square,
                 )
                 drawLine(
-                    color = SongMatchPink,
+                    color = DwijColors.Pink,
                     start = Offset(size.width * 0.72f - 1.2.dp.toPx(), size.height * 0.83f),
                     end = Offset(size.width * 0.29f - 1.2.dp.toPx(), size.height * 0.5f),
                     strokeWidth = stroke,
                     cap = StrokeCap.Square,
                 )
                 drawLine(
-                    color = Color.White,
+                    color = DwijColors.White,
                     start = Offset(size.width * 0.72f, size.height * 0.17f),
                     end = Offset(size.width * 0.29f, size.height * 0.5f),
                     strokeWidth = stroke,
                     cap = StrokeCap.Square,
                 )
                 drawLine(
-                    color = Color.White,
+                    color = DwijColors.White,
                     start = Offset(size.width * 0.29f, size.height * 0.5f),
                     end = Offset(size.width * 0.72f, size.height * 0.83f),
                     strokeWidth = stroke,
@@ -113,7 +113,7 @@ private fun SongMatchCandidatesHeader(onBackClick: () -> Unit) {
         }
         Text(
             text = stringResource(Res.string.song_match_candidates_title),
-            color = Color.White,
+            color = DwijColors.White,
             fontSize = 24.sp,
             fontWeight = FontWeight.Bold,
             modifier = Modifier.weight(1f),
@@ -122,7 +122,7 @@ private fun SongMatchCandidatesHeader(onBackClick: () -> Unit) {
     }
 }
 
-@Preview(showBackground = true, backgroundColor = 0xFF03040F)
+@Preview(showBackground = true, backgroundColor = DwijColors.BackgroundArgb)
 @Composable
 private fun SongMatchCandidatesScreenPreview() {
     SongMatchCandidatesScreen(
@@ -148,7 +148,3 @@ private fun SongMatchCandidatesScreenPreview() {
         loadCover = { null },
     )
 }
-
-private val SongMatchBackground = Color(0xFF03040F)
-private val SongMatchPink = Color(0xFFFF00BF)
-private val SongMatchCyan = Color(0xFF00DFFF)

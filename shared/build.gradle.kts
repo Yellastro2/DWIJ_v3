@@ -166,9 +166,7 @@ kotlin {
                 implementation(compose.foundation)
                 implementation(compose.ui)
                 implementation(compose.material3)
-                implementation(
-                    "org.jetbrains.compose.ui:ui-tooling-preview:1.10.3",
-                )
+                implementation(compose.components.uiToolingPreview)
                 /*
                  * Генерация Res.drawable,
                  * Res.string, Res.font и остальных
@@ -194,6 +192,10 @@ kotlin {
 
         val androidMain by getting {
             dependsOn(jvmCommonMain)
+
+            dependencies {
+                implementation(libs.androidx.activity.compose)
+            }
         }
 
         val desktopMain by getting {

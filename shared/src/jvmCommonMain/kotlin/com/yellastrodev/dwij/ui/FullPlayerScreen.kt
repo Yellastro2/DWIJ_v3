@@ -1,4 +1,4 @@
-package com.yellastrodev.dwij
+package com.yellastrodev.dwij.ui
 
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.tween
@@ -28,6 +28,7 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.Slider
 import androidx.compose.material3.SliderDefaults
@@ -47,6 +48,9 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.drawWithContent
+import androidx.compose.ui.geometry.CornerRadius
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.ColorFilter
 import androidx.compose.ui.graphics.ImageBitmap
@@ -60,24 +64,23 @@ import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.layout.Layout
 import androidx.compose.ui.layout.Placeable
-import androidx.compose.ui.res.colorResource
-import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
-import androidx.compose.ui.tooling.preview.Preview
+import org.jetbrains.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.Dp
 import com.yellastrodev.dwij.resources.*
+import com.yellastrodev.dwij.ui.theme.DwijColors
 import org.jetbrains.compose.resources.DrawableResource
 import org.jetbrains.compose.resources.painterResource
+import org.jetbrains.compose.resources.stringResource
 import androidx.compose.ui.unit.constrainHeight
 import androidx.compose.ui.unit.constrainWidth
 import androidx.compose.ui.unit.sp
-import com.yellastrodev.dwij.ui.MultipleSourcesIndicator
 import com.yellastrodev.dwij.utils.PlayerEvent
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.Flow
@@ -130,7 +133,7 @@ fun FullPlayerScreen(
     onSourcesClick: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
-    val backgroundColor = colorResource(R.color.background)
+    val backgroundColor = DwijColors.Background
     val snackbarHostState = remember { SnackbarHostState() }
 
     LaunchedEffect(playerEvents) {
@@ -216,7 +219,7 @@ fun FullPlayerScreen(
                 onShuffleClick = onShuffleClick,
                 onRepeatClick = onRepeatClick,
                 modifier = Modifier
-                    .background(PlayerBackground.copy(alpha = 0.96f))
+                    .background(DwijColors.Background.copy(alpha = 0.96f))
                     .navigationBarsPadding(),
             )
         }
@@ -229,9 +232,9 @@ fun FullPlayerScreen(
         ) { data ->
             Snackbar(
                 snackbarData = data,
-                containerColor = Color(0xF21B1022),
-                contentColor = Color.White,
-                actionColor = PlayerPink,
+                containerColor = DwijColors.PlayerSnackbarBackground,
+                contentColor = DwijColors.White,
+                actionColor = DwijColors.Pink,
             )
         }
     }
@@ -246,12 +249,12 @@ private fun FullPlayerTopBar(
     onSourcesClick: () -> Unit,
     onBackClick: () -> Unit,
 ) {
-    val backDescription = stringResource(R.string.player_back_content_description)
+    val backDescription = stringResource(Res.string.player_back_content_description)
     Row(
         verticalAlignment = Alignment.CenterVertically,
         modifier = Modifier
             .fillMaxWidth()
-            .background(PlayerBackground.copy(alpha = 0.92f))
+            .background(DwijColors.Background.copy(alpha = 0.92f))
             .statusBarsPadding()
             .height(58.dp)
             .padding(horizontal = 8.dp),
@@ -268,30 +271,30 @@ private fun FullPlayerTopBar(
             Canvas(modifier = Modifier.size(25.dp)) {
                 val stroke = 2.dp.toPx()
                 drawLine(
-                    color = PlayerCyan,
-                    start = androidx.compose.ui.geometry.Offset(size.width * 0.72f + 1.dp.toPx(), size.height * 0.18f),
-                    end = androidx.compose.ui.geometry.Offset(size.width * 0.28f + 1.dp.toPx(), size.height * 0.5f),
+                    color = DwijColors.Cyan,
+                    start = Offset(size.width * 0.72f + 1.dp.toPx(), size.height * 0.18f),
+                    end = Offset(size.width * 0.28f + 1.dp.toPx(), size.height * 0.5f),
                     strokeWidth = stroke,
                     cap = StrokeCap.Square,
                 )
                 drawLine(
-                    color = PlayerPink,
-                    start = androidx.compose.ui.geometry.Offset(size.width * 0.72f - 1.dp.toPx(), size.height * 0.82f),
-                    end = androidx.compose.ui.geometry.Offset(size.width * 0.28f - 1.dp.toPx(), size.height * 0.5f),
+                    color = DwijColors.Pink,
+                    start = Offset(size.width * 0.72f - 1.dp.toPx(), size.height * 0.82f),
+                    end = Offset(size.width * 0.28f - 1.dp.toPx(), size.height * 0.5f),
                     strokeWidth = stroke,
                     cap = StrokeCap.Square,
                 )
                 drawLine(
-                    color = Color.White,
-                    start = androidx.compose.ui.geometry.Offset(size.width * 0.72f, size.height * 0.18f),
-                    end = androidx.compose.ui.geometry.Offset(size.width * 0.28f, size.height * 0.5f),
+                    color = DwijColors.White,
+                    start = Offset(size.width * 0.72f, size.height * 0.18f),
+                    end = Offset(size.width * 0.28f, size.height * 0.5f),
                     strokeWidth = stroke,
                     cap = StrokeCap.Square,
                 )
                 drawLine(
-                    color = Color.White,
-                    start = androidx.compose.ui.geometry.Offset(size.width * 0.28f, size.height * 0.5f),
-                    end = androidx.compose.ui.geometry.Offset(size.width * 0.72f, size.height * 0.82f),
+                    color = DwijColors.White,
+                    start = Offset(size.width * 0.28f, size.height * 0.5f),
+                    end = Offset(size.width * 0.72f, size.height * 0.82f),
                     strokeWidth = stroke,
                     cap = StrokeCap.Square,
                 )
@@ -302,8 +305,8 @@ private fun FullPlayerTopBar(
             modifier = Modifier.weight(1f),
         ) {
             Text(
-                text = stringResource(R.string.player_now_playing, queuePosition),
-                color = PlayerPink,
+                text = stringResource(Res.string.player_now_playing, queuePosition),
+                color = DwijColors.Pink,
                 fontSize = 9.sp,
                 fontWeight = FontWeight.Bold,
                 letterSpacing = 1.2.sp,
@@ -311,7 +314,7 @@ private fun FullPlayerTopBar(
             )
             Text(
                 text = queueTitle,
-                color = Color.White,
+                color = DwijColors.White,
                 fontSize = 15.sp,
                 fontWeight = FontWeight.SemiBold,
                 maxLines = 1,
@@ -406,7 +409,7 @@ private fun FullPlayerCover(
                         .fillMaxSize()
                         .padding(8.dp)
                         .clip(RoundedCornerShape(16.dp))
-                        .background(Color(0xE00A0C18)),
+                        .background(DwijColors.PlayerCoverPlaceholderBackground),
                 ) {
                     Image(
                         painter = painterResource(Res.drawable.ic_home_player_placeholder),
@@ -414,8 +417,8 @@ private fun FullPlayerCover(
                         modifier = Modifier.size(116.dp),
                     )
                     if (isWaveLoading) {
-                        androidx.compose.material3.CircularProgressIndicator(
-                            color = PlayerPink,
+                        CircularProgressIndicator(
+                            color = DwijColors.Pink,
                             strokeWidth = 3.dp,
                             modifier = Modifier.size(54.dp),
                         )
@@ -443,24 +446,32 @@ private fun GlitchCoverFrame(modifier: Modifier = Modifier) {
         val radius = 17.dp.toPx()
         val inset = 5.dp.toPx()
         drawRoundRect(
-            color = PlayerCyan.copy(alpha = 0.72f),
-            topLeft = androidx.compose.ui.geometry.Offset(inset + 2.dp.toPx(), inset - 1.dp.toPx()),
-            size = androidx.compose.ui.geometry.Size(size.width - inset * 2, size.height - inset * 2),
-            cornerRadius = androidx.compose.ui.geometry.CornerRadius(radius),
+            color = DwijColors.Cyan.copy(alpha = 0.72f),
+            topLeft = Offset(inset + 2.dp.toPx(), inset - 1.dp.toPx()),
+            size = Size(size.width - inset * 2, size.height - inset * 2),
+            cornerRadius = CornerRadius(radius),
             style = Stroke(width = 1.dp.toPx()),
         )
         drawRoundRect(
-            color = PlayerPink.copy(alpha = 0.9f),
-            topLeft = androidx.compose.ui.geometry.Offset(inset - 2.dp.toPx(), inset + 1.dp.toPx()),
-            size = androidx.compose.ui.geometry.Size(size.width - inset * 2, size.height - inset * 2),
-            cornerRadius = androidx.compose.ui.geometry.CornerRadius(radius),
+            color = DwijColors.Pink.copy(alpha = 0.9f),
+            topLeft = Offset(inset - 2.dp.toPx(), inset + 1.dp.toPx()),
+            size = Size(size.width - inset * 2, size.height - inset * 2),
+            cornerRadius = CornerRadius(radius),
             style = Stroke(width = 1.5.dp.toPx()),
         )
         val whiteStroke = 1.dp.toPx()
-        drawLine(Color.White, androidx.compose.ui.geometry.Offset(size.width * 0.08f, inset), androidx.compose.ui.geometry.Offset(size.width * 0.38f, inset), whiteStroke)
-        drawLine(PlayerPink, androidx.compose.ui.geometry.Offset(size.width * 0.66f, inset - 3.dp.toPx()), androidx.compose.ui.geometry.Offset(size.width * 0.91f, inset - 3.dp.toPx()), 2.dp.toPx())
-        drawLine(PlayerCyan, androidx.compose.ui.geometry.Offset(inset - 3.dp.toPx(), size.height * 0.72f), androidx.compose.ui.geometry.Offset(inset - 3.dp.toPx(), size.height * 0.92f), 2.dp.toPx())
-        drawLine(Color.White, androidx.compose.ui.geometry.Offset(size.width * 0.69f, size.height - inset), androidx.compose.ui.geometry.Offset(size.width * 0.93f, size.height - inset), whiteStroke)
+        drawLine(DwijColors.White,
+            Offset(size.width * 0.08f, inset),
+            Offset(size.width * 0.38f, inset), whiteStroke)
+        drawLine(DwijColors.Pink,
+            Offset(size.width * 0.66f, inset - 3.dp.toPx()),
+            Offset(size.width * 0.91f, inset - 3.dp.toPx()), 2.dp.toPx())
+        drawLine(DwijColors.Cyan,
+            Offset(inset - 3.dp.toPx(), size.height * 0.72f),
+            Offset(inset - 3.dp.toPx(), size.height * 0.92f), 2.dp.toPx())
+        drawLine(DwijColors.White,
+            Offset(size.width * 0.69f, size.height - inset),
+            Offset(size.width * 0.93f, size.height - inset), whiteStroke)
     }
 }
 
@@ -504,18 +515,18 @@ private fun PlayerHeartPreview(
             close()
         }
         translate(left = 3.dp.toPx()) {
-            drawPath(heart, PlayerCyan.copy(alpha = 0.55f))
+            drawPath(heart, DwijColors.Cyan.copy(alpha = 0.55f))
         }
         translate(left = -3.dp.toPx()) {
-            drawPath(heart, PlayerPink.copy(alpha = 0.7f))
+            drawPath(heart, DwijColors.Pink.copy(alpha = 0.7f))
         }
         drawPath(
             path = heart,
-            color = if (isLiked) PlayerPink else Color.White.copy(alpha = 0.82f),
+            color = if (isLiked) DwijColors.Pink else DwijColors.White.copy(alpha = 0.82f),
         )
         drawPath(
             path = heart,
-            color = Color.White.copy(alpha = if (isLiked) 0.72f else 0.9f),
+            color = DwijColors.White.copy(alpha = if (isLiked) 0.72f else 0.9f),
             style = Stroke(width = 2.dp.toPx()),
         )
     }
@@ -538,18 +549,18 @@ private fun FullPlayerMetadata(
 //        sourceLabel?.let { source ->
 //            Text(
 //                text = source,
-//                color = PlayerCyan,
+//                color = DwijColors.Cyan,
 //                fontSize = 9.sp,
 //                fontWeight = FontWeight.Bold,
 //                letterSpacing = 1.1.sp,
 //                modifier = Modifier
-//                    .border(1.dp, PlayerCyan.copy(alpha = 0.45f), RoundedCornerShape(3.dp))
+//                    .border(1.dp, DwijColors.Cyan.copy(alpha = 0.45f), RoundedCornerShape(3.dp))
 //                    .padding(horizontal = 8.dp, vertical = 3.dp),
 //            )
 //        }
         Text(
             text = title,
-            color = Color.White,
+            color = DwijColors.White,
             fontSize = 27.sp,
             lineHeight = 31.sp,
             fontWeight = FontWeight.Bold,
@@ -560,7 +571,7 @@ private fun FullPlayerMetadata(
         )
         Text(
             text = artist,
-            color = Color(0xFFD0D2DD),
+            color = DwijColors.PlayerArtistText,
             fontSize = 16.sp,
             textAlign = TextAlign.Center,
             maxLines = 1,
@@ -608,13 +619,13 @@ private fun FullPlayerProgress(
         Row(modifier = Modifier.fillMaxWidth()) {
             Text(
                 text = formatFullPlayerTime(displayedPosition),
-                color = PlayerCyan,
+                color = DwijColors.Cyan,
                 fontSize = 10.sp,
             )
             Spacer(modifier = Modifier.weight(1f))
             Text(
                 text = formatFullPlayerTime(safeDuration),
-                color = PlayerSecondary,
+                color = DwijColors.SecondaryText,
                 fontSize = 10.sp,
             )
         }
@@ -646,7 +657,7 @@ private fun PlayerWaveformSlider(
             painter = waveformPainter,
             contentDescription = null,
             contentScale = ContentScale.FillBounds,
-            colorFilter = ColorFilter.tint(PlayerCyan.copy(alpha = 0.24f)),
+            colorFilter = ColorFilter.tint(DwijColors.Cyan.copy(alpha = 0.24f)),
             modifier = Modifier
                 .fillMaxSize()
                 .padding(vertical = 3.dp),
@@ -655,7 +666,7 @@ private fun PlayerWaveformSlider(
             painter = waveformPainter,
             contentDescription = null,
             contentScale = ContentScale.FillBounds,
-            colorFilter = ColorFilter.tint(PlayerPink),
+            colorFilter = ColorFilter.tint(DwijColors.Pink),
             modifier = Modifier
                 .fillMaxSize()
                 .padding(vertical = 3.dp)
@@ -683,12 +694,12 @@ private fun PlayerWaveformSlider(
             enabled = enabled,
             valueRange = valueRange,
             colors = SliderDefaults.colors(
-                thumbColor = Color.Transparent,
-                activeTrackColor = Color.Transparent,
-                inactiveTrackColor = Color.Transparent,
-                disabledThumbColor = Color.Transparent,
-                disabledActiveTrackColor = Color.Transparent,
-                disabledInactiveTrackColor = Color.Transparent,
+                thumbColor = DwijColors.Transparent,
+                activeTrackColor = DwijColors.Transparent,
+                inactiveTrackColor = DwijColors.Transparent,
+                disabledThumbColor = DwijColors.Transparent,
+                disabledActiveTrackColor = DwijColors.Transparent,
+                disabledInactiveTrackColor = DwijColors.Transparent,
             ),
             modifier = Modifier.fillMaxSize(),
         )
@@ -724,8 +735,8 @@ private fun PlayerPlaylistMemberships(
                 )
             }
             PlayerPlaylistChip(
-                title = stringResource(R.string.player_add_to_playlist),
-                accent = PlayerPink,
+                title = stringResource(Res.string.player_add_to_playlist),
+                accent = DwijColors.Pink,
                 onClick = onAddToPlaylistClick,
             )
         }
@@ -829,7 +840,7 @@ private fun PlayerPlaylistChip(
     ) {
         Text(
             text = title,
-            color = Color.White,
+            color = DwijColors.White,
             fontSize = 12.sp,
             fontWeight = FontWeight.Medium,
             maxLines = 1,
@@ -862,7 +873,7 @@ private fun FullPlayerControls(
         if (showPlaybackModes) {
             PlayerModeControl(
                 mode = PlayerModeIcon.Shuffle,
-                contentDescription = stringResource(R.string.player_shuffle_content_description),
+                contentDescription = stringResource(Res.string.player_shuffle_content_description),
                 selected = isShuffle,
                 enabled = enabled,
                 onClick = onShuffleClick,
@@ -872,7 +883,7 @@ private fun FullPlayerControls(
         }
         PlayerSmallControl(
             icon = Res.drawable.ic_home_player_next,
-            contentDescription = stringResource(R.string.home_player_previous_content_description),
+            contentDescription = stringResource(Res.string.home_player_previous_content_description),
             enabled = enabled,
             mirror = true,
             onClick = onPreviousClick,
@@ -884,14 +895,14 @@ private fun FullPlayerControls(
         )
         PlayerSmallControl(
             icon = Res.drawable.ic_home_player_next,
-            contentDescription = stringResource(R.string.home_player_next_content_description),
+            contentDescription = stringResource(Res.string.home_player_next_content_description),
             enabled = enabled,
             onClick = onNextClick,
         )
         if (showPlaybackModes) {
             PlayerModeControl(
                 mode = PlayerModeIcon.Repeat,
-                contentDescription = stringResource(R.string.player_repeat_content_description),
+                contentDescription = stringResource(Res.string.player_repeat_content_description),
                 selected = isRepeatAll,
                 enabled = enabled,
                 onClick = onRepeatClick,
@@ -928,16 +939,16 @@ private fun PlayerModeControl(
                 .semantics { this.contentDescription = contentDescription },
         ) {
             val primary = when {
-                !enabled -> PlayerSecondary.copy(alpha = 0.35f)
-                selected -> PlayerPink
-                else -> Color.White
+                !enabled -> DwijColors.SecondaryText.copy(alpha = 0.35f)
+                selected -> DwijColors.Pink
+                else -> DwijColors.White
             }
             val stroke = 1.8.dp.toPx()
             val glitchStroke = 1.4.dp.toPx()
 
             fun drawMode(color: Color, horizontalOffset: Float, strokeWidth: Float) {
                 val unit = size.minDimension / 24f
-                fun point(x: Float, y: Float) = androidx.compose.ui.geometry.Offset(
+                fun point(x: Float, y: Float) = Offset(
                     x = x * unit + horizontalOffset,
                     y = y * unit,
                 )
@@ -982,8 +993,8 @@ private fun PlayerModeControl(
                 }
             }
 
-            drawMode(PlayerCyan.copy(alpha = 0.5f), 1.dp.toPx(), glitchStroke)
-            drawMode(PlayerPink.copy(alpha = 0.55f), -1.dp.toPx(), glitchStroke)
+            drawMode(DwijColors.Cyan.copy(alpha = 0.5f), 1.dp.toPx(), glitchStroke)
+            drawMode(DwijColors.Pink.copy(alpha = 0.55f), -1.dp.toPx(), glitchStroke)
             drawMode(primary, 0f, stroke)
         }
     }
@@ -1007,7 +1018,7 @@ private fun PlayerSmallControl(
             painter = painterResource(icon),
             contentDescription = contentDescription,
             colorFilter = ColorFilter.tint(
-                if (enabled) Color.White else PlayerSecondary.copy(alpha = 0.35f),
+                if (enabled) DwijColors.White else DwijColors.SecondaryText.copy(alpha = 0.35f),
             ),
             modifier = Modifier
                 .size(27.dp)
@@ -1028,8 +1039,8 @@ private fun PlayerMainControl(
         modifier = Modifier
             .size(86.dp)
             .clip(CircleShape)
-            .background(Color(0xD90A0714))
-            .border(1.dp, PlayerPink.copy(alpha = if (enabled) 0.9f else 0.35f), CircleShape)
+            .background(DwijColors.PlayerMainControlBackground)
+            .border(1.dp, DwijColors.Pink.copy(alpha = if (enabled) 0.9f else 0.35f), CircleShape)
             .clickable(enabled = enabled, role = Role.Button, onClick = onClick),
     ) {
         Image(
@@ -1042,9 +1053,9 @@ private fun PlayerMainControl(
             ),
             contentDescription = stringResource(
                 if (isPlaying) {
-                    R.string.home_player_pause_content_description
+                    Res.string.home_player_pause_content_description
                 } else {
-                    R.string.home_player_play_content_description
+                    Res.string.home_player_play_content_description
                 },
             ),
             contentScale = ContentScale.FillBounds,
@@ -1064,7 +1075,12 @@ private fun formatFullPlayerTime(milliseconds: Long): String {
 
 /** Возвращает один и тот же акцент для одинакового названия между рекомпозициями. */
 private fun playlistAccent(title: String): Color {
-    val accents = listOf(PlayerPink, PlayerCyan, Color(0xFF9D4DFF), Color(0xFFFF8A00))
+    val accents = listOf(
+        DwijColors.Pink,
+        DwijColors.Cyan,
+        DwijColors.PlayerPlaylistPurple,
+        DwijColors.PlayerPlaylistOrange,
+    )
     return accents[Math.floorMod(title.hashCode(), accents.size)]
 }
 
@@ -1074,7 +1090,7 @@ private fun playlistAccent(title: String): Color {
     widthDp = 360,
     heightDp = 800,
     showBackground = true,
-    backgroundColor = 0xFF03040F,
+    backgroundColor = DwijColors.BackgroundArgb,
 )
 @Composable
 private fun FullPlayerScreenPreview() {
@@ -1114,8 +1130,3 @@ private fun FullPlayerScreenPreview() {
         onSourcesClick = {},
     )
 }
-
-private val PlayerBackground = Color(0xFF03040F)
-private val PlayerSecondary = Color(0xFFA7AABC)
-private val PlayerPink = Color(0xFFFF00BF)
-private val PlayerCyan = Color(0xFF00BBEB)

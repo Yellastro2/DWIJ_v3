@@ -1,9 +1,5 @@
-package com.yellastrodev.dwij
+package com.yellastrodev.dwij.ui
 
-import android.annotation.SuppressLint
-import android.os.SystemClock
-import android.util.Log
-import androidx.activity.compose.BackHandler
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.Image
@@ -63,7 +59,6 @@ import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.drawWithContent
 import androidx.compose.ui.layout.ContentScale
-import androidx.compose.ui.res.colorResource
 import com.yellastrodev.dwij.resources.*
 import org.jetbrains.compose.resources.DrawableResource
 import org.jetbrains.compose.resources.painterResource
@@ -75,12 +70,11 @@ import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.text.style.TextAlign
-import androidx.compose.ui.tooling.preview.Preview
+import org.jetbrains.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import com.yellastrodev.dwij.models.SearchResultItemUiModel
-import com.yellastrodev.dwij.models.SearchUiState
-import com.yellastrodev.dwij.ui.MultipleSourcesIndicator
+import com.yellastrodev.dwij.HomeMusicSource
+import com.yellastrodev.dwij.ui.theme.DwijColors
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import kotlin.math.abs
@@ -107,11 +101,8 @@ fun HomeScreen(
     player: HomeCompactPlayerUiState?,
     selectedSource: HomeMusicSource,
     onSourceSelected: (HomeMusicSource) -> Unit,
-    searchState: SearchUiState,
-    onSearchQueryChange: (String) -> Unit,
-    loadSearchTrackCover: suspend (SearchResultItemUiModel.Track) -> ImageBitmap?,
-    loadSearchEntityCover: suspend (key: String, uri: String) -> ImageBitmap?,
-    onSearchResultClick: (SearchResultItemUiModel) -> Unit,
+    radialMenuContent: @Composable (HomeRadialMenuUiState, Modifier) -> Unit,
+    searchContent: @Composable (Modifier) -> Unit,
     modifier: Modifier = Modifier,
 ) {
     var isRadialMenuVisible by remember { mutableStateOf(false) }
@@ -135,7 +126,7 @@ fun HomeScreen(
         }
     }
 
-    BackHandler(enabled = selectedTab == HomeNavigationTab.Search) {
+    DwijBackHandler(enabled = selectedTab == HomeNavigationTab.Search) {
         navigationTimingTracker.onClick(
             targetLabel = "Главная",
             targetTab = HomeNavigationTab.Main,
@@ -152,7 +143,7 @@ fun HomeScreen(
     Scaffold(
         modifier = modifier
             .fillMaxSize(),
-        containerColor = colorResource(R.color.background),
+        containerColor = DwijColors.Background,
         contentWindowInsets = WindowInsets(0, 0, 0, 0),
         snackbarHost = {
             SnackbarHost(hostState = snackbarHostState)
@@ -161,7 +152,7 @@ fun HomeScreen(
             Column(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .background(colorResource(R.color.background)),
+                    .background(DwijColors.Background),
             ) {
                 if (selectedTab != HomeNavigationTab.Main) player?.let { playerState ->
                     HomeCompactPlayer(
@@ -251,32 +242,33 @@ fun HomeScreen(
                                     modifier = Modifier.fillMaxSize(),
                                 )
                             }
-                            RadialMenu(
-                                items = radialMenuItems,
-                                visible = isRadialMenuVisible,
-                                onPrimaryClick = {
-                                    if (player == null) {
-                                        onWaveClick()
-                                    } else {
-                                        onPlayerPlayPauseClick()
-                                    }
-                                },
-                                onVisualActivation = {
-                                    isRadialMenuVisible = true
-                                },
-                                onPressChange = { isPressed ->
-                                    isPlayerPressed = isPressed
-                                },
-                                onItemClick = { item ->
-                                    isRadialMenuVisible = false
-                                    radialActionMessages[item.id]?.let(::showActionSnackbar)
-                                },
-                                onDismiss = {
-                                    isRadialMenuVisible = false
-                                },
-                                outerRadiusFraction = HOME_RADIAL_MENU_OUTER_RADIUS_FRACTION,
-                                animationStyle = RadialMenuAnimationStyle.GlitchFlicker,
-                                modifier = Modifier.fillMaxSize(),
+                            radialMenuContent(
+                                HomeRadialMenuUiState(
+                                    items = radialMenuItems,
+                                    visible = isRadialMenuVisible,
+                                    outerRadiusFraction = HOME_RADIAL_MENU_OUTER_RADIUS_FRACTION,
+                                    onPrimaryClick = {
+                                        if (player == null) {
+                                            onWaveClick()
+                                        } else {
+                                            onPlayerPlayPauseClick()
+                                        }
+                                    },
+                                    onVisualActivation = {
+                                        isRadialMenuVisible = true
+                                    },
+                                    onPressChange = { isPressed ->
+                                        isPlayerPressed = isPressed
+                                    },
+                                    onItemClick = { item ->
+                                        isRadialMenuVisible = false
+                                        radialActionMessages[item.id]?.let(::showActionSnackbar)
+                                    },
+                                    onDismiss = {
+                                        isRadialMenuVisible = false
+                                    },
+                                ),
+                                Modifier.fillMaxSize(),
                             )
                             if (player != null && !isPlayerHudDimmed) {
                                 HomeOrbitalPlayerTouchTargets(
@@ -329,20 +321,30 @@ fun HomeScreen(
                         )
                     }
                 }
-                HomeNavigationTab.Search -> SearchScreen(
-                    selectedSource = selectedSource,
-                    onSourceSelected = onSourceSelected,
-                    state = searchState,
-                    onQueryChange = onSearchQueryChange,
-                    loadTrackCover = loadSearchTrackCover,
-                    loadEntityCover = loadSearchEntityCover,
-                    onResultClick = onSearchResultClick,
-                    modifier = Modifier.fillMaxSize(),
-                )
+                HomeNavigationTab.Search -> searchContent(Modifier.fillMaxSize())
             }
         }
     }
 }
+
+/** Один сектор радиального меню, не зависящий от его платформенной отрисовки. */
+data class RadialMenuItem(
+    val id: String,
+    val title: String,
+    val color: Color,
+)
+
+/** Состояние и действия, которые shared-экран передаёт реализации радиального меню. */
+data class HomeRadialMenuUiState(
+    val items: List<RadialMenuItem>,
+    val visible: Boolean,
+    val outerRadiusFraction: Float,
+    val onPrimaryClick: () -> Unit,
+    val onVisualActivation: () -> Unit,
+    val onPressChange: (Boolean) -> Unit,
+    val onItemClick: (RadialMenuItem) -> Unit,
+    val onDismiss: () -> Unit,
+)
 
 /** Данные, необходимые компактному плееру без зависимости UI от ViewModel. */
 data class HomeCompactPlayerUiState(
@@ -381,16 +383,16 @@ private class HomeNavigationTimingTracker {
 
     fun onPress(targetLabel: String) {
         pressTarget = targetLabel
-        pressStartedAtNanos = SystemClock.elapsedRealtimeNanos()
-        Log.d(
+        pressStartedAtNanos = System.nanoTime()
+        uiLogDebug(
             HOME_NAVIGATION_TIMING_TAG,
             "[onPress] Палец нажат: цель=$targetLabel",
         )
     }
 
     fun onRelease(targetLabel: String) {
-        val now = SystemClock.elapsedRealtimeNanos()
-        Log.d(
+        val now = System.nanoTime()
+        uiLogDebug(
             HOME_NAVIGATION_TIMING_TAG,
             "[onRelease] Палец отпущен: цель=$targetLabel, " +
                     "после DOWN=${elapsedMillis(pressStartedAtNanos, now)} мс",
@@ -398,8 +400,8 @@ private class HomeNavigationTimingTracker {
     }
 
     fun onCancel(targetLabel: String) {
-        val now = SystemClock.elapsedRealtimeNanos()
-        Log.d(
+        val now = System.nanoTime()
+        uiLogDebug(
             HOME_NAVIGATION_TIMING_TAG,
             "[onCancel] Нажатие отменено: цель=$targetLabel, " +
                     "после DOWN=${elapsedMillis(pressStartedAtNanos, now)} мс",
@@ -413,13 +415,13 @@ private class HomeNavigationTimingTracker {
         targetTab: HomeNavigationTab?,
         currentTab: HomeNavigationTab,
     ) {
-        val now = SystemClock.elapsedRealtimeNanos()
+        val now = System.nanoTime()
         val fromPress = if (pressTarget == targetLabel) {
             "${elapsedMillis(pressStartedAtNanos, now)} мс"
         } else {
             "нет DOWN"
         }
-        Log.d(
+        uiLogDebug(
             HOME_NAVIGATION_TIMING_TAG,
             "[onClick] onClick вызван: цель=$targetLabel, " +
                     "после DOWN=$fromPress, текущая вкладка=$currentTab",
@@ -439,7 +441,7 @@ private class HomeNavigationTimingTracker {
 
     fun onStateAssigned(targetTab: HomeNavigationTab) {
         if (pendingTarget != targetTab) return
-        Log.d(
+        uiLogDebug(
             HOME_NAVIGATION_TIMING_TAG,
             "[onStateAssigned] Вкладка записана в state: цель=$targetTab, " +
                     "после onClick=${elapsedMillis(clickAtNanos)} мс",
@@ -449,7 +451,7 @@ private class HomeNavigationTimingTracker {
     fun onCompositionCommitted(tab: HomeNavigationTab) {
         if (pendingTarget != tab || compositionLogged) return
         compositionLogged = true
-        Log.d(
+        uiLogDebug(
             HOME_NAVIGATION_TIMING_TAG,
             "[onCompositionCommitted] Композиция подтверждена: вкладка=$tab, " +
                     "после onClick=${elapsedMillis(clickAtNanos)} мс",
@@ -459,8 +461,8 @@ private class HomeNavigationTimingTracker {
     fun onFirstDraw(tab: HomeNavigationTab) {
         if (pendingTarget != tab || drawLogged) return
         drawLogged = true
-        val now = SystemClock.elapsedRealtimeNanos()
-        Log.d(
+        val now = System.nanoTime()
+        uiLogDebug(
             HOME_NAVIGATION_TIMING_TAG,
             "[onFirstDraw] Первый draw: вкладка=$tab, " +
                     "после onClick=${elapsedMillis(clickAtNanos, now)} мс, " +
@@ -474,7 +476,7 @@ private class HomeNavigationTimingTracker {
 
     private fun elapsedMillis(
         startedAtNanos: Long,
-        finishedAtNanos: Long = SystemClock.elapsedRealtimeNanos(),
+        finishedAtNanos: Long = System.nanoTime(),
     ): String {
         if (startedAtNanos <= 0L) return "неизвестно"
         val durationMillis = (finishedAtNanos - startedAtNanos) / 1_000_000.0
@@ -502,18 +504,18 @@ private fun homeRadialMenuItems(): List<RadialMenuItem> {
         partyTitle,
     ) {
         listOf(
-            RadialMenuItem("road", roadTitle, Color(0xFFFF2D82)),
-            RadialMenuItem("focus", focusTitle, Color(0xFF00BEFF)),
-            RadialMenuItem("calm", calmTitle, Color(0xFFB737FF)),
-            RadialMenuItem("favorite", favoriteTitle, Color(0xFFFF2D96)),
-            RadialMenuItem("radio", radioTitle, Color(0xFF00E6DC)),
-            RadialMenuItem("party", partyTitle, Color(0xFFFF9100)),
+            RadialMenuItem("road", roadTitle, DwijColors.HomeRadialRoad),
+            RadialMenuItem("focus", focusTitle, DwijColors.HomeRadialFocus),
+            RadialMenuItem("calm", calmTitle, DwijColors.HomeRadialCalm),
+            RadialMenuItem("favorite", favoriteTitle, DwijColors.HomeRadialFavorite),
+            RadialMenuItem("radio", radioTitle, DwijColors.HomeRadialRadio),
+            RadialMenuItem("party", partyTitle, DwijColors.HomeRadialParty),
         )
     }
 }
 
 /** Рисует орбитальные элементы управления под слоем радиального меню. */
-@SuppressLint("UnusedBoxWithConstraintsScope")
+@Suppress("UnusedBoxWithConstraintsScope")
 @Composable
 private fun HomeOrbitalPlayerHud(
     player: HomeCompactPlayerUiState,
@@ -548,7 +550,7 @@ private fun HomeOrbitalPlayerHud(
         )
         Text(
             text = formatPlayerTime(player.currentPositionMillis),
-            color = Color(0xFFE7E5ED),
+            color = DwijColors.HomeTimeText,
             fontSize = 10.sp,
             fontWeight = FontWeight.Medium,
             modifier = Modifier
@@ -557,7 +559,7 @@ private fun HomeOrbitalPlayerHud(
         )
         Text(
             text = formatPlayerTime(player.durationMillis),
-            color = Color(0xFFE7E5ED),
+            color = DwijColors.HomeTimeText,
             fontSize = 10.sp,
             fontWeight = FontWeight.Medium,
             modifier = Modifier
@@ -573,7 +575,7 @@ private fun HomeOrbitalPlayerHud(
         ) {
             Text(
                 text = player.title,
-                color = Color.White,
+                color = DwijColors.White,
                 fontSize = 15.sp,
                 fontWeight = FontWeight.SemiBold,
                 textAlign = TextAlign.Center,
@@ -582,7 +584,7 @@ private fun HomeOrbitalPlayerHud(
             )
             Text(
                 text = player.artist,
-                color = Color(0xFFAAAFC0),
+                color = DwijColors.MutedText,
                 fontSize = 12.sp,
                 textAlign = TextAlign.Center,
                 maxLines = 1,
@@ -593,7 +595,7 @@ private fun HomeOrbitalPlayerHud(
 }
 
 /** Даёт элементам HUD кликабельность, не перекрывая ими открытое радиальное меню. */
-@SuppressLint("UnusedBoxWithConstraintsScope")
+@Suppress("UnusedBoxWithConstraintsScope")
 @Composable
 private fun HomeOrbitalPlayerTouchTargets(
     onPreviousClick: () -> Unit,
@@ -642,7 +644,7 @@ private fun HomeOrbitalPlayerTouchTargets(
 }
 
 /** Карточка текущего трека, закреплённая непосредственно над нижней навигацией. */
-@SuppressLint("UnusedBoxWithConstraintsScope")
+@Suppress("UnusedBoxWithConstraintsScope")
 @Composable
 fun HomeCompactPlayer(
     player: HomeCompactPlayerUiState,
@@ -706,7 +708,7 @@ fun HomeCompactPlayer(
             Column(modifier = Modifier.width(detailsWidth)) {
                 Text(
                     text = player.title,
-                    color = Color.White,
+                    color = DwijColors.White,
                     fontSize = 15.sp,
                     fontWeight = FontWeight.SemiBold,
                     maxLines = 1,
@@ -714,7 +716,7 @@ fun HomeCompactPlayer(
                 )
                 Text(
                     text = player.artist,
-                    color = Color(0xFFAAAFC0),
+                    color = DwijColors.MutedText,
                     fontSize = 12.sp,
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis,
@@ -765,7 +767,7 @@ fun HomeCompactPlayer(
 }
 
 /** Линейный прогресс с текущим и полным временем трека. */
-@SuppressLint("UnusedBoxWithConstraintsScope")
+@Suppress("UnusedBoxWithConstraintsScope")
 @Composable
 private fun HomePlayerProgress(
     currentPositionMillis: Long,
@@ -786,7 +788,7 @@ private fun HomePlayerProgress(
         Row(verticalAlignment = Alignment.CenterVertically) {
             Text(
                 text = formatPlayerTime(safePosition),
-                color = Color(0xFFCDD0DC),
+                color = DwijColors.HomeProgressText,
                 fontSize = 9.sp,
             )
             Spacer(modifier = Modifier.width(5.dp))
@@ -795,19 +797,19 @@ private fun HomePlayerProgress(
                     .width(progressWidth)
                     .height(3.dp)
                     .clip(RoundedCornerShape(2.dp))
-                    .background(Color(0xFF303543)),
+                    .background(DwijColors.HomeProgressBackground),
             ) {
                 Box(
                     modifier = Modifier
                         .fillMaxWidth(progress)
                         .height(3.dp)
-                        .background(Color(0xFFFF178F)),
+                        .background(DwijColors.HomeNavigationSelected),
                 )
             }
             Spacer(modifier = Modifier.width(5.dp))
             Text(
                 text = formatPlayerTime(safeDuration),
-                color = Color(0xFFCDD0DC),
+                color = DwijColors.HomeProgressText,
                 fontSize = 9.sp,
             )
         }
@@ -815,7 +817,7 @@ private fun HomePlayerProgress(
 }
 
 /** Три пункта нижней навигации с переключением активной главной или поиска. */
-@SuppressLint("UnusedBoxWithConstraintsScope")
+@Suppress("UnusedBoxWithConstraintsScope")
 @Composable
 private fun HomeBottomNavigation(
     selectedTab: HomeNavigationTab,
@@ -901,7 +903,11 @@ private fun HomeBottomNavigationItem(
     onClick: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
-    val contentColor = if (selected) Color(0xFFFF178F) else Color(0xFF9095A7)
+    val contentColor = if (selected) {
+        DwijColors.HomeNavigationSelected
+    } else {
+        DwijColors.HomeNavigationUnselected
+    }
     val interactionSource = remember { MutableInteractionSource() }
     val currentOnPress by rememberUpdatedState(onPress)
     val currentOnRelease by rememberUpdatedState(onRelease)
@@ -949,7 +955,7 @@ private fun HomeBottomNavigationItem(
                 modifier = Modifier
                     .width(46.dp)
                     .height(2.dp)
-                    .background(Color(0xFFFF178F)),
+                    .background(DwijColors.HomeNavigationSelected),
             )
         }
     }
@@ -1137,9 +1143,9 @@ fun MusicSourceSelector(
                     Text(
                         text = option.title,
                         color = if (isSelected && selectedFrameVisible) {
-                            Color.White
+                            DwijColors.White
                         } else {
-                            Color(0xFFAAAFC0)
+                            DwijColors.MutedText
                         },
                         fontSize = 14.sp,
                         fontWeight = if (isSelected) {
@@ -1247,7 +1253,7 @@ private fun HomeMenuCard(
         )
         Text(
             text = title,
-            color = Color.White,
+            color = DwijColors.White,
             fontSize = 14.sp,
             fontWeight = FontWeight.Medium,
             textAlign = TextAlign.Start,
@@ -1280,11 +1286,8 @@ private fun HomeScreenPreview() {
         onPlayerNextClick = {},
         selectedSource = HomeMusicSource.Yandex,
         onSourceSelected = {},
-        searchState = SearchUiState(),
-        onSearchQueryChange = {},
-        loadSearchTrackCover = { null },
-        loadSearchEntityCover = { _, _ -> null },
-        onSearchResultClick = {},
+        radialMenuContent = { _, _ -> },
+        searchContent = {},
         player = HomeCompactPlayerUiState(
             title = "Ночной город",
             artist = "Три дня дождя",

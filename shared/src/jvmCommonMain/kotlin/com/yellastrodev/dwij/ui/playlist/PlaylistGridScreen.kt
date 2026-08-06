@@ -36,7 +36,6 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.geometry.Offset
-import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.ImageBitmap
 import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.text.font.FontWeight
@@ -44,6 +43,7 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.yellastrodev.dwij.HomeMusicSource
+import com.yellastrodev.dwij.ui.theme.DwijColors
 import androidx.compose.runtime.getValue
 
 /** Минимальный общий контракт элемента сетки плейлистов. */
@@ -107,7 +107,7 @@ fun <T : PlaylistGridEntry> PlaylistGridScreen(
 
     Scaffold(
         modifier = modifier.fillMaxSize(),
-        containerColor = PlaylistScreenBackground,
+        containerColor = DwijColors.Background,
         contentWindowInsets = WindowInsets(
             left = 0,
             top = 0,
@@ -119,7 +119,7 @@ fun <T : PlaylistGridEntry> PlaylistGridScreen(
             modifier = Modifier
                 .fillMaxSize()
                 .padding(contentPadding)
-                .background(PlaylistScreenBackground)
+                .background(DwijColors.Background)
                 .statusBarsPadding(),
         ) {
             PlaylistGridHeader(
@@ -324,7 +324,7 @@ private fun PlaylistGridEmptyState(
     ) {
         Text(
             text = message,
-            color = Color(0xFF969BAD),
+            color = DwijColors.ListSecondaryText,
             fontSize = 15.sp,
             lineHeight = 21.sp,
         )
@@ -368,13 +368,13 @@ private fun PlaylistGridLoadingPlaceholder(
                         RoundedCornerShape(12.dp),
                     )
                     .background(
-                        PlaylistLoadingPlaceholder,
+                        DwijColors.LoadingPlaceholder.copy(alpha = 0.62f),
                     ),
             ) {
                 if (index == 0) {
                     Text(
                         text = loadingMessage,
-                        color = Color.White.copy(
+                        color = DwijColors.White.copy(
                             alpha = 0.52f,
                         ),
                         fontSize = 13.sp,
@@ -395,7 +395,7 @@ private fun PlaylistGridLoadingPlaceholder(
                                 ),
                             )
                             .background(
-                                Color.White.copy(
+                                DwijColors.White.copy(
                                     alpha = 0.09f,
                                 ),
                             ),
@@ -435,7 +435,7 @@ private fun PlaylistGridHeader(
                     2.dp.toPx()
 
                 drawLine(
-                    color = Color.White,
+                    color = DwijColors.White,
                     start = Offset(
                         x = size.width * 0.68f,
                         y = size.height * 0.18f,
@@ -449,7 +449,7 @@ private fun PlaylistGridHeader(
                 )
 
                 drawLine(
-                    color = Color.White,
+                    color = DwijColors.White,
                     start = Offset(
                         x = size.width * 0.32f,
                         y = size.height * 0.5f,
@@ -470,7 +470,7 @@ private fun PlaylistGridHeader(
 
         Text(
             text = title,
-            color = Color.White,
+            color = DwijColors.White,
             fontSize = 27.sp,
             fontWeight =
                 FontWeight.SemiBold,
@@ -481,13 +481,6 @@ private fun PlaylistGridHeader(
     }
 }
 
-private val PlaylistScreenBackground =
-    Color(0xFF03040F)
-
-private val PlaylistLoadingPlaceholder =
-    Color(0xFF202635).copy(
-        alpha = 0.62f,
-    )
 
 private const val
         PLAYLIST_LOADING_PLACEHOLDER_COUNT = 6

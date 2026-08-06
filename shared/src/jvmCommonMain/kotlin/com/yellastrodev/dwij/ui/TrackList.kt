@@ -26,14 +26,14 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.ImageBitmap
-import androidx.compose.ui.tooling.preview.Preview
+import org.jetbrains.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.yellastrodev.dwij.TrackListItemUiModel
 import com.yellastrodev.dwij.resources.Res
 import com.yellastrodev.dwij.resources.*
+import com.yellastrodev.dwij.ui.theme.DwijColors
 import org.jetbrains.compose.resources.stringResource
 
 /**
@@ -90,7 +90,7 @@ fun TrackList(
                     if (emptyMessage.isNotBlank()) {
                         Text(
                             text = emptyMessage,
-                            color = TrackSecondaryText,
+                            color = DwijColors.SecondaryText,
                             fontSize = 15.sp,
                         )
                     }
@@ -160,7 +160,7 @@ private fun TrackListLoadingPlaceholder(showMessage: Boolean) {
             modifier = Modifier
                 .size(60.dp)
                 .clip(RoundedCornerShape(5.dp))
-                .background(TrackLoadingPlaceholder),
+                .background(DwijColors.LoadingPlaceholder.copy(alpha = 0.62f)),
         )
 
         Column(
@@ -171,7 +171,7 @@ private fun TrackListLoadingPlaceholder(showMessage: Boolean) {
             if (showMessage) {
                 Text(
                     text = stringResource(Res.string.list_loading_placeholder),
-                    color = TrackSecondaryText.copy(alpha = 0.72f),
+                    color = DwijColors.SecondaryText.copy(alpha = 0.72f),
                     fontSize = 15.sp,
                     maxLines = 1,
                 )
@@ -181,7 +181,7 @@ private fun TrackListLoadingPlaceholder(showMessage: Boolean) {
                         .fillMaxWidth(0.64f)
                         .height(13.dp)
                         .clip(RoundedCornerShape(4.dp))
-                        .background(TrackLoadingPlaceholder),
+                        .background(DwijColors.LoadingPlaceholder.copy(alpha = 0.62f)),
                 )
             }
 
@@ -191,7 +191,7 @@ private fun TrackListLoadingPlaceholder(showMessage: Boolean) {
                     .fillMaxWidth(if (showMessage) 0.38f else 0.43f)
                     .height(9.dp)
                     .clip(RoundedCornerShape(4.dp))
-                    .background(TrackLoadingPlaceholder.copy(alpha = 0.72f)),
+                    .background(DwijColors.LoadingPlaceholder.copy(alpha = 0.72f)),
             )
         }
     }
@@ -202,7 +202,7 @@ private fun TrackListLoadingPlaceholder(showMessage: Boolean) {
     widthDp = 360,
     heightDp = 360,
     showBackground = true,
-    backgroundColor = 0xFF03040F,
+    backgroundColor = DwijColors.BackgroundArgb,
 )
 @Composable
 private fun TrackListPreview() {
@@ -236,10 +236,8 @@ private fun TrackListPreview() {
             ),
         ),
         onItemClick = { _, _ -> },
-        modifier = Modifier.background(TrackListBackground),
+        modifier = Modifier.background(DwijColors.Background),
     )
 }
 
-private val TrackListBackground = Color(0xFF03040F)
-private val TrackLoadingPlaceholder = Color(0xFF202635).copy(alpha = 0.62f)
 private const val TRACK_LOADING_PLACEHOLDER_COUNT = 5

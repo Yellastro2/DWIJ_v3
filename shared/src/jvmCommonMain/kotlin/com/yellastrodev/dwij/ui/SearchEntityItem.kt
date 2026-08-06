@@ -1,6 +1,5 @@
-package com.yellastrodev.dwij
+package com.yellastrodev.dwij.ui
 
-import android.util.Log
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
@@ -23,10 +22,8 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.ImageBitmap
 import androidx.compose.ui.layout.ContentScale
-import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
@@ -34,6 +31,10 @@ import androidx.compose.ui.unit.sp
 import com.yellastrodev.dwij.models.SearchEntityKind
 import com.yellastrodev.dwij.models.SearchResultItemUiModel
 import kotlinx.coroutines.CancellationException
+import org.jetbrains.compose.resources.stringResource
+import com.yellastrodev.dwij.resources.Res
+import com.yellastrodev.dwij.resources.*
+import com.yellastrodev.dwij.ui.theme.DwijColors
 
 /** Компактная строка альбома или артиста с круглой обложкой и одной строкой метаданных. */
 @Composable
@@ -59,7 +60,7 @@ fun SearchEntityItem(
         ) {
             Text(
                 text = item.title,
-                color = Color.White,
+                color = DwijColors.White,
                 fontSize = 17.sp,
                 fontWeight = FontWeight.Medium,
                 maxLines = 1,
@@ -67,7 +68,7 @@ fun SearchEntityItem(
             )
             Text(
                 text = searchEntityMeta(item),
-                color = Color(0xFF8F96A9),
+                color = DwijColors.SearchEntityMeta,
                 fontSize = 13.sp,
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis,
@@ -91,7 +92,6 @@ private fun SearchEntityAvatar(
         } catch (error: CancellationException) {
             throw error
         } catch (error: Exception) {
-            Log.w(TAG, "[SearchEntityAvatar] Не загрузилась обложка key=${item.key}", error)
             null
         }
     }
@@ -101,7 +101,7 @@ private fun SearchEntityAvatar(
         modifier = Modifier
             .size(60.dp)
             .clip(CircleShape)
-            .background(Color(0xFF12182A)),
+            .background(DwijColors.SearchEntityAvatarBackground),
     ) {
         bitmap?.let { loaded ->
             Image(
@@ -112,7 +112,7 @@ private fun SearchEntityAvatar(
             )
         } ?: Text(
             text = item.title.take(1).uppercase(),
-            color = Color(0x99FF4BA7),
+            color = DwijColors.SearchEntityAvatarInitial,
             fontSize = 22.sp,
             fontWeight = FontWeight.SemiBold,
         )
@@ -123,12 +123,12 @@ private fun SearchEntityAvatar(
 private fun searchEntityMeta(item: SearchResultItemUiModel.Entity): String = when {
     item.artistNames.isNotEmpty() -> item.artistNames.joinToString(", ")
     item.kind == SearchEntityKind.Artist && item.trackCount != null ->
-        stringResource(R.string.search_artist_track_count, item.trackCount!!)
+        stringResource(Res.string.search_artist_track_count, item.trackCount!!)
     item.genres.isNotEmpty() -> item.genres.take(2).joinToString(" · ")
-    item.trackCount != null -> stringResource(R.string.search_album_track_count, item.trackCount!!)
-    item.likesCount != null -> stringResource(R.string.search_entity_likes_count, item.likesCount!!)
-    item.kind == SearchEntityKind.Album -> stringResource(R.string.search_entity_album)
-    else -> stringResource(R.string.search_entity_artist)
+    item.trackCount != null -> stringResource(Res.string.search_album_track_count, item.trackCount!!)
+    item.likesCount != null -> stringResource(Res.string.search_entity_likes_count, item.likesCount!!)
+    item.kind == SearchEntityKind.Album -> stringResource(Res.string.search_entity_album)
+    else -> stringResource(Res.string.search_entity_artist)
 }
 
 private const val TAG = "SearchEntityItem"

@@ -31,7 +31,7 @@ import androidx.navigation.NavHostController
 import com.yellastrodev.dwij.CACHE_SIZE
 import com.yellastrodev.dwij.DEFAULT_CACHE_SIZE
 import com.yellastrodev.dwij.R
-import com.yellastrodev.dwij.SettingsScreen
+import com.yellastrodev.dwij.ui.SettingsScreen
 import com.yellastrodev.dwij.YA_ID
 import com.yellastrodev.dwij.YA_LOGIN
 import com.yellastrodev.dwij.YA_REFRESH_TOKEN

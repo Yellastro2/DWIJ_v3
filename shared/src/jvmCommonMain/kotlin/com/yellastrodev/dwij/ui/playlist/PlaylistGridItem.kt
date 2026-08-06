@@ -30,6 +30,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.yellastrodev.dwij.ui.theme.DwijColors
 
 /**
  * Платформонезависимые данные плитки плейлиста.
@@ -133,14 +134,14 @@ fun PlaylistGridItem(
         ) {
             PlaylistGridTextPlate(
                 backgroundColor = if (item.highlighted) {
-                    PlaylistHighlightedTitleBackground
+                    DwijColors.PlaylistHighlightedTitleBackground
                 } else {
-                    PlaylistTitleBackground
+                    DwijColors.PlaylistTitleBackground
                 },
             ) {
                 Text(
                     text = item.title,
-                    color = Color.White,
+                    color = DwijColors.White,
                     fontSize = 14.sp,
                     fontWeight = FontWeight.Bold,
                     lineHeight = 20.sp,
@@ -155,11 +156,11 @@ fun PlaylistGridItem(
 
             if (item.details.isNotBlank()) {
                 PlaylistGridTextPlate(
-                    backgroundColor = PlaylistDetailsBackground,
+                    backgroundColor = DwijColors.PlaylistDetailsBackground,
                 ) {
                     Text(
                         text = item.details,
-                        color = Color(0xFFE9F8FF),
+                        color = DwijColors.PlaylistDetailsText,
                         fontSize = 8.sp,
                         fontWeight = FontWeight.Medium,
                         lineHeight = 15.sp,
@@ -220,7 +221,7 @@ private fun PlaylistCover(
         else -> {
             Box(
                 modifier = modifier.background(
-                    PlaylistBackground,
+                    DwijColors.Background,
                 ),
             )
         }
@@ -244,15 +245,3 @@ private fun PlaylistGridTextPlate(
         content()
     }
 }
-
-private val PlaylistBackground =
-    Color(0xFF03040F)
-
-private val PlaylistTitleBackground =
-    Color(0xB30A0714)
-
-private val PlaylistHighlightedTitleBackground =
-    Color(0xB31A0B22)
-
-private val PlaylistDetailsBackground =
-    Color(0x99001622)

@@ -41,12 +41,13 @@ import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
-import androidx.compose.ui.tooling.preview.Preview
+import org.jetbrains.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.platform.LocalDensity
 import com.yellastrodev.dwij.TrackListItemUiModel
 import com.yellastrodev.dwij.resources.*
+import com.yellastrodev.dwij.ui.theme.DwijColors
 import org.jetbrains.compose.resources.painterResource
 import org.jetbrains.compose.resources.stringResource
 
@@ -87,7 +88,7 @@ fun ObjectScreen(
     Column(
         modifier = modifier
             .fillMaxSize()
-            .background(ObjectScreenBackground)
+            .background(DwijColors.Background)
             .navigationBarsPadding(),
     ) {
         ObjectTopBar(
@@ -147,7 +148,7 @@ private fun ObjectTopBar(
     Box(
         modifier = Modifier
             .fillMaxWidth()
-            .background(ObjectScreenBackground.copy(alpha = collapseFraction * 0.96f))
+            .background(DwijColors.Background.copy(alpha = collapseFraction * 0.96f))
             .statusBarsPadding()
             .height(54.dp)
             .padding(horizontal = 6.dp),
@@ -162,28 +163,28 @@ private fun ObjectTopBar(
             Canvas(modifier = Modifier.size(25.dp)) {
                 val stroke = 2.dp.toPx()
                 drawLine(
-                    color = ObjectCyan,
+                    color = DwijColors.Cyan,
                     start = Offset(size.width * 0.72f + 1.2.dp.toPx(), size.height * 0.17f),
                     end = Offset(size.width * 0.29f + 1.2.dp.toPx(), size.height * 0.5f),
                     strokeWidth = stroke,
                     cap = StrokeCap.Square,
                 )
                 drawLine(
-                    color = ObjectPink,
+                    color = DwijColors.Pink,
                     start = Offset(size.width * 0.72f - 1.2.dp.toPx(), size.height * 0.83f),
                     end = Offset(size.width * 0.29f - 1.2.dp.toPx(), size.height * 0.5f),
                     strokeWidth = stroke,
                     cap = StrokeCap.Square,
                 )
                 drawLine(
-                    color = Color.White,
+                    color = DwijColors.White,
                     start = Offset(size.width * 0.72f, size.height * 0.17f),
                     end = Offset(size.width * 0.29f, size.height * 0.5f),
                     strokeWidth = stroke,
                     cap = StrokeCap.Square,
                 )
                 drawLine(
-                    color = Color.White,
+                    color = DwijColors.White,
                     start = Offset(size.width * 0.29f, size.height * 0.5f),
                     end = Offset(size.width * 0.72f, size.height * 0.83f),
                     strokeWidth = stroke,
@@ -193,7 +194,7 @@ private fun ObjectTopBar(
         }
         Text(
             text = title,
-            color = Color.White,
+            color = DwijColors.White,
             fontSize = 18.sp,
             fontWeight = FontWeight.SemiBold,
             maxLines = 1,
@@ -250,7 +251,7 @@ private fun ObjectHeader(
             )
             Text(
                 text = title,
-                color = Color.White,
+                color = DwijColors.White,
                 fontSize = 29.sp,
                 lineHeight = 34.sp,
                 fontWeight = FontWeight.Bold,
@@ -261,7 +262,7 @@ private fun ObjectHeader(
             )
             Text(
                 text = subtitle,
-                color = ObjectSecondaryText,
+                color = DwijColors.SecondaryText,
                 fontSize = 14.sp,
                 textAlign = TextAlign.Center,
                 modifier = Modifier.padding(top = 7.dp),
@@ -269,7 +270,7 @@ private fun ObjectHeader(
             if (!description.isNullOrBlank()) {
                 Text(
                     text = description,
-                    color = Color(0xFFD4D6E0),
+                    color = DwijColors.ObjectTitleText,
                     fontSize = 13.sp,
                     lineHeight = 18.sp,
                     textAlign = TextAlign.Center,
@@ -288,7 +289,7 @@ private fun ObjectHeader(
                 if (showShare) {
                     ObjectActionButton(
                         text = stringResource(Res.string.object_share),
-                        accent = ObjectCyan,
+                        accent = DwijColors.Cyan,
                         onClick = onShareClick,
                     )
                     Spacer(modifier = Modifier.width(12.dp))
@@ -298,7 +299,7 @@ private fun ObjectHeader(
                     Spacer(modifier = Modifier.width(12.dp))
                     ObjectActionButton(
                         text = stringResource(Res.string.object_wave),
-                        accent = ObjectPink,
+                        accent = DwijColors.Pink,
                         onClick = onWaveClick,
                     )
                 }
@@ -310,13 +311,13 @@ private fun ObjectHeader(
                     .height(2.dp),
             ) {
                 drawLine(
-                    color = ObjectCyan.copy(alpha = 0.7f),
+                    color = DwijColors.Cyan.copy(alpha = 0.7f),
                     start = Offset(size.width * 0.05f, size.height * 0.25f),
                     end = Offset(size.width * 0.48f, size.height * 0.25f),
                     strokeWidth = 1.dp.toPx(),
                 )
                 drawLine(
-                    color = ObjectPink.copy(alpha = 0.75f),
+                    color = DwijColors.Pink.copy(alpha = 0.75f),
                     start = Offset(size.width * 0.52f, size.height * 0.75f),
                     end = Offset(size.width * 0.95f, size.height * 0.75f),
                     strokeWidth = 1.dp.toPx(),
@@ -351,7 +352,7 @@ private fun ObjectCover(
                 modifier = Modifier
                     .size(174.dp)
                     .clip(RoundedCornerShape(12.dp))
-                    .background(Color(0xCC0D1020)),
+                    .background(DwijColors.ObjectHeaderOverlay),
             ) {
                 Image(
                     painter = painterResource(Res.drawable.ic_playlist_liked),
@@ -377,8 +378,8 @@ private fun ObjectPlayButton(onClick: () -> Unit) {
         modifier = Modifier
             .size(76.dp)
             .clip(RoundedCornerShape(18.dp))
-            .background(Color(0xB30A0714))
-            .border(1.dp, ObjectPink.copy(alpha = 0.85f), RoundedCornerShape(18.dp))
+            .background(DwijColors.ObjectActionBackground)
+            .border(1.dp, DwijColors.Pink.copy(alpha = 0.85f), RoundedCornerShape(18.dp))
             .clickable(onClick = onClick),
     ) {
         Image(
@@ -403,13 +404,13 @@ private fun ObjectActionButton(
             .width(100.dp)
             .height(48.dp)
             .clip(RoundedCornerShape(12.dp))
-            .background(Color(0xA6080B16))
+            .background(DwijColors.ObjectFooterBackground)
             .border(1.dp, accent.copy(alpha = 0.72f), RoundedCornerShape(12.dp))
             .clickable(onClick = onClick),
     ) {
         Text(
             text = text,
-            color = Color.White,
+            color = DwijColors.White,
             fontSize = 12.sp,
             fontWeight = FontWeight.Medium,
             maxLines = 1,
@@ -423,7 +424,7 @@ private fun ObjectActionButton(
     widthDp = 360,
     heightDp = 780,
     showBackground = true,
-    backgroundColor = 0xFF03040F,
+    backgroundColor = DwijColors.BackgroundArgb,
 )
 @Composable
 private fun ObjectScreenPreview() {
@@ -443,8 +444,3 @@ private fun ObjectScreenPreview() {
         loadTrackCover = { null },
     )
 }
-
-private val ObjectScreenBackground = Color(0xFF03040F)
-private val ObjectSecondaryText = Color(0xFFA7AABC)
-private val ObjectPink = Color(0xFFFF00BF)
-private val ObjectCyan = Color(0xFF00BBEB)

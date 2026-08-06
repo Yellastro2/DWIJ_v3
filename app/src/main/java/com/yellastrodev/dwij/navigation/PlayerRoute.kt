@@ -13,8 +13,8 @@ import androidx.compose.ui.graphics.ImageBitmap
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
 import androidx.navigation.NavHostController
-import com.yellastrodev.dwij.FullPlayerScreen
-import com.yellastrodev.dwij.FullPlayerUiState
+import com.yellastrodev.dwij.ui.FullPlayerScreen
+import com.yellastrodev.dwij.ui.FullPlayerUiState
 import com.yellastrodev.dwij.ui.MultiSourceDialog
 import com.yellastrodev.dwij.R
 import com.yellastrodev.dwij.TrackListItemUiModel

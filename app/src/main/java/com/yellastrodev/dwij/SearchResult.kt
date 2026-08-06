@@ -20,6 +20,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.yellastrodev.dwij.models.SearchResultItemUiModel
 import com.yellastrodev.dwij.models.SearchUiState
+import com.yellastrodev.dwij.ui.SearchEntityItem
 import com.yellastrodev.dwij.ui.TrackCoverLoader
 import com.yellastrodev.dwij.ui.TrackCoverState
 import com.yellastrodev.dwij.ui.TrackListItem
