@@ -11,14 +11,15 @@ import androidx.lifecycle.viewmodel.initializer
 import androidx.lifecycle.viewmodel.viewModelFactory
 import com.yellastrodev.dwij.models.AndroidPlayerCoverLoader
 import com.yellastrodev.dwij.models.PlayerModel
+import com.yellastrodev.dwij.navigation.AndroidDwijAppPlatform
 import com.yellastrodev.dwij.navigation.DwijApp
 import com.yellastrodev.dwij.ui.LocalYamLogger
 import com.yellastrodev.dwij.yApplication
 
 /**
- * Единственная Activity приложения.
+ * Android-точка входа приложения.
  *
- * Всё содержимое и навигация размещены в Compose.
+ * Создаёт Android-зависимости и запускает полностью shared Compose-корень.
  */
 class MainActivity : ComponentActivity() {
 
@@ -85,6 +86,8 @@ class MainActivity : ComponentActivity() {
                         playerModel,
                     component =
                         dwijApplication.component,
+                    platform =
+                        AndroidDwijAppPlatform,
                 )
             }
         }

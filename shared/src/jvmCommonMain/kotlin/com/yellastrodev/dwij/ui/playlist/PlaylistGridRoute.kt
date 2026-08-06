@@ -43,7 +43,7 @@ data class PlaylistGridDependencies(
     val musicSourceSelectionStore: MusicSourceSelectionStore,
 )
 
-/** Тексты, которые пока ещё приходят из Android resources. */
+/** Тексты экрана плейлистов. */
 @Immutable
 data class PlaylistGridTexts(
     val title: String,
@@ -91,6 +91,7 @@ data class PlaylistGridMessageEvent(
 )
 
 sealed interface PlaylistGridDialogState {
+
     @Immutable
     data class Create(
         val source: HomeMusicSource,
@@ -122,8 +123,9 @@ data class PlaylistGridRouteState(
 )
 
 /**
- * Действия, которые presentation-слой просто возвращает владельцу экрана.
- * Решения по этим действиям принимает shared route ниже.
+ * Действия, которые presentation-слой возвращает владельцу экрана.
+ *
+ * Решения по этим действиям принимает shared-route.
  */
 class PlaylistGridRouteActions internal constructor(
     val onSourceSelected: (HomeMusicSource) -> Unit,
@@ -133,7 +135,10 @@ class PlaylistGridRouteActions internal constructor(
     val loadCover: suspend (String) -> ImageBitmap?,
     val onRefresh: () -> Unit,
     val onDialogDismiss: () -> Unit,
-    val onCreatePlaylist: (title: String, isPublic: Boolean) -> Unit,
+    val onCreatePlaylist: (
+        title: String,
+        isPublic: Boolean,
+    ) -> Unit,
     val onRemoveTrackConfirm: () -> Unit,
     val onDeleteInfoConfirm: () -> Unit,
 )
@@ -141,17 +146,20 @@ class PlaylistGridRouteActions internal constructor(
 /**
  * Shared-владелец экрана плейлистов.
  *
- * Здесь живут режим добавления трека, выбор источника, состояния диалогов,
- * операции с плейлистами, refresh и вся логика кликов.
+ * Здесь находятся выбор источника, состояния диалогов, операции с плейлистами,
+ * обновление данных и обработка пользовательских действий.
  *
- * [content] — временный presentation-мост к текущим Android resources.
- * После переноса оставшейся статики он исчезнет, логика route не изменится.
+ * Навигационные действия передаются отдельными callback-функциями, поэтому
+ * платформенный адаптер больше не зависит от конкретной системы навигации.
  */
 @Composable
 fun PlaylistGridRoute(
     trackToAdd: String? = null,
     dependencies: PlaylistGridDependencies,
     platform: PlaylistGridPlatform,
+    onOpenYandexPlaylist: (playlistId: String) -> Unit,
+    onOpenLocalPlaylist: (playlistId: String) -> Unit,
+    onCloseScreen: () -> Unit,
     texts: PlaylistGridTexts,
     content: @Composable (
         state: PlaylistGridRouteState,
@@ -161,6 +169,7 @@ fun PlaylistGridRoute(
     modifier: Modifier = Modifier,
 ) {
     val coroutineScope = rememberCoroutineScope()
+
     val model = viewModel(
         key = "playlist-grid-${trackToAdd ?: "browse"}",
     ) {
@@ -172,35 +181,81 @@ fun PlaylistGridRoute(
     }
 
     val yandexPlaylists by model.playlists.collectAsState()
-    val yandexInitialLoadComplete by model.initialLoadComplete.collectAsState()
-    val localPlaylistSummarySnapshot by dependencies.localMusicRepository.playlistSummaries
+    val yandexInitialLoadComplete by
+    model.initialLoadComplete.collectAsState()
+
+    val localPlaylistSummarySnapshot by
+    dependencies.localMusicRepository
+        .playlistSummaries
         .collectAsState(initial = null)
-    val isLocalSynchronizing by dependencies.localMusicRepository.isSynchronizing
-        .collectAsState()
-    val musicSource by dependencies.musicSourceSelectionStore.selectedSource
+
+    val isLocalSynchronizing by
+    dependencies.localMusicRepository
+        .isSynchronizing
         .collectAsState()
 
-    val localPlaylistSummaries = localPlaylistSummarySnapshot.orEmpty()
+    val musicSource by
+    dependencies.musicSourceSelectionStore
+        .selectedSource
+        .collectAsState()
+
+    val localPlaylistSummaries =
+        localPlaylistSummarySnapshot.orEmpty()
+
     val localPlaylists = remember(localPlaylistSummaries) {
-        localPlaylistSummaries.map(LocalPlaylistSummary::playlist)
+        localPlaylistSummaries.map(
+            LocalPlaylistSummary::playlist,
+        )
     }
-    val isAddTrackMode = trackToAdd != null
-    val screenSource = if (isAddTrackMode) HomeMusicSource.Yandex else musicSource
 
-    var permissionRequestInFlight by remember { mutableStateOf(false) }
-    var pickedTrack by remember(trackToAdd) { mutableStateOf<dYaTrack?>(null) }
-    var isRefreshing by remember { mutableStateOf(false) }
-    var createDialogSource by remember { mutableStateOf<HomeMusicSource?>(null) }
-    var isCreatingPlaylist by remember { mutableStateOf(false) }
+    val isAddTrackMode = trackToAdd != null
+
+    val screenSource =
+        if (isAddTrackMode) {
+            HomeMusicSource.Yandex
+        } else {
+            musicSource
+        }
+
+    var permissionRequestInFlight by remember {
+        mutableStateOf(false)
+    }
+
+    var pickedTrack by remember(trackToAdd) {
+        mutableStateOf<dYaTrack?>(null)
+    }
+
+    var isRefreshing by remember {
+        mutableStateOf(false)
+    }
+
+    var createDialogSource by remember {
+        mutableStateOf<HomeMusicSource?>(null)
+    }
+
+    var isCreatingPlaylist by remember {
+        mutableStateOf(false)
+    }
+
     var removeTrackRequest by remember {
         mutableStateOf<Pair<dYaPlaylist, dYaTrack>?>(null)
     }
-    var deleteInfoPlaylist by remember { mutableStateOf<dYaPlaylist?>(null) }
-    var messageSequence by remember { mutableLongStateOf(0L) }
-    var message by remember { mutableStateOf<PlaylistGridMessageEvent?>(null) }
+
+    var deleteInfoPlaylist by remember {
+        mutableStateOf<dYaPlaylist?>(null)
+    }
+
+    var messageSequence by remember {
+        mutableLongStateOf(0L)
+    }
+
+    var message by remember {
+        mutableStateOf<PlaylistGridMessageEvent?>(null)
+    }
 
     fun showMessage(value: PlaylistGridMessage) {
         messageSequence += 1L
+
         message = PlaylistGridMessageEvent(
             id = messageSequence,
             message = value,
@@ -208,7 +263,12 @@ fun PlaylistGridRoute(
     }
 
     fun selectMusicSource(source: HomeMusicSource) {
-        if (source == musicSource || permissionRequestInFlight) return
+        if (
+            source == musicSource ||
+            permissionRequestInFlight
+        ) {
+            return
+        }
 
         if (source == HomeMusicSource.Yandex) {
             dependencies.musicSourceSelectionStore.select(source)
@@ -222,7 +282,10 @@ fun PlaylistGridRoute(
         }
 
         permissionRequestInFlight = true
-        dependencies.musicSourceSelectionStore.preview(HomeMusicSource.Local)
+
+        dependencies.musicSourceSelectionStore.preview(
+            HomeMusicSource.Local,
+        )
 
         coroutineScope.launch {
             val granted = try {
@@ -236,26 +299,48 @@ fun PlaylistGridRoute(
             }
 
             if (granted) {
-                dependencies.musicSourceSelectionStore.select(HomeMusicSource.Local)
+                dependencies.musicSourceSelectionStore.select(
+                    HomeMusicSource.Local,
+                )
+
                 platform.startLocalLibrarySync()
             } else {
-                dependencies.musicSourceSelectionStore.select(HomeMusicSource.Yandex)
+                dependencies.musicSourceSelectionStore.select(
+                    HomeMusicSource.Yandex,
+                )
             }
         }
     }
 
-    androidx.compose.runtime.LaunchedEffect(dependencies.musicSourceSelectionStore, platform) {
-        val restored = dependencies.musicSourceSelectionStore.restore()
-        if (restored == HomeMusicSource.Local && !platform.hasLocalMusicAccess()) {
-            dependencies.musicSourceSelectionStore.select(HomeMusicSource.Yandex)
+    androidx.compose.runtime.LaunchedEffect(
+        dependencies.musicSourceSelectionStore,
+        platform,
+    ) {
+        val restored =
+            dependencies.musicSourceSelectionStore.restore()
+
+        if (
+            restored == HomeMusicSource.Local &&
+            !platform.hasLocalMusicAccess()
+        ) {
+            dependencies.musicSourceSelectionStore.select(
+                HomeMusicSource.Yandex,
+            )
         }
     }
 
     androidx.compose.runtime.LaunchedEffect(trackToAdd) {
         if (trackToAdd != null) {
             when (val result = model.getTrack(trackToAdd)) {
-                is DataResult.Success -> pickedTrack = result.value
-                is DataResult.Failure -> showMessage(PlaylistGridMessage.TrackLoadFailed)
+                is DataResult.Success -> {
+                    pickedTrack = result.value
+                }
+
+                is DataResult.Failure -> {
+                    showMessage(
+                        PlaylistGridMessage.TrackLoadFailed,
+                    )
+                }
             }
         }
     }
@@ -305,38 +390,61 @@ fun PlaylistGridRoute(
         coroutineScope.launch {
             try {
                 when (source) {
-                    HomeMusicSource.Yandex -> when (
-                        val result = model.createPlaylist(title, isPublic)
-                    ) {
-                        is DataResult.Success -> {
-                            isCreatingPlaylist = false
-                            createDialogSource = null
-                            platform.openYandexPlaylist(result.value.getdId())
-                        }
+                    HomeMusicSource.Yandex -> {
+                        when (
+                            val result =
+                                model.createPlaylist(
+                                    title = title,
+                                    isPublic = isPublic,
+                                )
+                        ) {
+                            is DataResult.Success -> {
+                                isCreatingPlaylist = false
+                                createDialogSource = null
 
-                        is DataResult.Failure -> {
-                            isCreatingPlaylist = false
-                            showMessage(PlaylistGridMessage.CreateFailed)
+                                onOpenYandexPlaylist(
+                                    result.value.getdId(),
+                                )
+                            }
+
+                            is DataResult.Failure -> {
+                                isCreatingPlaylist = false
+
+                                showMessage(
+                                    PlaylistGridMessage.CreateFailed,
+                                )
+                            }
                         }
                     }
 
-                    HomeMusicSource.Local -> when (
-                        val result = withContext(Dispatchers.IO) {
-                            dependencies.localMusicRepository.saveDwijPlaylist(
-                                name = title,
-                                trackIds = emptyList(),
-                            )
-                        }
-                    ) {
-                        is DataResult.Success -> {
-                            isCreatingPlaylist = false
-                            createDialogSource = null
-                            platform.openLocalPlaylist(result.value.playlistId)
-                        }
+                    HomeMusicSource.Local -> {
+                        when (
+                            val result =
+                                withContext(Dispatchers.IO) {
+                                    dependencies
+                                        .localMusicRepository
+                                        .saveDwijPlaylist(
+                                            name = title,
+                                            trackIds = emptyList(),
+                                        )
+                                }
+                        ) {
+                            is DataResult.Success -> {
+                                isCreatingPlaylist = false
+                                createDialogSource = null
 
-                        is DataResult.Failure -> {
-                            isCreatingPlaylist = false
-                            showMessage(PlaylistGridMessage.CreateFailed)
+                                onOpenLocalPlaylist(
+                                    result.value.playlistId,
+                                )
+                            }
+
+                            is DataResult.Failure -> {
+                                isCreatingPlaylist = false
+
+                                showMessage(
+                                    PlaylistGridMessage.CreateFailed,
+                                )
+                            }
                         }
                     }
                 }
@@ -344,52 +452,83 @@ fun PlaylistGridRoute(
                 throw error
             } catch (_: Exception) {
                 isCreatingPlaylist = false
-                showMessage(PlaylistGridMessage.CreateFailed)
+
+                showMessage(
+                    PlaylistGridMessage.CreateFailed,
+                )
             }
         }
     }
 
     val dialogState = when {
-        createDialogSource != null -> PlaylistGridDialogState.Create(
-            source = requireNotNull(createDialogSource),
-            isCreating = isCreatingPlaylist,
-        )
+        createDialogSource != null -> {
+            PlaylistGridDialogState.Create(
+                source = requireNotNull(createDialogSource),
+                isCreating = isCreatingPlaylist,
+            )
+        }
 
-        removeTrackRequest != null -> PlaylistGridDialogState.RemoveTrack(
-            playlistTitle = requireNotNull(removeTrackRequest).first.title,
-        )
+        removeTrackRequest != null -> {
+            PlaylistGridDialogState.RemoveTrack(
+                playlistTitle =
+                    requireNotNull(removeTrackRequest).first.title,
+            )
+        }
 
-        deleteInfoPlaylist != null -> PlaylistGridDialogState.DeleteInfo(
-            playlistTitle = requireNotNull(deleteInfoPlaylist).title,
-        )
+        deleteInfoPlaylist != null -> {
+            PlaylistGridDialogState.DeleteInfo(
+                playlistTitle =
+                    requireNotNull(deleteInfoPlaylist).title,
+            )
+        }
 
         else -> null
     }
 
     val state = PlaylistGridRouteState(
-        title = if (isAddTrackMode) texts.addTrackTitle else texts.title,
+        title =
+            if (isAddTrackMode) {
+                texts.addTrackTitle
+            } else {
+                texts.title
+            },
         items = screenItems,
         selectedSource = screenSource,
         showSourceSelector = !isAddTrackMode,
-        emptyMessage = if (screenSource == HomeMusicSource.Local) {
-            texts.localEmpty
-        } else {
-            texts.yandexEmpty
-        },
-        isLoading = when (screenSource) {
-            HomeMusicSource.Yandex -> !yandexInitialLoadComplete
-            HomeMusicSource.Local -> localPlaylistSummarySnapshot == null ||
-                    (localPlaylistSummarySnapshot.isNullOrEmpty() && isLocalSynchronizing)
-        },
-        isRefreshing = isRefreshing ||
-                (screenSource == HomeMusicSource.Local && isLocalSynchronizing),
+        emptyMessage =
+            if (screenSource == HomeMusicSource.Local) {
+                texts.localEmpty
+            } else {
+                texts.yandexEmpty
+            },
+        isLoading =
+            when (screenSource) {
+                HomeMusicSource.Yandex -> {
+                    !yandexInitialLoadComplete
+                }
+
+                HomeMusicSource.Local -> {
+                    localPlaylistSummarySnapshot == null ||
+                            (
+                                    localPlaylistSummarySnapshot
+                                        .isNullOrEmpty() &&
+                                            isLocalSynchronizing
+                                    )
+                }
+            },
+        isRefreshing =
+            isRefreshing ||
+                    (
+                            screenSource == HomeMusicSource.Local &&
+                                    isLocalSynchronizing
+                            ),
         dialog = dialogState,
         message = message,
     )
 
     val actions = PlaylistGridRouteActions(
         onSourceSelected = ::selectMusicSource,
-        onBackClick = platform::closeScreen,
+        onBackClick = onCloseScreen,
         onItemClick = { item ->
             when {
                 item.isCreateAction -> {
@@ -398,42 +537,66 @@ fun PlaylistGridRoute(
 
                 screenSource == HomeMusicSource.Local -> {
                     if (isAddTrackMode) {
-                        showMessage(PlaylistGridMessage.LocalAddUnavailable)
+                        showMessage(
+                            PlaylistGridMessage.LocalAddUnavailable,
+                        )
                     } else {
                         localPlaylists
-                            .firstOrNull { it.playlistId == item.id }
+                            .firstOrNull { playlist ->
+                                playlist.playlistId == item.id
+                            }
                             ?.let(LocalPlaylistEntity::playlistId)
-                            ?.let(platform::openLocalPlaylist)
+                            ?.let(onOpenLocalPlaylist)
                     }
                 }
 
                 else -> {
-                    val playlist = yandexPlaylists.firstOrNull {
-                        it.getdId() == item.id
-                    }
+                    val playlist =
+                        yandexPlaylists.firstOrNull {
+                            it.getdId() == item.id
+                        }
 
                     when {
                         playlist == null -> Unit
 
                         trackToAdd == null -> {
-                            platform.openYandexPlaylist(playlist.getdId())
+                            onOpenYandexPlaylist(
+                                playlist.getdId(),
+                            )
                         }
 
                         item.highlighted -> {
                             val track = pickedTrack
+
                             if (track == null) {
-                                showMessage(PlaylistGridMessage.TrackLoadFailed)
+                                showMessage(
+                                    PlaylistGridMessage
+                                        .TrackLoadFailed,
+                                )
                             } else {
-                                removeTrackRequest = playlist to track
+                                removeTrackRequest =
+                                    playlist to track
                             }
                         }
 
                         else -> {
                             coroutineScope.launch {
-                                when (model.addTrackToPlaylist(playlist, trackToAdd)) {
-                                    is DataResult.Success -> platform.closeScreen()
-                                    is DataResult.Failure ->
-                                        showMessage(PlaylistGridMessage.TrackAddFailed)
+                                when (
+                                    model.addTrackToPlaylist(
+                                        playlist = playlist,
+                                        trackId = trackToAdd,
+                                    )
+                                ) {
+                                    is DataResult.Success -> {
+                                        onCloseScreen()
+                                    }
+
+                                    is DataResult.Failure -> {
+                                        showMessage(
+                                            PlaylistGridMessage
+                                                .TrackAddFailed,
+                                        )
+                                    }
                                 }
                             }
                         }
@@ -442,23 +605,33 @@ fun PlaylistGridRoute(
             }
         },
         onItemLongClick = { item ->
-            if (screenSource == HomeMusicSource.Yandex && !isAddTrackMode) {
-                deleteInfoPlaylist = yandexPlaylists.firstOrNull {
-                    it.getdId() == item.id
-                }
+            if (
+                screenSource == HomeMusicSource.Yandex &&
+                !isAddTrackMode
+            ) {
+                deleteInfoPlaylist =
+                    yandexPlaylists.firstOrNull {
+                        it.getdId() == item.id
+                    }
             }
         },
         loadCover = { playlistId ->
-            val playlist = yandexPlaylists.firstOrNull {
-                it.getdId() == playlistId
-            }
+            val playlist =
+                yandexPlaylists.firstOrNull {
+                    it.getdId() == playlistId
+                }
 
-            if (playlist == null || playlist.ogImageUri.isNullOrBlank()) {
+            if (
+                playlist == null ||
+                playlist.ogImageUri.isNullOrBlank()
+            ) {
                 null
             } else {
                 try {
                     withContext(Dispatchers.IO) {
-                        model.getCover(playlist)?.toImageBitmapOrNull()
+                        model
+                            .getCover(playlist)
+                            ?.toImageBitmapOrNull()
                     }
                 } catch (error: CancellationException) {
                     throw error
@@ -473,10 +646,17 @@ fun PlaylistGridRoute(
                     platform.startLocalLibrarySync()
                 } else {
                     isRefreshing = true
+
                     coroutineScope.launch {
                         try {
-                            if (model.refreshPlaylists() is DataResult.Failure) {
-                                showMessage(PlaylistGridMessage.RefreshFailed)
+                            if (
+                                model.refreshPlaylists()
+                                        is DataResult.Failure
+                            ) {
+                                showMessage(
+                                    PlaylistGridMessage
+                                        .RefreshFailed,
+                                )
                             }
                         } finally {
                             isRefreshing = false
@@ -494,8 +674,13 @@ fun PlaylistGridRoute(
         },
         onCreatePlaylist = { title, isPublic ->
             val source = createDialogSource
-            if (source != null && !isCreatingPlaylist) {
+
+            if (
+                source != null &&
+                !isCreatingPlaylist
+            ) {
                 isCreatingPlaylist = true
+
                 createPlaylist(
                     source = source,
                     title = title,
@@ -515,7 +700,10 @@ fun PlaylistGridRoute(
                             track = request.second,
                         ) is DataResult.Failure
                     ) {
-                        showMessage(PlaylistGridMessage.TrackRemoveFailed)
+                        showMessage(
+                            PlaylistGridMessage
+                                .TrackRemoveFailed,
+                        )
                     }
                 }
             }
@@ -551,31 +739,53 @@ private fun buildYandexItems(
     }
 
     playlists
-        .filterNot { pickedTrackId != null && it.kind == KIND_LIKED }
+        .filterNot {
+            pickedTrackId != null &&
+                    it.kind == KIND_LIKED
+        }
         .forEach { playlist ->
             val trackCount = playlist.trackCount
-            val isLikedPlaylist = playlist.kind == KIND_LIKED
+            val isLikedPlaylist =
+                playlist.kind == KIND_LIKED
 
             add(
                 PlaylistGridScreenItem(
                     id = playlist.getdId(),
-                    title = if (isLikedPlaylist) likedTitle else playlist.title,
-                    details = "$trackCount трек${getNumericPostfix(trackCount)}\n" +
-                            formatDuration(playlist.durationMs ?: 0),
-                    shouldLoadCover = !isLikedPlaylist &&
-                            !playlist.ogImageUri.isNullOrBlank(),
-                    fallbackArtwork = if (isLikedPlaylist) {
-                        null
-                    } else {
-                        PlaylistGridArtwork.PlayerFallback
-                    },
-                    artwork = if (isLikedPlaylist) {
-                        PlaylistGridArtwork.Liked
-                    } else {
-                        null
-                    },
-                    highlighted = pickedTrackId != null &&
-                            playlist.tracks.any { it.trackId == pickedTrackId },
+                    title =
+                        if (isLikedPlaylist) {
+                            likedTitle
+                        } else {
+                            playlist.title
+                        },
+                    details =
+                        "$trackCount трек" +
+                                getNumericPostfix(trackCount) +
+                                "\n" +
+                                formatDuration(
+                                    playlist.durationMs ?: 0,
+                                ),
+                    shouldLoadCover =
+                        !isLikedPlaylist &&
+                                !playlist
+                                    .ogImageUri
+                                    .isNullOrBlank(),
+                    fallbackArtwork =
+                        if (isLikedPlaylist) {
+                            null
+                        } else {
+                            PlaylistGridArtwork.PlayerFallback
+                        },
+                    artwork =
+                        if (isLikedPlaylist) {
+                            PlaylistGridArtwork.Liked
+                        } else {
+                            null
+                        },
+                    highlighted =
+                        pickedTrackId != null &&
+                                playlist.tracks.any {
+                                    it.trackId == pickedTrackId
+                                },
                 ),
             )
         }
@@ -602,11 +812,22 @@ private fun buildLocalItems(
 
     playlists.forEach { summary ->
         val playlist = summary.playlist
-        val formatLabel = when (playlist.origin) {
-            LocalPlaylistOrigin.DWIJ.name -> dwijLabel
-            LocalPlaylistOrigin.MEDIA_STORE.name -> mediaStoreLabel
-            else -> m3uLabel
-        }
+
+        val formatLabel =
+            when (playlist.origin) {
+                LocalPlaylistOrigin.DWIJ.name -> {
+                    dwijLabel
+                }
+
+                LocalPlaylistOrigin.MEDIA_STORE.name -> {
+                    mediaStoreLabel
+                }
+
+                else -> {
+                    m3uLabel
+                }
+            }
+
         val duration = formatDuration(
             summary.durationMs
                 .coerceAtMost(Int.MAX_VALUE.toLong())
@@ -617,12 +838,16 @@ private fun buildLocalItems(
             PlaylistGridScreenItem(
                 id = playlist.playlistId,
                 title = playlist.name,
-                fallbackArtwork = PlaylistGridArtwork.PlayerFallback,
-                details = "${summary.trackCount} " +
-                        "трек${getNumericPostfix(summary.trackCount)} · $duration\n$formatLabel",
+                fallbackArtwork =
+                    PlaylistGridArtwork.PlayerFallback,
+                details =
+                    "${summary.trackCount} трек" +
+                            getNumericPostfix(summary.trackCount) +
+                            " · $duration\n$formatLabel",
             ),
         )
     }
 }
 
-private const val CREATE_ITEM_ID = "playlist_create_item"
+private const val CREATE_ITEM_ID =
+    "playlist_create_item"

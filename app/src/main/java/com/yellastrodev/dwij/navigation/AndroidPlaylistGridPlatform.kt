@@ -11,18 +11,17 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.platform.LocalContext
 import androidx.core.content.ContextCompat
-import androidx.navigation.NavHostController
 import com.yellastrodev.dwij.data.source.requiredLocalMediaPermissions
 import com.yellastrodev.dwij.ui.playlist.PlaylistGridPlatform
 import com.yellastrodev.dwij.work.LocalLibrarySyncWorker
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CompletableDeferred
 
+/** Android-разрешения и синхронизация для shared-route плейлистов. */
 @Composable
-fun rememberAndroidPlaylistGridPlatform(
-    navController: NavHostController,
-): PlaylistGridPlatform {
+fun rememberAndroidPlaylistGridPlatform(): PlaylistGridPlatform {
     val context = LocalContext.current
+
     var pendingPermissionRequest by remember {
         mutableStateOf<CompletableDeferred<Boolean>?>(null)
     }
@@ -40,10 +39,10 @@ fun rememberAndroidPlaylistGridPlatform(
     ) { permissions ->
         val granted = requiredLocalMediaPermissions().all { permission ->
             permissions[permission] == true ||
-                    ContextCompat.checkSelfPermission(
-                        context,
-                        permission,
-                    ) == PackageManager.PERMISSION_GRANTED
+                ContextCompat.checkSelfPermission(
+                    context,
+                    permission,
+                ) == PackageManager.PERMISSION_GRANTED
         }
 
         pendingPermissionRequest?.complete(granted)
@@ -57,13 +56,15 @@ fun rememberAndroidPlaylistGridPlatform(
         }
     }
 
-    return remember(context, navController, permissionLauncher) {
+    return remember(context, permissionLauncher) {
         object : PlaylistGridPlatform {
             override fun hasLocalMusicAccess(): Boolean =
                 checkLocalMusicAccess()
 
             override suspend fun requestLocalMusicAccess(): Boolean {
-                if (checkLocalMusicAccess()) return true
+                if (checkLocalMusicAccess()) {
+                    return true
+                }
 
                 pendingPermissionRequest?.let { currentRequest ->
                     return currentRequest.await()
@@ -71,7 +72,9 @@ fun rememberAndroidPlaylistGridPlatform(
 
                 val request = CompletableDeferred<Boolean>()
                 pendingPermissionRequest = request
-                permissionLauncher.launch(requiredLocalMediaPermissions())
+                permissionLauncher.launch(
+                    requiredLocalMediaPermissions(),
+                )
 
                 return try {
                     request.await()
@@ -79,6 +82,7 @@ fun rememberAndroidPlaylistGridPlatform(
                     if (pendingPermissionRequest === request) {
                         pendingPermissionRequest = null
                     }
+
                     request.cancel()
                     throw error
                 }
@@ -88,28 +92,6 @@ fun rememberAndroidPlaylistGridPlatform(
                 LocalLibrarySyncWorker.enqueueImmediate(
                     context.applicationContext,
                 )
-            }
-
-            override fun openYandexPlaylist(playlistId: String) {
-                navController.navigate(
-                    DwijDestination.objectRoute(
-                        type = DwijDestination.OBJECT_TYPE_PLAYLIST,
-                        value = playlistId,
-                    ),
-                )
-            }
-
-            override fun openLocalPlaylist(playlistId: String) {
-                navController.navigate(
-                    DwijDestination.localLibraryRoute(
-                        mode = DwijDestination.LOCAL_MODE_PLAYLIST,
-                        playlistId = playlistId,
-                    ),
-                )
-            }
-
-            override fun closeScreen() {
-                navController.popBackStack()
             }
         }
     }

@@ -1,10 +1,9 @@
 package com.yellastrodev.dwij.ui.playlist
 
 /**
- * Только те действия экрана плейлистов, которые исполняются конкретной платформой.
+ * Системные возможности, необходимые shared-route плейлистов.
  *
- * Экран сам решает, когда запросить доступ, запустить синхронизацию или открыть плейлист.
- * Платформа лишь выполняет принятое экраном решение.
+ * Контракт не содержит навигацию: открытие экранов и возврат принадлежат общему NavHost.
  */
 interface PlaylistGridPlatform {
     fun hasLocalMusicAccess(): Boolean
@@ -12,10 +11,4 @@ interface PlaylistGridPlatform {
     suspend fun requestLocalMusicAccess(): Boolean
 
     fun startLocalLibrarySync()
-
-    fun openYandexPlaylist(playlistId: String)
-
-    fun openLocalPlaylist(playlistId: String)
-
-    fun closeScreen()
 }

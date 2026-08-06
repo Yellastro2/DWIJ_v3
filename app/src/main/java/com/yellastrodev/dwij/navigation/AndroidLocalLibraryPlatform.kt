@@ -8,41 +8,21 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleEventObserver
 import androidx.lifecycle.compose.LocalLifecycleOwner
-import androidx.navigation.NavHostController
 import com.yellastrodev.dwij.R
 import com.yellastrodev.dwij.work.LocalLibrarySyncWorker
 
-/** Android-реализация lifecycle, WorkManager, Toast и навигации медиатеки. */
+/** Android lifecycle, WorkManager и сообщения локальной медиатеки. */
 @Composable
-fun rememberAndroidLocalLibraryPlatform(
-    navController: NavHostController,
-): LocalLibraryPlatform {
+fun rememberAndroidLocalLibraryPlatform(): LocalLibraryPlatform {
     val context = LocalContext.current
     val lifecycleOwner = LocalLifecycleOwner.current
 
-    val platform = remember(context, navController) {
+    val platform = remember(context) {
         object : LocalLibraryPlatform {
             override fun startLocalLibrarySync() {
                 LocalLibrarySyncWorker.enqueueImmediate(
                     context.applicationContext,
                 )
-            }
-
-            override fun openPlayer() {
-                navController.navigate(DwijDestination.PLAYER)
-            }
-
-            override fun openPlaylist(playlistId: String) {
-                navController.navigate(
-                    DwijDestination.localLibraryRoute(
-                        mode = DwijDestination.LOCAL_MODE_PLAYLIST,
-                        playlistId = playlistId,
-                    ),
-                )
-            }
-
-            override fun closeScreen() {
-                navController.navigateUp()
             }
 
             override fun showTrackHideFailed() {

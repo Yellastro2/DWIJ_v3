@@ -19,32 +19,37 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.ImageBitmap
-import androidx.compose.ui.res.colorResource
-import androidx.compose.ui.res.stringResource
+import androidx.navigation.NavBackStackEntry
 import androidx.navigation.NavType
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.compose.currentBackStackEntryAsState
 import androidx.navigation.compose.rememberNavController
 import androidx.navigation.navArgument
-import com.yellastrodev.dwij.AndroidHomeScreenPlatform
-import com.yellastrodev.dwij.R
+import androidx.savedstate.read
 import com.yellastrodev.dwij.di.DwijComponent
 import com.yellastrodev.dwij.models.PlayerModel
+import com.yellastrodev.dwij.resources.Res
+import com.yellastrodev.dwij.resources.home_player_unknown_artist
 import com.yellastrodev.dwij.ui.HomeCompactPlayer
 import com.yellastrodev.dwij.ui.HomeCompactPlayerUiState
+import com.yellastrodev.dwij.ui.theme.DwijColors
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.flowOn
 import kotlinx.coroutines.launch
+import org.jetbrains.compose.resources.stringResource
 
 /**
- * Единый Android Compose-корень приложения:
- * NavHost и общий компактный плеер.
+ * Единый multiplatform Compose-корень приложения.
+ *
+ * Владеет NavController, back stack, графом маршрутов и общим компактным плеером.
+ * Платформа предоставляет только системные возможности отдельных экранов.
  */
 @Composable
 fun DwijApp(
     playerModel: PlayerModel,
     component: DwijComponent,
+    platform: DwijAppPlatform,
     modifier: Modifier = Modifier,
 ) {
     val navController = rememberNavController()
@@ -65,7 +70,7 @@ fun DwijApp(
     }
 
     val unknownArtist = stringResource(
-        R.string.home_player_unknown_artist,
+        Res.string.home_player_unknown_artist,
     )
 
     val showCompactPlayer =
@@ -92,10 +97,8 @@ fun DwijApp(
     Scaffold(
         modifier = modifier
             .fillMaxSize()
-            .background(
-                colorResource(R.color.background),
-            ),
-        containerColor = colorResource(R.color.background),
+            .background(DwijColors.Background),
+        containerColor = DwijColors.Background,
         contentWindowInsets = WindowInsets(0, 0, 0, 0),
         bottomBar = {
             if (showCompactPlayer) {
@@ -148,16 +151,24 @@ fun DwijApp(
                 HomeRoute(
                     component = component,
                     playerModel = playerModel,
-                    routePlatform = rememberAndroidHomeRoutePlatform(),
-                    screenPlatform = AndroidHomeScreenPlatform,
+                    routePlatform =
+                        platform.rememberHomeRoutePlatform(),
+                    screenPlatform =
+                        platform.homeScreenPlatform,
                     onOpenSettings = {
-                        navController.navigate(DwijDestination.SETTINGS)
+                        navController.navigate(
+                            DwijDestination.SETTINGS,
+                        )
                     },
                     onOpenSongMatches = {
-                        navController.navigate(DwijDestination.SONG_MATCHES)
+                        navController.navigate(
+                            DwijDestination.SONG_MATCHES,
+                        )
                     },
                     onOpenPlaylists = {
-                        navController.navigate(DwijDestination.PLAYLISTS)
+                        navController.navigate(
+                            DwijDestination.PLAYLISTS,
+                        )
                     },
                     onOpenLocalTracks = {
                         navController.navigate(
@@ -174,7 +185,9 @@ fun DwijApp(
                         )
                     },
                     onOpenPlayer = {
-                        navController.navigate(DwijDestination.PLAYER)
+                        navController.navigate(
+                            DwijDestination.PLAYER,
+                        )
                     },
                 )
             }
@@ -182,9 +195,27 @@ fun DwijApp(
             composable(DwijDestination.PLAYLISTS) {
                 PlaylistGridRoute(
                     component = component,
-                    platform = rememberAndroidPlaylistGridPlatform(
-                        navController,
-                    ),
+                    platform =
+                        platform.rememberPlaylistGridPlatform(),
+                    onOpenYandexPlaylist = { playlistId ->
+                        navController.navigate(
+                            DwijDestination.objectRoute(
+                                type = DwijDestination.OBJECT_TYPE_PLAYLIST,
+                                value = playlistId,
+                            ),
+                        )
+                    },
+                    onOpenLocalPlaylist = { playlistId ->
+                        navController.navigate(
+                            DwijDestination.localLibraryRoute(
+                                mode = DwijDestination.LOCAL_MODE_PLAYLIST,
+                                playlistId = playlistId,
+                            ),
+                        )
+                    },
+                    onBackClick = {
+                        navController.navigateUp()
+                    },
                 )
             }
 
@@ -198,11 +229,30 @@ fun DwijApp(
             ) { entry ->
                 PlaylistGridRoute(
                     component = component,
-                    platform = rememberAndroidPlaylistGridPlatform(
-                        navController,
+                    platform =
+                        platform.rememberPlaylistGridPlatform(),
+                    trackToAdd = entry.stringArgument(
+                        DwijDestination.ARG_TRACK_TO_ADD,
                     ),
-                    trackToAdd = entry.arguments
-                        ?.getString(DwijDestination.ARG_TRACK_TO_ADD),
+                    onOpenYandexPlaylist = { playlistId ->
+                        navController.navigate(
+                            DwijDestination.objectRoute(
+                                type = DwijDestination.OBJECT_TYPE_PLAYLIST,
+                                value = playlistId,
+                            ),
+                        )
+                    },
+                    onOpenLocalPlaylist = { playlistId ->
+                        navController.navigate(
+                            DwijDestination.localLibraryRoute(
+                                mode = DwijDestination.LOCAL_MODE_PLAYLIST,
+                                playlistId = playlistId,
+                            ),
+                        )
+                    },
+                    onBackClick = {
+                        navController.navigateUp()
+                    },
                 )
             }
 
@@ -220,17 +270,19 @@ fun DwijApp(
                 ObjectRoute(
                     component = component,
                     playerModel = playerModel,
-                    objectType = entry.arguments
-                        ?.getString(DwijDestination.ARG_OBJECT_TYPE)
-                        .orEmpty(),
-                    objectValue = entry.arguments
-                        ?.getString(DwijDestination.ARG_OBJECT_VALUE)
-                        .orEmpty(),
+                    objectType = entry.stringArgument(
+                        DwijDestination.ARG_OBJECT_TYPE,
+                    ).orEmpty(),
+                    objectValue = entry.stringArgument(
+                        DwijDestination.ARG_OBJECT_VALUE,
+                    ).orEmpty(),
                     onBackClick = {
                         navController.navigateUp()
                     },
                     onOpenPlayer = {
-                        navController.navigate(DwijDestination.PLAYER)
+                        navController.navigate(
+                            DwijDestination.PLAYER,
+                        )
                     },
                 )
             }
@@ -266,14 +318,30 @@ fun DwijApp(
                 LocalLibraryRoute(
                     component = component,
                     playerModel = playerModel,
-                    platform = rememberAndroidLocalLibraryPlatform(
-                        navController,
+                    platform =
+                        platform.rememberLocalLibraryPlatform(),
+                    mode = entry.stringArgument(
+                        DwijDestination.ARG_LOCAL_MODE,
+                    ).orEmpty(),
+                    playlistId = entry.stringArgument(
+                        DwijDestination.ARG_LOCAL_PLAYLIST_ID,
                     ),
-                    mode = entry.arguments
-                        ?.getString(DwijDestination.ARG_LOCAL_MODE)
-                        .orEmpty(),
-                    playlistId = entry.arguments
-                        ?.getString(DwijDestination.ARG_LOCAL_PLAYLIST_ID),
+                    onOpenPlayer = {
+                        navController.navigate(
+                            DwijDestination.PLAYER,
+                        )
+                    },
+                    onOpenPlaylist = { playlistId ->
+                        navController.navigate(
+                            DwijDestination.localLibraryRoute(
+                                mode = DwijDestination.LOCAL_MODE_PLAYLIST,
+                                playlistId = playlistId,
+                            ),
+                        )
+                    },
+                    onBackClick = {
+                        navController.navigateUp()
+                    },
                 )
             }
 
@@ -290,7 +358,8 @@ fun DwijApp(
             composable(DwijDestination.SETTINGS) {
                 SettingsRoute(
                     component = component,
-                    platform = rememberAndroidSettingsPlatform(),
+                    platform =
+                        platform.rememberSettingsPlatform(),
                     onBackClick = {
                         navController.navigateUp()
                     },
@@ -299,3 +368,11 @@ fun DwijApp(
         }
     }
 }
+
+/** Читает строковый аргумент маршрута через multiplatform SavedState API. */
+private fun NavBackStackEntry.stringArgument(
+    key: String,
+): String? =
+    arguments?.read {
+        getStringOrNull(key)
+    }

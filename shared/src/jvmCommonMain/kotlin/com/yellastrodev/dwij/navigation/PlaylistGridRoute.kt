@@ -24,14 +24,16 @@ import org.jetbrains.compose.resources.stringResource
 /**
  * Shared-entry экрана плейлистов.
  *
- * Собирает route-зависимости из общего компонента и использует
- * Compose Multiplatform resources. Платформа передаёт только
- * разрешения, синхронизацию и действия навигации.
+ * Платформа отвечает только за разрешения и синхронизацию. Все переходы выполняет
+ * владелец общего NavHost через переданные callbacks.
  */
 @Composable
 fun PlaylistGridRoute(
     component: DwijComponent,
     platform: PlaylistGridPlatform,
+    onOpenYandexPlaylist: (playlistId: String) -> Unit,
+    onOpenLocalPlaylist: (playlistId: String) -> Unit,
+    onBackClick: () -> Unit,
     trackToAdd: String? = null,
     modifier: Modifier = Modifier,
 ) {
@@ -95,6 +97,9 @@ fun PlaylistGridRoute(
         trackToAdd = trackToAdd,
         dependencies = dependencies,
         platform = platform,
+        onOpenYandexPlaylist = onOpenYandexPlaylist,
+        onOpenLocalPlaylist = onOpenLocalPlaylist,
+        onCloseScreen = onBackClick,
         texts = texts,
         content = {
                 state,

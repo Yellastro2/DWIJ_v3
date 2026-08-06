@@ -13,6 +13,7 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.ImageBitmap
@@ -45,6 +46,9 @@ fun LocalLibraryRoute(
     platform: LocalLibraryPlatform,
     mode: String,
     playlistId: String?,
+    onOpenPlayer: () -> Unit,
+    onOpenPlaylist: (playlistId: String) -> Unit,
+    onBackClick: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
     val content = remember(mode, playlistId) {
@@ -80,12 +84,13 @@ fun LocalLibraryRoute(
 
     val state by localLibraryModel.state.collectAsState()
     val allTracksTitle = stringResource(Res.string.local_all_tracks_title)
+    val currentOnOpenPlayer by rememberUpdatedState(onOpenPlayer)
 
-    LaunchedEffect(localLibraryModel, platform) {
+    LaunchedEffect(localLibraryModel) {
         localLibraryModel.events.collect { event ->
             when (event) {
                 LocalLibraryEvent.OpenPlayer ->
-                    platform.openPlayer()
+                    currentOnOpenPlayer()
             }
         }
     }
@@ -111,7 +116,7 @@ fun LocalLibraryRoute(
     fun openPlaylist(
         playlist: LocalPlaylistEntity,
     ) {
-        platform.openPlaylist(playlist.playlistId)
+        onOpenPlaylist(playlist.playlistId)
     }
 
     when (content) {
@@ -145,7 +150,7 @@ fun LocalLibraryRoute(
             LocalPlaylistObjectScreen(
                 title = playlistTitle,
                 tracks = loadedTracks,
-                onBackClick = platform::closeScreen,
+                onBackClick = onBackClick,
                 onPlayClick = {
                     localLibraryModel.play(
                         index = 0,
