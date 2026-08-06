@@ -95,7 +95,7 @@ private class AndroidSettingsPlatform(
         } else {
             editor.putLong(
                 YA_TOKEN_EXPIRES_AT,
-                session.expiresAtMillis,
+                session.expiresAtMillis!!,
             )
         }
 
