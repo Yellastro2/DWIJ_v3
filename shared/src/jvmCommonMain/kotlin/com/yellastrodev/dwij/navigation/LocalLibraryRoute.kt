@@ -1,6 +1,5 @@
 package com.yellastrodev.dwij.navigation
 
-import android.widget.Toast
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.fillMaxSize
@@ -10,7 +9,6 @@ import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
@@ -18,116 +16,102 @@ import androidx.compose.runtime.remember
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.ImageBitmap
-import androidx.compose.ui.platform.LocalContext
-import androidx.compose.ui.res.stringResource
-import androidx.lifecycle.Lifecycle
-import androidx.lifecycle.LifecycleEventObserver
-import androidx.lifecycle.compose.LocalLifecycleOwner
 import androidx.lifecycle.viewmodel.compose.viewModel
-import androidx.navigation.NavHostController
-import com.yellastrodev.dwij.ui.LocalLibraryScreen
-import com.yellastrodev.dwij.ui.LocalPlaylistObjectScreen
-import com.yellastrodev.dwij.R
 import com.yellastrodev.dwij.data.entities.LocalPlaylistEntity
 import com.yellastrodev.dwij.data.entities.Song
+import com.yellastrodev.dwij.di.DwijComponent
 import com.yellastrodev.dwij.models.LocalLibraryContent
 import com.yellastrodev.dwij.models.LocalLibraryEvent
 import com.yellastrodev.dwij.models.LocalLibraryModel
 import com.yellastrodev.dwij.models.PlayerModel
-import com.yellastrodev.dwij.work.LocalLibrarySyncWorker
-import com.yellastrodev.dwij.yApplication
+import com.yellastrodev.dwij.resources.Res
+import com.yellastrodev.dwij.resources.local_all_tracks_title
+import com.yellastrodev.dwij.resources.local_playlist_title
+import com.yellastrodev.dwij.resources.local_playlists_title
+import com.yellastrodev.dwij.resources.local_track_hide_action
+import com.yellastrodev.dwij.resources.local_track_hide_confirm_message
+import com.yellastrodev.dwij.resources.local_track_hide_confirm_title
+import com.yellastrodev.dwij.resources.playlists_cancel
+import com.yellastrodev.dwij.ui.LocalLibraryScreen
+import com.yellastrodev.dwij.ui.LocalPlaylistObjectScreen
 import kotlinx.coroutines.flow.firstOrNull
+import org.jetbrains.compose.resources.stringResource
 
-/** Compose-route локальных списков, всех треков и объекта локального плейлиста. */
+/** Shared-route локальных списков, всех треков и локального плейлиста. */
 @Composable
 fun LocalLibraryRoute(
-    navController: NavHostController,
+    component: DwijComponent,
     playerModel: PlayerModel,
+    platform: LocalLibraryPlatform,
     mode: String,
     playlistId: String?,
     modifier: Modifier = Modifier,
 ) {
-    val context = LocalContext.current
-    val lifecycleOwner = LocalLifecycleOwner.current
-    val application = context.applicationContext as yApplication
-
     val content = remember(mode, playlistId) {
         when {
             mode == DwijDestination.LOCAL_MODE_PLAYLISTS ->
                 LocalLibraryContent.PLAYLISTS
 
-            mode == DwijDestination.LOCAL_MODE_PLAYLIST && playlistId != null ->
+            mode == DwijDestination.LOCAL_MODE_PLAYLIST &&
+                playlistId != null ->
                 LocalLibraryContent.PLAYLIST
 
             else -> LocalLibraryContent.ALL_TRACKS
         }
     }
 
-    val localLibraryModel = viewModel<LocalLibraryModel>(
-        key = "local-library:$mode:${playlistId.orEmpty()}",
-        factory = LocalLibraryModel.Factory(
-            repository = application.localMusicRepository,
-            playerRepository = application.playerRepo,
+    val modelFactory = remember(
+        component,
+        content,
+        playlistId,
+    ) {
+        LocalLibraryModel.Factory(
+            repository = component.localMusicRepository,
+            playerRepository = component.playerRepo,
             content = content,
             playlistId = playlistId,
-        ),
+        )
+    }
+
+    val localLibraryModel = viewModel<LocalLibraryModel>(
+        key = "local-library:$mode:${playlistId.orEmpty()}",
+        factory = modelFactory,
     )
 
     val state by localLibraryModel.state.collectAsState()
-    val allTracksTitle = stringResource(R.string.local_all_tracks_title)
+    val allTracksTitle = stringResource(Res.string.local_all_tracks_title)
 
-    DisposableEffect(lifecycleOwner, context) {
-        val observer = LifecycleEventObserver { _, event ->
-            if (event == Lifecycle.Event.ON_RESUME) {
-                LocalLibrarySyncWorker.enqueueImmediate(
-                    context.applicationContext,
-                )
-            }
-        }
-
-        lifecycleOwner.lifecycle.addObserver(observer)
-
-        onDispose {
-            lifecycleOwner.lifecycle.removeObserver(observer)
-        }
-    }
-
-    LaunchedEffect(localLibraryModel, navController) {
+    LaunchedEffect(localLibraryModel, platform) {
         localLibraryModel.events.collect { event ->
             when (event) {
                 LocalLibraryEvent.OpenPlayer ->
-                    navController.navigate(DwijDestination.PLAYER)
+                    platform.openPlayer()
             }
         }
     }
 
-    LaunchedEffect(state.hideError) {
+    LaunchedEffect(state.hideError, platform) {
         if (state.hideError != null) {
-            Toast.makeText(
-                context,
-                R.string.local_track_hide_failed,
-                Toast.LENGTH_SHORT,
-            ).show()
-
+            platform.showTrackHideFailed()
             localLibraryModel.consumeHideError()
         }
     }
 
-    suspend fun loadTrackCover(song: Song): ImageBitmap? =
-        playerModel
+    suspend fun loadTrackCover(
+        song: Song,
+    ): ImageBitmap? {
+        return playerModel
             .cover(
                 song = song,
                 maxEdgePx = TRACK_COVER_SIZE_PX,
             )
             .firstOrNull()
+    }
 
-    fun openPlaylist(playlist: LocalPlaylistEntity) {
-        navController.navigate(
-            DwijDestination.localLibraryRoute(
-                mode = DwijDestination.LOCAL_MODE_PLAYLIST,
-                playlistId = playlist.playlistId,
-            ),
-        )
+    fun openPlaylist(
+        playlist: LocalPlaylistEntity,
+    ) {
+        platform.openPlaylist(playlist.playlistId)
     }
 
     when (content) {
@@ -135,19 +119,20 @@ fun LocalLibraryRoute(
             val playlists = state.playlists
 
             LocalLibraryScreen(
-                title = stringResource(R.string.local_playlists_title),
+                title = stringResource(Res.string.local_playlists_title),
                 playlists = playlists.orEmpty(),
                 tracks = null,
                 onPlaylistClick = ::openPlaylist,
                 onTrackClick = { _, _ -> },
                 onTrackHideRequest = {},
                 loadTrackCover = ::loadTrackCover,
-                isLoading = playlists == null ||
-                        (playlists.isEmpty() && state.isSynchronizing),
-                modifier = modifier
-                    .fillMaxSize()
-                    .windowInsetsPadding(WindowInsets.safeDrawing)
-                    .background(LocalLibraryBackground),
+                isLoading =
+                    playlists == null ||
+                        (
+                            playlists.isEmpty() &&
+                                state.isSynchronizing
+                        ),
+                modifier = modifier.localLibraryBackground(),
             )
         }
 
@@ -155,12 +140,12 @@ fun LocalLibraryRoute(
             val tracks = state.tracks
             val loadedTracks = tracks.orEmpty()
             val playlistTitle = state.playlist?.name
-                ?: stringResource(R.string.local_playlist_title)
+                ?: stringResource(Res.string.local_playlist_title)
 
             LocalPlaylistObjectScreen(
                 title = playlistTitle,
                 tracks = loadedTracks,
-                onBackClick = { navController.navigateUp() },
+                onBackClick = platform::closeScreen,
                 onPlayClick = {
                     localLibraryModel.play(
                         index = 0,
@@ -174,13 +159,15 @@ fun LocalLibraryRoute(
                         tracklistName = playlistTitle,
                     )
                 },
-                onTrackHideRequest = localLibraryModel::requestTrackHide,
-                isLoading = tracks == null ||
-                        (tracks.isEmpty() && state.isSynchronizing),
-                modifier = modifier
-                    .fillMaxSize()
-                    .windowInsetsPadding(WindowInsets.safeDrawing)
-                    .background(LocalLibraryBackground),
+                onTrackHideRequest =
+                    localLibraryModel::requestTrackHide,
+                isLoading =
+                    tracks == null ||
+                        (
+                            tracks.isEmpty() &&
+                                state.isSynchronizing
+                        ),
+                modifier = modifier.localLibraryBackground(),
             )
         }
 
@@ -200,50 +187,71 @@ fun LocalLibraryRoute(
                         tracklistName = allTracksTitle,
                     )
                 },
-                onTrackHideRequest = localLibraryModel::requestTrackHide,
-                isLoading = tracks == null ||
-                        (tracks.isEmpty() && state.isSynchronizing),
-                modifier = modifier
-                    .fillMaxSize()
-                    .windowInsetsPadding(WindowInsets.safeDrawing)
-                    .background(LocalLibraryBackground),
+                onTrackHideRequest =
+                    localLibraryModel::requestTrackHide,
+                isLoading =
+                    tracks == null ||
+                        (
+                            tracks.isEmpty() &&
+                                state.isSynchronizing
+                        ),
+                modifier = modifier.localLibraryBackground(),
             )
         }
     }
 
     state.pendingHideSong?.let { track ->
         AlertDialog(
-            onDismissRequest = localLibraryModel::dismissTrackHide,
+            onDismissRequest =
+                localLibraryModel::dismissTrackHide,
             title = {
                 Text(
-                    stringResource(R.string.local_track_hide_confirm_title),
+                    stringResource(
+                        Res.string.local_track_hide_confirm_title,
+                    ),
                 )
             },
             text = {
                 Text(
                     stringResource(
-                        R.string.local_track_hide_confirm_message,
+                        Res.string.local_track_hide_confirm_message,
                         track.title,
                     ),
                 )
             },
             confirmButton = {
                 TextButton(
-                    onClick = localLibraryModel::confirmTrackHide,
+                    onClick =
+                        localLibraryModel::confirmTrackHide,
                 ) {
-                    Text(stringResource(R.string.local_track_hide_action))
+                    Text(
+                        stringResource(
+                            Res.string.local_track_hide_action,
+                        ),
+                    )
                 }
             },
             dismissButton = {
                 TextButton(
-                    onClick = localLibraryModel::dismissTrackHide,
+                    onClick =
+                        localLibraryModel::dismissTrackHide,
                 ) {
-                    Text(stringResource(R.string.playlists_cancel))
+                    Text(
+                        stringResource(
+                            Res.string.playlists_cancel,
+                        ),
+                    )
                 }
             },
         )
     }
 }
+
+@Composable
+private fun Modifier.localLibraryBackground(): Modifier =
+    fillMaxSize()
+        .windowInsetsPadding(WindowInsets.safeDrawing)
+        .background(LocalLibraryBackground)
 
 private val LocalLibraryBackground = Color(0xFF101116)
 private const val TRACK_COVER_SIZE_PX = 180

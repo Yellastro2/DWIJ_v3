@@ -26,19 +26,23 @@ class MainActivity : ComponentActivity() {
         viewModelFactory {
             initializer {
                 val application =
-                    this@MainActivity.application as yApplication
+                    this@MainActivity.application
+                            as yApplication
+
+                val component =
+                    application.component
 
                 PlayerModel(
                     playerRepo =
-                        application.playerRepo,
+                        component.playerRepo,
                     playlistRepo =
-                        application.playlistRepository,
+                        component.playlistRepository,
                     coverLoader =
                         AndroidPlayerCoverLoader(
                             context =
                                 application.applicationContext,
                             coverRepository =
-                                application.coverRepository,
+                                component.coverRepository,
                         ),
                 )
             }
@@ -48,7 +52,9 @@ class MainActivity : ComponentActivity() {
     override fun onCreate(
         savedInstanceState: Bundle?,
     ) {
-        super.onCreate(savedInstanceState)
+        super.onCreate(
+            savedInstanceState,
+        )
 
         enableEdgeToEdge()
 
@@ -58,18 +64,27 @@ class MainActivity : ComponentActivity() {
                 window.decorView,
             )
             .apply {
-                isAppearanceLightStatusBars = false
-                isAppearanceLightNavigationBars = false
-        }
+                isAppearanceLightStatusBars =
+                    false
+
+                isAppearanceLightNavigationBars =
+                    false
+            }
 
         setContent {
             val dwijApplication =
-                this@MainActivity.application as yApplication
+                this@MainActivity.application
+                        as yApplication
+
             CompositionLocalProvider(
-                LocalYamLogger provides dwijApplication.logger,
+                LocalYamLogger provides
+                        dwijApplication.logger,
             ) {
                 DwijApp(
-                    playerModel = playerModel,
+                    playerModel =
+                        playerModel,
+                    component =
+                        dwijApplication.component,
                 )
             }
         }

@@ -27,44 +27,61 @@ import androidx.navigation.compose.composable
 import androidx.navigation.compose.currentBackStackEntryAsState
 import androidx.navigation.compose.rememberNavController
 import androidx.navigation.navArgument
+import com.yellastrodev.dwij.AndroidHomeScreenPlatform
+import com.yellastrodev.dwij.R
+import com.yellastrodev.dwij.di.DwijComponent
+import com.yellastrodev.dwij.models.PlayerModel
 import com.yellastrodev.dwij.ui.HomeCompactPlayer
 import com.yellastrodev.dwij.ui.HomeCompactPlayerUiState
-import com.yellastrodev.dwij.R
-import com.yellastrodev.dwij.models.PlayerModel
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.flowOn
 import kotlinx.coroutines.launch
 
 /**
- * Единый Compose-корень приложения: back stack, маршруты и общий компактный плеер.
- *
- * `NavHost` держит в памяти только back stack и сохранённое состояние маршрутов; невидимые
- * экраны не рисуются и не участвуют в layout.
+ * Единый Android Compose-корень приложения:
+ * NavHost и общий компактный плеер.
  */
 @Composable
 fun DwijApp(
     playerModel: PlayerModel,
+    component: DwijComponent,
     modifier: Modifier = Modifier,
 ) {
     val navController = rememberNavController()
     val backStackEntry by navController.currentBackStackEntryAsState()
     val currentRoute = backStackEntry?.destination?.route
+
     val track by playerModel.track.collectAsState()
     val playbackTrack by playerModel.playbackTrack.collectAsState()
     val playerState by playerModel.playerState.collectAsState()
+
     val coroutineScope = rememberCoroutineScope()
-    var compactCover by remember(track?.id, playbackTrack?.instanceId) {
+
+    var compactCover by remember(
+        track?.id,
+        playbackTrack?.instanceId,
+    ) {
         mutableStateOf<ImageBitmap?>(null)
     }
-    val unknownArtist = stringResource(R.string.home_player_unknown_artist)
-    val showCompactPlayer = track != null &&
-        currentRoute != DwijDestination.HOME &&
-        currentRoute != DwijDestination.PLAYER
 
-    LaunchedEffect(track?.id, playbackTrack?.instanceId) {
+    val unknownArtist = stringResource(
+        R.string.home_player_unknown_artist,
+    )
+
+    val showCompactPlayer =
+        track != null &&
+            currentRoute != DwijDestination.HOME &&
+            currentRoute != DwijDestination.PLAYER
+
+    LaunchedEffect(
+        track?.id,
+        playbackTrack?.instanceId,
+    ) {
         compactCover = null
+
         track?.let { currentTrack ->
-            playerModel.cover(currentTrack)
+            playerModel
+                .cover(currentTrack)
                 .flowOn(Dispatchers.IO)
                 .collect { imageBitmap ->
                     compactCover = imageBitmap
@@ -75,7 +92,9 @@ fun DwijApp(
     Scaffold(
         modifier = modifier
             .fillMaxSize()
-            .background(colorResource(R.color.background)),
+            .background(
+                colorResource(R.color.background),
+            ),
         containerColor = colorResource(R.color.background),
         contentWindowInsets = WindowInsets(0, 0, 0, 0),
         bottomBar = {
@@ -94,15 +113,22 @@ fun DwijApp(
                                     .ifBlank { unknownArtist },
                                 cover = compactCover,
                                 isPlaying = playerState.isPlaying,
-                                currentPositionMillis = playerState.currentPosition,
-                                durationMillis = playerState.duration,
+                                currentPositionMillis =
+                                    playerState.currentPosition,
+                                durationMillis =
+                                    playerState.duration,
                             ),
                             onOpenClick = {
-                                navController.navigate(DwijDestination.PLAYER)
+                                navController.navigate(
+                                    DwijDestination.PLAYER,
+                                )
                             },
-                            onPlayPauseClick = playerModel::playAudio,
+                            onPlayPauseClick =
+                                playerModel::playAudio,
                             onNextClick = {
-                                coroutineScope.launch { playerModel.nextTrack() }
+                                coroutineScope.launch {
+                                    playerModel.nextTrack()
+                                }
                             },
                         )
                     }
@@ -119,11 +145,49 @@ fun DwijApp(
                 .consumeWindowInsets(contentPadding),
         ) {
             composable(DwijDestination.HOME) {
-                HomeRoute(navController = navController, playerModel = playerModel)
+                HomeRoute(
+                    component = component,
+                    playerModel = playerModel,
+                    routePlatform = rememberAndroidHomeRoutePlatform(),
+                    screenPlatform = AndroidHomeScreenPlatform,
+                    onOpenSettings = {
+                        navController.navigate(DwijDestination.SETTINGS)
+                    },
+                    onOpenSongMatches = {
+                        navController.navigate(DwijDestination.SONG_MATCHES)
+                    },
+                    onOpenPlaylists = {
+                        navController.navigate(DwijDestination.PLAYLISTS)
+                    },
+                    onOpenLocalTracks = {
+                        navController.navigate(
+                            DwijDestination.localLibraryRoute(
+                                DwijDestination.LOCAL_MODE_ALL_TRACKS,
+                            ),
+                        )
+                    },
+                    onOpenYandexTracks = {
+                        navController.navigate(
+                            DwijDestination.objectRoute(
+                                DwijDestination.OBJECT_TYPE_TRACKLIST,
+                            ),
+                        )
+                    },
+                    onOpenPlayer = {
+                        navController.navigate(DwijDestination.PLAYER)
+                    },
+                )
             }
+
             composable(DwijDestination.PLAYLISTS) {
-                PlaylistGridRoute(navController = navController)
+                PlaylistGridRoute(
+                    component = component,
+                    platform = rememberAndroidPlaylistGridPlatform(
+                        navController,
+                    ),
+                )
             }
+
             composable(
                 route = DwijDestination.PLAYLISTS_ADD_PATTERN,
                 arguments = listOf(
@@ -133,11 +197,15 @@ fun DwijApp(
                 ),
             ) { entry ->
                 PlaylistGridRoute(
-                    navController = navController,
+                    component = component,
+                    platform = rememberAndroidPlaylistGridPlatform(
+                        navController,
+                    ),
                     trackToAdd = entry.arguments
                         ?.getString(DwijDestination.ARG_TRACK_TO_ADD),
                 )
             }
+
             composable(
                 route = DwijDestination.OBJECT_PATTERN,
                 arguments = listOf(
@@ -150,7 +218,7 @@ fun DwijApp(
                 ),
             ) { entry ->
                 ObjectRoute(
-                    navController = navController,
+                    component = component,
                     playerModel = playerModel,
                     objectType = entry.arguments
                         ?.getString(DwijDestination.ARG_OBJECT_TYPE)
@@ -158,11 +226,30 @@ fun DwijApp(
                     objectValue = entry.arguments
                         ?.getString(DwijDestination.ARG_OBJECT_VALUE)
                         .orEmpty(),
+                    onBackClick = {
+                        navController.navigateUp()
+                    },
+                    onOpenPlayer = {
+                        navController.navigate(DwijDestination.PLAYER)
+                    },
                 )
             }
+
             composable(DwijDestination.PLAYER) {
-                PlayerRoute(navController = navController, playerModel = playerModel)
+                PlayerRoute(
+                    component = component,
+                    playerModel = playerModel,
+                    onBackClick = {
+                        navController.navigateUp()
+                    },
+                    onAddToPlaylist = { trackId ->
+                        navController.navigate(
+                            DwijDestination.playlistsAddRoute(trackId),
+                        )
+                    },
+                )
             }
+
             composable(
                 route = DwijDestination.LOCAL_LIBRARY_PATTERN,
                 arguments = listOf(
@@ -177,8 +264,11 @@ fun DwijApp(
                 ),
             ) { entry ->
                 LocalLibraryRoute(
-                    navController = navController,
+                    component = component,
                     playerModel = playerModel,
+                    platform = rememberAndroidLocalLibraryPlatform(
+                        navController,
+                    ),
                     mode = entry.arguments
                         ?.getString(DwijDestination.ARG_LOCAL_MODE)
                         .orEmpty(),
@@ -186,14 +276,25 @@ fun DwijApp(
                         ?.getString(DwijDestination.ARG_LOCAL_PLAYLIST_ID),
                 )
             }
+
             composable(DwijDestination.SONG_MATCHES) {
                 SongMatchCandidatesRoute(
-                    navController = navController,
+                    component = component,
                     playerModel = playerModel,
+                    onBackClick = {
+                        navController.navigateUp()
+                    },
                 )
             }
+
             composable(DwijDestination.SETTINGS) {
-                SettingsRoute(navController = navController)
+                SettingsRoute(
+                    component = component,
+                    platform = rememberAndroidSettingsPlatform(),
+                    onBackClick = {
+                        navController.navigateUp()
+                    },
+                )
             }
         }
     }
