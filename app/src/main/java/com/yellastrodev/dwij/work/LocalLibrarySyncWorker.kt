@@ -18,9 +18,11 @@ class LocalLibrarySyncWorker(
     params: WorkerParameters,
 ) : CoroutineWorker(appContext, params) {
     override suspend fun doWork(): Result = when (
-        val result = (applicationContext as yApplication)
-            .localMusicRepository
-            .synchronize(force = false)
+        val result =
+            (applicationContext as yApplication)
+                .component
+                .localMusicRepository
+                .synchronize(force = false)
     ) {
         is DataResult.Success -> Result.success()
         is DataResult.Failure -> when (result.error) {

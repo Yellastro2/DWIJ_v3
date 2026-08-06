@@ -12,7 +12,6 @@ import com.yellastrodev.dwij.data.entities.LocalTrackEntity
 import com.yellastrodev.dwij.data.entities.TrackInstance
 import com.yellastrodev.dwij.data.entities.dYaTrack
 import com.yellastrodev.dwij.data.repo.CoverRepository
-import com.yellastrodev.yandexmusiclib.entities.CoverSize
 
 /**
  * Android-реализация загрузки обложек.
@@ -54,10 +53,10 @@ class AndroidPlayerCoverLoader(
     private suspend fun loadYandexCover(
         track: dYaTrack,
     ): Bitmap? {
-        val coverData = coverRepository.getTrackCover(
-            track = track,
-            size = CoverSize.`400x400`,
-        ) ?: return null
+        val coverData =
+            coverRepository
+                .getPlayerTrackCover(track)
+                ?: return null
 
         return BitmapFactory.decodeByteArray(
             coverData.bytes,

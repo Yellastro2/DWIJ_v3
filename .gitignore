@@ -17,3 +17,4 @@ local.properties
 .idea
 .kotlin
 .codex-tmp
+app/release

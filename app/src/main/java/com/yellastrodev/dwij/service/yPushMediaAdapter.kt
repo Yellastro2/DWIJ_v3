@@ -12,7 +12,6 @@ import com.yellastrodev.dwij.TRACK_ID
 import com.yellastrodev.dwij.activities.MainActivity
 import com.yellastrodev.dwij.playback.TrackCoverLoader
 import com.yellastrodev.dwij.yApplication
-import com.yellastrodev.yandexmusiclib.entities.CoverSize
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.launch
@@ -27,7 +26,9 @@ class yPushMediaAdapterobject(
         val application =
             playerService.application as yApplication
 
-        application.trackCoverLoader
+        application
+            .component
+            .trackCoverLoader
     }
 
     private var coverJob: Job? = null
@@ -113,10 +114,10 @@ class yPushMediaAdapterobject(
         coverJob = playerService.serviceScope.launch(
             Dispatchers.IO,
         ) {
-            val coverBytes = trackCoverLoader.load(
-                trackId = trackId,
-                size = CoverSize.`100x100`,
-            ) ?: run {
+            val coverBytes =
+                trackCoverLoader
+                    .loadNotificationCover(trackId)
+                    ?: run {
                 Log.d(
                     TAG,
                     "[getCurrentLargeIcon] " +

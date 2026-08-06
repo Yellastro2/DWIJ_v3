@@ -3,6 +3,8 @@ package com.yellastrodev.dwij.di
 import com.yellastrodev.dwij.CacheManager
 import com.yellastrodev.dwij.MusicSourceSelectionStore
 import com.yellastrodev.dwij.MusicSourceSettings
+import com.yellastrodev.dwij.auth.YandexSessionManager
+import com.yellastrodev.dwij.auth.YandexSessionStore
 import com.yellastrodev.dwij.data.cache.FileCacheStore
 import com.yellastrodev.dwij.data.db.DwijDatabase
 import com.yellastrodev.dwij.data.entities.dYaPlaylist
@@ -28,25 +30,25 @@ import com.yellastrodev.dwij.playback.PlayerEngine
 import com.yellastrodev.dwij.playback.TrackCoverLoader
 import com.yellastrodev.dwij.playback.feedback.PlaybackFeedbackTracker
 import com.yellastrodev.dwij.utils.DwLruCache
-import com.yellastrodev.yandexmusiclib.YamApiClient
 import com.yellastrodev.yandexmusiclib.YamLogger
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.runBlocking
 import java.io.File
 import java.util.concurrent.atomic.AtomicBoolean
 
 /**
  * Общий JVM-граф приложения.
  *
- * Создаёт только платформонезависимые зависимости из jvmCommonMain.
- * Android передаёт готовые платформенные реализации: Room-базу,
- * PlayerEngine, настройки, LocalMediaSource и каталоги кэша.
+ * Создаёт YamApiClient, восстанавливает сессию и собирает все общие
+ * репозитории. Платформа передаёт только системные реализации.
  */
-class DwijComponent(
+class DwijComponent private constructor(
     private val applicationScope: CoroutineScope,
-    private val logger: YamLogger,
-    private val yamClient: YamApiClient,
+    val logger: YamLogger,
+    val yandexSessionManager: YandexSessionManager,
     private val db: DwijDatabase,
     private val trackCacheDirectory: File,
     private val coverCacheDirectory: File,
@@ -56,8 +58,10 @@ class DwijComponent(
     private val musicSourceSettings: MusicSourceSettings,
     private val localMediaSource: LocalMediaSource,
     private val canReadAudio: () -> Boolean,
+    private val platformLifecycle: DwijPlatformLifecycle,
 ) {
     private val started = AtomicBoolean(false)
+    private val yamClient = yandexSessionManager.client
 
     val songRepository: SongRepository by lazy {
         SongRepository(
@@ -222,11 +226,24 @@ class DwijComponent(
     }
 
     /**
-     * Запускает общую инициализацию ровно один раз.
+     * Запускает общую и платформенную инициализацию ровно один раз.
      */
     fun start() {
         if (!started.compareAndSet(false, true)) {
             return
+        }
+
+        try {
+            platformLifecycle.startLocalLibraryIntegration(
+                repository = localMusicRepository,
+                scope = applicationScope,
+            )
+        } catch (error: Exception) {
+            logger.error(
+                TAG,
+                "[start] Не удалось запустить платформенную интеграцию медиатеки",
+                error,
+            )
         }
 
         applicationScope.launch {
@@ -251,8 +268,52 @@ class DwijComponent(
         }
     }
 
-    private companion object {
-        const val TAG = "DwijComponent"
-        const val PLAYLIST_MEMORY_CACHE_SIZE = 50
+    companion object {
+        private const val TAG = "DwijComponent"
+        private const val PLAYLIST_MEMORY_CACHE_SIZE = 50
+
+        /**
+         * Восстанавливает сессию Яндекс Музыки и создаёт общий граф.
+         */
+        fun create(
+            applicationScope: CoroutineScope,
+            logger: YamLogger,
+            yandexSessionStore: YandexSessionStore,
+            db: DwijDatabase,
+            trackCacheDirectory: File,
+            coverCacheDirectory: File,
+            maxCacheSizeBytes: () -> Long,
+            playbackSettings: PlaybackSettings,
+            playerEngine: PlayerEngine,
+            musicSourceSettings: MusicSourceSettings,
+            localMediaSource: LocalMediaSource,
+            canReadAudio: () -> Boolean,
+            platformLifecycle: DwijPlatformLifecycle =
+                NoOpDwijPlatformLifecycle,
+        ): DwijComponent {
+            val sessionManager =
+                runBlocking(Dispatchers.IO) {
+                    YandexSessionManager.create(
+                        store = yandexSessionStore,
+                        logger = logger,
+                    )
+                }
+
+            return DwijComponent(
+                applicationScope = applicationScope,
+                logger = logger,
+                yandexSessionManager = sessionManager,
+                db = db,
+                trackCacheDirectory = trackCacheDirectory,
+                coverCacheDirectory = coverCacheDirectory,
+                maxCacheSizeBytes = maxCacheSizeBytes,
+                playbackSettings = playbackSettings,
+                playerEngine = playerEngine,
+                musicSourceSettings = musicSourceSettings,
+                localMediaSource = localMediaSource,
+                canReadAudio = canReadAudio,
+                platformLifecycle = platformLifecycle,
+            )
+        }
     }
 }

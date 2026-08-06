@@ -48,6 +48,18 @@ class CoverRepository(
         )
     }
 
+    /**
+     * Загружает крупную обложку для Android-плеера,
+     * не раскрывая CoverSize платформенному модулю.
+     */
+    suspend fun getPlayerTrackCover(
+        track: dYaTrack,
+    ): CoverData? =
+        getTrackCover(
+            track = track,
+            size = CoverSize.`400x400`,
+        )
+
     suspend fun getPlaylistCover(
         playlist: dYaPlaylist,
         size: CoverSize = CoverSize.`200x200`,

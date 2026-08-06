@@ -68,8 +68,6 @@ android {
 
 dependencies {
     implementation(project(":shared"))
-    implementation(project(":yandexmusiclib"))
-
     implementation(libs.androidx.core.ktx)
 
     implementation("androidx.media3:media3-exoplayer:1.8.0")

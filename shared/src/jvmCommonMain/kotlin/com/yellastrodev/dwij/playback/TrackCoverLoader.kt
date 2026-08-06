@@ -17,6 +17,17 @@ class TrackCoverLoader(
     private val logger: YamLogger,
 ) {
 
+    /**
+     * Загружает компактную обложку для системного уведомления.
+     */
+    suspend fun loadNotificationCover(
+        trackId: String,
+    ): ByteArray? =
+        load(
+            trackId = trackId,
+            size = CoverSize.`100x100`,
+        )
+
     suspend fun load(
         trackId: String,
         size: CoverSize,

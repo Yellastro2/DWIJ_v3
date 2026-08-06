@@ -9,7 +9,6 @@ import com.yellastrodev.dwij.data.entities.dTracklist
 import com.yellastrodev.dwij.service.PlayerService
 import com.yellastrodev.dwij.utils.PlayerEvent
 import com.yellastrodev.dwij.utils.PlayerState
-import com.yellastrodev.dwij.yApplication
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
@@ -31,6 +30,8 @@ class AndroidPlayerEngine(
     context: Context,
     private val scope: CoroutineScope,
     private val mediaItemMapper: AndroidMediaItemMapper,
+    private val serviceRegistry:
+        AndroidPlayerServiceRegistry,
 ) : PlayerEngine {
 
     private val applicationContext = context.applicationContext
@@ -126,11 +127,9 @@ class AndroidPlayerEngine(
         }
     }
 
-    private fun getApplicationService(): PlayerService? {
-        return (applicationContext as yApplication)
-            .playerServiceRef
-            ?.get()
-    }
+    private fun getApplicationService():
+        PlayerService? =
+        serviceRegistry.current()
 
     /**
      * Вот здесь конкретно должна находиться проверка subscriptionsStarted.

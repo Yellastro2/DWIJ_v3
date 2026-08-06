@@ -79,7 +79,9 @@ class MainActivity : ComponentActivity() {
 
             CompositionLocalProvider(
                 LocalYamLogger provides
-                        dwijApplication.logger,
+                    dwijApplication
+                        .component
+                        .logger,
             ) {
                 DwijApp(
                     playerModel =

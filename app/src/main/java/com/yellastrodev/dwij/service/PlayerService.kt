@@ -70,20 +70,31 @@ class PlayerService : MediaSessionService() {
     internal val serviceScope = CoroutineScope(SupervisorJob() + Dispatchers.Main.immediate)
 
     // Репозитории для треков и обложек
+    private val applicationComponent by lazy {
+        (application as yApplication).component
+    }
+
+    // Репозитории для треков и обложек
     internal val coverRepo: CoverRepository by lazy {
-        (application as yApplication).coverRepository
+        applicationComponent.coverRepository
     }
+
     internal val trackRepo: TrackRepository by lazy {
-        (application as yApplication).trackRepository
+        applicationComponent.trackRepository
     }
+
     val playerRepo: PlayerRepository by lazy {
-        (application as yApplication).playerRepo
+        applicationComponent.playerRepo
     }
+
     val trackCacheRepo: TrackCacheRepository by lazy {
-        (application as yApplication).trackCacheRepo
+        applicationComponent.trackCacheRepo
     }
+
     private val playbackFeedbackTracker: AndroidPlaybackFeedbackAdapter by lazy {
-        (application as yApplication).playbackFeedbackAdapter
+        AndroidPlaybackFeedbackAdapter(
+            tracker = applicationComponent.playbackFeedbackTracker,
+        )
     }
 
     /** Горячие стримы состояния плеера для UI или наблюдения */
@@ -93,9 +104,13 @@ class PlayerService : MediaSessionService() {
     private val _events = MutableSharedFlow<PlayerEvent>()
     val events: SharedFlow<PlayerEvent> = _events
 
-    override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
+    override fun onStartCommand(
+        intent: Intent?,
+        flags: Int,
+        startId: Int,
+    ): Int {
+        Log.d(TAG, "[onStartCommand] Получена команда запуска")
         return super.onStartCommand(intent, flags, startId)
-        Log.d(TAG, "onStartCommand called")
     }
 
     override fun onCreate() {
@@ -217,10 +232,9 @@ class PlayerService : MediaSessionService() {
                             return@launch
                         }
                     }
-                    val coverData = coverRepo.getTrackCover(
-                        track = track,
-                        size = CoverSize.`400x400`,
-                    ) ?: return@launch
+                    val coverData =
+                        coverRepo.getPlayerTrackCover(track)
+                            ?: return@launch
 
                     val newMetadata = mediaItem.mediaMetadata.buildUpon()
                         .setArtworkData(
@@ -331,7 +345,9 @@ class PlayerService : MediaSessionService() {
 
 //        setMediaNotificationProvider(MyNotificationProvider(this))
 
-        (application as? yApplication)?.playerServiceRef = WeakReference(this)
+        (application as yApplication)
+            .playerServiceRegistry
+            .attach(this)
     }
 
     override fun onGetSession(controllerInfo: MediaSession.ControllerInfo): MediaSession? {
@@ -486,6 +502,9 @@ class PlayerService : MediaSessionService() {
             )
         }
         Log.d(TAG, "[onDestroy] Сервис плеера уничтожен")
+        (application as yApplication)
+            .playerServiceRegistry
+            .detach(this)
         serviceScope.cancel()
         mediaSession.release()
         player.release()
