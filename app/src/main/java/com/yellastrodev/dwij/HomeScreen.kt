@@ -3,7 +3,6 @@ package com.yellastrodev.dwij
 import android.annotation.SuppressLint
 import android.os.SystemClock
 import android.util.Log
-import androidx.annotation.DrawableRes
 import androidx.activity.compose.BackHandler
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.tween
@@ -65,8 +64,11 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.drawWithContent
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.res.colorResource
-import androidx.compose.ui.res.painterResource
-import androidx.compose.ui.res.stringResource
+import com.yellastrodev.dwij.resources.*
+import org.jetbrains.compose.resources.DrawableResource
+import org.jetbrains.compose.resources.painterResource
+import org.jetbrains.compose.resources.stringResource
+import com.yellastrodev.dwij.resources.*
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.selected
@@ -121,7 +123,7 @@ fun HomeScreen(
     val coroutineScope = rememberCoroutineScope()
     val radialActionMessages = radialMenuItems.mapIndexed { index, item ->
         item.id to stringResource(
-            R.string.home_radial_action_triggered,
+            Res.string.home_radial_action_triggered,
             index + 2,
             item.title,
         )
@@ -220,111 +222,111 @@ fun HomeScreen(
                             .fillMaxSize()
                             .verticalScroll(rememberScrollState()),
                     ) {
-                    Box(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .aspectRatio(1f),
-                    ) {
-                        val isPlayerHudDimmed = isPlayerPressed || isRadialMenuVisible
-                        val playerHudAlpha by animateFloatAsState(
-                            targetValue = if (isPlayerHudDimmed) 0.16f else 1f,
-                            animationSpec = tween(durationMillis = 70),
-                            label = "homePlayerHudAlpha",
-                        )
-                        PlayerIconButton(
-                            modifier = Modifier.fillMaxSize(),
-                            isPlaying = player?.isPlaying == true,
-                            progress = player?.playbackProgress ?: 0f,
-                            expanded = isRadialMenuVisible,
-                            pressed = isPlayerPressed,
-                            gesturesEnabled = false,
-                            expandedAccentOuterRadiusFraction =
-                                HOME_RADIAL_MENU_OUTER_RADIUS_FRACTION,
-                            onClick = {},
-                        )
-                        player?.let { playerState ->
-                            HomeOrbitalPlayerHud(
-                                player = playerState,
-                                alpha = playerHudAlpha,
-                                modifier = Modifier.fillMaxSize(),
-                            )
-                        }
-                        RadialMenu(
-                            items = radialMenuItems,
-                            visible = isRadialMenuVisible,
-                            onPrimaryClick = {
-                                if (player == null) {
-                                    onWaveClick()
-                                } else {
-                                    onPlayerPlayPauseClick()
-                                }
-                            },
-                            onVisualActivation = {
-                                isRadialMenuVisible = true
-                            },
-                            onPressChange = { isPressed ->
-                                isPlayerPressed = isPressed
-                            },
-                            onItemClick = { item ->
-                                isRadialMenuVisible = false
-                                radialActionMessages[item.id]?.let(::showActionSnackbar)
-                            },
-                            onDismiss = {
-                                isRadialMenuVisible = false
-                            },
-                            outerRadiusFraction = HOME_RADIAL_MENU_OUTER_RADIUS_FRACTION,
-                            animationStyle = RadialMenuAnimationStyle.GlitchFlicker,
-                            modifier = Modifier.fillMaxSize(),
-                        )
-                        if (player != null && !isPlayerHudDimmed) {
-                            HomeOrbitalPlayerTouchTargets(
-                                onPreviousClick = onPlayerPreviousClick,
-                                onNextClick = onPlayerNextClick,
-                                onDetailsClick = onPlayerOpenClick,
-                                modifier = Modifier.fillMaxSize(),
-                            )
-                        }
-                        IconButton(
-                            onClick = onSongMatchesClick,
+                        Box(
                             modifier = Modifier
-                                .align(Alignment.TopStart)
-                                .padding(top = 15.dp, start = 15.dp)
-                                .size(30.dp),
+                                .fillMaxWidth()
+                                .aspectRatio(1f),
                         ) {
-                            MultipleSourcesIndicator(
-                                semanticDescription = stringResource(
-                                    R.string.song_match_candidates_button_content_description,
-                                ),
+                            val isPlayerHudDimmed = isPlayerPressed || isRadialMenuVisible
+                            val playerHudAlpha by animateFloatAsState(
+                                targetValue = if (isPlayerHudDimmed) 0.16f else 1f,
+                                animationSpec = tween(durationMillis = 70),
+                                label = "homePlayerHudAlpha",
+                            )
+                            PlayerIconButton(
+                                modifier = Modifier.fillMaxSize(),
+                                isPlaying = player?.isPlaying == true,
+                                progress = player?.playbackProgress ?: 0f,
+                                expanded = isRadialMenuVisible,
+                                pressed = isPlayerPressed,
+                                gesturesEnabled = false,
+                                expandedAccentOuterRadiusFraction =
+                                    HOME_RADIAL_MENU_OUTER_RADIUS_FRACTION,
+                                onClick = {},
+                            )
+                            player?.let { playerState ->
+                                HomeOrbitalPlayerHud(
+                                    player = playerState,
+                                    alpha = playerHudAlpha,
+                                    modifier = Modifier.fillMaxSize(),
+                                )
+                            }
+                            RadialMenu(
+                                items = radialMenuItems,
+                                visible = isRadialMenuVisible,
+                                onPrimaryClick = {
+                                    if (player == null) {
+                                        onWaveClick()
+                                    } else {
+                                        onPlayerPlayPauseClick()
+                                    }
+                                },
+                                onVisualActivation = {
+                                    isRadialMenuVisible = true
+                                },
+                                onPressChange = { isPressed ->
+                                    isPlayerPressed = isPressed
+                                },
+                                onItemClick = { item ->
+                                    isRadialMenuVisible = false
+                                    radialActionMessages[item.id]?.let(::showActionSnackbar)
+                                },
+                                onDismiss = {
+                                    isRadialMenuVisible = false
+                                },
+                                outerRadiusFraction = HOME_RADIAL_MENU_OUTER_RADIUS_FRACTION,
+                                animationStyle = RadialMenuAnimationStyle.GlitchFlicker,
                                 modifier = Modifier.fillMaxSize(),
                             )
+                            if (player != null && !isPlayerHudDimmed) {
+                                HomeOrbitalPlayerTouchTargets(
+                                    onPreviousClick = onPlayerPreviousClick,
+                                    onNextClick = onPlayerNextClick,
+                                    onDetailsClick = onPlayerOpenClick,
+                                    modifier = Modifier.fillMaxSize(),
+                                )
+                            }
+                            IconButton(
+                                onClick = onSongMatchesClick,
+                                modifier = Modifier
+                                    .align(Alignment.TopStart)
+                                    .padding(top = 15.dp, start = 15.dp)
+                                    .size(30.dp),
+                            ) {
+                                MultipleSourcesIndicator(
+                                    semanticDescription = stringResource(
+                                        Res.string.song_match_candidates_button_content_description,
+                                    ),
+                                    modifier = Modifier.fillMaxSize(),
+                                )
+                            }
+                            IconButton(
+                                onClick = onSettingsClick,
+                                modifier = Modifier
+                                    .align(Alignment.TopEnd)
+                                    .padding(top = 15.dp, end = 15.dp)
+                                    .size(30.dp),
+                            ) {
+                                Image(
+                                    painter = painterResource(Res.drawable.ic_settings),
+                                    contentDescription = stringResource(
+                                        Res.string.settings_button_content_description,
+                                    ),
+                                    modifier = Modifier.fillMaxSize(),
+                                )
+                            }
                         }
-                        IconButton(
-                            onClick = onSettingsClick,
-                            modifier = Modifier
-                                .align(Alignment.TopEnd)
-                                .padding(top = 15.dp, end = 15.dp)
-                                .size(30.dp),
-                        ) {
-                            Image(
-                                painter = painterResource(R.drawable.ic_settings),
-                                contentDescription = stringResource(
-                                    R.string.settings_button_content_description,
-                                ),
-                                modifier = Modifier.fillMaxSize(),
-                            )
-                        }
-                    }
-                    MusicSourceSelector(
-                        selectedSource = selectedSource,
-                        onSourceSelected = onSourceSelected,
-                    )
-                    HomeMenuGrid(
-                        onPlaylistsClick = onPlaylistsClick,
-                        onTracksClick = onTracksClick,
-                        onWaveClick = onWaveClick,
-                        onAllTracksClick = onAllTracksClick,
-                        waveEnabled = selectedSource == HomeMusicSource.Yandex,
-                    )
+                        MusicSourceSelector(
+                            selectedSource = selectedSource,
+                            onSourceSelected = onSourceSelected,
+                        )
+                        HomeMenuGrid(
+                            onPlaylistsClick = onPlaylistsClick,
+                            onTracksClick = onTracksClick,
+                            onWaveClick = onWaveClick,
+                            onAllTracksClick = onAllTracksClick,
+                            waveEnabled = selectedSource == HomeMusicSource.Yandex,
+                        )
                     }
                 }
                 HomeNavigationTab.Search -> SearchScreen(
@@ -391,7 +393,7 @@ private class HomeNavigationTimingTracker {
         Log.d(
             HOME_NAVIGATION_TIMING_TAG,
             "[onRelease] Палец отпущен: цель=$targetLabel, " +
-                "после DOWN=${elapsedMillis(pressStartedAtNanos, now)} мс",
+                    "после DOWN=${elapsedMillis(pressStartedAtNanos, now)} мс",
         )
     }
 
@@ -400,7 +402,7 @@ private class HomeNavigationTimingTracker {
         Log.d(
             HOME_NAVIGATION_TIMING_TAG,
             "[onCancel] Нажатие отменено: цель=$targetLabel, " +
-                "после DOWN=${elapsedMillis(pressStartedAtNanos, now)} мс",
+                    "после DOWN=${elapsedMillis(pressStartedAtNanos, now)} мс",
         )
         pressTarget = null
         pressStartedAtNanos = 0L
@@ -420,7 +422,7 @@ private class HomeNavigationTimingTracker {
         Log.d(
             HOME_NAVIGATION_TIMING_TAG,
             "[onClick] onClick вызван: цель=$targetLabel, " +
-                "после DOWN=$fromPress, текущая вкладка=$currentTab",
+                    "после DOWN=$fromPress, текущая вкладка=$currentTab",
         )
 
         if (targetTab == null || targetTab == currentTab) {
@@ -440,7 +442,7 @@ private class HomeNavigationTimingTracker {
         Log.d(
             HOME_NAVIGATION_TIMING_TAG,
             "[onStateAssigned] Вкладка записана в state: цель=$targetTab, " +
-                "после onClick=${elapsedMillis(clickAtNanos)} мс",
+                    "после onClick=${elapsedMillis(clickAtNanos)} мс",
         )
     }
 
@@ -450,7 +452,7 @@ private class HomeNavigationTimingTracker {
         Log.d(
             HOME_NAVIGATION_TIMING_TAG,
             "[onCompositionCommitted] Композиция подтверждена: вкладка=$tab, " +
-                "после onClick=${elapsedMillis(clickAtNanos)} мс",
+                    "после onClick=${elapsedMillis(clickAtNanos)} мс",
         )
     }
 
@@ -461,8 +463,8 @@ private class HomeNavigationTimingTracker {
         Log.d(
             HOME_NAVIGATION_TIMING_TAG,
             "[onFirstDraw] Первый draw: вкладка=$tab, " +
-                "после onClick=${elapsedMillis(clickAtNanos, now)} мс, " +
-                "после DOWN=${elapsedMillis(pressStartedAtNanos, now)} мс",
+                    "после onClick=${elapsedMillis(clickAtNanos, now)} мс, " +
+                    "после DOWN=${elapsedMillis(pressStartedAtNanos, now)} мс",
         )
         pendingTarget = null
         clickAtNanos = 0L
@@ -484,12 +486,12 @@ private const val HOME_NAVIGATION_TIMING_TAG = "HomeNavigationTiming"
 
 @Composable
 private fun homeRadialMenuItems(): List<RadialMenuItem> {
-    val roadTitle = stringResource(R.string.radial_menu_road)
-    val focusTitle = stringResource(R.string.radial_menu_focus)
-    val calmTitle = stringResource(R.string.radial_menu_calm)
-    val favoriteTitle = stringResource(R.string.radial_menu_favorite)
-    val radioTitle = stringResource(R.string.radial_menu_radio)
-    val partyTitle = stringResource(R.string.radial_menu_party)
+    val roadTitle = stringResource(Res.string.radial_menu_road)
+    val focusTitle = stringResource(Res.string.radial_menu_focus)
+    val calmTitle = stringResource(Res.string.radial_menu_calm)
+    val favoriteTitle = stringResource(Res.string.radial_menu_favorite)
+    val radioTitle = stringResource(Res.string.radial_menu_radio)
+    val partyTitle = stringResource(Res.string.radial_menu_party)
 
     return remember(
         roadTitle,
@@ -528,7 +530,7 @@ private fun HomeOrbitalPlayerHud(
         val detailsOffset = maxWidth * 0.32f
 
         Image(
-            painter = painterResource(R.drawable.ic_home_player_next),
+            painter = painterResource(Res.drawable.ic_home_player_next),
             contentDescription = null,
             modifier = Modifier
                 .align(Alignment.Center)
@@ -537,7 +539,7 @@ private fun HomeOrbitalPlayerHud(
                 .graphicsLayer { scaleX = -1f },
         )
         Image(
-            painter = painterResource(R.drawable.ic_home_player_next),
+            painter = painterResource(Res.drawable.ic_home_player_next),
             contentDescription = null,
             modifier = Modifier
                 .align(Alignment.Center)
@@ -600,11 +602,11 @@ private fun HomeOrbitalPlayerTouchTargets(
     modifier: Modifier = Modifier,
 ) {
     val previousDescription = stringResource(
-        R.string.home_player_previous_content_description,
+        Res.string.home_player_previous_content_description,
     )
-    val nextDescription = stringResource(R.string.home_player_next_content_description)
+    val nextDescription = stringResource(Res.string.home_player_next_content_description)
     val detailsDescription = stringResource(
-        R.string.home_player_details_content_description,
+        Res.string.home_player_details_content_description,
     )
 
     BoxWithConstraints(modifier = modifier) {
@@ -661,7 +663,7 @@ fun HomeCompactPlayer(
         val detailsWidth = (maxWidth - 22.dp - 64.dp - 10.dp - 84.dp)
             .coerceAtLeast(72.dp)
         Image(
-            painter = painterResource(R.drawable.bg_home_compact_player),
+            painter = painterResource(Res.drawable.bg_home_compact_player),
             contentDescription = null,
             contentScale = ContentScale.FillBounds,
             modifier = Modifier.fillMaxSize(),
@@ -685,14 +687,14 @@ fun HomeCompactPlayer(
                     )
                 } else {
                     Image(
-                        painter = painterResource(R.drawable.ic_home_player_placeholder),
+                        painter = painterResource(Res.drawable.ic_home_player_placeholder),
                         contentDescription = null,
                         contentScale = ContentScale.FillBounds,
                         modifier = Modifier.fillMaxSize(),
                     )
                 }
                 Image(
-                    painter = painterResource(R.drawable.dvizh_album_thumb_glitch_frame_contour),
+                    painter = painterResource(Res.drawable.dvizh_album_thumb_glitch_frame_contour,),
                     contentDescription = null,
                     contentScale = ContentScale.FillBounds,
                     modifier = Modifier.fillMaxSize(),
@@ -731,16 +733,16 @@ fun HomeCompactPlayer(
                 Image(
                     painter = painterResource(
                         if (player.isPlaying) {
-                            R.drawable.ic_home_player_pause
+                            Res.drawable.ic_home_player_pause
                         } else {
-                            R.drawable.ic_home_player_play
+                            Res.drawable.ic_home_player_play
                         },
                     ),
                     contentDescription = stringResource(
                         if (player.isPlaying) {
-                            R.string.home_player_pause_content_description
+                            Res.string.home_player_pause_content_description
                         } else {
-                            R.string.home_player_play_content_description
+                            Res.string.home_player_play_content_description
                         },
                     ),
                     modifier = Modifier.size(28.dp),
@@ -751,9 +753,9 @@ fun HomeCompactPlayer(
                 modifier = Modifier.size(42.dp),
             ) {
                 Image(
-                    painter = painterResource(R.drawable.ic_home_player_next),
+                    painter = painterResource(Res.drawable.ic_home_player_next),
                     contentDescription = stringResource(
-                        R.string.home_player_next_content_description,
+                        Res.string.home_player_next_content_description,
                     ),
                     modifier = Modifier.size(28.dp),
                 )
@@ -830,15 +832,15 @@ private fun HomeBottomNavigation(
     ) {
         val itemWidth = maxWidth / 3
         Image(
-            painter = painterResource(R.drawable.bg_home_bottom_navigation),
+            painter = painterResource(Res.drawable.bg_home_bottom_navigation),
             contentDescription = null,
             contentScale = ContentScale.FillBounds,
             modifier = Modifier.fillMaxSize(),
         )
         Row(modifier = Modifier.fillMaxSize()) {
             HomeBottomNavigationItem(
-                iconRes = R.drawable.ic_home_nav_catalog,
-                title = stringResource(R.string.home_navigation_catalog),
+                iconRes = Res.drawable.ic_home_nav_catalog,
+                title = stringResource(Res.string.home_navigation_catalog),
                 selected = false,
                 onPress = {
                     navigationTimingTracker.onPress("Каталог")
@@ -853,8 +855,8 @@ private fun HomeBottomNavigation(
                 modifier = Modifier.width(itemWidth),
             )
             HomeBottomNavigationItem(
-                iconRes = R.drawable.ic_home_nav_main,
-                title = stringResource(R.string.home_navigation_main),
+                iconRes = Res.drawable.ic_home_nav_main,
+                title = stringResource(Res.string.home_navigation_main),
                 selected = selectedTab == HomeNavigationTab.Main,
                 onPress = {
                     navigationTimingTracker.onPress("Главная")
@@ -869,8 +871,8 @@ private fun HomeBottomNavigation(
                 modifier = Modifier.width(itemWidth),
             )
             HomeBottomNavigationItem(
-                iconRes = R.drawable.ic_home_nav_search,
-                title = stringResource(R.string.home_navigation_search),
+                iconRes = Res.drawable.ic_home_nav_search,
+                title = stringResource(Res.string.home_navigation_search),
                 selected = selectedTab == HomeNavigationTab.Search,
                 onPress = {
                     navigationTimingTracker.onPress("Поиск")
@@ -890,7 +892,7 @@ private fun HomeBottomNavigation(
 
 @Composable
 private fun HomeBottomNavigationItem(
-    @DrawableRes iconRes: Int,
+    iconRes: DrawableResource,
     title: String,
     selected: Boolean,
     onPress: () -> Unit,
@@ -969,8 +971,8 @@ private data class HomeSourceOption(
 /** Собирает локализованные заглушки источников музыки. */
 @Composable
 private fun homeSourceOptions(): List<HomeSourceOption> {
-    val local = stringResource(R.string.home_source_local)
-    val yandexMusic = stringResource(R.string.home_source_yandex_music)
+    val local = stringResource(Res.string.home_source_local)
+    val yandexMusic = stringResource(Res.string.home_source_yandex_music)
     return remember(local, yandexMusic) {
         listOf(
             HomeSourceOption("local", local, HomeMusicSource.Local),
@@ -1123,9 +1125,9 @@ fun MusicSourceSelector(
                     Image(
                         painter = painterResource(
                             if (isSelected && selectedFrameVisible) {
-                                R.drawable.bg_home_source_chip_selected
+                                Res.drawable.bg_home_source_chip_selected
                             } else {
-                                R.drawable.bg_home_source_chip
+                                Res.drawable.bg_home_source_chip
                             },
                         ),
                         contentDescription = null,
@@ -1173,27 +1175,27 @@ private fun HomeMenuGrid(
     ) {
         item {
             HomeMenuCard(
-                textureRes = R.drawable.bg_calm_texture,
-                frameRes = R.drawable.dvizh_calm_glitch_frame_contour,
-                title = stringResource(R.string.home_playlists),
+                textureRes = Res.drawable.bg_calm_texture,
+                frameRes = Res.drawable.dvizh_calm_glitch_frame_contour,
+                title = stringResource(Res.string.home_playlists),
                 onClick = onPlaylistsClick,
                 modifier = Modifier.height(110.dp),
             )
         }
         item {
             HomeMenuCard(
-                textureRes = R.drawable.bg_drive_texture,
-                frameRes = R.drawable.dvizh_drive_glitch_frame_contour,
-                title = stringResource(R.string.home_tracks),
+                textureRes = Res.drawable.bg_drive_texture,
+                frameRes = Res.drawable.dvizh_drive_glitch_frame_contour,
+                title = stringResource(Res.string.home_tracks),
                 onClick = onTracksClick,
                 modifier = Modifier.height(110.dp),
             )
         }
         item {
             HomeMenuCard(
-                textureRes = R.drawable.bg_focus_texture,
-                frameRes = R.drawable.dvizh_focus_glitch_frame_contour,
-                title = stringResource(R.string.home_wave),
+                textureRes = Res.drawable.bg_focus_texture,
+                frameRes = Res.drawable.dvizh_focus_glitch_frame_contour,
+                title = stringResource(Res.string.home_wave),
                 onClick = onWaveClick,
                 enabled = waveEnabled,
                 modifier = Modifier.height(110.dp),
@@ -1201,9 +1203,9 @@ private fun HomeMenuGrid(
         }
         item {
             HomeMenuCard(
-                textureRes = R.drawable.bg_party_texture,
-                frameRes = R.drawable.dvizh_orange_glitch_frame_contour,
-                title = stringResource(R.string.home_all_tracks),
+                textureRes = Res.drawable.bg_party_texture,
+                frameRes = Res.drawable.dvizh_orange_glitch_frame_contour,
+                title = stringResource(Res.string.home_all_tracks),
                 onClick = onAllTracksClick,
                 modifier = Modifier.height(110.dp),
             )
@@ -1214,8 +1216,8 @@ private fun HomeMenuGrid(
 /** Накладывает совместимые с Compose векторные слои текстуры и рамки. */
 @Composable
 private fun HomeMenuCard(
-    @DrawableRes textureRes: Int,
-    @DrawableRes frameRes: Int,
+    textureRes: DrawableResource,
+    frameRes: DrawableResource,
     title: String,
     onClick: () -> Unit,
     enabled: Boolean = true,

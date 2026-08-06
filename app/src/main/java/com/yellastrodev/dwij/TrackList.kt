@@ -1,7 +1,7 @@
 package com.yellastrodev.dwij
 
-import androidx.compose.foundation.background
 import androidx.compose.foundation.ExperimentalFoundationApi
+import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
@@ -16,10 +16,9 @@ import androidx.compose.foundation.lazy.LazyListState
 import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.material3.Text
 import androidx.compose.material3.DropdownMenu
+import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.Immutable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -33,25 +32,6 @@ import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-
-/**
- * Независимые от источника данные одной строки трека.
- *
- * [isYandexUnavailable], [hasMultipleSources] и [hasUnresolvedMatchCandidate] включают
- * правые индикаторы, а [isPlaybackBlocked] приглушает недоступные метаданные.
- */
-@Immutable
-data class TrackListItemUiModel(
-    val key: String,
-    val trackId: String,
-    val title: String,
-    val artist: String,
-    val shouldLoadCover: Boolean = true,
-    val isYandexUnavailable: Boolean = false,
-    val isPlaybackBlocked: Boolean = false,
-    val hasMultipleSources: Boolean = false,
-    val hasUnresolvedMatchCandidate: Boolean = false,
-)
 
 /**
  * Линейный ленивый список треков для плейлистов, каталога и локальной медиатеки.
@@ -76,6 +56,7 @@ fun TrackList(
     header: (@Composable () -> Unit)? = null,
 ) {
     val coverStates = remember { mutableMapOf<String, TrackCoverState>() }
+
     LazyColumn(
         state = state,
         contentPadding = PaddingValues(vertical = 4.dp),
@@ -86,6 +67,7 @@ fun TrackList(
                 headerContent()
             }
         }
+
         if (items.isEmpty() && isLoading) {
             items(
                 count = TRACK_LOADING_PLACEHOLDER_COUNT,
@@ -115,12 +97,17 @@ fun TrackList(
             itemsIndexed(
                 items = items,
                 key = { _, item -> item.key },
-                contentType = { _, item -> if (item.shouldLoadCover) "cover" else "plain" },
+                contentType = { _, item ->
+                    if (item.shouldLoadCover) "cover" else "plain"
+                },
             ) { index, item ->
                 val coverState = remember(item.key) {
                     coverStates.getOrPut(item.key) { TrackCoverState() }
                 }
-                var isContextMenuExpanded by remember(item.key) { mutableStateOf(false) }
+                var isContextMenuExpanded by remember(item.key) {
+                    mutableStateOf(false)
+                }
+
                 if (item.shouldLoadCover) {
                     TrackCoverLoader(
                         trackId = item.trackId,
@@ -128,6 +115,7 @@ fun TrackList(
                         loadCover = loadCover,
                     )
                 }
+
                 Box {
                     TrackListItem(
                         item = item,
@@ -137,13 +125,16 @@ fun TrackList(
                             { isContextMenuExpanded = true }
                         },
                     )
+
                     contextMenuContent?.let { menuContent ->
                         DropdownMenu(
                             expanded = isContextMenuExpanded,
                             onDismissRequest = { isContextMenuExpanded = false },
                             modifier = Modifier.align(Alignment.TopEnd),
                         ) {
-                            menuContent(index, item) { isContextMenuExpanded = false }
+                            menuContent(index, item) {
+                                isContextMenuExpanded = false
+                            }
                         }
                     }
                 }
@@ -168,6 +159,7 @@ private fun TrackListLoadingPlaceholder(showMessage: Boolean) {
                 .clip(RoundedCornerShape(5.dp))
                 .background(TrackLoadingPlaceholder),
         )
+
         Column(
             modifier = Modifier
                 .weight(1f)
@@ -189,6 +181,7 @@ private fun TrackListLoadingPlaceholder(showMessage: Boolean) {
                         .background(TrackLoadingPlaceholder),
                 )
             }
+
             Box(
                 modifier = Modifier
                     .padding(top = 7.dp)
@@ -212,22 +205,28 @@ private fun TrackListLoadingPlaceholder(showMessage: Boolean) {
 private fun TrackListPreview() {
     TrackList(
         items = listOf(
-            TrackListItemUiModel("1:0", "1", "Ночной город", "Три дня дождя", false),
             TrackListItemUiModel(
-                "2:0",
-                "2",
-                "MARDI GRAS",
-                "Scriptz",
-                false,
+                key = "1:0",
+                trackId = "1",
+                title = "Ночной город",
+                artist = "Три дня дождя",
+                shouldLoadCover = false,
+            ),
+            TrackListItemUiModel(
+                key = "2:0",
+                trackId = "2",
+                title = "MARDI GRAS",
+                artist = "Scriptz",
+                shouldLoadCover = false,
                 isYandexUnavailable = true,
                 hasMultipleSources = true,
             ),
             TrackListItemUiModel(
-                "3:0",
-                "3",
-                "FROSTSURGE",
-                "qõke, N:GHT",
-                false,
+                key = "3:0",
+                trackId = "3",
+                title = "FROSTSURGE",
+                artist = "qõke, N:GHT",
+                shouldLoadCover = false,
                 isYandexUnavailable = true,
                 isPlaybackBlocked = true,
                 hasUnresolvedMatchCandidate = true,

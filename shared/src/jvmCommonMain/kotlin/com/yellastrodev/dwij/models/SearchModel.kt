@@ -81,6 +81,7 @@ class SearchModel(
     private val songRepository: SongRepository,
     private val playerRepository: PlayerRepository,
 ) : ViewModel() {
+
     private val _state = MutableStateFlow(SearchUiState())
     val state: StateFlow<SearchUiState> = _state.asStateFlow()
 
@@ -90,6 +91,7 @@ class SearchModel(
     /** Обновляет введённый текст и заменяет ожидающий сетевой запрос новым. */
     fun updateQuery(query: String) {
         if (_state.value.query == query) return
+
         _state.value = _state.value.copy(query = query)
         scheduleSearch()
     }
@@ -97,40 +99,51 @@ class SearchModel(
     /** Смена источника отменяет прежний запрос и повторяет поиск в его хранилище. */
     fun setYandexEnabled(enabled: Boolean) {
         if (yandexEnabled == enabled) return
+
         yandexEnabled = enabled
         scheduleSearch()
     }
 
     private fun scheduleSearch() {
         searchJob?.cancel()
+
         val query = _state.value.query.trim()
+
         if (query.isBlank()) {
             _state.value = SearchUiState()
             return
         }
+
         _state.value = _state.value.copy(
             isLoading = true,
             hasSearched = false,
             results = emptyList(),
             error = null,
         )
+
         searchJob = viewModelScope.launch {
             delay(SEARCH_DEBOUNCE_MILLIS)
+
             try {
                 if (yandexEnabled) {
                     when (val result = repository.searchAll(query)) {
-                        is DataResult.Success -> _state.value = _state.value.copy(
-                            isLoading = false,
-                            hasSearched = true,
-                            results = result.value.toUiItems(),
-                            error = null,
-                        )
-                        is DataResult.Failure -> _state.value = _state.value.copy(
-                            isLoading = false,
-                            hasSearched = true,
-                            results = emptyList(),
-                            error = result.error,
-                        )
+                        is DataResult.Success -> {
+                            _state.value = _state.value.copy(
+                                isLoading = false,
+                                hasSearched = true,
+                                results = result.value.toUiItems(),
+                                error = null,
+                            )
+                        }
+
+                        is DataResult.Failure -> {
+                            _state.value = _state.value.copy(
+                                isLoading = false,
+                                hasSearched = true,
+                                results = emptyList(),
+                                error = result.error,
+                            )
+                        }
                     }
                 } else {
                     _state.value = _state.value.copy(
@@ -147,7 +160,7 @@ class SearchModel(
     }
 
     private fun com.yellastrodev.yandexmusiclib.search.SearchResponse.toUiItems():
-        List<SearchResultItemUiModel> = buildList {
+            List<SearchResultItemUiModel> = buildList {
         tracks?.results.orEmpty().forEach { track ->
             add(
                 SearchResultItemUiModel.Track(
@@ -165,6 +178,7 @@ class SearchModel(
                 ),
             )
         }
+
         albums?.results.orEmpty().forEach { album ->
             add(
                 SearchResultItemUiModel.Entity(
@@ -179,6 +193,7 @@ class SearchModel(
                 ),
             )
         }
+
         artists?.results.orEmpty().forEach { artist ->
             add(
                 SearchResultItemUiModel.Entity(
@@ -208,7 +223,7 @@ class SearchModel(
         )
     }
 
-    /** Запускает выбранный трек отдельной поисковой очередью, переживающей переход на экран плеера. */
+    /** Запускает выбранный трек отдельной поисковой очередью. */
     fun playTrack(item: SearchResultItemUiModel.Track) {
         viewModelScope.launch {
             val songs = when (val source = item.source) {
@@ -216,8 +231,10 @@ class SearchModel(
                     trackRepository.putTracks(listOf(source.track))
                     songRepository.songsForYandexTracks(listOf(source.track))
                 }
+
                 is SearchTrackSource.Local -> listOf(source.song)
             }
+
             playerRepository.playQueue(
                 songs = songs,
                 startIndex = 0,
@@ -233,6 +250,7 @@ class SearchModel(
         private val songRepository: SongRepository,
         private val playerRepository: PlayerRepository,
     ) : ViewModelProvider.Factory {
+
         @Suppress("UNCHECKED_CAST")
         override fun <T : ViewModel> create(modelClass: Class<T>): T {
             if (modelClass.isAssignableFrom(SearchModel::class.java)) {
@@ -244,6 +262,7 @@ class SearchModel(
                     playerRepository = playerRepository,
                 ) as T
             }
+
             throw IllegalArgumentException("Unknown ViewModel class")
         }
     }

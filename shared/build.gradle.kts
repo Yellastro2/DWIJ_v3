@@ -135,7 +135,7 @@ kotlin {
                  * Res.string, Res.font и остальных
                  * multiplatform accessors.
                  */
-                implementation(compose.components.resources,)
+                api(compose.components.resources)
             }
         }
 

@@ -37,6 +37,7 @@ import com.yellastrodev.dwij.data.entities.TrackInstance
 import com.yellastrodev.dwij.data.entities.dYaPlaylist
 import com.yellastrodev.dwij.models.PlayerModel
 import com.yellastrodev.dwij.models.TracklistModel
+import com.yellastrodev.dwij.ui.toImageBitmapOrNull
 import com.yellastrodev.dwij.yApplication
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
@@ -67,6 +68,7 @@ fun ObjectRoute(
             songRepo = application.songRepository,
             playerRepo = application.playerRepo,
             waveRepo = application.waveRepository,
+            logger = application.logger,
         ),
     )
     val playlist by model.playlist.collectAsState()
@@ -79,6 +81,7 @@ fun ObjectRoute(
     val title = when {
         objectType == DwijDestination.OBJECT_TYPE_TRACKLIST ->
             stringResource(R.string.track_list_all_title)
+
         yandexPlaylist != null -> yandexPlaylist.title
         else -> stringResource(R.string.object_loading_title)
     }
@@ -93,7 +96,9 @@ fun ObjectRoute(
     var objectCover by remember(objectId) { mutableStateOf<ImageBitmap?>(null) }
     var isRefreshing by remember { mutableStateOf(false) }
     var sourceDialogSongId by remember { mutableStateOf<String?>(null) }
-    var candidateSongs by remember(sourceDialogSongId) { mutableStateOf(emptyList<Song>()) }
+    var candidateSongs by remember(sourceDialogSongId) {
+        mutableStateOf(emptyList<Song>())
+    }
     var isMergingSources by remember(sourceDialogSongId) { mutableStateOf(false) }
     var mergeSourcesError by remember(sourceDialogSongId) { mutableStateOf<String?>(null) }
     val sourceDialogSong = remember(tracks, sourceDialogSongId) {
@@ -109,23 +114,32 @@ fun ObjectRoute(
     }
 
     LaunchedEffect(objectType, objectValue) {
-        model.setType(objectType, objectValue.takeUnless { it == "_" }.orEmpty())
+        model.setType(
+            type = objectType,
+            value = objectValue.takeUnless { it == "_" }.orEmpty(),
+        )
     }
+
     LaunchedEffect(sourceDialogSongId, pendingMatchCandidates) {
         val currentSongId = sourceDialogSongId ?: return@LaunchedEffect
         val relatedSongIds = pendingMatchCandidates
-            .flatMap { candidate -> listOf(candidate.firstSongId, candidate.secondSongId) }
+            .flatMap { candidate ->
+                listOf(candidate.firstSongId, candidate.secondSongId)
+            }
             .filterNot { songId -> songId == currentSongId }
             .distinct()
+
         candidateSongs = try {
-            withContext(Dispatchers.IO) { songRepository.songsByIds(relatedSongIds) }
+            withContext(Dispatchers.IO) {
+                songRepository.songsByIds(relatedSongIds)
+            }
         } catch (error: CancellationException) {
             throw error
         } catch (error: Exception) {
             Log.w(
                 TAG,
                 "[loadMultiSourceCandidates] Не удалось загрузить варианты " +
-                    "songId=$currentSongId",
+                        "songId=$currentSongId",
                 error,
             )
             emptyList()
@@ -136,7 +150,9 @@ fun ObjectRoute(
         (listOfNotNull(sourceDialogSong) + candidateSongs)
             .distinctBy(Song::id)
             .flatMap { song ->
-                song.instances.map { instance -> ObjectSourceDialogEntry(song, instance) }
+                song.instances.map { instance ->
+                    ObjectSourceDialogEntry(song, instance)
+                }
             }
             .distinctBy { entry -> entry.instance.id }
     }
@@ -148,9 +164,13 @@ fun ObjectRoute(
                     key = entry.instance.id,
                     trackId = entry.song.id,
                     title = entry.song.title,
-                    artist = entry.song.artistNames.joinToString(", ").ifBlank { unknownArtist },
+                    artist = entry.song.artistNames
+                        .joinToString(", ")
+                        .ifBlank { unknownArtist },
                     isYandexUnavailable =
-                        (entry.instance as? TrackInstance.Yandex)?.track?.available == false,
+                        (entry.instance as? TrackInstance.Yandex)
+                            ?.track
+                            ?.available == false,
                 ),
                 sourceIndicator = when (entry.instance) {
                     is TrackInstance.Yandex -> TrackSourceIndicator.YANDEX
@@ -160,15 +180,19 @@ fun ObjectRoute(
         }
     }
     val sourceInstancesById = remember(sourceEntries) {
-        sourceEntries.associate { entry -> entry.instance.id to entry.instance }
+        sourceEntries.associate { entry ->
+            entry.instance.id to entry.instance
+        }
     }
 
     LaunchedEffect(objectId) {
         objectCover = null
+
         val currentPlaylist = yandexPlaylist ?: return@LaunchedEffect
         if (currentPlaylist.ogImageUri.isNullOrBlank()) return@LaunchedEffect
+
         objectCover = try {
-            model.getPlaylistCover(currentPlaylist).asImageBitmap()
+            model.getPlaylistCover(currentPlaylist).toImageBitmapOrNull()
         } catch (error: CancellationException) {
             throw error
         } catch (error: Exception) {
@@ -180,8 +204,11 @@ fun ObjectRoute(
             null
         }
     }
+
     LaunchedEffect(listState) {
-        model.scrollResetEvents.collect { listState.scrollToItem(0) }
+        model.scrollResetEvents.collect {
+            listState.scrollToItem(0)
+        }
     }
 
     fun playTrack(position: Int, expectedSongId: String? = null) {
@@ -207,42 +234,57 @@ fun ObjectRoute(
                 if (!isRefreshing) {
                     coroutineScope.launch {
                         isRefreshing = true
+
                         try {
                             model.refreshObject()
                         } catch (error: CancellationException) {
                             throw error
                         } catch (error: Exception) {
-                            Log.w(TAG, "[refreshObject] Не удалось обновить объект", error)
+                            Log.w(
+                                TAG,
+                                "[refreshObject] Не удалось обновить объект",
+                                error,
+                            )
                         } finally {
                             isRefreshing = false
                         }
                     }
                 }
             },
-            loadTrackCover = { trackId -> model.getTrackCover(trackId)?.asImageBitmap() },
+            loadTrackCover = { trackId ->
+                model.getTrackCover(trackId)?.toImageBitmapOrNull()
+            },
             onBackClick = { navController.navigateUp() },
             onPlayClick = {
                 val firstPlayableIndex = trackItems.indexOfFirst { item ->
                     !item.isPlaybackBlocked
                 }
+
                 if (firstPlayableIndex >= 0) {
                     playTrack(
                         position = firstPlayableIndex,
                         expectedSongId = trackItems[firstPlayableIndex].trackId,
                     )
                 } else if (trackItems.isNotEmpty()) {
-                    showSnackbar(context.getString(R.string.track_unavailable_yandex))
+                    showSnackbar(
+                        context.getString(R.string.track_unavailable_yandex),
+                    )
                 }
             },
             onTrackClick = { position, item ->
                 when {
                     item.isPlaybackBlocked &&
-                        (item.hasMultipleSources || item.hasUnresolvedMatchCandidate) -> {
+                            (item.hasMultipleSources || item.hasUnresolvedMatchCandidate) -> {
                         mergeSourcesError = null
                         sourceDialogSongId = item.trackId
                     }
-                    item.isPlaybackBlocked ->
-                        showSnackbar(context.getString(R.string.track_unavailable_yandex))
+
+                    item.isPlaybackBlocked -> {
+                        showSnackbar(
+                            context.getString(R.string.track_unavailable_yandex),
+                        )
+                    }
+
                     else -> playTrack(position, item.trackId)
                 }
             },
@@ -254,6 +296,7 @@ fun ObjectRoute(
                 navController.navigate(DwijDestination.PLAYER)
             },
         )
+
         SnackbarHost(
             hostState = snackbarHostState,
             modifier = Modifier
@@ -276,10 +319,15 @@ fun ObjectRoute(
                 val selectedEntries = sourceEntries.filter { entry ->
                     entry.instance.id in selectedIds
                 }
-                if (selectedEntries.size < 2 || isMergingSources) return@onSave
+
+                if (selectedEntries.size < 2 || isMergingSources) {
+                    return@onSave
+                }
+
                 coroutineScope.launch {
                     isMergingSources = true
                     mergeSourcesError = null
+
                     try {
                         val sourceSongIds = selectedEntries
                             .mapTo(linkedSetOf(), ObjectSourceDialogEntry::songId)
@@ -288,20 +336,33 @@ fun ObjectRoute(
                                 selectedEntries.map(ObjectSourceDialogEntry::instance),
                             )
                             val resultSong = requireNotNull(
-                                songRepository.songsByIds(listOf(resultId)).firstOrNull(),
-                            ) { "Объединённая Song $resultId не найдена" }
+                                songRepository
+                                    .songsByIds(listOf(resultId))
+                                    .firstOrNull(),
+                            ) {
+                                "Объединённая Song $resultId не найдена"
+                            }
                             resultId to resultSong
                         }
+
                         model.applyMergedSong(sourceSongIds, mergedSong)
                         playerModel.applyMergedSong(sourceSongIds, mergedSong)
                         sourceDialogSongId = null
+
                         showSnackbar(
-                            context.getString(R.string.multi_source_merge_success, mergedSongId),
+                            context.getString(
+                                R.string.multi_source_merge_success,
+                                mergedSongId,
+                            ),
                         )
                     } catch (error: CancellationException) {
                         throw error
                     } catch (error: Exception) {
-                        Log.e(TAG, "[mergeSources] Не удалось объединить источники", error)
+                        Log.e(
+                            TAG,
+                            "[mergeSources] Не удалось объединить источники",
+                            error,
+                        )
                         mergeSourcesError = context.getString(
                             R.string.multi_source_merge_error,
                             error.message ?: error.javaClass.simpleName,
@@ -323,19 +384,24 @@ private fun List<Song>.toObjectTrackListItems(
     cachedUnavailableSongIds: Set<String>,
 ): List<TrackListItemUiModel> {
     val occurrences = mutableMapOf<String, Int>()
+
     return map { song ->
         val occurrence = occurrences.getOrDefault(song.id, 0)
         occurrences[song.id] = occurrence + 1
+
         val yandexUnavailable = song.yandexInstances.isNotEmpty() &&
-            song.yandexInstances.none { instance -> instance.track.available }
+                song.yandexInstances.none { instance -> instance.track.available }
         val yandexPlayable = song.yandexInstances.any { instance ->
             instance.track.available || song.id in cachedUnavailableSongIds
         }
+
         TrackListItemUiModel(
             key = "${song.id}:$occurrence",
             trackId = song.id,
             title = song.title,
-            artist = song.artistNames.joinToString(", ").ifBlank { unknownArtist },
+            artist = song.artistNames
+                .joinToString(", ")
+                .ifBlank { unknownArtist },
             shouldLoadCover = song.coverUri != null,
             isYandexUnavailable = yandexUnavailable,
             isPlaybackBlocked = song.localInstances.isEmpty() && !yandexPlayable,
