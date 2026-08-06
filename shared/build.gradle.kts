@@ -166,6 +166,9 @@ kotlin {
                 implementation(compose.foundation)
                 implementation(compose.ui)
                 implementation(compose.material3)
+                implementation(
+                    "org.jetbrains.compose.ui:ui-tooling-preview:1.10.3",
+                )
                 /*
                  * Генерация Res.drawable,
                  * Res.string, Res.font и остальных
