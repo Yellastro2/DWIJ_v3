@@ -67,7 +67,9 @@ fun DwijApp(
         track?.let { currentTrack ->
             playerModel.cover(currentTrack)
                 .flowOn(Dispatchers.IO)
-                .collect { bitmap -> compactCover = bitmap.asImageBitmap() }
+                .collect { imageBitmap ->
+                    compactCover = imageBitmap
+                }
         }
     }
 

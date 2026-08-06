@@ -67,7 +67,9 @@ fun PlayerRoute(
         try {
             playerModel.cover(currentTrack)
                 .flowOn(Dispatchers.IO)
-                .collect { bitmap -> cover = bitmap.asImageBitmap() }
+                .collect { imageBitmap ->
+                    cover = imageBitmap
+                }
         } catch (error: CancellationException) {
             throw error
         } catch (error: Exception) {
@@ -258,9 +260,10 @@ fun PlayerRoute(
             options = sourceOptions,
             loadCover = { instanceId ->
                 sourceInstancesById[instanceId]
-                    ?.let { instance -> playerModel.cover(instance) }
+                    ?.let { instance ->
+                        playerModel.cover(instance)
+                    }
                     ?.firstOrNull()
-                    ?.asImageBitmap()
             },
             onDismiss = { showMultiSourceDialog = false },
             onSave = onSave@{ selectedIds ->

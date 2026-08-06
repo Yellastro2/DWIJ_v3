@@ -6,31 +6,64 @@ import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
 import androidx.activity.viewModels
 import androidx.core.view.WindowCompat
+import androidx.lifecycle.viewmodel.initializer
+import androidx.lifecycle.viewmodel.viewModelFactory
+import com.yellastrodev.dwij.models.AndroidPlayerCoverLoader
 import com.yellastrodev.dwij.models.PlayerModel
 import com.yellastrodev.dwij.navigation.DwijApp
 import com.yellastrodev.dwij.yApplication
 
-/** Единственная Activity приложения; всё содержимое и навигация размещены в Compose. */
+/**
+ * Единственная Activity приложения.
+ *
+ * Всё содержимое и навигация размещены в Compose.
+ */
 class MainActivity : ComponentActivity() {
+
     val playerModel: PlayerModel by viewModels {
-        val application = application as yApplication
-        PlayerModel.Factory(
-            context = application.applicationContext,
-            playerRepo = application.playerRepo,
-            coverRepo = application.coverRepository,
-            playlistRepo = application.playlistRepository,
-        )
+        viewModelFactory {
+            initializer {
+                val application =
+                    this@MainActivity.application as yApplication
+
+                PlayerModel(
+                    playerRepo =
+                        application.playerRepo,
+                    playlistRepo =
+                        application.playlistRepository,
+                    coverLoader =
+                        AndroidPlayerCoverLoader(
+                            context =
+                                application.applicationContext,
+                            coverRepository =
+                                application.coverRepository,
+                        ),
+                )
+            }
+        }
     }
 
-    override fun onCreate(savedInstanceState: Bundle?) {
+    override fun onCreate(
+        savedInstanceState: Bundle?,
+    ) {
         super.onCreate(savedInstanceState)
+
         enableEdgeToEdge()
-        WindowCompat.getInsetsController(window, window.decorView).apply {
-            isAppearanceLightStatusBars = false
-            isAppearanceLightNavigationBars = false
-        }
+
+        WindowCompat
+            .getInsetsController(
+                window,
+                window.decorView,
+            )
+            .apply {
+                isAppearanceLightStatusBars = false
+                isAppearanceLightNavigationBars = false
+            }
+
         setContent {
-            DwijApp(playerModel = playerModel)
+            DwijApp(
+                playerModel = playerModel,
+            )
         }
     }
 }

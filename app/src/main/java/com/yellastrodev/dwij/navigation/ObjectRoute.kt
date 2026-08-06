@@ -310,9 +310,10 @@ fun ObjectRoute(
             options = sourceOptions,
             loadCover = { instanceId ->
                 sourceInstancesById[instanceId]
-                    ?.let { instance -> playerModel.cover(instance) }
+                    ?.let { instance ->
+                        playerModel.cover(instance)
+                    }
                     ?.firstOrNull()
-                    ?.asImageBitmap()
             },
             onDismiss = { sourceDialogSongId = null },
             onSave = onSave@{ selectedIds ->

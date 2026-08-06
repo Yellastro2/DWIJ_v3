@@ -18,7 +18,6 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.ImageBitmap
-import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
 import androidx.core.content.ContextCompat
@@ -190,8 +189,8 @@ fun HomeRoute(
             playerModel
                 .cover(currentTrack)
                 .flowOn(Dispatchers.IO)
-                .collect { bitmap ->
-                    cover = bitmap.asImageBitmap()
+                .collect { imageBitmap ->
+                    cover = imageBitmap
                 }
         }
     }
@@ -378,9 +377,11 @@ fun HomeRoute(
                             .firstOrNull()
                             ?.let { instance ->
                                 playerModel
-                                    .cover(instance)
+                                    .cover(
+                                        instance = instance,
+                                        maxEdgePx = 100,
+                                    )
                                     .first()
-                                    .asImageBitmap()
                             }
                     }
                 }

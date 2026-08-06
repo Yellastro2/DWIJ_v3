@@ -126,33 +126,17 @@ fun SongMatchCandidatesRoute(
     suspend fun loadListCover(
         song: Song,
     ): ImageBitmap? = withContext(Dispatchers.IO) {
-        val instance = song.yandexInstances.firstOrNull()
-            ?: song.localInstances.firstOrNull()
-            ?: return@withContext null
+        val instance =
+            song.yandexInstances.firstOrNull()
+                ?: song.localInstances.firstOrNull()
+                ?: return@withContext null
 
-        val source = playerModel.cover(instance)
-            .firstOrNull()
-            ?: return@withContext null
-
-        val largestSide = maxOf(
-            source.width,
-            source.height,
-        )
-
-        val bitmap = if (largestSide > LIST_COVER_SIZE_PX) {
-            val scale = LIST_COVER_SIZE_PX.toFloat() / largestSide
-
-            Bitmap.createScaledBitmap(
-                source,
-                (source.width * scale).toInt().coerceAtLeast(1),
-                (source.height * scale).toInt().coerceAtLeast(1),
-                true,
+        playerModel
+            .cover(
+                instance = instance,
+                maxEdgePx = LIST_COVER_SIZE_PX,
             )
-        } else {
-            source
-        }
-
-        bitmap.asImageBitmap()
+            .firstOrNull()
     }
 
     Box(modifier = modifier.fillMaxSize()) {
@@ -219,9 +203,10 @@ fun SongMatchCandidatesRoute(
             options = sourceOptions,
             loadCover = { instanceId ->
                 sourceInstancesById[instanceId]
-                    ?.let { instance -> playerModel.cover(instance) }
+                    ?.let { instance ->
+                        playerModel.cover(instance)
+                    }
                     ?.firstOrNull()
-                    ?.asImageBitmap()
             },
             onDismiss = { selectedCandidateKey = null },
             onSave = onSave@{ selectedIds ->
