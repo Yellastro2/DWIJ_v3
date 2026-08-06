@@ -1,4 +1,3 @@
-import com.yellastrodev.build.RasterizeSvgToPngTask
 import java.util.Properties
 
 val localProperties = Properties().apply {
@@ -17,44 +16,6 @@ plugins {
     alias(libs.plugins.kotlin.compose)
     id("com.google.devtools.ksp")
 }
-
-val rasterizedSvgAssets = mapOf(
-    "ic_player_progress_ring_base" to "355x237",
-    "ic_player_accent_v2" to "355x237",
-    "bg_player_glitch_v2" to "355x355",
-    "ic_player_play_v2" to "355x237",
-    "ic_player_waveform" to "360x32",
-    "ic_player_waveform_head" to "12x32",
-    "ic_player_progress_head" to "24x24",
-    "bg_drive_texture" to "160x92",
-    "bg_focus_texture" to "160x92",
-    "bg_calm_texture" to "160x92",
-    "bg_party_texture" to "160x92",
-    "dvizh_drive_glitch_frame_contour" to "160x92",
-    "dvizh_focus_glitch_frame_contour" to "160x92",
-    "dvizh_orange_glitch_frame_contour" to "160x92",
-    "dvizh_calm_glitch_frame_contour" to "160x92",
-    "dvizh_album_thumb_glitch_frame_contour" to "74x74",
-    "bg_home_source_chip" to "152x56",
-    "bg_home_source_chip_selected" to "152x56",
-      "ic_playlist_create" to "64x64",
-      "ic_playlist_liked" to "64x64",
-      "ic_source_yandex" to "24x24",
-      "ic_source_local_storage" to "24x24",
-      "bg_playlist_tile_overlay" to "112x112",
-    "bg_playlist_tile_overlay_highlighted" to "112x112",
-    "bg_playlist_title_plate" to "104x48",
-    "bg_playlist_title_plate_highlighted" to "104x48",
-    "bg_playlist_details_plate" to "104x38",
-)
-
-val rasterizedSvgDensities = mapOf(
-    "mdpi" to 1.0,
-    "hdpi" to 1.5,
-    "xhdpi" to 2.0,
-    "xxhdpi" to 3.0,
-    "xxxhdpi" to 4.0,
-)
 
 android {
     namespace = "com.yellastrodev.dwij"
@@ -99,29 +60,6 @@ android {
     buildFeatures {
         compose = true
         buildConfig = true
-    }
-}
-
-androidComponents {
-    onVariants(selector().all()) { variant ->
-        val capitalizedVariantName = variant.name.replaceFirstChar { character ->
-            if (character.isLowerCase()) character.titlecase() else character.toString()
-        }
-        val rasterizeTask = tasks.register<RasterizeSvgToPngTask>(
-            "rasterize${capitalizedVariantName}SvgToPng",
-        ) {
-            sourceDirectory.set(layout.projectDirectory.dir("src/main/vector-png"))
-            assets.set(rasterizedSvgAssets)
-            densityScales.set(rasterizedSvgDensities)
-            outputDirectory.set(
-                layout.buildDirectory.dir("generated/res/vectorPng/${variant.name}"),
-            )
-        }
-
-        variant.sources.res?.addGeneratedSourceDirectory(
-            rasterizeTask,
-            RasterizeSvgToPngTask::getOutputDirectory,
-        )
     }
 }
 

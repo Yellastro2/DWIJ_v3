@@ -27,9 +27,9 @@ import org.gradle.api.tasks.TaskAction;
 import javax.inject.Inject;
 
 /**
- * Растеризует выбранные SVG-исходники в PNG-наборы Android для каждой density.
- * Входы и выход объявлены Gradle-свойствами, поэтому задача поддерживает
- * up-to-date checks и build cache.
+ * Растеризует выбранные SVG-исходники
+ * в PNG-наборы Compose Multiplatform
+ * для каждой density.
  */
 @CacheableTask
 public abstract class RasterizeSvgToPngTask extends DefaultTask {
