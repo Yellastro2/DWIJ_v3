@@ -179,6 +179,7 @@ fun DwijApp(
             ) { entry ->
                 LocalLibraryRoute(
                     navController = navController,
+                    playerModel = playerModel,
                     mode = entry.arguments
                         ?.getString(DwijDestination.ARG_LOCAL_MODE)
                         .orEmpty(),
