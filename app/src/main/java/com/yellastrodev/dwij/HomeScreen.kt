@@ -80,6 +80,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.yellastrodev.dwij.models.SearchResultItemUiModel
 import com.yellastrodev.dwij.models.SearchUiState
+import com.yellastrodev.dwij.ui.MultipleSourcesIndicator
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import kotlin.math.abs

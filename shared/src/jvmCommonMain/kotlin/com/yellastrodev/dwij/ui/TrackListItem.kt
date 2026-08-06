@@ -1,4 +1,4 @@
-package com.yellastrodev.dwij
+package com.yellastrodev.dwij.ui
 
 import android.util.Log
 import androidx.compose.foundation.Canvas
@@ -35,6 +35,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.yellastrodev.dwij.TrackListItemUiModel
 import com.yellastrodev.dwij.resources.*
 import kotlinx.coroutines.CancellationException
 import org.jetbrains.compose.resources.painterResource

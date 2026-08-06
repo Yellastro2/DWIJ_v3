@@ -1,4 +1,4 @@
-package com.yellastrodev.dwij
+package com.yellastrodev.dwij.ui
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
@@ -30,15 +30,16 @@ import androidx.compose.ui.draw.paint
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.ImageBitmap
 import androidx.compose.ui.layout.ContentScale
-import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
+import com.yellastrodev.dwij.TrackListItemUiModel
 import com.yellastrodev.dwij.resources.*
 import org.jetbrains.compose.resources.painterResource
+import org.jetbrains.compose.resources.stringResource
 
 /** Один source-инстанс, который пользователь может отметить в диалоге вариантов. */
 @Immutable
@@ -98,7 +99,7 @@ fun MultiSourceDialog(
         ) {
             Column(modifier = Modifier.padding(vertical = 18.dp)) {
                 Text(
-                    text = stringResource(R.string.multi_source_dialog_title),
+                    text = stringResource(Res.string.multi_source_dialog_title),
                     color = Color.White,
                     fontSize = 20.sp,
                     fontWeight = FontWeight.SemiBold,
@@ -113,7 +114,7 @@ fun MultiSourceDialog(
                     if (options.isEmpty()) {
                         item(key = "multi_source_empty") {
                             Text(
-                                text = stringResource(R.string.multi_source_dialog_empty),
+                                text = stringResource(Res.string.multi_source_dialog_empty),
                                 color = MultiSourceSecondary,
                                 modifier = Modifier.padding(horizontal = 18.dp, vertical = 24.dp),
                             )
@@ -168,7 +169,7 @@ fun MultiSourceDialog(
                 ) {
                     TextButton(onClick = onDismiss, enabled = !isSaving) {
                         Text(
-                            text = stringResource(R.string.multi_source_dialog_cancel),
+                            text = stringResource(Res.string.multi_source_dialog_cancel),
                             color = MultiSourceSecondary,
                         )
                     }
@@ -180,9 +181,9 @@ fun MultiSourceDialog(
                             Text(
                                 text = stringResource(
                                     if (isSaving) {
-                                        R.string.multi_source_dialog_saving
+                                        Res.string.multi_source_dialog_saving
                                     } else {
-                                        R.string.multi_source_dialog_save
+                                        Res.string.multi_source_dialog_save
                                     },
                                 ),
                                 color = MultiSourcePink,

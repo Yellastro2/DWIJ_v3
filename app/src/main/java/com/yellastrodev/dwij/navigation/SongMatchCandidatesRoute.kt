@@ -18,12 +18,12 @@ import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.navigation.NavHostController
-import com.yellastrodev.dwij.MultiSourceDialog
+import com.yellastrodev.dwij.ui.MultiSourceDialog
 import com.yellastrodev.dwij.R
-import com.yellastrodev.dwij.SongMatchCandidatesScreen
+import com.yellastrodev.dwij.ui.SongMatchCandidatesScreen
 import com.yellastrodev.dwij.TrackListItemUiModel
-import com.yellastrodev.dwij.TrackSourceIndicator
-import com.yellastrodev.dwij.TrackSourceOptionUiModel
+import com.yellastrodev.dwij.ui.TrackSourceIndicator
+import com.yellastrodev.dwij.ui.TrackSourceOptionUiModel
 import com.yellastrodev.dwij.data.entities.Song
 import com.yellastrodev.dwij.data.entities.SongMatchCandidateStatus
 import com.yellastrodev.dwij.data.entities.TrackInstance

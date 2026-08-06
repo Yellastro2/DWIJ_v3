@@ -1,4 +1,4 @@
-package com.yellastrodev.dwij
+package com.yellastrodev.dwij.ui
 
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
@@ -15,17 +15,21 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.ImageBitmap
 import androidx.compose.ui.graphics.StrokeCap
-import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.yellastrodev.dwij.TrackListItemUiModel
+import com.yellastrodev.dwij.resources.Res
+import com.yellastrodev.dwij.resources.song_match_candidates_empty
+import com.yellastrodev.dwij.resources.song_match_candidates_title
+import org.jetbrains.compose.resources.stringResource
 
 /**
  * Показывает все пары, найденные SongMatch resolver-ом, через общий ленивый список треков.
@@ -52,7 +56,7 @@ fun SongMatchCandidatesScreen(
             items = items,
             onItemClick = { _, item -> onItemClick(item) },
             loadCover = loadCover,
-            emptyMessage = stringResource(R.string.song_match_candidates_empty),
+            emptyMessage = stringResource(Res.string.song_match_candidates_empty),
             isLoading = isLoading,
             modifier = Modifier.weight(1f),
         )
@@ -108,7 +112,7 @@ private fun SongMatchCandidatesHeader(onBackClick: () -> Unit) {
             }
         }
         Text(
-            text = stringResource(R.string.song_match_candidates_title),
+            text = stringResource(Res.string.song_match_candidates_title),
             color = Color.White,
             fontSize = 24.sp,
             fontWeight = FontWeight.Bold,

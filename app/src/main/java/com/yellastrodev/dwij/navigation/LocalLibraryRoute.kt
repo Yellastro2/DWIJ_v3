@@ -25,8 +25,8 @@ import androidx.lifecycle.LifecycleEventObserver
 import androidx.lifecycle.compose.LocalLifecycleOwner
 import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.navigation.NavHostController
-import com.yellastrodev.dwij.LocalLibraryScreen
-import com.yellastrodev.dwij.LocalPlaylistObjectScreen
+import com.yellastrodev.dwij.ui.LocalLibraryScreen
+import com.yellastrodev.dwij.ui.LocalPlaylistObjectScreen
 import com.yellastrodev.dwij.R
 import com.yellastrodev.dwij.data.entities.LocalPlaylistEntity
 import com.yellastrodev.dwij.data.entities.Song

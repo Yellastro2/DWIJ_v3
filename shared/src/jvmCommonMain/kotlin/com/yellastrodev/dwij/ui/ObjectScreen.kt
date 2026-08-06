@@ -1,4 +1,4 @@
-package com.yellastrodev.dwij
+package com.yellastrodev.dwij.ui
 
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.Image
@@ -38,7 +38,6 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.ImageBitmap
 import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.layout.ContentScale
-import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
@@ -46,8 +45,10 @@ import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.platform.LocalDensity
+import com.yellastrodev.dwij.TrackListItemUiModel
 import com.yellastrodev.dwij.resources.*
 import org.jetbrains.compose.resources.painterResource
+import org.jetbrains.compose.resources.stringResource
 
 /**
  * Универсальный экран музыкального объекта: общая шапка и переданный список треков.
@@ -286,7 +287,7 @@ private fun ObjectHeader(
             ) {
                 if (showShare) {
                     ObjectActionButton(
-                        text = stringResource(R.string.object_share),
+                        text = stringResource(Res.string.object_share),
                         accent = ObjectCyan,
                         onClick = onShareClick,
                     )
@@ -296,7 +297,7 @@ private fun ObjectHeader(
                 if (showWave) {
                     Spacer(modifier = Modifier.width(12.dp))
                     ObjectActionButton(
-                        text = stringResource(R.string.object_wave),
+                        text = stringResource(Res.string.object_wave),
                         accent = ObjectPink,
                         onClick = onWaveClick,
                     )
@@ -382,7 +383,7 @@ private fun ObjectPlayButton(onClick: () -> Unit) {
     ) {
         Image(
             painter = painterResource(Res.drawable.ic_player_play_v2),
-            contentDescription = stringResource(R.string.object_play_content_description),
+            contentDescription = stringResource(Res.string.object_play_content_description),
             contentScale = ContentScale.FillBounds,
             modifier = Modifier.requiredSize(width = 225.dp, height = 150.dp),
         )

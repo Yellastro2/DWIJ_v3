@@ -1,4 +1,4 @@
-package com.yellastrodev.dwij
+package com.yellastrodev.dwij.ui
 
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.background
@@ -20,15 +20,18 @@ import androidx.compose.runtime.remember
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.ImageBitmap
-import androidx.compose.ui.res.pluralStringResource
-import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.yellastrodev.dwij.TrackListItemUiModel
 import com.yellastrodev.dwij.data.entities.LocalPlaylistEntity
 import com.yellastrodev.dwij.data.entities.LocalPlaylistOrigin
 import com.yellastrodev.dwij.data.entities.Song
+import com.yellastrodev.dwij.resources.Res
+import com.yellastrodev.dwij.resources.*
+import org.jetbrains.compose.resources.pluralStringResource
+import org.jetbrains.compose.resources.stringResource
 
 /** Показывает локальные плейлисты либо общий Compose-список локальных треков. */
 @Composable
@@ -86,7 +89,7 @@ fun LocalPlaylistObjectScreen(
     modifier: Modifier = Modifier,
     isLoading: Boolean = false,
 ) {
-    val unknownArtist = stringResource(R.string.home_player_unknown_artist)
+    val unknownArtist = stringResource(Res.string.home_player_unknown_artist)
     val tracksById = remember(tracks) { tracks.associateBy(Song::id) }
     val items = remember(tracks, unknownArtist) {
         tracks.toTrackListItems(unknownArtist)
@@ -94,7 +97,7 @@ fun LocalPlaylistObjectScreen(
     ObjectScreen(
         title = title,
         subtitle = pluralStringResource(
-            R.plurals.object_track_count,
+            Res.plurals.object_track_count,
             tracks.size,
             tracks.size,
         ),
@@ -108,7 +111,7 @@ fun LocalPlaylistObjectScreen(
         },
         trackContextMenuContent = { index, _, onDismiss ->
             DropdownMenuItem(
-                text = { Text(stringResource(R.string.local_track_hide_action)) },
+                text = { Text(stringResource(Res.string.local_track_hide_action)) },
                 onClick = {
                     onDismiss()
                     tracks.getOrNull(index)?.let(onTrackHideRequest)
@@ -120,7 +123,7 @@ fun LocalPlaylistObjectScreen(
         },
         showShare = false,
         showWave = false,
-        emptyMessage = stringResource(R.string.local_tracks_empty),
+        emptyMessage = stringResource(Res.string.local_tracks_empty),
         isLoading = isLoading,
         modifier = modifier,
     )
@@ -143,7 +146,7 @@ private fun LocalPlaylistList(
                     ) {
                         if (index == 0) {
                             Text(
-                                text = stringResource(R.string.list_loading_placeholder),
+                                text = stringResource(Res.string.list_loading_placeholder),
                                 color = Color(0xFF969BAD).copy(alpha = 0.72f),
                                 fontSize = 15.sp,
                             )
@@ -174,7 +177,7 @@ private fun LocalPlaylistList(
             }
             return
         }
-        EmptyLocalLibraryText(stringResource(R.string.local_playlists_empty))
+        EmptyLocalLibraryText(stringResource(Res.string.local_playlists_empty))
         return
     }
     LazyColumn(modifier = Modifier.fillMaxSize()) {
@@ -194,10 +197,10 @@ private fun LocalPlaylistList(
                 )
                 Text(
                     text = when (playlist.origin) {
-                        LocalPlaylistOrigin.DWIJ.name -> stringResource(R.string.local_playlist_dwij)
+                        LocalPlaylistOrigin.DWIJ.name -> stringResource(Res.string.local_playlist_dwij)
                         LocalPlaylistOrigin.MEDIA_STORE.name ->
-                            stringResource(R.string.local_playlist_media_store)
-                        else -> stringResource(R.string.local_playlist_m3u)
+                            stringResource(Res.string.local_playlist_media_store)
+                        else -> stringResource(Res.string.local_playlist_m3u)
                     },
                     color = Color(0xFF969BAD),
                     fontSize = 12.sp,
@@ -216,14 +219,14 @@ private fun LocalTrackList(
     onTrackHideRequest: (Song) -> Unit,
     loadCover: suspend (Song) -> ImageBitmap?,
 ) {
-    val unknownArtist = stringResource(R.string.home_player_unknown_artist)
+    val unknownArtist = stringResource(Res.string.home_player_unknown_artist)
     val tracksById = remember(tracks) { tracks.associateBy(Song::id) }
     val items = remember(tracks, unknownArtist) {
         tracks.toTrackListItems(unknownArtist)
     }
     TrackList(
         items = items,
-        emptyMessage = stringResource(R.string.local_tracks_empty),
+        emptyMessage = stringResource(Res.string.local_tracks_empty),
         isLoading = isLoading,
         loadCover = { trackId ->
             tracksById[trackId]?.let { track -> loadCover(track) }
@@ -233,7 +236,7 @@ private fun LocalTrackList(
         },
         contextMenuContent = { index, _, onDismiss ->
             DropdownMenuItem(
-                text = { Text(stringResource(R.string.local_track_hide_action)) },
+                text = { Text(stringResource(Res.string.local_track_hide_action)) },
                 onClick = {
                     onDismiss()
                     tracks.getOrNull(index)?.let(onTrackHideRequest)
