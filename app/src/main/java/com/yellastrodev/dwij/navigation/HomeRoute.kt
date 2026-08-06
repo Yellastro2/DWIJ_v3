@@ -25,10 +25,11 @@ import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.navigation.NavHostController
 import com.yellastrodev.dwij.ui.HomeCompactPlayerUiState
 import com.yellastrodev.dwij.HomeMusicSource
+import com.yellastrodev.dwij.AndroidHomeScreenPlatform
 import com.yellastrodev.dwij.ui.HomeScreen
-import com.yellastrodev.dwij.RadialMenu
-import com.yellastrodev.dwij.RadialMenuAnimationStyle
-import com.yellastrodev.dwij.SearchScreen
+import com.yellastrodev.dwij.ui.RadialMenu
+import com.yellastrodev.dwij.ui.RadialMenuAnimationStyle
+import com.yellastrodev.dwij.ui.search.SearchScreen
 import com.yellastrodev.dwij.R
 import com.yellastrodev.dwij.data.source.requiredAudioPermission
 import com.yellastrodev.dwij.data.source.requiredLocalMediaPermissions
@@ -428,6 +429,8 @@ fun HomeRoute(
                 modifier = searchModifier,
             )
         },
+
+        platform = AndroidHomeScreenPlatform,
     )
 }
 

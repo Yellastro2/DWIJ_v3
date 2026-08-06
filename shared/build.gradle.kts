@@ -192,10 +192,6 @@ kotlin {
 
         val androidMain by getting {
             dependsOn(jvmCommonMain)
-
-            dependencies {
-                implementation(libs.androidx.activity.compose)
-            }
         }
 
         val desktopMain by getting {

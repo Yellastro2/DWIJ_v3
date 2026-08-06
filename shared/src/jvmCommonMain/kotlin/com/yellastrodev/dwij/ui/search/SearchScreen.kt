@@ -1,5 +1,6 @@
-package com.yellastrodev.dwij
+package com.yellastrodev.dwij.ui.search
 
+import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -17,6 +18,7 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.BasicTextField
+import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -25,19 +27,20 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.ColorFilter
 import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.graphics.ImageBitmap
-import androidx.compose.ui.res.colorResource
-import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.yellastrodev.dwij.HomeMusicSource
 import com.yellastrodev.dwij.resources.*
 import org.jetbrains.compose.resources.painterResource
 import com.yellastrodev.dwij.models.SearchResultItemUiModel
 import com.yellastrodev.dwij.models.SearchUiState
 import com.yellastrodev.dwij.ui.MusicSourceSelector
+import com.yellastrodev.dwij.ui.theme.DwijColors
+import org.jetbrains.compose.resources.stringResource
+import org.jetbrains.compose.ui.tooling.preview.Preview
 
 /**
  * Экран поиска: выбор источника, поле запроса, недавние запросы и место для будущей выдачи.
@@ -54,9 +57,9 @@ fun SearchScreen(
     modifier: Modifier = Modifier,
 ) {
     val recentQueries = listOf(
-        stringResource(R.string.search_recent_query_city),
-        stringResource(R.string.search_recent_query_road),
-        stringResource(R.string.search_recent_query_synthwave),
+        stringResource(Res.string.search_recent_query_city),
+        stringResource(Res.string.search_recent_query_road),
+        stringResource(Res.string.search_recent_query_synthwave),
     )
 
     Column(
@@ -93,14 +96,14 @@ fun SearchScreen(
 @Composable
 private fun SearchHeader() {
     Column(modifier = Modifier.padding(horizontal = 18.dp)) {
-        androidx.compose.material3.Text(
-            text = stringResource(R.string.search_title),
+        Text(
+            text = stringResource(Res.string.search_title),
             color = Color.White,
             fontSize = 30.sp,
             fontWeight = FontWeight.Bold,
         )
-        androidx.compose.material3.Text(
-            text = stringResource(R.string.search_subtitle),
+        Text(
+            text = stringResource(Res.string.search_subtitle),
             color = Color(0xFF9298AC),
             fontSize = 13.sp,
             modifier = Modifier.padding(top = 3.dp),
@@ -127,7 +130,7 @@ private fun SearchInput(
                 shape = RoundedCornerShape(18.dp),
             ),
     ) {
-        androidx.compose.foundation.Image(
+        Image(
             painter = painterResource(Res.drawable.ic_home_nav_search),
             contentDescription = null,
             colorFilter = ColorFilter.tint(Color(0xFFFF178F)),
@@ -147,8 +150,8 @@ private fun SearchInput(
             decorationBox = { innerTextField ->
                 Box {
                     if (query.isEmpty()) {
-                        androidx.compose.material3.Text(
-                            text = stringResource(R.string.search_hint),
+                        Text(
+                            text = stringResource(Res.string.search_hint),
                             color = Color(0xFF777E92),
                             fontSize = 15.sp,
                         )
@@ -191,7 +194,7 @@ private fun SearchQueryChip(
     text: String,
     onClick: () -> Unit,
 ) {
-    androidx.compose.material3.Text(
+    Text(
         text = text,
         color = Color(0xFFD8DAE4),
         fontSize = 13.sp,
@@ -213,7 +216,7 @@ private fun SearchScreenPreview() {
     Box(
         modifier = Modifier
             .fillMaxSize()
-            .background(colorResource(R.color.background)),
+            .background(DwijColors.Background),
     ) {
         SearchScreen(
             selectedSource = HomeMusicSource.Yandex,

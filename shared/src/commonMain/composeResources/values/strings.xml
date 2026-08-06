@@ -41,6 +41,7 @@
     <string name="object_share">Поделиться</string>
     <string name="object_wave">Волна</string>
     <string name="object_play_content_description">Воспроизвести объект</string>
+    <string name="common_ok">OK</string>
     <plurals name="object_track_count">
         <item quantity="one">%1$d трек</item>
         <item quantity="few">%1$d трека</item>

@@ -5,12 +5,14 @@ import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
 import androidx.activity.viewModels
+import androidx.compose.runtime.CompositionLocalProvider
 import androidx.core.view.WindowCompat
 import androidx.lifecycle.viewmodel.initializer
 import androidx.lifecycle.viewmodel.viewModelFactory
 import com.yellastrodev.dwij.models.AndroidPlayerCoverLoader
 import com.yellastrodev.dwij.models.PlayerModel
 import com.yellastrodev.dwij.navigation.DwijApp
+import com.yellastrodev.dwij.ui.LocalYamLogger
 import com.yellastrodev.dwij.yApplication
 
 /**
@@ -58,12 +60,18 @@ class MainActivity : ComponentActivity() {
             .apply {
                 isAppearanceLightStatusBars = false
                 isAppearanceLightNavigationBars = false
-            }
+        }
 
         setContent {
-            DwijApp(
-                playerModel = playerModel,
-            )
+            val dwijApplication =
+                this@MainActivity.application as yApplication
+            CompositionLocalProvider(
+                LocalYamLogger provides dwijApplication.logger,
+            ) {
+                DwijApp(
+                    playerModel = playerModel,
+                )
+            }
         }
     }
 }

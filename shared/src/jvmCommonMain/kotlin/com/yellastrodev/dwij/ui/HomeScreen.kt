@@ -75,6 +75,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.yellastrodev.dwij.HomeMusicSource
 import com.yellastrodev.dwij.ui.theme.DwijColors
+import com.yellastrodev.yandexmusiclib.YamLogger
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import kotlin.math.abs
@@ -103,12 +104,16 @@ fun HomeScreen(
     onSourceSelected: (HomeMusicSource) -> Unit,
     radialMenuContent: @Composable (HomeRadialMenuUiState, Modifier) -> Unit,
     searchContent: @Composable (Modifier) -> Unit,
+    platform: HomeScreenPlatform,
     modifier: Modifier = Modifier,
 ) {
     var isRadialMenuVisible by remember { mutableStateOf(false) }
     var isPlayerPressed by remember { mutableStateOf(false) }
     var selectedTab by remember { mutableStateOf(HomeNavigationTab.Main) }
-    val navigationTimingTracker = remember { HomeNavigationTimingTracker() }
+    val logger = LocalYamLogger.current
+    val navigationTimingTracker = remember(logger) {
+        HomeNavigationTimingTracker(logger)
+    }
     val radialMenuItems = homeRadialMenuItems()
     val snackbarHostState = remember { SnackbarHostState() }
     val coroutineScope = rememberCoroutineScope()
@@ -126,7 +131,7 @@ fun HomeScreen(
         }
     }
 
-    DwijBackHandler(enabled = selectedTab == HomeNavigationTab.Search) {
+    platform.BackHandler(enabled = selectedTab == HomeNavigationTab.Search) {
         navigationTimingTracker.onClick(
             targetLabel = "Главная",
             targetTab = HomeNavigationTab.Main,
@@ -373,7 +378,9 @@ private enum class HomeNavigationTab {
 }
 
 /** Собирает временные метки от касания вкладки до первого draw нового экрана. */
-private class HomeNavigationTimingTracker {
+private class HomeNavigationTimingTracker(
+    private val logger: YamLogger,
+) {
     private var pressTarget: String? = null
     private var pressStartedAtNanos: Long = 0L
     private var clickAtNanos: Long = 0L
@@ -384,7 +391,7 @@ private class HomeNavigationTimingTracker {
     fun onPress(targetLabel: String) {
         pressTarget = targetLabel
         pressStartedAtNanos = System.nanoTime()
-        uiLogDebug(
+        logger.debug(
             HOME_NAVIGATION_TIMING_TAG,
             "[onPress] Палец нажат: цель=$targetLabel",
         )
@@ -392,7 +399,7 @@ private class HomeNavigationTimingTracker {
 
     fun onRelease(targetLabel: String) {
         val now = System.nanoTime()
-        uiLogDebug(
+        logger.debug(
             HOME_NAVIGATION_TIMING_TAG,
             "[onRelease] Палец отпущен: цель=$targetLabel, " +
                     "после DOWN=${elapsedMillis(pressStartedAtNanos, now)} мс",
@@ -401,7 +408,7 @@ private class HomeNavigationTimingTracker {
 
     fun onCancel(targetLabel: String) {
         val now = System.nanoTime()
-        uiLogDebug(
+        logger.debug(
             HOME_NAVIGATION_TIMING_TAG,
             "[onCancel] Нажатие отменено: цель=$targetLabel, " +
                     "после DOWN=${elapsedMillis(pressStartedAtNanos, now)} мс",
@@ -421,7 +428,7 @@ private class HomeNavigationTimingTracker {
         } else {
             "нет DOWN"
         }
-        uiLogDebug(
+        logger.debug(
             HOME_NAVIGATION_TIMING_TAG,
             "[onClick] onClick вызван: цель=$targetLabel, " +
                     "после DOWN=$fromPress, текущая вкладка=$currentTab",
@@ -441,7 +448,7 @@ private class HomeNavigationTimingTracker {
 
     fun onStateAssigned(targetTab: HomeNavigationTab) {
         if (pendingTarget != targetTab) return
-        uiLogDebug(
+        logger.debug(
             HOME_NAVIGATION_TIMING_TAG,
             "[onStateAssigned] Вкладка записана в state: цель=$targetTab, " +
                     "после onClick=${elapsedMillis(clickAtNanos)} мс",
@@ -451,7 +458,7 @@ private class HomeNavigationTimingTracker {
     fun onCompositionCommitted(tab: HomeNavigationTab) {
         if (pendingTarget != tab || compositionLogged) return
         compositionLogged = true
-        uiLogDebug(
+        logger.debug(
             HOME_NAVIGATION_TIMING_TAG,
             "[onCompositionCommitted] Композиция подтверждена: вкладка=$tab, " +
                     "после onClick=${elapsedMillis(clickAtNanos)} мс",
@@ -462,7 +469,7 @@ private class HomeNavigationTimingTracker {
         if (pendingTarget != tab || drawLogged) return
         drawLogged = true
         val now = System.nanoTime()
-        uiLogDebug(
+        logger.debug(
             HOME_NAVIGATION_TIMING_TAG,
             "[onFirstDraw] Первый draw: вкладка=$tab, " +
                     "после onClick=${elapsedMillis(clickAtNanos, now)} мс, " +
@@ -1288,6 +1295,7 @@ private fun HomeScreenPreview() {
         onSourceSelected = {},
         radialMenuContent = { _, _ -> },
         searchContent = {},
+        platform = NoOpHomeScreenPlatform,
         player = HomeCompactPlayerUiState(
             title = "Ночной город",
             artist = "Три дня дождя",

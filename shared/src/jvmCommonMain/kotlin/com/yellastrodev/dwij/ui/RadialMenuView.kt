@@ -1,7 +1,5 @@
-package com.yellastrodev.dwij
+package com.yellastrodev.dwij.ui
 
-import android.graphics.Paint
-import android.graphics.Typeface
 import androidx.compose.animation.core.CubicBezierEasing
 import androidx.compose.animation.core.LinearEasing
 import androidx.compose.animation.core.animateFloatAsState
@@ -25,14 +23,15 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.drawscope.Stroke
-import androidx.compose.ui.graphics.drawscope.drawIntoCanvas
-import androidx.compose.ui.graphics.nativeCanvas
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalViewConfiguration
+import androidx.compose.ui.text.TextStyle
+import androidx.compose.ui.text.drawText
+import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.rememberTextMeasurer
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import com.yellastrodev.dwij.ui.RadialMenuItem
 import kotlinx.coroutines.delay
 import kotlin.math.atan2
 import kotlin.math.cos
@@ -104,14 +103,13 @@ fun RadialMenu(
     val contourWidth = with(density) { 1.4.dp.toPx() }
     val glowWidth = with(density) { 4.5.dp.toPx() }
     val glitchWidth = with(density) { 1.1.dp.toPx() }
-    val textSize = with(density) { 13.sp.toPx() }
-    val textPaint = remember(textSize) {
-        Paint(Paint.ANTI_ALIAS_FLAG).apply {
-            color = android.graphics.Color.WHITE
-            textAlign = Paint.Align.CENTER
-            this.textSize = textSize
-            typeface = Typeface.create(Typeface.DEFAULT, Typeface.BOLD)
-        }
+    val textMeasurer = rememberTextMeasurer()
+    val textStyle = remember {
+        TextStyle(
+            color = Color.White,
+            fontSize = 13.sp,
+            fontWeight = FontWeight.Bold,
+        )
     }
     val safeTotalSweep = totalSweepAngle.coerceIn(1f, 360f)
     val safeGap = gapAngle.coerceAtLeast(0f)
@@ -211,15 +209,18 @@ fun RadialMenu(
                         }
                         return@awaitEachGesture
                     }
+
                     PendingRadialGestureResult.ReleasedWithoutItem -> {
                         if (stayedInsideCenter) currentOnPrimaryClick.value()
                         currentOnDismiss.value()
                         return@awaitEachGesture
                     }
+
                     PendingRadialGestureResult.PointerLost -> {
                         currentOnDismiss.value()
                         return@awaitEachGesture
                     }
+
                     PendingRadialGestureResult.EnteredItem,
                     null -> Unit
                 }
@@ -303,6 +304,7 @@ fun RadialMenu(
                     finalOuterRadius = finalOuterRadius,
                     finalVisibleSweep = finalVisibleSweep,
                 )
+
                 RadialMenuAnimationStyle.Expand -> radialMenuExpandItemAnimation(
                     animationProgress = expansionProgress,
                     index = index,
@@ -384,24 +386,26 @@ fun RadialMenu(
             val contentProgress = itemAnimation.contentAlpha
             if (contentProgress > 0f) {
                 val contentRadius = finalInnerRadius +
-                    (outerRadius - finalInnerRadius) * 0.55f
+                        (outerRadius - finalInnerRadius) * 0.55f
                 val contentAngle = currentStart + currentSweep / 2f
                 val textPosition = center + Offset(
                     x = contentRadius * cosDegrees(contentAngle),
                     y = contentRadius * sinDegrees(contentAngle),
                 )
-                drawIntoCanvas { canvas ->
-                    textPaint.alpha = (255 * contentProgress).toInt()
-                    val metrics = textPaint.fontMetrics
-                    val baseline = textPosition.y - (metrics.ascent + metrics.descent) / 2f
-                    canvas.nativeCanvas.drawText(
-                        item.title,
-                        textPosition.x,
-                        baseline,
-                        textPaint,
-                    )
-                    textPaint.alpha = 255
-                }
+                val textLayout = textMeasurer.measure(
+                    text = item.title,
+                    style = textStyle,
+                )
+
+                drawText(
+                    textLayoutResult = textLayout,
+                    color = Color.White,
+                    topLeft = Offset(
+                        x = textPosition.x - textLayout.size.width / 2f,
+                        y = textPosition.y - textLayout.size.height / 2f,
+                    ),
+                    alpha = contentProgress,
+                )
             }
         }
     }
@@ -488,7 +492,7 @@ private data class RadialMenuGlitchFrame(
 ) {
     fun isItemVisible(index: Int): Boolean =
         visibleItemsMask == ALL_RADIAL_MENU_ITEMS_MASK ||
-            (visibleItemsMask and (1 shl (index % RADIAL_MENU_ITEM_MASK_BITS))) != 0
+                (visibleItemsMask and (1 shl (index % RADIAL_MENU_ITEM_MASK_BITS))) != 0
 }
 
 /**
@@ -514,9 +518,9 @@ private fun RadialMenuGlitchFrame.shiftVisibleItems(
     val itemBitsMask = (1 shl bitCount) - 1
     val sourceMask = visibleItemsMask and itemBitsMask
     val shiftedMask = (
-        (sourceMask shl normalizedOffset) or
-            (sourceMask ushr (bitCount - normalizedOffset))
-        ) and itemBitsMask
+            (sourceMask shl normalizedOffset) or
+                    (sourceMask ushr (bitCount - normalizedOffset))
+            ) and itemBitsMask
     return copy(visibleItemsMask = shiftedMask)
 }
 
@@ -744,7 +748,8 @@ private fun findRadialMenuItemAt(
     val innerRadius = minDimension * innerRadiusFraction
     val outerRadius = minDimension * outerRadiusFraction
 
-    if (distanceSquared < innerRadius * innerRadius ||
+    if (
+        distanceSquared < innerRadius * innerRadius ||
         distanceSquared > outerRadius * outerRadius
     ) {
         return -1
@@ -799,7 +804,8 @@ private fun cosDegrees(angle: Float): Float =
 private fun sinDegrees(angle: Float): Float =
     sin(Math.toRadians(angle.toDouble())).toFloat()
 
-private fun normalizeAngle(angle: Float): Float = ((angle % 360f) + 360f) % 360f
+private fun normalizeAngle(angle: Float): Float =
+    ((angle % 360f) + 360f) % 360f
 
 private fun lerp(from: Float, to: Float, progress: Float): Float =
     from + (to - from) * progress
@@ -844,7 +850,7 @@ private fun generateRandomRadialMenuGlitchFrames(
         )
     }.toMutableList()
     var durationDelta = RADIAL_MENU_GLITCH_DURATION_MILLIS -
-        randomizedSpecs.sumOf { spec -> spec.holdMillis }
+            randomizedSpecs.sumOf { spec -> spec.holdMillis }
 
     while (durationDelta != 0L) {
         val index = random.nextInt(randomizedSpecs.size)
@@ -854,6 +860,7 @@ private fun generateRandomRadialMenuGlitchFrames(
                 randomizedSpecs[index] = spec.copy(holdMillis = spec.holdMillis + 1L)
                 durationDelta -= 1L
             }
+
             spec.holdMillis > 1L -> {
                 randomizedSpecs[index] = spec.copy(holdMillis = spec.holdMillis - 1L)
                 durationDelta += 1L
@@ -916,8 +923,12 @@ private val RADIAL_MENU_GLITCH_FRAME_SPECS = listOf(
     // Устойчиво включено.
     glitchFrame(0b111111, 1.00f, 170L),
 )
+
 private val RADIAL_MENU_GLITCH_DURATION_MILLIS =
     RADIAL_MENU_GLITCH_FRAME_SPECS.sumOf { spec -> spec.holdMillis }
+
 private const val RADIAL_MENU_ANIMATION_DURATION_MILLIS = 520
 private const val RADIAL_MENU_STAGGER_FRACTION = 0.055f
-private val RADIAL_MENU_EASING = CubicBezierEasing(0.18f, 0.8f, 0.2f, 1f)
+
+private val RADIAL_MENU_EASING =
+    CubicBezierEasing(0.18f, 0.8f, 0.2f, 1f)

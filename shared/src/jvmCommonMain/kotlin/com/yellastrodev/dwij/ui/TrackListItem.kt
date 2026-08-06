@@ -267,6 +267,7 @@ fun TrackCoverLoader(
     coverState: TrackCoverState,
     loadCover: suspend (trackId: String) -> ImageBitmap?,
 ) {
+    val logger = LocalYamLogger.current
     val currentLoadCover by rememberUpdatedState(loadCover)
     LaunchedEffect(trackId, coverState) {
         if (!coverState.tryStartLoading()) return@LaunchedEffect
@@ -277,7 +278,7 @@ fun TrackCoverLoader(
             } catch (error: CancellationException) {
                 throw error
             } catch (error: Exception) {
-                uiLogWarning(
+                logger.error(
                     TRACK_LIST_ITEM_TAG,
                     "[TrackCoverLoader] Не удалось загрузить обложку trackId=$trackId",
                     error,
