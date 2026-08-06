@@ -1,4 +1,5 @@
 import com.yellastrodev.build.RasterizeSvgToPngTask
+import org.gradle.api.tasks.Sync
 import org.jetbrains.kotlin.gradle.dsl.JvmTarget
 
 plugins {
@@ -98,6 +99,41 @@ val rasterizeSharedSvgToPng =
         )
     }
 
+/**
+ * Объединяет обычные Compose Multiplatform resources
+ * со сгенерированными density-PNG в едином каталоге.
+ *
+ * customDirectory заменяет стандартный каталог source set целиком,
+ * поэтому напрямую подключать только результат растеризации нельзя.
+ */
+val mergeSharedComposeResources =
+    tasks.register<Sync>(
+        "mergeSharedComposeResources",
+    ) {
+        from(
+            layout.projectDirectory.dir(
+                "src/commonMain/composeResources",
+            ),
+        )
+
+        from(
+            rasterizeSharedSvgToPng,
+        )
+
+        into(
+            layout.buildDirectory.dir(
+                "generated/composeResources/mergedCommonMain",
+            ),
+        )
+    }
+
+val mergedSharedComposeResources =
+    layout.dir(
+        mergeSharedComposeResources.map { task ->
+            task.destinationDir
+        },
+    )
+
 kotlin {
     android {
         namespace = "com.yellastrodev.dwij.shared"
@@ -177,21 +213,20 @@ compose.resources {
         "com.yellastrodev.dwij.resources"
 
     /*
-     * Подключаем результат SVG → PNG задачи
-     * как дополнительный commonMain resource directory.
+     * Подключаем объединённый каталог обычных ресурсов
+     * и результата SVG → PNG задачи.
      *
      * Gradle сам построит зависимость:
      *
      * generate Res
      *     ↓
+     * mergeSharedComposeResources
+     *     ↓
      * rasterizeSharedSvgToPng
      */
     customDirectory(
         sourceSetName = "commonMain",
-        directoryProvider =
-            rasterizeSharedSvgToPng.map { task ->
-                task.outputDirectory.get()
-            },
+        directoryProvider = mergedSharedComposeResources,
     )
 }
 

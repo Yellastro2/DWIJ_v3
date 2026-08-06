@@ -30,7 +30,6 @@ import androidx.compose.ui.draw.paint
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.ImageBitmap
 import androidx.compose.ui.layout.ContentScale
-import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.tooling.preview.Preview
@@ -38,6 +37,8 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
+import com.yellastrodev.dwij.resources.*
+import org.jetbrains.compose.resources.painterResource
 
 /** Один source-инстанс, который пользователь может отметить в диалоге вариантов. */
 @Immutable
@@ -89,7 +90,7 @@ fun MultiSourceDialog(
                 .clip(RoundedCornerShape(18.dp))
                 .background(MultiSourceBackground)
                 .paint(
-                    painter = painterResource(R.drawable.bg_player_glitch_v2),
+                    painter = painterResource(Res.drawable.bg_player_glitch_v2),
                     sizeToIntrinsics = false,
                     contentScale = ContentScale.Crop,
                     alpha = 0.2f,

@@ -31,12 +31,13 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.ImageBitmap
 import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.layout.ContentScale
-import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.yellastrodev.dwij.resources.*
 import kotlinx.coroutines.CancellationException
+import org.jetbrains.compose.resources.painterResource
 
 /** Источник, который нужно обозначить справа в строке выбора трека. */
 enum class TrackSourceIndicator {
@@ -169,7 +170,7 @@ private fun YandexSourceIndicator(
 ) {
     Box(modifier = modifier.size(22.dp)) {
         Image(
-            painter = painterResource(R.drawable.ic_source_yandex),
+            painter = painterResource(Res.drawable.ic_source_yandex),
             contentDescription = null,
             modifier = Modifier.fillMaxSize(),
         )
@@ -192,7 +193,7 @@ private fun YandexSourceIndicator(
 @Composable
 private fun LocalSourceIndicator(modifier: Modifier = Modifier) {
     Image(
-        painter = painterResource(R.drawable.ic_source_local_storage),
+        painter = painterResource(Res.drawable.ic_source_local_storage),
         contentDescription = null,
         modifier = modifier.size(22.dp),
     )

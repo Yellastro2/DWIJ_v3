@@ -38,7 +38,6 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.ImageBitmap
 import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.layout.ContentScale
-import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
@@ -47,6 +46,8 @@ import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.platform.LocalDensity
+import com.yellastrodev.dwij.resources.*
+import org.jetbrains.compose.resources.painterResource
 
 /**
  * Универсальный экран музыкального объекта: общая шапка и переданный список треков.
@@ -227,7 +228,7 @@ private fun ObjectHeader(
             .padding(bottom = 12.dp),
     ) {
         Image(
-            painter = painterResource(R.drawable.bg_player_glitch_v2),
+            painter = painterResource(Res.drawable.bg_player_glitch_v2),
             contentDescription = null,
             contentScale = ContentScale.Crop,
             alpha = 0.34f,
@@ -352,14 +353,14 @@ private fun ObjectCover(
                     .background(Color(0xCC0D1020)),
             ) {
                 Image(
-                    painter = painterResource(R.drawable.ic_playlist_liked),
+                    painter = painterResource(Res.drawable.ic_playlist_liked),
                     contentDescription = null,
                     modifier = Modifier.size(92.dp),
                 )
             }
         }
         Image(
-            painter = painterResource(R.drawable.dvizh_album_thumb_glitch_frame_contour),
+            painter = painterResource(Res.drawable.dvizh_album_thumb_glitch_frame_contour),
             contentDescription = null,
             contentScale = ContentScale.FillBounds,
             modifier = Modifier.fillMaxSize(),
@@ -380,7 +381,7 @@ private fun ObjectPlayButton(onClick: () -> Unit) {
             .clickable(onClick = onClick),
     ) {
         Image(
-            painter = painterResource(R.drawable.ic_player_play_v2),
+            painter = painterResource(Res.drawable.ic_player_play_v2),
             contentDescription = stringResource(R.string.object_play_content_description),
             contentScale = ContentScale.FillBounds,
             modifier = Modifier.requiredSize(width = 225.dp, height = 150.dp),

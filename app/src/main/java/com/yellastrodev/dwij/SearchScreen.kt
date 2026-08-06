@@ -26,7 +26,6 @@ import androidx.compose.ui.graphics.ColorFilter
 import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.graphics.ImageBitmap
 import androidx.compose.ui.res.colorResource
-import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.text.TextStyle
@@ -34,6 +33,8 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.yellastrodev.dwij.resources.*
+import org.jetbrains.compose.resources.painterResource
 import com.yellastrodev.dwij.models.SearchResultItemUiModel
 import com.yellastrodev.dwij.models.SearchUiState
 
@@ -126,7 +127,7 @@ private fun SearchInput(
             ),
     ) {
         androidx.compose.foundation.Image(
-            painter = painterResource(R.drawable.ic_home_nav_search),
+            painter = painterResource(Res.drawable.ic_home_nav_search),
             contentDescription = null,
             colorFilter = ColorFilter.tint(Color(0xFFFF178F)),
             modifier = Modifier

@@ -39,13 +39,14 @@ import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.painter.Painter
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.res.colorResource
-import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
+import com.yellastrodev.dwij.resources.*
 import kotlinx.coroutines.delay
+import org.jetbrains.compose.resources.painterResource
 import kotlin.math.atan2
 import kotlin.math.cos
 import kotlin.math.sin
@@ -198,11 +199,15 @@ fun PlayerIconButton(
         val artworkTopOffset = (maxHeight - artworkSize) / 2
         val artworkContentHeight = artworkSize * (237f / 355f)
         val artworkContentTopOffset = (maxHeight - artworkContentHeight) / 2
-        val backgroundPainter = painterResource(R.drawable.bg_player_glitch_v2)
-        val ringPainter = painterResource(R.drawable.ic_player_progress_ring_base)
-        val progressPainter = painterResource(R.drawable.ic_player_progress_ring_fill)
+        val backgroundPainter = painterResource(Res.drawable.bg_player_glitch_v2)
+        val ringPainter = painterResource(Res.drawable.ic_player_progress_ring_base)
+        val progressPainter = painterResource(Res.drawable.ic_player_progress_ring_fill)
         val playPainter = painterResource(
-            if (isPlaying) R.drawable.ic_player_pause_v2 else R.drawable.ic_player_play_v2,
+            if (isPlaying) {
+                Res.drawable.ic_player_pause_v2
+            } else {
+                Res.drawable.ic_player_play_v2
+            },
         )
         val effectiveGroupAShift = when {
             shouldExpand -> 0f
@@ -324,7 +329,7 @@ private fun BoxScope.PlayerProgressHead(
     scaleX: Float,
     scaleY: Float,
 ) {
-    val headPainter = painterResource(R.drawable.ic_player_progress_head)
+    val headPainter = painterResource(Res.drawable.ic_player_progress_head)
     val artworkHeight = artworkSize *
         (PLAYER_ARTWORK_VIEWPORT_HEIGHT / PLAYER_ARTWORK_VIEWPORT_WIDTH)
     val centerX = artworkSize *

@@ -1,6 +1,5 @@
 package com.yellastrodev.dwij
 
-import androidx.annotation.DrawableRes
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.Canvas
@@ -62,7 +61,6 @@ import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.layout.Layout
 import androidx.compose.ui.layout.Placeable
 import androidx.compose.ui.res.colorResource
-import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.contentDescription
@@ -73,6 +71,9 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.Dp
+import com.yellastrodev.dwij.resources.*
+import org.jetbrains.compose.resources.DrawableResource
+import org.jetbrains.compose.resources.painterResource
 import androidx.compose.ui.unit.constrainHeight
 import androidx.compose.ui.unit.constrainWidth
 import androidx.compose.ui.unit.sp
@@ -152,7 +153,7 @@ fun FullPlayerScreen(
             .background(backgroundColor),
     ) {
         Image(
-            painter = painterResource(R.drawable.bg_player_glitch_v2),
+            painter = painterResource(Res.drawable.bg_player_glitch_v2),
             contentDescription = null,
             contentScale = ContentScale.Crop,
             alpha = 0.22f,
@@ -407,7 +408,7 @@ private fun FullPlayerCover(
                         .background(Color(0xE00A0C18)),
                 ) {
                     Image(
-                        painter = painterResource(R.drawable.ic_home_player_placeholder),
+                        painter = painterResource(Res.drawable.ic_home_player_placeholder),
                         contentDescription = null,
                         modifier = Modifier.size(116.dp),
                     )
@@ -632,7 +633,7 @@ private fun PlayerWaveformSlider(
     onValueChange: (Float) -> Unit,
     onValueChangeFinished: () -> Unit,
 ) {
-    val waveformPainter = painterResource(R.drawable.ic_player_waveform)
+    val waveformPainter = painterResource(Res.drawable.ic_player_waveform)
     val headWidth = 12.dp
 
     BoxWithConstraints(
@@ -664,7 +665,7 @@ private fun PlayerWaveformSlider(
                 },
         )
         Image(
-            painter = painterResource(R.drawable.ic_player_waveform_head),
+            painter = painterResource(Res.drawable.ic_player_waveform_head),
             contentDescription = null,
             contentScale = ContentScale.FillBounds,
             alpha = if (enabled) 1f else 0.35f,
@@ -869,7 +870,7 @@ private fun FullPlayerControls(
             Spacer(modifier = Modifier.size(46.dp))
         }
         PlayerSmallControl(
-            icon = R.drawable.ic_home_player_next,
+            icon = Res.drawable.ic_home_player_next,
             contentDescription = stringResource(R.string.home_player_previous_content_description),
             enabled = enabled,
             mirror = true,
@@ -881,7 +882,7 @@ private fun FullPlayerControls(
             onClick = onPlayPauseClick,
         )
         PlayerSmallControl(
-            icon = R.drawable.ic_home_player_next,
+            icon = Res.drawable.ic_home_player_next,
             contentDescription = stringResource(R.string.home_player_next_content_description),
             enabled = enabled,
             onClick = onNextClick,
@@ -990,7 +991,7 @@ private fun PlayerModeControl(
 /** Маленькая транспортная кнопка с цветом состояния вместо Material-заливки. */
 @Composable
 private fun PlayerSmallControl(
-    @DrawableRes icon: Int,
+    icon: DrawableResource,
     contentDescription: String,
     enabled: Boolean,
     onClick: () -> Unit,
@@ -1032,7 +1033,11 @@ private fun PlayerMainControl(
     ) {
         Image(
             painter = painterResource(
-                if (isPlaying) R.drawable.ic_player_pause_v2 else R.drawable.ic_player_play_v2,
+                if (isPlaying) {
+                    Res.drawable.ic_player_pause_v2
+                } else {
+                    Res.drawable.ic_player_play_v2
+                },
             ),
             contentDescription = stringResource(
                 if (isPlaying) {

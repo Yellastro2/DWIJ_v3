@@ -34,7 +34,6 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.layout.ContentScale
-import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
@@ -45,6 +44,8 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
+import com.yellastrodev.dwij.resources.*
+import org.jetbrains.compose.resources.painterResource
 
 /**
  * Неоновый диалог создания плейлиста для выбранного музыкального источника.
@@ -88,7 +89,7 @@ fun CreatePlaylistDialog(
                 ),
         ) {
             Image(
-                painter = painterResource(R.drawable.bg_focus_texture),
+                painter = painterResource(Res.drawable.bg_focus_texture),
                 contentDescription = null,
                 contentScale = ContentScale.Crop,
                 alpha = 0.22f,

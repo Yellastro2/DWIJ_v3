@@ -38,14 +38,16 @@ import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.layout.ContentScale
-import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.yellastrodev.dwij.resources.*
 import kotlinx.coroutines.launch
+import org.jetbrains.compose.resources.DrawableResource
+import org.jetbrains.compose.resources.painterResource
 import kotlin.math.roundToInt
 
 /**
@@ -188,7 +190,7 @@ private fun SettingsYandexCard(
     onAuthClick: () -> Unit,
 ) {
     SettingsTextureCard(
-        textureRes = R.drawable.bg_party_texture,
+        textureRes = Res.drawable.bg_party_texture,
         accent = SettingsPink,
         modifier = Modifier.height(142.dp),
     ) {
@@ -199,7 +201,7 @@ private fun SettingsYandexCard(
                 .padding(horizontal = 16.dp),
         ) {
             Image(
-                painter = painterResource(R.drawable.ya_m_ico),
+                painter = painterResource(Res.drawable.ya_m_ico),
                 contentDescription = null,
                 contentScale = ContentScale.Fit,
                 modifier = Modifier
@@ -259,7 +261,7 @@ private fun SettingsCacheCard(
     }
 
     SettingsTextureCard(
-        textureRes = R.drawable.bg_focus_texture,
+        textureRes = Res.drawable.bg_focus_texture,
         accent = SettingsCyan,
         modifier = Modifier.height(248.dp),
     ) {
@@ -362,7 +364,7 @@ private fun SettingsCacheValue(
 /** Накладывает существующую текстуру на тёмную карточку с тонкой неоновой рамкой. */
 @Composable
 private fun SettingsTextureCard(
-    textureRes: Int,
+    textureRes: DrawableResource,
     accent: Color,
     modifier: Modifier = Modifier,
     content: @Composable () -> Unit,

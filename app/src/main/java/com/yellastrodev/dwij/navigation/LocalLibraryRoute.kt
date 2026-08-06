@@ -128,7 +128,7 @@ fun LocalLibraryRoute(
         } ?: requireNotNull(
             ContextCompat.getDrawable(
                 context,
-                R.drawable.ic_player_play_v2,
+                R.drawable.ic_play_logo,
             ),
         ).toBitmap()
 

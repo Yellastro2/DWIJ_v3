@@ -1,6 +1,8 @@
 package com.yellastrodev.dwij
 
-import androidx.annotation.DrawableRes
+import com.yellastrodev.dwij.resources.*
+import org.jetbrains.compose.resources.DrawableResource
+import org.jetbrains.compose.resources.painterResource as sharedPainterResource
 import androidx.annotation.StringRes
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.layout.Box
@@ -19,7 +21,6 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.ImageBitmap
 import androidx.compose.ui.layout.ContentScale
-import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
@@ -38,7 +39,7 @@ import com.yellastrodev.dwij.ui.playlist.PlaylistGridScreenItem
  * Временный Android presentation-мост.
  *
  * Вся экранная логика уже живёт в shared PlaylistGridRoute. Здесь остаются только
- * Android resources и их отображение существующими composable-компонентами.
+ * Android string resources и подключение существующих composable-компонентов.
  */
 @Composable
 fun AndroidPlaylistGridContent(
@@ -139,8 +140,7 @@ fun AndroidPlaylistGridContent(
 }
 
 /**
- * Тонкий Android-адаптер общей разметки.
- * Здесь остаются только Android drawable resources и текущий MusicSourceSelector.
+ * Тонкий Android-адаптер общей разметки с shared-графикой и текущим MusicSourceSelector.
  */
 @Composable
 fun PlaylistGridScreen(
@@ -214,7 +214,7 @@ private fun AndroidPlaylistGridItem(
         item.fallbackArtwork?.let { artwork ->
             {
                 Image(
-                    painter = painterResource(artwork.drawableResId()),
+                    painter = sharedPainterResource(artwork.drawableResource()),
                     contentDescription = null,
                     contentScale = ContentScale.Crop,
                     modifier = Modifier.fillMaxSize(),
@@ -226,7 +226,7 @@ private fun AndroidPlaylistGridItem(
         item.artwork?.let { artwork ->
             {
                 Image(
-                    painter = painterResource(artwork.drawableResId()),
+                    painter = sharedPainterResource(artwork.drawableResource()),
                     contentDescription = null,
                     contentScale = ContentScale.Fit,
                     modifier = Modifier.fillMaxSize(),
@@ -249,11 +249,10 @@ private fun AndroidPlaylistGridItem(
     )
 }
 
-@DrawableRes
-private fun PlaylistGridArtwork.drawableResId(): Int = when (this) {
-    PlaylistGridArtwork.Create -> R.drawable.ic_playlist_create
-    PlaylistGridArtwork.Liked -> R.drawable.ic_playlist_liked
-    PlaylistGridArtwork.PlayerFallback -> R.drawable.ic_player_play_v2
+private fun PlaylistGridArtwork.drawableResource(): DrawableResource = when (this) {
+    PlaylistGridArtwork.Create -> Res.drawable.ic_playlist_create
+    PlaylistGridArtwork.Liked -> Res.drawable.ic_playlist_liked
+    PlaylistGridArtwork.PlayerFallback -> Res.drawable.ic_player_play_v2
 }
 
 @StringRes
