@@ -15,7 +15,7 @@ import org.jetbrains.compose.resources.stringResource
 
 /** Рисует постоянный индикатор из трёх сцепленных знаков Play для песни с дублями. */
 @Composable
-internal fun MultipleSourcesIndicator(
+fun MultipleSourcesIndicator(
     modifier: Modifier = Modifier,
     semanticDescription: String? = null,
 ) {

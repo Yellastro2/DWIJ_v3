@@ -28,11 +28,13 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.ImageBitmap
-import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.yellastrodev.dwij.TrackListItemUiModel
+import com.yellastrodev.dwij.resources.Res
+import com.yellastrodev.dwij.resources.*
+import org.jetbrains.compose.resources.stringResource
 
 /**
  * Линейный ленивый список треков для плейлистов, каталога и локальной медиатеки.
@@ -168,7 +170,7 @@ private fun TrackListLoadingPlaceholder(showMessage: Boolean) {
         ) {
             if (showMessage) {
                 Text(
-                    text = stringResource(R.string.list_loading_placeholder),
+                    text = stringResource(Res.string.list_loading_placeholder),
                     color = TrackSecondaryText.copy(alpha = 0.72f),
                     fontSize = 15.sp,
                     maxLines = 1,

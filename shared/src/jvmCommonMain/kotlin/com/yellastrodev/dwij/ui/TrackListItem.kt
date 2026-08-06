@@ -262,7 +262,7 @@ class TrackCoverState(initialBitmap: ImageBitmap? = null) {
 
 /** Загружает обложку в жизненном цикле конкретной скомпонованной строки. */
 @Composable
-internal fun TrackCoverLoader(
+fun TrackCoverLoader(
     trackId: String,
     coverState: TrackCoverState,
     loadCover: suspend (trackId: String) -> ImageBitmap?,
