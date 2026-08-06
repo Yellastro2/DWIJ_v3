@@ -123,10 +123,10 @@ private fun SearchEntityAvatar(
 private fun searchEntityMeta(item: SearchResultItemUiModel.Entity): String = when {
     item.artistNames.isNotEmpty() -> item.artistNames.joinToString(", ")
     item.kind == SearchEntityKind.Artist && item.trackCount != null ->
-        stringResource(R.string.search_artist_track_count, item.trackCount)
+        stringResource(R.string.search_artist_track_count, item.trackCount!!)
     item.genres.isNotEmpty() -> item.genres.take(2).joinToString(" · ")
-    item.trackCount != null -> stringResource(R.string.search_album_track_count, item.trackCount)
-    item.likesCount != null -> stringResource(R.string.search_entity_likes_count, item.likesCount)
+    item.trackCount != null -> stringResource(R.string.search_album_track_count, item.trackCount!!)
+    item.likesCount != null -> stringResource(R.string.search_entity_likes_count, item.likesCount!!)
     item.kind == SearchEntityKind.Album -> stringResource(R.string.search_entity_album)
     else -> stringResource(R.string.search_entity_artist)
 }
