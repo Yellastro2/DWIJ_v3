@@ -1,6 +1,8 @@
 package com.yellastrodev.dwij.desktop
 
 import androidx.compose.runtime.CompositionLocalProvider
+import dwij_v3.desktopapp.generated.resources.Res
+import dwij_v3.desktopapp.generated.resources.dwij
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.window.Window
 import androidx.compose.ui.window.application
@@ -10,6 +12,7 @@ import com.yellastrodev.dwij.desktop.navigation.DesktopDwijAppPlatform
 import com.yellastrodev.dwij.models.PlayerModel
 import com.yellastrodev.dwij.navigation.DwijApp
 import com.yellastrodev.dwij.ui.LocalYamLogger
+import org.jetbrains.compose.resources.painterResource
 
 /**
  * Desktop/Windows entry point.
@@ -64,6 +67,7 @@ fun main() {
                 "DWIJ",
             resizable =
                 true,
+            icon = painterResource(Res.drawable.dwij),
         ) {
             CompositionLocalProvider(
                 LocalYamLogger provides

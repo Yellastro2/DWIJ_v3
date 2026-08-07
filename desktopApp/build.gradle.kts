@@ -91,6 +91,7 @@ dependencies {
 
 compose.desktop {
     application {
+        javaHome = "C:/Users/Turbo/.jdks/ms-21.0.7"
         mainClass =
             "com.yellastrodev.dwij.desktop.MainKt"
 
@@ -120,6 +121,20 @@ compose.desktop {
 
             vendor =
                 "Yellastro"
+
+            windows {
+                iconFile.set(
+                    project.file(
+                        "src/main/resources/dwij.ico",
+                    ),
+                )
+
+                shortcut = true
+
+                menu = true
+
+                menuGroup = "DWIJ"
+            }
         }
     }
 }
