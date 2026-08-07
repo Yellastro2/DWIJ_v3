@@ -4,6 +4,7 @@ import androidx.compose.runtime.Immutable
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.viewModelScope
+import androidx.lifecycle.viewmodel.CreationExtras
 import com.yellastrodev.dwij.data.entities.Song
 import com.yellastrodev.dwij.data.entities.SongMatchCandidateEntity
 import com.yellastrodev.dwij.data.entities.SongMatchCandidateStatus
@@ -20,6 +21,7 @@ import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.flow.receiveAsFlow
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
+import kotlin.reflect.KClass
 
 @Immutable
 data class SongMatchCandidateItem(
@@ -238,8 +240,11 @@ class SongMatchCandidatesModel(
     ) : ViewModelProvider.Factory {
 
         @Suppress("UNCHECKED_CAST")
-        override fun <T : ViewModel> create(modelClass: Class<T>): T {
-            if (modelClass.isAssignableFrom(SongMatchCandidatesModel::class.java)) {
+        override fun <T : ViewModel> create(
+            modelClass: KClass<T>,
+            extras: CreationExtras,
+        ): T {
+            if (modelClass == SongMatchCandidatesModel::class) {
                 return SongMatchCandidatesModel(
                     songMatchRepository = songMatchRepository,
                     songRepository = songRepository,

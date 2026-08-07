@@ -3,6 +3,7 @@ package com.yellastrodev.dwij.models
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.viewModelScope
+import androidx.lifecycle.viewmodel.CreationExtras
 import com.yellastrodev.dwij.data.entities.Song
 import com.yellastrodev.dwij.data.entities.dSimpleTracklist
 import com.yellastrodev.dwij.data.entities.dTracklist
@@ -36,6 +37,7 @@ import kotlinx.coroutines.flow.receiveAsFlow
 import kotlinx.coroutines.flow.scan
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
+import kotlin.reflect.KClass
 
 /**
  * Готовит треки выбранного Яндекс-объекта, проверяет кэш недоступных записей
@@ -65,8 +67,11 @@ class TracklistModel(
     ) : ViewModelProvider.Factory {
 
         @Suppress("UNCHECKED_CAST")
-        override fun <T : ViewModel> create(modelClass: Class<T>): T {
-            if (modelClass.isAssignableFrom(TracklistModel::class.java)) {
+        override fun <T : ViewModel> create(
+            modelClass: KClass<T>,
+            extras: CreationExtras,
+        ): T {
+            if (modelClass == TracklistModel::class) {
                 logger.debug(TAG, "Создаём экземпляр TracklistModel через Factory")
 
                 return TracklistModel(

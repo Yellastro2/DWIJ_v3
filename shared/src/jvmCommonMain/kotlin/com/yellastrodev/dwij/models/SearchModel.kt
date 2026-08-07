@@ -4,6 +4,7 @@ import androidx.compose.runtime.Immutable
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.viewModelScope
+import androidx.lifecycle.viewmodel.CreationExtras
 import com.yellastrodev.dwij.TrackListItemUiModel
 import com.yellastrodev.dwij.data.DataError
 import com.yellastrodev.dwij.data.DataResult
@@ -23,6 +24,7 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
+import kotlin.reflect.KClass
 
 /** Вид сущности в общей поисковой выдаче. */
 enum class SearchEntityKind {
@@ -252,8 +254,11 @@ class SearchModel(
     ) : ViewModelProvider.Factory {
 
         @Suppress("UNCHECKED_CAST")
-        override fun <T : ViewModel> create(modelClass: Class<T>): T {
-            if (modelClass.isAssignableFrom(SearchModel::class.java)) {
+        override fun <T : ViewModel> create(
+            modelClass: KClass<T>,
+            extras: CreationExtras,
+        ): T {
+            if (modelClass == SearchModel::class) {
                 return SearchModel(
                     repository = repository,
                     localMusicRepository = localMusicRepository,

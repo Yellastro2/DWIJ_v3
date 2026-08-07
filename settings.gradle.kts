@@ -11,6 +11,7 @@ pluginManagement {
         gradlePluginPortal()
     }
 }
+
 dependencyResolutionManagement {
     repositoriesMode.set(RepositoriesMode.FAIL_ON_PROJECT_REPOS)
     repositories {
@@ -20,6 +21,8 @@ dependencyResolutionManagement {
 }
 
 rootProject.name = "DWIJ_v3"
+
 include(":app")
 include(":shared")
 include(":yandexmusiclib")
+include(":desktopApp")

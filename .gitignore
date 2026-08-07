@@ -18,3 +18,4 @@ local.properties
 .kotlin
 .codex-tmp
 app/release
+**/build/
