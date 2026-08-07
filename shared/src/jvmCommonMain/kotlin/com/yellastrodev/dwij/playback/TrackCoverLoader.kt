@@ -4,70 +4,37 @@ import com.yellastrodev.dwij.data.DataResult
 import com.yellastrodev.dwij.data.repo.CoverRepository
 import com.yellastrodev.dwij.data.repo.TrackRepository
 import com.yellastrodev.yandexmusiclib.YamLogger
-import com.yellastrodev.yandexmusiclib.entities.CoverSize
 
 /**
  * Загружает байты обложки трека.
- *
- * Не знает ничего об Android Bitmap, Media3 и уведомлениях.
+ * Не знает ничего об Android Bitmap и Media3.
  */
 class TrackCoverLoader(
     private val trackRepository: TrackRepository,
     private val coverRepository: CoverRepository,
     private val logger: YamLogger,
 ) {
-
-    /**
-     * Загружает компактную обложку для системного уведомления.
-     */
-    suspend fun loadNotificationCover(
-        trackId: String,
-    ): ByteArray? =
-        load(
-            trackId = trackId,
-            size = CoverSize.`100x100`,
-        )
-
-    suspend fun load(
-        trackId: String,
-        size: CoverSize,
-    ): ByteArray? {
+    suspend fun loadPlayerCover(trackId: String): ByteArray? {
         if (trackId.isBlank()) {
-            logger.warning(
-                TAG,
-                "[load] Передан пустой trackId",
-            )
+            logger.warning(TAG, "[loadPlayerCover] Передан пустой trackId")
             return null
         }
 
-        val track = when (
-            val result = trackRepository.getTrack(trackId)
-        ) {
-            is DataResult.Success -> {
-                result.value
-            }
-
+        val track = when (val result = trackRepository.getTrack(trackId)) {
+            is DataResult.Success -> result.value
             is DataResult.Failure -> {
                 logger.warning(
                     TAG,
-                    "[load] Не удалось получить трек " +
-                            "trackId=$trackId: ${result.error}",
+                    "[loadPlayerCover] Не удалось получить trackId=$trackId: ${result.error}",
                 )
                 return null
             }
         }
 
-        val cover = coverRepository.getTrackCover(
-            track = track,
-            size = size,
-        )
+        val cover = coverRepository.getPlayerTrackCover(track)
 
         if (cover == null) {
-            logger.debug(
-                TAG,
-                "[load] Обложка отсутствует: " +
-                        "trackId=$trackId, size=$size",
-            )
+            logger.debug(TAG, "[loadPlayerCover] Обложка отсутствует: trackId=$trackId")
             return null
         }
 
