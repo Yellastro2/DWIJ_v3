@@ -1,7 +1,6 @@
 package com.yellastrodev.dwij
 
 import android.app.Application
-import android.preference.PreferenceManager
 import androidx.media3.common.util.UnstableApi
 import androidx.room.Room
 import com.yellastrodev.dwij.data.db.DwijDatabase
@@ -10,9 +9,9 @@ import com.yellastrodev.dwij.data.source.MediaStoreLocalSource
 import com.yellastrodev.dwij.data.source.hasAudioPermission
 import com.yellastrodev.dwij.di.DwijComponent
 import com.yellastrodev.dwij.playback.AndroidMediaItemMapper
-import com.yellastrodev.dwij.playback.AndroidPlaybackSettings
 import com.yellastrodev.dwij.playback.AndroidPlayerEngine
 import com.yellastrodev.dwij.playback.AndroidPlayerServiceRegistry
+import com.yellastrodev.dwij.storage.SharedPreferencesLocalKeyValueStore
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
@@ -25,7 +24,7 @@ import java.io.File
 class AndroidDwijComponentFactory(
     private val application: Application,
     private val playerServiceRegistry:
-        AndroidPlayerServiceRegistry,
+    AndroidPlayerServiceRegistry,
 ) {
 
     fun create(): DwijComponent {
@@ -35,7 +34,7 @@ class AndroidDwijComponentFactory(
         val applicationScope =
             CoroutineScope(
                 SupervisorJob() +
-                    Dispatchers.IO,
+                        Dispatchers.IO,
             )
 
         val logger =
@@ -53,15 +52,20 @@ class AndroidDwijComponentFactory(
         val mediaItemMapper =
             AndroidMediaItemMapper()
 
+        val localKeyValueStore =
+            SharedPreferencesLocalKeyValueStore(
+                context,
+            )
+
         return DwijComponent.create(
             applicationScope =
                 applicationScope,
-            logger = logger,
-            yandexSessionStore =
-                AndroidYandexSessionStore(
-                    context,
-                ),
-            db = database,
+            logger =
+                logger,
+            localKeyValueStore =
+                localKeyValueStore,
+            db =
+                database,
             trackCacheDirectory =
                 File(
                     application.cacheDir,
@@ -72,39 +76,25 @@ class AndroidDwijComponentFactory(
                     application.cacheDir,
                     DIR_COVER_CACHE,
                 ),
-            maxCacheSizeBytes = {
-                PreferenceManager
-                    .getDefaultSharedPreferences(
-                        context,
-                    )
-                    .getLong(
-                        CACHE_SIZE,
-                        DEFAULT_CACHE_SIZE,
-                    )
-            },
-            playbackSettings =
-                AndroidPlaybackSettings(
-                    context,
-                ),
             playerEngine =
                 AndroidPlayerEngine(
-                    context = context,
-                    scope = applicationScope,
+                    context =
+                        context,
+                    scope =
+                        applicationScope,
                     mediaItemMapper =
                         mediaItemMapper,
                     serviceRegistry =
                         playerServiceRegistry,
-                ),
-            musicSourceSettings =
-                AndroidMusicSourceSettings(
-                    context,
                 ),
             localMediaSource =
                 MediaStoreLocalSource(
                     context,
                 ),
             canReadAudio = {
-                hasAudioPermission(context)
+                hasAudioPermission(
+                    context,
+                )
             },
             platformLifecycle =
                 AndroidDwijPlatformLifecycle(

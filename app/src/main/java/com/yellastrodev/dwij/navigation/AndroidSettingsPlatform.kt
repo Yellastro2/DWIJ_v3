@@ -7,7 +7,6 @@ import android.content.Context
 import android.content.Intent
 import android.net.Uri
 import android.os.StatFs
-import android.preference.PreferenceManager
 import android.util.Log
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
@@ -18,39 +17,26 @@ import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleEventObserver
 import androidx.lifecycle.compose.LocalLifecycleOwner
 import com.yellastrodev.dwij.BuildConfig
-import com.yellastrodev.dwij.CACHE_SIZE
-import com.yellastrodev.dwij.DEFAULT_CACHE_SIZE
-import com.yellastrodev.dwij.auth.YandexSession
-import com.yellastrodev.dwij.yApplication
 
-/** Android-внешние действия и настройки дискового кэша. */
+/**
+ * Android-внешние действия экрана настроек.
+ */
 @Composable
 fun rememberAndroidSettingsPlatform(): SettingsPlatform {
-    val application =
-        LocalContext.current.applicationContext
-            as yApplication
+    val context =
+        LocalContext.current
+            .applicationContext
 
-    return remember(application) {
-        AndroidSettingsPlatform(application)
+    return remember(context) {
+        AndroidSettingsPlatform(
+            context,
+        )
     }
 }
 
 private class AndroidSettingsPlatform(
-    private val application: yApplication,
+    private val context: Context,
 ) : SettingsPlatform {
-
-    private val context: Context =
-        application.applicationContext
-
-    private val preferences =
-        PreferenceManager
-            .getDefaultSharedPreferences(context)
-
-    private val sessionManager
-        get() =
-            application
-                .component
-                .yandexSessionManager
 
     override val oauthClientId: String
         get() =
@@ -59,49 +45,6 @@ private class AndroidSettingsPlatform(
     override val oauthClientSecret: String
         get() =
             BuildConfig.YANDEX_OAUTH_CLIENT_SECRET
-
-    override fun readYandexLogin(): String? =
-        sessionManager.currentLogin()
-
-    override fun saveYandexSession(
-        session: SettingsYandexSession,
-    ) {
-        sessionManager.save(
-            YandexSession(
-                accessToken =
-                    session.accessToken,
-                refreshToken =
-                    session.refreshToken,
-                expiresAtMillis =
-                    session.expiresAtMillis,
-                login =
-                    session.login,
-                userId =
-                    session.userId,
-            ),
-        )
-    }
-
-    override fun clearYandexSession() {
-        sessionManager.clear()
-    }
-
-    override fun readCacheLimitBytes(): Long =
-        preferences.getLong(
-            CACHE_SIZE,
-            DEFAULT_CACHE_SIZE,
-        )
-
-    override fun writeCacheLimitBytes(
-        bytes: Long,
-    ) {
-        preferences.edit()
-            .putLong(
-                CACHE_SIZE,
-                bytes,
-            )
-            .apply()
-    }
 
     override fun availableCacheBytes(): Long =
         StatFs(
@@ -136,6 +79,7 @@ private class AndroidSettingsPlatform(
                     Intent.FLAG_ACTIVITY_NEW_TASK,
                 ),
             )
+
             true
         } catch (
             error: ActivityNotFoundException,
@@ -145,6 +89,7 @@ private class AndroidSettingsPlatform(
                 "[openUrl] Не найден браузер для страницы авторизации",
                 error,
             )
+
             false
         }
 
@@ -156,13 +101,21 @@ private class AndroidSettingsPlatform(
             LocalLifecycleOwner.current
 
         val currentOnResume =
-            rememberUpdatedState(onResume)
+            rememberUpdatedState(
+                onResume,
+            )
 
-        DisposableEffect(lifecycleOwner) {
+        DisposableEffect(
+            lifecycleOwner,
+        ) {
             var firstResume = true
 
             val observer =
-                LifecycleEventObserver { _, event ->
+                LifecycleEventObserver {
+                        _,
+                        event,
+                    ->
+
                     if (
                         event ==
                         Lifecycle.Event.ON_RESUME
@@ -170,17 +123,24 @@ private class AndroidSettingsPlatform(
                         if (firstResume) {
                             firstResume = false
                         } else {
-                            currentOnResume.value()
+                            currentOnResume
+                                .value()
                         }
                     }
                 }
 
-            lifecycleOwner.lifecycle
-                .addObserver(observer)
+            lifecycleOwner
+                .lifecycle
+                .addObserver(
+                    observer,
+                )
 
             onDispose {
-                lifecycleOwner.lifecycle
-                    .removeObserver(observer)
+                lifecycleOwner
+                    .lifecycle
+                    .removeObserver(
+                        observer,
+                    )
             }
         }
     }

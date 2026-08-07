@@ -4,7 +4,6 @@ import com.yellastrodev.dwij.CacheManager
 import com.yellastrodev.dwij.MusicSourceSelectionStore
 import com.yellastrodev.dwij.MusicSourceSettings
 import com.yellastrodev.dwij.auth.YandexSessionManager
-import com.yellastrodev.dwij.auth.YandexSessionStore
 import com.yellastrodev.dwij.data.cache.FileCacheStore
 import com.yellastrodev.dwij.data.db.DwijDatabase
 import com.yellastrodev.dwij.data.entities.dYaPlaylist
@@ -29,6 +28,12 @@ import com.yellastrodev.dwij.playback.PlaybackSettings
 import com.yellastrodev.dwij.playback.PlayerEngine
 import com.yellastrodev.dwij.playback.TrackCoverLoader
 import com.yellastrodev.dwij.playback.feedback.PlaybackFeedbackTracker
+import com.yellastrodev.dwij.storage.CacheSettings
+import com.yellastrodev.dwij.storage.LocalKeyValueStore
+import com.yellastrodev.dwij.storage.StoredCacheSettings
+import com.yellastrodev.dwij.storage.StoredMusicSourceSettings
+import com.yellastrodev.dwij.storage.StoredPlaybackSettings
+import com.yellastrodev.dwij.storage.StoredYandexSessionStore
 import com.yellastrodev.dwij.utils.DwLruCache
 import com.yellastrodev.yandexmusiclib.YamLogger
 import kotlinx.coroutines.CancellationException
@@ -43,16 +48,19 @@ import java.util.concurrent.atomic.AtomicBoolean
  * Общий JVM-граф приложения.
  *
  * Создаёт YamApiClient, восстанавливает сессию и собирает все общие
- * репозитории. Платформа передаёт только системные реализации.
+ * репозитории и постоянные настройки.
+ *
+ * Платформа передаёт только системные реализации и низкоуровневое
+ * key-value хранилище.
  */
 class DwijComponent private constructor(
     private val applicationScope: CoroutineScope,
     val logger: YamLogger,
     val yandexSessionManager: YandexSessionManager,
+    val cacheSettings: CacheSettings,
     private val db: DwijDatabase,
     private val trackCacheDirectory: File,
     private val coverCacheDirectory: File,
-    private val maxCacheSizeBytes: () -> Long,
     private val playbackSettings: PlaybackSettings,
     private val playerEngine: PlayerEngine,
     private val musicSourceSettings: MusicSourceSettings,
@@ -60,8 +68,12 @@ class DwijComponent private constructor(
     private val canReadAudio: () -> Boolean,
     private val platformLifecycle: DwijPlatformLifecycle,
 ) {
-    private val started = AtomicBoolean(false)
-    private val yamClient = yandexSessionManager.client
+
+    private val started =
+        AtomicBoolean(false)
+
+    private val yamClient =
+        yandexSessionManager.client
 
     val songRepository: SongRepository by lazy {
         SongRepository(
@@ -74,7 +86,10 @@ class DwijComponent private constructor(
 
     val trackRepository: TrackRepository by lazy {
         TrackRepository(
-            remote = TrackRemoteSource(yamClient),
+            remote =
+                TrackRemoteSource(
+                    yamClient,
+                ),
             local = db.dTrackDao(),
             songRepository = songRepository,
             scope = applicationScope,
@@ -83,22 +98,29 @@ class DwijComponent private constructor(
     }
 
     val playlistRepository: PlaylistRepository by lazy {
-        val memoryCache = object : DwLruCache<Int, dYaPlaylist>(
-            PLAYLIST_MEMORY_CACHE_SIZE,
-        ) {
-            override fun sizeOf(
-                key: Int,
-                value: dYaPlaylist,
-            ): Int = 1
-        }
+        val memoryCache =
+            object :
+                DwLruCache<Int, dYaPlaylist>(
+                    PLAYLIST_MEMORY_CACHE_SIZE,
+                ) {
+
+                override fun sizeOf(
+                    key: Int,
+                    value: dYaPlaylist,
+                ): Int = 1
+            }
 
         PlaylistRepository(
             local = db.dPlaylistDao(),
-            remote = PlaylistRemoteSource(
-                client = yamClient,
-                logger = logger,
-            ),
-            cache = PlaylistCacheSource(memoryCache),
+            remote =
+                PlaylistRemoteSource(
+                    client = yamClient,
+                    logger = logger,
+                ),
+            cache =
+                PlaylistCacheSource(
+                    memoryCache,
+                ),
             scope = applicationScope,
             trackRepo = trackRepository,
             logger = logger,
@@ -109,7 +131,9 @@ class DwijComponent private constructor(
         CacheManager(
             trackDir = trackCacheDirectory,
             coverDir = coverCacheDirectory,
-            maxCacheSizeBytes = maxCacheSizeBytes,
+            maxCacheSizeBytes = {
+                cacheSettings.maxSizeBytes
+            },
             logger = logger,
         )
     }
@@ -145,7 +169,9 @@ class DwijComponent private constructor(
         )
     }
 
-    val musicSourceSelectionStore: MusicSourceSelectionStore by lazy {
+    val musicSourceSelectionStore:
+            MusicSourceSelectionStore by lazy {
+
         MusicSourceSelectionStore(
             settings = musicSourceSettings,
         )
@@ -156,15 +182,20 @@ class DwijComponent private constructor(
             engine = playerEngine,
             settings = playbackSettings,
             scope = applicationScope,
-            isTrackCached = trackCacheRepo::isCached,
+            isTrackCached =
+                trackCacheRepo::isCached,
             continueWave = { tracklist ->
-                waveRepository.playWave(tracklist)
+                waveRepository.playWave(
+                    tracklist,
+                )
             },
             logger = logger,
         )
     }
 
-    val waveRemoteSource: WaveRemoteSource by lazy {
+    val waveRemoteSource:
+            WaveRemoteSource by lazy {
+
         WaveRemoteSource(
             client = yamClient,
             logger = logger,
@@ -177,20 +208,28 @@ class DwijComponent private constructor(
             trackRepository = trackRepository,
             songRepository = songRepository,
             playerRepository = playerRepo,
-            isTrackCached = trackCacheRepo::isCached,
+            isTrackCached =
+                trackCacheRepo::isCached,
             scope = applicationScope,
             logger = logger,
         )
     }
 
-    val searchRepository: SearchRepository by lazy {
+    val searchRepository:
+            SearchRepository by lazy {
+
         SearchRepository(
-            remote = SearchRemoteSource(yamClient),
+            remote =
+                SearchRemoteSource(
+                    yamClient,
+                ),
             logger = logger,
         )
     }
 
-    val songMatchRepository: SongMatchRepository by lazy {
+    val songMatchRepository:
+            SongMatchRepository by lazy {
+
         SongMatchRepository(
             songDao = db.songDao(),
             matchDao = db.songMatchDao(),
@@ -198,7 +237,9 @@ class DwijComponent private constructor(
         )
     }
 
-    val localMusicRepository: LocalMusicRepository by lazy {
+    val localMusicRepository:
+            LocalMusicRepository by lazy {
+
         LocalMusicRepository(
             dao = db.localLibraryDao(),
             mediaStore = localMediaSource,
@@ -209,18 +250,23 @@ class DwijComponent private constructor(
         )
     }
 
-    private val playbackRemoteSource: PlaybackRemoteSource by lazy {
+    private val playbackRemoteSource:
+            PlaybackRemoteSource by lazy {
+
         PlaybackRemoteSource(
             client = yamClient,
             logger = logger,
         )
     }
 
-    val playbackFeedbackTracker: PlaybackFeedbackTracker by lazy {
+    val playbackFeedbackTracker:
+            PlaybackFeedbackTracker by lazy {
+
         PlaybackFeedbackTracker(
             remote = playbackRemoteSource,
             scope = applicationScope,
-            isTrackCached = trackCacheRepo::isCached,
+            isTrackCached =
+                trackCacheRepo::isCached,
             logger = logger,
         )
     }
@@ -229,15 +275,23 @@ class DwijComponent private constructor(
      * Запускает общую и платформенную инициализацию ровно один раз.
      */
     fun start() {
-        if (!started.compareAndSet(false, true)) {
+        if (
+            !started.compareAndSet(
+                false,
+                true,
+            )
+        ) {
             return
         }
 
         try {
-            platformLifecycle.startLocalLibraryIntegration(
-                repository = localMusicRepository,
-                scope = applicationScope,
-            )
+            platformLifecycle
+                .startLocalLibraryIntegration(
+                    repository =
+                        localMusicRepository,
+                    scope =
+                        applicationScope,
+                )
         } catch (error: Exception) {
             logger.error(
                 TAG,
@@ -248,13 +302,16 @@ class DwijComponent private constructor(
 
         applicationScope.launch {
             try {
-                songRepository.indexExistingTracks()
+                songRepository
+                    .indexExistingTracks()
 
                 logger.debug(
                     TAG,
                     "[start] Индекс песен актуализирован",
                 )
-            } catch (error: CancellationException) {
+            } catch (
+                error: CancellationException,
+            ) {
                 throw error
             } catch (error: Exception) {
                 logger.error(
@@ -264,55 +321,97 @@ class DwijComponent private constructor(
                 )
             }
 
-            songMatchRepository.start(applicationScope)
+            songMatchRepository.start(
+                applicationScope,
+            )
         }
     }
 
     companion object {
-        private const val TAG = "DwijComponent"
-        private const val PLAYLIST_MEMORY_CACHE_SIZE = 50
+
+        private const val TAG =
+            "DwijComponent"
+
+        private const val PLAYLIST_MEMORY_CACHE_SIZE =
+            50
 
         /**
-         * Восстанавливает сессию Яндекс Музыки и создаёт общий граф.
+         * Восстанавливает постоянные настройки и сессию,
+         * затем создаёт общий граф приложения.
          */
         fun create(
             applicationScope: CoroutineScope,
             logger: YamLogger,
-            yandexSessionStore: YandexSessionStore,
+            localKeyValueStore: LocalKeyValueStore,
             db: DwijDatabase,
             trackCacheDirectory: File,
             coverCacheDirectory: File,
-            maxCacheSizeBytes: () -> Long,
-            playbackSettings: PlaybackSettings,
             playerEngine: PlayerEngine,
-            musicSourceSettings: MusicSourceSettings,
             localMediaSource: LocalMediaSource,
             canReadAudio: () -> Boolean,
             platformLifecycle: DwijPlatformLifecycle =
                 NoOpDwijPlatformLifecycle,
         ): DwijComponent {
+
+            val yandexSessionStore =
+                StoredYandexSessionStore(
+                    localKeyValueStore,
+                )
+
+            val cacheSettings =
+                StoredCacheSettings(
+                    localKeyValueStore,
+                )
+
+            val playbackSettings =
+                StoredPlaybackSettings(
+                    localKeyValueStore,
+                )
+
+            val musicSourceSettings =
+                StoredMusicSourceSettings(
+                    localKeyValueStore,
+                )
+
             val sessionManager =
-                runBlocking(Dispatchers.IO) {
+                runBlocking(
+                    Dispatchers.IO,
+                ) {
                     YandexSessionManager.create(
-                        store = yandexSessionStore,
-                        logger = logger,
+                        store =
+                            yandexSessionStore,
+                        logger =
+                            logger,
                     )
                 }
 
             return DwijComponent(
-                applicationScope = applicationScope,
-                logger = logger,
-                yandexSessionManager = sessionManager,
-                db = db,
-                trackCacheDirectory = trackCacheDirectory,
-                coverCacheDirectory = coverCacheDirectory,
-                maxCacheSizeBytes = maxCacheSizeBytes,
-                playbackSettings = playbackSettings,
-                playerEngine = playerEngine,
-                musicSourceSettings = musicSourceSettings,
-                localMediaSource = localMediaSource,
-                canReadAudio = canReadAudio,
-                platformLifecycle = platformLifecycle,
+                applicationScope =
+                    applicationScope,
+                logger =
+                    logger,
+                yandexSessionManager =
+                    sessionManager,
+                cacheSettings =
+                    cacheSettings,
+                db =
+                    db,
+                trackCacheDirectory =
+                    trackCacheDirectory,
+                coverCacheDirectory =
+                    coverCacheDirectory,
+                playbackSettings =
+                    playbackSettings,
+                playerEngine =
+                    playerEngine,
+                musicSourceSettings =
+                    musicSourceSettings,
+                localMediaSource =
+                    localMediaSource,
+                canReadAudio =
+                    canReadAudio,
+                platformLifecycle =
+                    platformLifecycle,
             )
         }
     }
