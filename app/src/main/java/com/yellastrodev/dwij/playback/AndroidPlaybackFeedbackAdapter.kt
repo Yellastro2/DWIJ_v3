@@ -3,7 +3,7 @@ package com.yellastrodev.dwij.playback
 import androidx.media3.common.C
 import androidx.media3.common.MediaItem
 import androidx.media3.common.Player
-import androidx.media3.common.util.UnstableApi
+
 import com.yellastrodev.dwij.data.entities.MusicSource
 import com.yellastrodev.dwij.playback.feedback.PlaybackFeedbackMetadata
 import com.yellastrodev.dwij.playback.feedback.PlaybackFeedbackTracker
@@ -11,7 +11,6 @@ import com.yellastrodev.dwij.playback.feedback.PlaybackMetadataKeys
 import com.yellastrodev.dwij.playback.feedback.PlaybackTransitionReason
 
 /** Переводит Media3-события в общие модели PlaybackFeedbackTracker. */
-@OptIn(UnstableApi::class)
 class AndroidPlaybackFeedbackAdapter(
     private val tracker: PlaybackFeedbackTracker,
 ) {

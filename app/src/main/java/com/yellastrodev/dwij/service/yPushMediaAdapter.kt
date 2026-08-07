@@ -6,7 +6,7 @@ import android.graphics.Bitmap
 import android.graphics.BitmapFactory
 import android.util.Log
 import androidx.media3.common.Player
-import androidx.media3.common.util.UnstableApi
+
 import androidx.media3.ui.PlayerNotificationManager
 import com.yellastrodev.dwij.TRACK_ID
 import com.yellastrodev.dwij.activities.MainActivity
@@ -17,7 +17,6 @@ import kotlinx.coroutines.Job
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 
-@OptIn(UnstableApi::class)
 class yPushMediaAdapterobject(
     private val playerService: PlayerService,
 ) : PlayerNotificationManager.MediaDescriptionAdapter {

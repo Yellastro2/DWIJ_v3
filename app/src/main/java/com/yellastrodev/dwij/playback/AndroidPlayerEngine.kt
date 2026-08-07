@@ -3,7 +3,7 @@ package com.yellastrodev.dwij.playback
 import android.content.Context
 import android.content.Intent
 import androidx.annotation.OptIn
-import androidx.media3.common.util.UnstableApi
+
 import com.yellastrodev.dwij.data.entities.PlaybackTrack
 import com.yellastrodev.dwij.data.entities.dTracklist
 import com.yellastrodev.dwij.service.PlayerService
@@ -25,7 +25,6 @@ import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
 
-@OptIn(UnstableApi::class)
 class AndroidPlayerEngine(
     context: Context,
     private val scope: CoroutineScope,
@@ -116,7 +115,6 @@ class AndroidPlayerEngine(
         applicationContext.startService(intent)
     }
 
-    @OptIn(UnstableApi::class)
     private suspend fun waitForService(): PlayerService {
         while (true) {
             getApplicationService()?.let { playerService ->

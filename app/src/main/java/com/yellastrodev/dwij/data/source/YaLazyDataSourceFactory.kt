@@ -4,7 +4,7 @@ import android.annotation.SuppressLint
 import android.content.Context
 import android.net.Uri
 import androidx.core.net.toUri
-import androidx.media3.common.util.UnstableApi
+
 import androidx.media3.datasource.DataSource
 import androidx.media3.datasource.DataSpec
 import androidx.media3.datasource.DefaultDataSource
@@ -20,8 +20,6 @@ import java.io.IOException
  * преобразует внутренние URI вида ya://trackId
  * в реальные локальные или сетевые URI.
  */
-@SuppressLint("UnsafeOptInUsageError")
-@OptIn(UnstableApi::class)
 class YaLazyDataSourceFactory(
     context: Context,
     trackCacheRepository: TrackCacheRepository,

@@ -1,7 +1,7 @@
 package com.yellastrodev.dwij
 
 import android.app.Application
-import androidx.media3.common.util.UnstableApi
+
 import androidx.room.Room
 import com.yellastrodev.dwij.data.db.DwijDatabase
 import com.yellastrodev.dwij.data.db.buildDwijDatabase
@@ -20,7 +20,6 @@ import java.io.File
 /**
  * Собирает Android-реализации и передаёт их shared-компоненту.
  */
-@UnstableApi
 class AndroidDwijComponentFactory(
     private val application: Application,
     private val playerServiceRegistry:
