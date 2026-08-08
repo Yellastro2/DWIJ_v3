@@ -29,7 +29,7 @@
     <string name="settings_cache_occupied">ЗАНЯТО</string>
     <string name="settings_cache_shrink_warning">Лишние файлы удалятся при следующем кэшировании</string>
     <string name="settings_cache_size_mb">%1$d МБ</string>
-    <string name="settings_cache_size_gb">%1$.1f ГБ</string>
+    <string name="settings_cache_size_gb">%1$s ГБ</string>
     <string name="home_playlists">Плейлисты</string>
     <string name="home_tracks">Треки</string>
     <string name="track_list_all_title">Все треки</string>

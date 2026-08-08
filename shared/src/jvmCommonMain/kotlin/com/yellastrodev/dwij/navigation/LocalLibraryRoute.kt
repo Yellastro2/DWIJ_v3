@@ -127,6 +127,7 @@ fun LocalLibraryRoute(
                 title = stringResource(Res.string.local_playlists_title),
                 playlists = playlists.orEmpty(),
                 tracks = null,
+                onBackClick = onBackClick,
                 onPlaylistClick = ::openPlaylist,
                 onTrackClick = { _, _ -> },
                 onTrackHideRequest = {},
@@ -184,6 +185,7 @@ fun LocalLibraryRoute(
                 title = allTracksTitle,
                 playlists = null,
                 tracks = loadedTracks,
+                onBackClick = onBackClick,
                 onPlaylistClick = {},
                 loadTrackCover = ::loadTrackCover,
                 onTrackClick = { index, _ ->

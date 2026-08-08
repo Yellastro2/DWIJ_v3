@@ -3,6 +3,7 @@ package com.yellastrodev.dwij.ui
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -17,6 +18,7 @@ import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.remember
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.ImageBitmap
 import androidx.compose.ui.text.font.FontWeight
@@ -39,6 +41,7 @@ fun LocalLibraryScreen(
     title: String,
     playlists: List<LocalPlaylistEntity>?,
     tracks: List<Song>?,
+    onBackClick: () -> Unit,
     onPlaylistClick: (LocalPlaylistEntity) -> Unit,
     onTrackClick: (Int, Song) -> Unit,
     onTrackHideRequest: (Song) -> Unit = {},
@@ -51,12 +54,22 @@ fun LocalLibraryScreen(
             .fillMaxSize()
             .padding(horizontal = 18.dp, vertical = 16.dp),
     ) {
-        Text(
-            text = title,
-            color = DwijColors.White,
-            fontSize = 26.sp,
-            fontWeight = FontWeight.Bold,
-        )
+        Row(
+            verticalAlignment = Alignment.CenterVertically,
+            modifier = Modifier.fillMaxWidth(),
+        ) {
+            DwijBackButton(
+                onClick = onBackClick,
+            )
+
+            Text(
+                text = title,
+                color = DwijColors.White,
+                fontSize = 26.sp,
+                fontWeight = FontWeight.Bold,
+                modifier = Modifier.padding(start = 4.dp),
+            )
+        }
         Spacer(modifier = Modifier.height(18.dp))
         when {
             playlists != null -> LocalPlaylistList(playlists, isLoading, onPlaylistClick)

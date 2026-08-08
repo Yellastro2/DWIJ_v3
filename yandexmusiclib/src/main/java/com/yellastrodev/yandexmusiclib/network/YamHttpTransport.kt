@@ -124,65 +124,215 @@ internal class YamHttpTransport(
 
     override suspend fun retrieve(
         url: String,
-        requiresAuthorization: Boolean
+        requiresAuthorization: Boolean,
     ): YamResult<ByteArray> = withContext(Dispatchers.IO) {
         val logPath = "/external-content"
         val token = accessToken()
+
         if (requiresAuthorization && token.isBlank()) {
-            logger.warning(TAG, "[retrieve] $logPath: отсутствует авторизация")
-            return@withContext YamResult.Failure(YamError.Unauthorized)
+            logger.warning(
+                TAG,
+                "[retrieve] $logPath: отсутствует авторизация",
+            )
+
+            return@withContext YamResult.Failure(
+                YamError.Unauthorized,
+            )
         }
 
         val startedAt = System.nanoTime()
-        logger.debug(TAG, "[retrieve] Начат запрос GET $logPath")
-        try {
-            val connection = URL(url).openConnection() as HttpURLConnection
-            try {
-                connection.requestMethod = YamHttpMethod.GET.name
-                connection.connectTimeout = connectTimeoutMillis
-                connection.readTimeout = readTimeoutMillis
-                connection.setRequestProperty("Accept", "*/*")
-                connection.setRequestProperty("User-Agent", USER_AGENT)
-                if (requiresAuthorization) {
-                    connection.setRequestProperty("Authorization", "OAuth $token")
-                }
+        logger.debug(
+            TAG,
+            "[retrieve] Начат запрос GET $logPath",
+        )
 
-                val statusCode = connection.responseCode
-                val elapsedMs =
-                    (System.nanoTime() - startedAt) / NANOS_IN_MILLISECOND
-                logger.debug(
-                    TAG,
-                    "[retrieve] GET $logPath: HTTP $statusCode, ${elapsedMs}мс",
-                )
-                if (statusCode in 200..299) {
-                    YamResult.Success(connection.inputStream.use { it.readBytes() })
-                } else {
-                    val errorBody = connection.errorStream
-                        ?.bufferedReader(StandardCharsets.UTF_8)
-                        ?.use { it.readText() }
-                        .orEmpty()
-                    YamResult.Failure(mapHttpError(statusCode, errorBody))
+        try {
+            var currentUrl = URL(url)
+            var redirectCount = 0
+
+            while (true) {
+                val connection =
+                    currentUrl.openConnection() as HttpURLConnection
+
+                try {
+                    // Обрабатываем редиректы сами:
+                    // OpenJDK HttpURLConnection не умеет HTTP 308.
+                    connection.instanceFollowRedirects = false
+
+                    connection.requestMethod =
+                        YamHttpMethod.GET.name
+
+                    connection.connectTimeout =
+                        connectTimeoutMillis
+
+                    connection.readTimeout =
+                        readTimeoutMillis
+
+                    connection.setRequestProperty(
+                        "Accept",
+                        "*/*",
+                    )
+
+                    connection.setRequestProperty(
+                        "User-Agent",
+                        USER_AGENT,
+                    )
+
+                    if (requiresAuthorization) {
+                        connection.setRequestProperty(
+                            "Authorization",
+                            "OAuth $token",
+                        )
+                    }
+
+                    val statusCode =
+                        connection.responseCode
+
+                    if (
+                        statusCode == HttpURLConnection.HTTP_MOVED_PERM ||
+                        statusCode == HttpURLConnection.HTTP_MOVED_TEMP ||
+                        statusCode == HttpURLConnection.HTTP_SEE_OTHER ||
+                        statusCode == HTTP_TEMPORARY_REDIRECT ||
+                        statusCode == HTTP_PERMANENT_REDIRECT
+                    ) {
+                        val location =
+                            connection.getHeaderField("Location")
+
+                        if (location.isNullOrBlank()) {
+                            return@withContext YamResult.Failure(
+                                YamError.InvalidResponse(
+                                    IllegalStateException(
+                                        "HTTP $statusCode без Location",
+                                    ),
+                                ),
+                            )
+                        }
+
+                        redirectCount++
+
+                        if (redirectCount > MAX_REDIRECTS) {
+                            return@withContext YamResult.Failure(
+                                YamError.InvalidResponse(
+                                    IllegalStateException(
+                                        "Слишком много HTTP redirects",
+                                    ),
+                                ),
+                            )
+                        }
+
+                        logger.debug(
+                            TAG,
+                            "[retrieve] GET $logPath: HTTP $statusCode, redirect=$redirectCount",
+                        )
+
+                        // Работает и для абсолютного, и для относительного Location.
+                        currentUrl =
+                            URL(
+                                currentUrl,
+                                location,
+                            )
+
+                        continue
+                    }
+
+                    val elapsedMs =
+                        (System.nanoTime() - startedAt) /
+                                NANOS_IN_MILLISECOND
+
+                    logger.debug(
+                        TAG,
+                        "[retrieve] GET $logPath: HTTP $statusCode, ${elapsedMs}мс",
+                    )
+
+                    if (statusCode in 200..299) {
+                        return@withContext YamResult.Success(
+                            connection.inputStream.use {
+                                it.readBytes()
+                            },
+                        )
+                    }
+
+                    val errorBody =
+                        connection.errorStream
+                            ?.bufferedReader(
+                                StandardCharsets.UTF_8,
+                            )
+                            ?.use {
+                                it.readText()
+                            }
+                            .orEmpty()
+
+                    return@withContext YamResult.Failure(
+                        mapHttpError(
+                            statusCode,
+                            errorBody,
+                        ),
+                    )
+                } finally {
+                    connection.disconnect()
                 }
-            } finally {
-                connection.disconnect()
             }
+
+            @Suppress("UNREACHABLE_CODE")
+            YamResult.Failure(
+                YamError.InvalidResponse(
+                    IllegalStateException(
+                        "Недостижимое состояние",
+                    ),
+                ),
+            )
         } catch (error: CancellationException) {
             throw error
         } catch (error: SocketTimeoutException) {
-            logger.error(TAG, "[retrieve] GET $logPath: таймаут", error)
-            YamResult.Failure(YamError.Timeout)
+            logger.error(
+                TAG,
+                "[retrieve] GET $logPath: таймаут",
+                error,
+            )
+
+            YamResult.Failure(
+                YamError.Timeout,
+            )
         } catch (error: UnknownHostException) {
-            logger.error(TAG, "[retrieve] GET $logPath: нет сети", error)
-            YamResult.Failure(YamError.NoInternet)
+            logger.error(
+                TAG,
+                "[retrieve] GET $logPath: нет сети",
+                error,
+            )
+
+            YamResult.Failure(
+                YamError.NoInternet,
+            )
         } catch (error: ConnectException) {
-            logger.error(TAG, "[retrieve] GET $logPath: нет соединения", error)
-            YamResult.Failure(YamError.NoInternet)
+            logger.error(
+                TAG,
+                "[retrieve] GET $logPath: нет соединения",
+                error,
+            )
+
+            YamResult.Failure(
+                YamError.NoInternet,
+            )
         } catch (error: IOException) {
-            logger.error(TAG, "[retrieve] GET $logPath: ошибка ввода-вывода", error)
-            YamResult.Failure(YamError.Network(error))
+            logger.error(
+                TAG,
+                "[retrieve] GET $logPath: ошибка ввода-вывода",
+                error,
+            )
+
+            YamResult.Failure(
+                YamError.Network(error),
+            )
         } catch (error: Exception) {
-            logger.error(TAG, "[retrieve] GET $logPath: сетевая ошибка", error)
-            YamResult.Failure(YamError.Network(error))
+            logger.error(
+                TAG,
+                "[retrieve] GET $logPath: сетевая ошибка",
+                error,
+            )
+
+            YamResult.Failure(
+                YamError.Network(error),
+            )
         }
     }
 
@@ -324,5 +474,8 @@ internal class YamHttpTransport(
         const val YANDEX_MUSIC_CLIENT = "YandexMusicAndroid/24023621"
         const val NANOS_IN_MILLISECOND = 1_000_000L
         val json = Json { ignoreUnknownKeys = true }
+        const val HTTP_TEMPORARY_REDIRECT = 307
+        const val HTTP_PERMANENT_REDIRECT = 308
+        const val MAX_REDIRECTS = 8
     }
 }

@@ -48,6 +48,7 @@ import kotlinx.coroutines.launch
 import org.jetbrains.compose.resources.DrawableResource
 import org.jetbrains.compose.resources.painterResource
 import org.jetbrains.compose.resources.stringResource
+import java.util.Locale
 import kotlin.math.roundToInt
 
 /**
@@ -432,10 +433,25 @@ private fun SettingsActionButton(
 
 /** Форматирует предел слайдера компактно в МБ или ГБ. */
 @Composable
-private fun formatCacheMegabytes(megabytes: Int): String = if (megabytes >= 1024) {
-    stringResource(Res.string.settings_cache_size_gb, megabytes / 1024f)
+private fun formatCacheMegabytes(
+    megabytes: Int,
+): String = if (megabytes >= 1024) {
+    val gigabytes =
+        String.format(
+            Locale.getDefault(),
+            "%.1f",
+            megabytes / 1024.0,
+        )
+
+    stringResource(
+        Res.string.settings_cache_size_gb,
+        gigabytes,
+    )
 } else {
-    stringResource(Res.string.settings_cache_size_mb, megabytes)
+    stringResource(
+        Res.string.settings_cache_size_mb,
+        megabytes,
+    )
 }
 
 /** Показывает экран без Activity, SharedPreferences и реальной авторизации. */
