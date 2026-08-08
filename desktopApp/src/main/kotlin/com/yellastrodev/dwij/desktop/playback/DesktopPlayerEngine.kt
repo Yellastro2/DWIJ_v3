@@ -34,6 +34,7 @@ import kotlin.random.Random
 class DesktopPlayerEngine(
     private val scope: CoroutineScope,
     private val logger: YamLogger,
+    initialVolume: Float,
     private val resolveUri:
     suspend (String) -> String,
 ) : PlayerEngine,
@@ -52,7 +53,10 @@ class DesktopPlayerEngine(
 
     private val volumeState =
         MutableStateFlow(
-            DEFAULT_VOLUME,
+            initialVolume.coerceIn(
+                MIN_VOLUME,
+                MAX_VOLUME,
+            ),
         )
 
     override val volume:
@@ -66,7 +70,11 @@ class DesktopPlayerEngine(
      * а не всегда 100%.
      */
     private var lastAudibleVolume =
-        DEFAULT_VOLUME
+        volumeState.value
+            .takeIf {
+                it > MIN_VOLUME
+            }
+            ?: DEFAULT_VOLUME
 
     private val commandMutex =
         Mutex()

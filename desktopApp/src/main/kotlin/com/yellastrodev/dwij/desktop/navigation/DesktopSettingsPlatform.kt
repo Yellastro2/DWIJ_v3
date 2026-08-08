@@ -128,17 +128,10 @@ private class DesktopSettingsPlatform(
                 onResume,
             )
 
-        /*
-         * Аналог Android ON_RESUME:
-         * после возврата фокуса из браузера повторно проверяем auth flow.
-         */
         DisposableEffect(Unit) {
             val focusManager =
                 KeyboardFocusManager
                     .getCurrentKeyboardFocusManager()
-
-            var firstActivation =
-                true
 
             val listener =
                 PropertyChangeListener { event ->
@@ -146,15 +139,8 @@ private class DesktopSettingsPlatform(
                         event.newValue !=
                         null
                     ) {
-                        if (
-                            firstActivation
-                        ) {
-                            firstActivation =
-                                false
-                        } else {
-                            currentOnResume
-                                .value()
-                        }
+                        currentOnResume
+                            .value()
                     }
                 }
 

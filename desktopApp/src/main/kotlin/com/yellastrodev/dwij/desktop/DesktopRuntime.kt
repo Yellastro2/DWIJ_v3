@@ -8,6 +8,7 @@ import com.yellastrodev.dwij.desktop.playback.DesktopPlayerEngine
 import com.yellastrodev.dwij.di.DwijComponent
 import com.yellastrodev.dwij.playback.PlaybackUriResolver
 import com.yellastrodev.dwij.playback.PlayerVolumeControl
+import com.yellastrodev.dwij.storage.LocalKeyValueStore
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
@@ -19,6 +20,7 @@ class DesktopRuntime private constructor(
     val component: DwijComponent,
     val applicationScope: CoroutineScope,
     val paths: DesktopPaths,
+    val settingsStore: LocalKeyValueStore,
     private val playerEngine: DesktopPlayerEngine,
 ) {
 
@@ -36,6 +38,16 @@ class DesktopRuntime private constructor(
      * Освобождает платформенный audio backend.
      */
     fun close() {
+        settingsStore.edit {
+            putLong(
+                PLAYER_VOLUME_KEY,
+                (
+                        playerEngine.volume.value *
+                                VOLUME_STORAGE_SCALE
+                        ).toLong(),
+            )
+        }
+
         playerEngine.close()
     }
 
@@ -71,6 +83,21 @@ class DesktopRuntime private constructor(
                     paths.settingsFile,
                 )
 
+            val initialVolume =
+                localKeyValueStore
+                    .getLong(
+                        PLAYER_VOLUME_KEY,
+                    )
+                    ?.toFloat()
+                    ?.div(
+                        VOLUME_STORAGE_SCALE,
+                    )
+                    ?.coerceIn(
+                        0f,
+                        1f,
+                    )
+                    ?: DEFAULT_PLAYER_VOLUME
+
             lateinit var component:
                     DwijComponent
 
@@ -85,6 +112,8 @@ class DesktopRuntime private constructor(
                         applicationScope,
                     logger =
                         logger,
+                    initialVolume =
+                        initialVolume,
                     resolveUri = { uri ->
                         PlaybackUriResolver(
                             component
@@ -138,9 +167,20 @@ class DesktopRuntime private constructor(
                     applicationScope,
                 paths =
                     paths,
+                settingsStore =
+                    localKeyValueStore,
                 playerEngine =
                     playerEngine,
             )
         }
+
+        private const val PLAYER_VOLUME_KEY =
+            "desktop.player.volume"
+
+        private const val VOLUME_STORAGE_SCALE =
+            1000f
+
+        private const val DEFAULT_PLAYER_VOLUME =
+            1f
     }
 }

@@ -1,8 +1,10 @@
 package com.yellastrodev.dwij.desktop
 
 import androidx.compose.runtime.CompositionLocalProvider
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.window.Window
+import androidx.compose.ui.window.WindowPosition
 import androidx.compose.ui.window.application
 import androidx.compose.ui.window.rememberWindowState
 import com.yellastrodev.dwij.desktop.models.DesktopPlayerCoverLoader
@@ -14,6 +16,7 @@ import com.yellastrodev.dwij.ui.LocalYamLogger
 import dwij_v3.desktopapp.generated.resources.Res
 import dwij_v3.desktopapp.generated.resources.dwij
 import org.jetbrains.compose.resources.painterResource
+import kotlin.math.roundToLong
 
 /**
  * Desktop/Windows entry point.
@@ -21,6 +24,28 @@ import org.jetbrains.compose.resources.painterResource
 fun main() {
     val runtime =
         DesktopRuntime.create()
+
+    val initialWindowWidthDp =
+        runtime.settingsStore
+            .getLong(
+                WINDOW_WIDTH_KEY,
+            )
+            ?.coerceIn(
+                MIN_WINDOW_WIDTH_DP,
+                MAX_WINDOW_WIDTH_DP,
+            )
+            ?: DEFAULT_WINDOW_WIDTH_DP
+
+    val initialWindowHeightDp =
+        runtime.settingsStore
+            .getLong(
+                WINDOW_HEIGHT_KEY,
+            )
+            ?.coerceIn(
+                MIN_WINDOW_HEIGHT_DP,
+                MAX_WINDOW_HEIGHT_DP,
+            )
+            ?: DEFAULT_WINDOW_HEIGHT_DP
 
     val component =
         runtime.component
@@ -51,14 +76,42 @@ fun main() {
     application {
         val windowState =
             rememberWindowState(
+                position =
+                    WindowPosition.Aligned(
+                        Alignment.Center,
+                    ),
                 width =
-                    520.dp,
+                    initialWindowWidthDp
+                        .toInt()
+                        .dp,
                 height =
-                    900.dp,
+                    initialWindowHeightDp
+                        .toInt()
+                        .dp,
             )
 
         Window(
             onCloseRequest = {
+                runtime.settingsStore.edit {
+                    putLong(
+                        WINDOW_WIDTH_KEY,
+                        windowState
+                            .size
+                            .width
+                            .value
+                            .roundToLong(),
+                    )
+
+                    putLong(
+                        WINDOW_HEIGHT_KEY,
+                        windowState
+                            .size
+                            .height
+                            .value
+                            .roundToLong(),
+                    )
+                }
+
                 runtime.close()
                 exitApplication()
             },
@@ -91,3 +144,27 @@ fun main() {
         }
     }
 }
+
+private const val WINDOW_WIDTH_KEY =
+    "desktop.window.width.dp"
+
+private const val WINDOW_HEIGHT_KEY =
+    "desktop.window.height.dp"
+
+private const val DEFAULT_WINDOW_WIDTH_DP =
+    360L
+
+private const val DEFAULT_WINDOW_HEIGHT_DP =
+    820L
+
+private const val MIN_WINDOW_WIDTH_DP =
+    320L
+
+private const val MIN_WINDOW_HEIGHT_DP =
+    600L
+
+private const val MAX_WINDOW_WIDTH_DP =
+    1200L
+
+private const val MAX_WINDOW_HEIGHT_DP =
+    900L

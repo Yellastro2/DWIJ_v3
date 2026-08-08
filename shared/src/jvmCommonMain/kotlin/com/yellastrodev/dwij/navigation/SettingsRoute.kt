@@ -471,6 +471,11 @@ fun SettingsRoute(
 
     platform.ResumeEffect {
         refreshCacheState()
+
+        yandexLogin =
+            component
+                .yandexSessionManager
+                .currentLogin()
     }
 
     Box(
