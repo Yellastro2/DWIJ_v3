@@ -6,6 +6,7 @@ import com.sun.jna.Platform
 import com.sun.jna.Pointer
 import com.sun.jna.Structure
 import com.sun.jna.WString
+import com.sun.jna.platform.win32.COM.COMInvoker
 import com.sun.jna.platform.win32.Guid
 import com.sun.jna.platform.win32.Ole32
 import com.sun.jna.platform.win32.User32
@@ -16,7 +17,6 @@ import com.sun.jna.platform.win32.WinDef.LPARAM
 import com.sun.jna.platform.win32.WinDef.LRESULT
 import com.sun.jna.platform.win32.WinDef.WPARAM
 import com.sun.jna.platform.win32.WinUser
-import com.sun.jna.platform.win32.COM.COMInvoker
 import com.sun.jna.ptr.PointerByReference
 import com.sun.jna.win32.StdCallLibrary
 import com.yellastrodev.dwij.utils.PlayerState
@@ -24,7 +24,6 @@ import com.yellastrodev.yandexmusiclib.YamLogger
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Job
-import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.map
@@ -40,7 +39,13 @@ import java.util.concurrent.atomic.AtomicBoolean
  *
  * Previous | Play/Pause | Next
  *
- * Сама миниатюра окна остаётся стандартной Windows live-preview.
+ * Важный порядок:
+ *
+ * 1. Получаем HWND до показа окна.
+ * 2. Подменяем WndProc.
+ * 3. Windows создаёт taskbar button.
+ * 4. Получаем TaskbarButtonCreated.
+ * 5. Только после этого вызываем ITaskbarList3.
  */
 class WindowsTaskbarControls(
     private val scope: CoroutineScope,
@@ -58,7 +63,9 @@ class WindowsTaskbarControls(
     private var attached =
         false
 
-    @Volatile
+    private var taskbarReady =
+        false
+
     private var buttonsAdded =
         false
 
@@ -79,9 +86,8 @@ class WindowsTaskbarControls(
         null
 
     /**
-     * Strong reference обязателен:
-     * Windows продолжает вызывать этот callback,
-     * пока WndProc не будет восстановлен.
+     * Нужен strong reference, иначе JNA callback
+     * может быть собран GC.
      */
     private var windowProc:
             WinUser.WindowProc? =
@@ -93,6 +99,9 @@ class WindowsTaskbarControls(
     private var taskbarList:
             TaskbarList3? =
         null
+
+    private var comReady =
+        false
 
     private var comUninitializeNeeded =
         false
@@ -117,10 +126,9 @@ class WindowsTaskbarControls(
             Job? =
         null
 
-    private var addRetryJob:
-            Job? =
-        null
-
+    /**
+     * Вызывать ДО показа окна.
+     */
     fun attach(
         window: Window,
     ) {
@@ -156,17 +164,8 @@ class WindowsTaskbarControls(
             return
         }
 
-        addRetryJob
-            ?.cancel()
-
-        addRetryJob =
-            null
-
-        stateJob
-            ?.cancel()
-
-        stateJob =
-            null
+        stateJob?.cancel()
+        stateJob = null
 
         try {
             runOnAwtThread {
@@ -192,6 +191,14 @@ class WindowsTaskbarControls(
         }
 
         try {
+            /*
+             * Невидимое AWT Window может ещё не иметь native peer.
+             * addNotify() создаёт peer, но НЕ показывает окно.
+             */
+            if (!window.isDisplayable) {
+                window.addNotify()
+            }
+
             val windowPointer =
                 Native.getComponentPointer(
                     window,
@@ -227,10 +234,11 @@ class WindowsTaskbarControls(
                 )
             }
 
-            initializeCom()
-
-            createTaskbarList()
-
+            /*
+             * Здесь принципиально НЕ создаём ITaskbarList3.
+             *
+             * Сначала Windows обязана прислать TaskbarButtonCreated.
+             */
             loadIcons()
 
             installWindowProc()
@@ -240,15 +248,9 @@ class WindowsTaskbarControls(
 
             startPlayerStateSync()
 
-            if (
-                !tryAddButtons()
-            ) {
-                scheduleAddRetries()
-            }
-
             logger.info(
                 TAG,
-                "[attach] Taskbar integration подключена",
+                "[attach] HWND готов, ждём TaskbarButtonCreated",
             )
         } catch (error: Throwable) {
             releaseNativeResourcesOnAwtThread()
@@ -257,6 +259,62 @@ class WindowsTaskbarControls(
                 false
 
             throw error
+        }
+    }
+
+    /**
+     * Вызывается только после настоящего TaskbarButtonCreated.
+     */
+    private fun onTaskbarButtonCreated() {
+        if (
+            closed.get() ||
+            !attached
+        ) {
+            return
+        }
+
+        logger.info(
+            TAG,
+            "[taskbar] Получен TaskbarButtonCreated",
+        )
+
+        taskbarReady =
+            true
+
+        buttonsAdded =
+            false
+
+        appliedIsPlaying =
+            null
+
+        /*
+         * TaskbarButtonCreated может прийти повторно,
+         * например после перезапуска Explorer.
+         */
+        taskbarList
+            ?.let { taskbar ->
+                runCatching {
+                    taskbar.release()
+                }
+            }
+
+        taskbarList =
+            null
+
+        try {
+            if (!comReady) {
+                initializeCom()
+            }
+
+            createTaskbarList()
+
+            addButtons()
+        } catch (error: Throwable) {
+            logger.error(
+                TAG,
+                "[taskbar] Не удалось создать thumbnail toolbar",
+                error,
+            )
         }
     }
 
@@ -271,8 +329,11 @@ class WindowsTaskbarControls(
 
         when {
             result >= 0 -> {
+                comReady =
+                    true
+
                 /*
-                 * И S_OK, и S_FALSE требуют парный CoUninitialize().
+                 * И S_OK, и S_FALSE требуют CoUninitialize.
                  */
                 comUninitializeNeeded =
                     true
@@ -280,10 +341,14 @@ class WindowsTaskbarControls(
 
             result ==
                     RPC_E_CHANGED_MODE -> {
+
                 /*
-                 * AWT thread уже имеет другую COM apartment model.
-                 * Используем существующую.
+                 * AWT thread уже инициализирован
+                 * с другой apartment model.
                  */
+                comReady =
+                    true
+
                 comUninitializeNeeded =
                     false
             }
@@ -300,6 +365,12 @@ class WindowsTaskbarControls(
     }
 
     private fun createTaskbarList() {
+        check(
+            taskbarReady,
+        ) {
+            "ITaskbarList3 нельзя создавать до TaskbarButtonCreated"
+        }
+
         val resultPointer =
             PointerByReference()
 
@@ -354,6 +425,59 @@ class WindowsTaskbarControls(
 
         taskbarList =
             instance
+
+        logger.info(
+            TAG,
+            "[taskbar] ITaskbarList3 готов",
+        )
+    }
+
+    private fun addButtons() {
+        val currentTaskbarList =
+            taskbarList
+                ?: error(
+                    "ITaskbarList3 ещё не создан",
+                )
+
+        val currentHwnd =
+            hwnd
+                ?: error(
+                    "HWND ещё не создан",
+                )
+
+        val buttons =
+            createInitialButtons()
+
+        val result =
+            currentTaskbarList
+                .thumbBarAddButtons(
+                    hwnd =
+                        currentHwnd,
+                    buttons =
+                        buttons,
+                )
+
+        if (
+            result < 0
+        ) {
+            error(
+                "ThumbBarAddButtons failed: " +
+                        formatHResult(
+                            result,
+                        ),
+            )
+        }
+
+        buttonsAdded =
+            true
+
+        appliedIsPlaying =
+            latestIsPlaying
+
+        logger.info(
+            TAG,
+            "[toolbar] Previous / Play-Pause / Next добавлены",
+        )
     }
 
     private fun installWindowProc() {
@@ -431,6 +555,11 @@ class WindowsTaskbarControls(
                 "Не удалось subclass'нуть WndProc окна",
             )
         }
+
+        logger.info(
+            TAG,
+            "[attach] WndProc установлен",
+        )
     }
 
     private fun handleWindowMessage(
@@ -444,21 +573,7 @@ class WindowsTaskbarControls(
                 message ==
                 taskbarButtonCreatedMessage
             ) {
-                /*
-                 * Explorer мог перезапуститься:
-                 * тогда toolbar надо зарегистрировать заново.
-                 */
-                buttonsAdded =
-                    false
-
-                appliedIsPlaying =
-                    null
-
-                if (
-                    !tryAddButtons()
-                ) {
-                    scheduleAddRetries()
-                }
+                onTaskbarButtonCreated()
 
                 return callOriginalWindowProc(
                     hwnd =
@@ -576,118 +691,8 @@ class WindowsTaskbarControls(
         }
     }
 
-    private fun tryAddButtons():
-            Boolean {
-
-        if (
-            closed.get() ||
-            buttonsAdded
-        ) {
-            return buttonsAdded
-        }
-
-        val currentTaskbarList =
-            taskbarList
-                ?: return false
-
-        val currentHwnd =
-            hwnd
-                ?: return false
-
-        val buttons =
-            createInitialButtons()
-
-        val result =
-            currentTaskbarList
-                .thumbBarAddButtons(
-                    hwnd =
-                        currentHwnd,
-                    buttons =
-                        buttons,
-                )
-
-        if (
-            result < 0
-        ) {
-            return false
-        }
-
-        buttonsAdded =
-            true
-
-        appliedIsPlaying =
-            latestIsPlaying
-
-        logger.info(
-            TAG,
-            "[toolbar] Previous / Play-Pause / Next добавлены",
-        )
-
-        return true
-    }
-
-    private fun scheduleAddRetries() {
-        if (
-            closed.get() ||
-            buttonsAdded
-        ) {
-            return
-        }
-
-        addRetryJob
-            ?.cancel()
-
-        addRetryJob =
-            scope.launch {
-                repeat(
-                    ADD_RETRY_COUNT,
-                ) { attempt ->
-
-                    delay(
-                        ADD_RETRY_DELAY_MS,
-                    )
-
-                    if (
-                        closed.get() ||
-                        buttonsAdded
-                    ) {
-                        return@launch
-                    }
-
-                    try {
-                        runOnAwtThread {
-                            tryAddButtons()
-                        }
-                    } catch (error: Throwable) {
-                        logger.debug(
-                            TAG,
-                            "[toolbar] retry=${attempt + 1} failed: " +
-                                    error.message,
-                        )
-                    }
-
-                    if (
-                        buttonsAdded
-                    ) {
-                        return@launch
-                    }
-                }
-
-                if (
-                    !closed.get() &&
-                    !buttonsAdded
-                ) {
-                    logger.warning(
-                        TAG,
-                        "[toolbar] Не удалось добавить taskbar buttons после retries",
-                    )
-                }
-            }
-    }
-
     private fun startPlayerStateSync() {
-        stateJob
-            ?.cancel()
+        stateJob?.cancel()
 
         stateJob =
             scope.launch {
@@ -701,7 +706,8 @@ class WindowsTaskbarControls(
                             isPlaying
 
                         if (
-                            closed.get()
+                            closed.get() ||
+                            !buttonsAdded
                         ) {
                             return@collect
                         }
@@ -794,13 +800,12 @@ class WindowsTaskbarControls(
             latestIsPlaying
     }
 
+    /**
+     * Native-contiguous THUMBBUTTON[3].
+     */
     private fun createInitialButtons():
             Array<ThumbButton> {
 
-        /*
-         * toArray() создаёт contiguous native memory,
-         * чего требует ThumbBarAddButtons.
-         */
         val structures =
             ThumbButton()
                 .toArray(
@@ -1030,17 +1035,10 @@ class WindowsTaskbarControls(
             }
         }
 
-        previousIcon =
-            null
-
-        playIcon =
-            null
-
-        pauseIcon =
-            null
-
-        nextIcon =
-            null
+        previousIcon = null
+        playIcon = null
+        pauseIcon = null
+        nextIcon = null
     }
 
     private fun callOriginalWindowProc(
@@ -1136,6 +1134,9 @@ class WindowsTaskbarControls(
         buttonsAdded =
             false
 
+        taskbarReady =
+            false
+
         appliedIsPlaying =
             null
 
@@ -1158,10 +1159,13 @@ class WindowsTaskbarControls(
                 Ole32.INSTANCE
                     .CoUninitialize()
             }
-
-            comUninitializeNeeded =
-                false
         }
+
+        comReady =
+            false
+
+        comUninitializeNeeded =
+            false
 
         hwnd =
             null
@@ -1209,14 +1213,6 @@ class WindowsTaskbarControls(
 
     /**
      * Минимальный wrapper ITaskbarList3.
-     *
-     * COM vtable:
-     *  0 QueryInterface
-     *  1 AddRef
-     *  2 Release
-     *  3 HrInit
-     * 15 ThumbBarAddButtons
-     * 16 ThumbBarUpdateButtons
      */
     private class TaskbarList3(
         pointer: Pointer,
@@ -1276,9 +1272,6 @@ class WindowsTaskbarControls(
         }
     }
 
-    /**
-     * Win32 THUMBBUTTON.
-     */
     @Structure.FieldOrder(
         "dwMask",
         "iId",
@@ -1287,7 +1280,7 @@ class WindowsTaskbarControls(
         "szTip",
         "dwFlags",
     )
-    private class ThumbButton :
+    class ThumbButton :
         Structure() {
 
         @JvmField
@@ -1350,13 +1343,6 @@ class WindowsTaskbarControls(
         const val TAG =
             "WindowsTaskbarControls"
 
-        /*
-         * Win32 message.
-         *
-         * JNA 5.14.0 не предоставляет его здесь
-         * в удобном для Kotlin виде, поэтому фиксируем
-         * официальный Win32 numeric value.
-         */
         const val WM_COMMAND =
             0x0111
 
@@ -1422,12 +1408,6 @@ class WindowsTaskbarControls(
 
         const val SM_CYICON =
             12
-
-        const val ADD_RETRY_COUNT =
-            20
-
-        const val ADD_RETRY_DELAY_MS =
-            250L
 
         const val ICON_PREVIOUS_BASE64 =
             "AAABAAEAICAAAAAAIAAkAgAAFgAAAIlQTkcNChoKAAAADUlIRFIAAAAgAAAAIAgGAAAAc3p69AAAAetJREFUeJztlr2KFEEQgL+aXU9N/EMEDUVEMBLRTOFAUO8JvIcwEyMDBVNBMDO4TLg3OB9CxODAN9DM6AI5d+Yz2Fpm7tzbnd710GALhqmZ7qr6uqu7umElK/nfRQ01/lnwaXpfW7X6GxDnSx2pg2l6iYNKHaof1B/qJ/XyvHSkXZX6GfW9ul4EMgmgXlB/2sqDoxwl2LDz/UT9mnYzAYbTfk78AHvAWuqjI4AHEVEDI/U68BZ4nM317OHOBgCogOg83cABVBFRq2vAc+AZcDYD28P//A7TpDPqWn0IvAFuZnMNDICmj6/S1V3RjvqKugV8zOAjxqMuWvUlMxAR0QCN+hR4AVzKoL2me1mAX+p94DVwL/+N0sfClbIkBQ1wDbiT33Wh/dIAJyNiC7gKbDPOdUW74o8dQLWKiO8RsQlsALsJEvTY88sCEBFNlugqInaA28ArYJ926xXNxiI5NEEGEbEfES8TZIe2cE2tmosA2HkfGFnWgkiQ3YjYADaBb7S7a24xmgUQjM+BJvUTf3SIMEGqTMs2cAt4x3gWqj4QB2Ry5Kqn1S95ou2pN7L9SOhD94C76mf10eG2XhD5vqiu5ynX61Y0SUvqp9RzfW17QRX077XAZzqdHLnkyi8B6NgTEQsXqpWs5NjlN9sFTPWBxTg0AAAAAElFTkSuQmCC"

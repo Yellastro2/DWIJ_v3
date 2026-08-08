@@ -2,6 +2,10 @@ package com.yellastrodev.dwij.desktop
 
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.DisposableEffect
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.window.Window
@@ -75,14 +79,6 @@ fun main() {
                 runtime.paths,
         )
 
-    /*
-     * Windows thumbnail toolbar:
-     *
-     * Previous | Play/Pause | Next
-     *
-     * Никакой отдельной playback-логики здесь нет:
-     * используем существующий PlayerRepository.
-     */
     val taskbarControls =
         WindowsTaskbarControls(
             scope =
@@ -126,17 +122,28 @@ fun main() {
                         .dp,
             )
 
+        /*
+         * Сначала создаём native Window невидимым.
+         *
+         * Так WindowsTaskbarControls успевает установить WndProc
+         * ДО появления taskbar button и не пропускает
+         * TaskbarButtonCreated.
+         */
+        var windowVisible by
+        remember {
+            mutableStateOf(
+                false,
+            )
+        }
+
         Window(
             onCloseRequest = {
                 /*
-                 * Сначала возвращаем исходный WndProc,
-                 * пока native Window ещё существует.
+                 * Сначала восстанавливаем исходный WndProc,
+                 * пока HWND ещё существует.
                  */
                 taskbarControls.close()
 
-                /*
-                 * Сохраняем размер окна как и раньше.
-                 */
                 runtime.settingsStore.edit {
                     putLong(
                         WINDOW_WIDTH_KEY,
@@ -158,8 +165,7 @@ fun main() {
                 }
 
                 /*
-                 * Runtime отдельно сохраняет volume
-                 * и закрывает PlayerEngine/SMTC.
+                 * Сохраняет volume и закрывает playback/SMTC.
                  */
                 runtime.close()
 
@@ -167,6 +173,8 @@ fun main() {
             },
             state =
                 windowState,
+            visible =
+                windowVisible,
             title =
                 "DWIJ",
             resizable =
@@ -176,16 +184,24 @@ fun main() {
                     Res.drawable.dwij,
                 ),
         ) {
-            /*
-             * Здесь ComposeWindow уже реально создан,
-             * поэтому JNA может получить его HWND.
-             */
             DisposableEffect(
                 window,
             ) {
+                /*
+                 * Устанавливаем WndProc пока окно ещё hidden.
+                 */
                 taskbarControls.attach(
                     window,
                 )
+
+                /*
+                 * Теперь можно показать окно.
+                 *
+                 * Windows создаст taskbar button и пришлёт
+                 * TaskbarButtonCreated уже нашему WndProc.
+                 */
+                windowVisible =
+                    true
 
                 onDispose {
                     taskbarControls.close()
