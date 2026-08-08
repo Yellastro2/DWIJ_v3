@@ -87,6 +87,13 @@ dependencies {
     implementation(
         "org.openjfx:javafx-media:17.0.19:win",
     )
+    implementation(
+        "io.github.selemba1000:JavaMediaTransportControls:0.0.3",
+    )
+
+    implementation(
+        "net.java.dev.jna:jna:5.14.0",
+    )
 }
 
 compose.desktop {

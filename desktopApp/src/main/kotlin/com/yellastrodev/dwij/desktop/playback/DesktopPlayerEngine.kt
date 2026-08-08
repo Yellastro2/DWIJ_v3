@@ -12,6 +12,7 @@ import com.yellastrodev.yandexmusiclib.YamLogger
 import javafx.scene.media.Media
 import javafx.scene.media.MediaPlayer
 import javafx.util.Duration
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharedFlow
@@ -20,23 +21,26 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
+import java.io.File
 import kotlin.random.Random
 
 /**
- * Первый JVM/Windows backend общего [PlayerEngine].
+ * JVM/Windows backend общего [PlayerEngine].
  *
- * Использует JavaFX Media только как платформенный декодер/вывод звука.
- * Очередь и публичное состояние остаются в тех же shared-моделях, что Android.
- *
- * Дополнительно реализует [PlayerVolumeControl], потому что desktop-версии
- * нужен собственный регулятор громкости приложения.
+ * JavaFX MediaPlayer отвечает за реальное воспроизведение.
+ * WindowsMediaSession публикует состояние в Windows SMTC
+ * и принимает системные media commands.
  */
 class DesktopPlayerEngine(
     private val scope: CoroutineScope,
     private val logger: YamLogger,
-    initialVolume: Float,
+    initialVolume: Float = DEFAULT_VOLUME,
     private val resolveUri:
     suspend (String) -> String,
+    private val resolveArtworkFile:
+    suspend (PlaybackTrack) -> File? = {
+        null
+    },
 ) : PlayerEngine,
     PlayerVolumeControl {
 
@@ -63,12 +67,6 @@ class DesktopPlayerEngine(
             StateFlow<Float> =
         volumeState
 
-    /**
-     * Последняя ненулевая громкость.
-     *
-     * Нужна, чтобы mute -> unmute возвращал прежнее значение,
-     * а не всегда 100%.
-     */
     private var lastAudibleVolume =
         volumeState.value
             .takeIf {
@@ -96,8 +94,47 @@ class DesktopPlayerEngine(
     private var repeatMode =
         RepeatMode.OFF
 
+    @Volatile
+    private var currentTrackInstanceId:
+            String? =
+        null
+
+    @Volatile
+    private var lastWindowsPositionUpdateNanos =
+        0L
+
+    private val windowsMediaSession =
+        WindowsMediaSession(
+            scope =
+                scope,
+            logger =
+                logger,
+            onPlayRequest = {
+                if (!state.value.isPlaying) {
+                    togglePlayPause()
+                }
+            },
+            onPauseRequest = {
+                if (state.value.isPlaying) {
+                    togglePlayPause()
+                }
+            },
+            onNextRequest = {
+                skipNext()
+            },
+            onPreviousRequest = {
+                skipPrevious()
+            },
+            onSeekRequest = { positionMs ->
+                seekTo(
+                    positionMs,
+                )
+            },
+        )
+
     override suspend fun prepare() {
         JavaFxRuntime.ensureStarted()
+        windowsMediaSession.prepare()
     }
 
     override suspend fun setQueue(
@@ -130,9 +167,7 @@ class DesktopPlayerEngine(
         tracklist: dTracklist?,
     ) {
         commandMutex.withLock {
-            if (
-                tracks.isNotEmpty()
-            ) {
+            if (tracks.isNotEmpty()) {
                 queue =
                     queue + tracks
             }
@@ -143,9 +178,7 @@ class DesktopPlayerEngine(
         index: Int,
     ) {
         commandMutex.withLock {
-            if (
-                index !in queue.indices
-            ) {
+            if (index !in queue.indices) {
                 return
             }
 
@@ -208,16 +241,33 @@ class DesktopPlayerEngine(
     override suspend fun seekTo(
         positionMs: Long,
     ) {
-        JavaFxRuntime.call {
-            currentPlayer?.seek(
-                Duration.millis(
-                    positionMs
-                        .coerceAtLeast(
-                            0L,
-                        )
-                        .toDouble(),
-                ),
+        val safePosition =
+            positionMs.coerceAtLeast(
+                0L,
             )
+
+        val didSeek =
+            JavaFxRuntime.call {
+                val player =
+                    currentPlayer
+                        ?: return@call false
+
+                player.seek(
+                    Duration.millis(
+                        safePosition.toDouble(),
+                    ),
+                )
+
+                true
+            }
+
+        if (didSeek) {
+            windowsMediaSession.setPosition(
+                safePosition,
+            )
+
+            lastWindowsPositionUpdateNanos =
+                System.nanoTime()
         }
     }
 
@@ -239,14 +289,10 @@ class DesktopPlayerEngine(
             mode
 
         stateStore.setRepeatAll(
-            mode ==
-                    RepeatMode.ALL,
+            mode == RepeatMode.ALL,
         )
     }
 
-    /**
-     * Меняет громкость только DWIJ, не системную громкость Windows.
-     */
     override fun setVolume(
         volume: Float,
     ) {
@@ -273,9 +319,6 @@ class DesktopPlayerEngine(
         }
     }
 
-    /**
-     * Переключает mute с восстановлением последней ненулевой громкости.
-     */
     override fun toggleMute() {
         val targetVolume =
             if (
@@ -292,15 +335,17 @@ class DesktopPlayerEngine(
         )
     }
 
-    /**
-     * Освобождает JavaFX MediaPlayer при завершении desktop-процесса.
-     */
     fun close() {
+        currentTrackInstanceId =
+            null
+
         runBlocking {
             JavaFxRuntime.call {
                 disposeCurrentPlayer()
             }
         }
+
+        windowsMediaSession.close()
     }
 
     private suspend fun startTrackLocked(
@@ -335,60 +380,123 @@ class DesktopPlayerEngine(
                 return
             }
 
-        JavaFxRuntime.call {
-            disposeCurrentPlayer()
+        currentTrackInstanceId =
+            track.instanceId
 
-            currentIndex =
-                index
+        val newPlayer =
+            JavaFxRuntime.call {
+                disposeCurrentPlayer()
 
-            stateStore.setPlayback(
-                isPlaying =
-                    false,
                 currentIndex =
-                    index,
-            )
+                    index
 
-            stateStore.setProgress(
-                positionMs =
-                    0L,
-                durationMs =
-                    track.durationMs
-                        ?: 0L,
-            )
-
-            val media =
-                Media(
-                    resolvedUri,
+                stateStore.setPlayback(
+                    isPlaying =
+                        false,
+                    currentIndex =
+                        index,
                 )
 
-            val player =
-                MediaPlayer(
-                    media,
+                stateStore.setProgress(
+                    positionMs =
+                        0L,
+                    durationMs =
+                        track.durationMs
+                            ?: 0L,
                 )
+
+                val media =
+                    Media(
+                        resolvedUri,
+                    )
+
+                val player =
+                    MediaPlayer(
+                        media,
+                    )
+
+                player.volume =
+                    volumeState.value
+                        .toDouble()
+
+                currentPlayer =
+                    player
+
+                installCallbacks(
+                    player =
+                        player,
+                    index =
+                        index,
+                )
+
+                player
+            }
+
+        windowsMediaSession.setTrack(
+            track,
+        )
+
+        requestWindowsArtwork(
+            track,
+        )
+
+        lastWindowsPositionUpdateNanos =
+            0L
+
+        if (autoPlay) {
+            JavaFxRuntime.call {
+                if (
+                    currentPlayer ===
+                    newPlayer
+                ) {
+                    newPlayer.play()
+                }
+            }
+        }
+    }
+
+    private fun requestWindowsArtwork(
+        track: PlaybackTrack,
+    ) {
+        scope.launch {
+            val artworkFile =
+                try {
+                    resolveArtworkFile(
+                        track,
+                    )
+                } catch (
+                    error: CancellationException,
+                ) {
+                    throw error
+                } catch (error: Exception) {
+                    logger.error(
+                        TAG,
+                        "[artwork] Не удалось получить обложку " +
+                                "instanceId=${track.instanceId}",
+                        error,
+                    )
+
+                    null
+                }
+                    ?: return@launch
 
             /*
-             * MediaPlayer создаётся заново для каждого трека.
-             *
-             * Поэтому обязательно восстанавливаем громкость
-             * до начала воспроизведения.
+             * Пока обложка грузилась/читалась из кэша,
+             * пользователь уже мог переключить трек.
              */
-            player.volume =
-                volumeState.value
-                    .toDouble()
-
-            currentPlayer =
-                player
-
-            installCallbacks(
-                player =
-                    player,
-                index =
-                    index,
-            )
-
-            if (autoPlay) {
-                player.play()
+            if (
+                currentTrackInstanceId !=
+                track.instanceId
+            ) {
+                return@launch
             }
+
+            windowsMediaSession.setArtwork(
+                trackInstanceId =
+                    track.instanceId,
+                file =
+                    artworkFile,
+            )
         }
     }
 
@@ -404,14 +512,30 @@ class DesktopPlayerEngine(
                 return@setOnReady
             }
 
+            val positionMs =
+                player.currentTime
+                    .toMillisSafe()
+
+            val durationMs =
+                player.totalDuration
+                    .toMillisSafe()
+
             stateStore.setProgress(
                 positionMs =
-                    player.currentTime
-                        .toMillisSafe(),
+                    positionMs,
                 durationMs =
-                    player.totalDuration
-                        .toMillisSafe(),
+                    durationMs,
             )
+
+            windowsMediaSession.setTimeline(
+                durationMs =
+                    durationMs,
+                positionMs =
+                    positionMs,
+            )
+
+            lastWindowsPositionUpdateNanos =
+                System.nanoTime()
         }
 
         player.setOnPlaying {
@@ -419,6 +543,10 @@ class DesktopPlayerEngine(
                 currentPlayer === player
             ) {
                 stateStore.setPlaying(
+                    true,
+                )
+
+                windowsMediaSession.setPlaying(
                     true,
                 )
             }
@@ -431,6 +559,10 @@ class DesktopPlayerEngine(
                 stateStore.setPlaying(
                     false,
                 )
+
+                windowsMediaSession.setPlaying(
+                    false,
+                )
             }
         }
 
@@ -439,6 +571,10 @@ class DesktopPlayerEngine(
                 currentPlayer === player
             ) {
                 stateStore.setPlaying(
+                    false,
+                )
+
+                windowsMediaSession.setPlaying(
                     false,
                 )
             }
@@ -454,13 +590,23 @@ class DesktopPlayerEngine(
                 if (
                     currentPlayer === player
                 ) {
+                    val positionMs =
+                        currentTime
+                            .toMillisSafe()
+
+                    val durationMs =
+                        player.totalDuration
+                            .toMillisSafe()
+
                     stateStore.setProgress(
                         positionMs =
-                            currentTime
-                                .toMillisSafe(),
+                            positionMs,
                         durationMs =
-                            player.totalDuration
-                                .toMillisSafe(),
+                            durationMs,
+                    )
+
+                    maybeUpdateWindowsPosition(
+                        positionMs,
                     )
                 }
             }
@@ -497,6 +643,10 @@ class DesktopPlayerEngine(
                 error,
             )
 
+            windowsMediaSession.setPlaying(
+                false,
+            )
+
             scope.launch {
                 stateStore.emit(
                     PlayerEvent.ShowError(
@@ -507,6 +657,31 @@ class DesktopPlayerEngine(
                 skipNext()
             }
         }
+    }
+
+    private fun maybeUpdateWindowsPosition(
+        positionMs: Long,
+    ) {
+        val now =
+            System.nanoTime()
+
+        val previous =
+            lastWindowsPositionUpdateNanos
+
+        if (
+            previous != 0L &&
+            now - previous <
+            WINDOWS_POSITION_UPDATE_INTERVAL_NANOS
+        ) {
+            return
+        }
+
+        lastWindowsPositionUpdateNanos =
+            now
+
+        windowsMediaSession.setPosition(
+            positionMs,
+        )
     }
 
     private suspend fun handleTrackEnded(
@@ -530,6 +705,10 @@ class DesktopPlayerEngine(
                     false,
                 )
 
+                windowsMediaSession.setPlaying(
+                    false,
+                )
+
                 stateStore.emit(
                     PlayerEvent.TrackListEnd(
                         "Playlist finished",
@@ -548,7 +727,9 @@ class DesktopPlayerEngine(
         }
     }
 
-    private fun nextIndex(): Int? {
+    private fun nextIndex():
+            Int? {
+
         if (
             queue.isEmpty() ||
             currentIndex !in queue.indices
@@ -589,7 +770,9 @@ class DesktopPlayerEngine(
         }
     }
 
-    private fun previousIndex(): Int? {
+    private fun previousIndex():
+            Int? {
+
         if (
             queue.isEmpty() ||
             currentIndex !in queue.indices
@@ -640,7 +823,9 @@ class DesktopPlayerEngine(
             null
     }
 
-    private fun Duration?.toMillisSafe(): Long {
+    private fun Duration?.toMillisSafe():
+            Long {
+
         if (
             this == null ||
             isUnknown ||
@@ -650,7 +835,9 @@ class DesktopPlayerEngine(
         }
 
         return toMillis()
-            .takeIf(Double::isFinite)
+            .takeIf(
+                Double::isFinite,
+            )
             ?.coerceAtLeast(
                 0.0,
             )
@@ -671,5 +858,8 @@ class DesktopPlayerEngine(
 
         const val DEFAULT_VOLUME =
             1f
+
+        const val WINDOWS_POSITION_UPDATE_INTERVAL_NANOS =
+            2_000_000_000L
     }
 }

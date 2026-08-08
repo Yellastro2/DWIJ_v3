@@ -4,14 +4,15 @@ import androidx.room.Room
 import com.yellastrodev.dwij.data.db.DwijDatabase
 import com.yellastrodev.dwij.data.db.buildDwijDatabase
 import com.yellastrodev.dwij.desktop.data.source.DesktopLocalMediaSource
+import com.yellastrodev.dwij.desktop.playback.DesktopMediaArtworkProvider
 import com.yellastrodev.dwij.desktop.playback.DesktopPlayerEngine
 import com.yellastrodev.dwij.di.DwijComponent
 import com.yellastrodev.dwij.playback.PlaybackUriResolver
 import com.yellastrodev.dwij.playback.PlayerVolumeControl
-import com.yellastrodev.dwij.storage.LocalKeyValueStore
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
+import kotlin.math.roundToLong
 
 /**
  * Собранный Windows runtime вокруг общего DwijComponent.
@@ -20,14 +21,12 @@ class DesktopRuntime private constructor(
     val component: DwijComponent,
     val applicationScope: CoroutineScope,
     val paths: DesktopPaths,
-    val settingsStore: LocalKeyValueStore,
+    val settingsStore: DesktopLocalKeyValueStore,
     private val playerEngine: DesktopPlayerEngine,
 ) {
 
     /**
-     * Опциональная desktop-возможность управления громкостью приложения.
-     *
-     * Наружу отдаётся интерфейс, а не конкретный JavaFX backend.
+     * Desktop-only управление громкостью DWIJ.
      */
     val playerVolumeControl:
             PlayerVolumeControl
@@ -35,7 +34,7 @@ class DesktopRuntime private constructor(
             playerEngine
 
     /**
-     * Освобождает платформенный audio backend.
+     * Сохраняет desktop-only состояние и освобождает playback backend.
      */
     fun close() {
         settingsStore.edit {
@@ -44,7 +43,7 @@ class DesktopRuntime private constructor(
                 (
                         playerEngine.volume.value *
                                 VOLUME_STORAGE_SCALE
-                        ).toLong(),
+                        ).roundToLong(),
             )
         }
 
@@ -53,10 +52,21 @@ class DesktopRuntime private constructor(
 
     companion object {
 
+        private const val PLAYER_VOLUME_KEY =
+            "desktop.player.volume"
+
+        private const val VOLUME_STORAGE_SCALE =
+            1000f
+
+        private const val DEFAULT_PLAYER_VOLUME =
+            1f
+
         /**
          * Собирает desktop-аналоги AndroidDwijComponentFactory/yApplication.
          */
-        fun create(): DesktopRuntime {
+        fun create():
+                DesktopRuntime {
+
             val paths =
                 DesktopPaths.create()
 
@@ -83,6 +93,12 @@ class DesktopRuntime private constructor(
                     paths.settingsFile,
                 )
 
+            /*
+             * Восстанавливаем громкость до создания PlayerEngine,
+             * чтобы первый MediaPlayer сразу получил нужное значение.
+             *
+             * В settings.properties хранится 0..1000.
+             */
             val initialVolume =
                 localKeyValueStore
                     .getLong(
@@ -98,14 +114,36 @@ class DesktopRuntime private constructor(
                     )
                     ?: DEFAULT_PLAYER_VOLUME
 
+            /*
+             * PlayerEngine создаётся раньше DwijComponent.
+             *
+             * Его callbacks resolveUri/resolveArtworkFile вызываются
+             * только после создания component, при реальном
+             * воспроизведении трека.
+             */
             lateinit var component:
                     DwijComponent
 
             /*
-             * Resolver требует TrackCacheRepository из уже собранного component.
-             * Lambda будет вызвана только при первом реальном воспроизведении,
-             * поэтому component к этому моменту уже присвоен.
+             * Используем уже существующие CoverRepository и CacheManager.
+             *
+             * Благодаря lazy они не потребуются до того,
+             * как component будет полностью создан.
              */
+            val artworkProvider by lazy {
+                DesktopMediaArtworkProvider(
+                    coverRepository =
+                        component
+                            .coverRepository,
+                    coverCacheDirectory =
+                        paths
+                            .coverCacheDirectory,
+                    cacheManager =
+                        component
+                            .cacheManager,
+                )
+            }
+
             val playerEngine =
                 DesktopPlayerEngine(
                     scope =
@@ -120,6 +158,11 @@ class DesktopRuntime private constructor(
                                 .trackCacheRepo,
                         ).resolve(
                             uri,
+                        )
+                    },
+                    resolveArtworkFile = { track ->
+                        artworkProvider.resolve(
+                            track,
                         )
                     },
                 )
@@ -173,14 +216,5 @@ class DesktopRuntime private constructor(
                     playerEngine,
             )
         }
-
-        private const val PLAYER_VOLUME_KEY =
-            "desktop.player.volume"
-
-        private const val VOLUME_STORAGE_SCALE =
-            1000f
-
-        private const val DEFAULT_PLAYER_VOLUME =
-            1f
     }
 }
