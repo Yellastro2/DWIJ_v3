@@ -124,7 +124,7 @@ compose.desktop {
                 "DWIJ"
 
             packageVersion =
-                "0.1.1"
+                "0.1.2"
 
             description =
                 "DWIJ desktop prototype"

@@ -2,7 +2,9 @@ package com.yellastrodev.dwij.playback
 
 import android.content.Context
 import android.content.Intent
-import androidx.annotation.OptIn
+import android.util.Log
+import androidx.media3.common.MediaItem
+import androidx.media3.common.Player
 
 import com.yellastrodev.dwij.data.entities.PlaybackTrack
 import com.yellastrodev.dwij.data.entities.dTracklist
@@ -38,6 +40,19 @@ class AndroidPlayerEngine(
     private var service: PlayerService? = null
 
     /**
+     * Последняя очередь хранится в application-scoped engine и переживает
+     * уничтожение отдельного экземпляра PlayerService.
+     */
+    @Volatile
+    private var playbackSnapshot: PlaybackSnapshot? = null
+
+    @Volatile
+    private var shuffleEnabled = false
+
+    @Volatile
+    private var repeatMode = Player.REPEAT_MODE_OFF
+
+    /**
      * Не даёт двум одновременным вызовам prepare()
      * параллельно запускать сервис и создавать двойные подписки.
      */
@@ -58,6 +73,12 @@ class AndroidPlayerEngine(
 
     private val mutableEvents = MutableSharedFlow<PlayerEvent>()
     override val events: SharedFlow<PlayerEvent> = mutableEvents.asSharedFlow()
+
+    init {
+        serviceRegistry.setServiceAttachedListener(
+            ::restoreSnapshotIfNeeded,
+        )
+    }
 
     override suspend fun prepare() {
         prepareMutex.withLock {
@@ -106,6 +127,30 @@ class AndroidPlayerEngine(
         }
     }
 
+    private fun restoreSnapshotIfNeeded(
+        playerService: PlayerService,
+    ) {
+        val snapshot = playbackSnapshot ?: return
+        val currentState = mutableState.value
+
+        playerService.restoreQueue(
+            tracks = snapshot.items,
+            startIndex = currentState.currentIndex,
+            startPositionMs = currentState.currentPosition,
+            durationMs = currentState.duration,
+            shuffleEnabled = shuffleEnabled,
+            repeatMode = repeatMode,
+        )
+
+        Log.d(
+            TAG,
+            "[restoreSnapshotIfNeeded] Состояние передано новому сервису: " +
+                    "size=${snapshot.items.size}, " +
+                    "index=${currentState.currentIndex}, " +
+                    "positionMs=${currentState.currentPosition}",
+        )
+    }
+
     private fun startPlayerService() {
         val intent = Intent(
             applicationContext,
@@ -146,6 +191,12 @@ class AndroidPlayerEngine(
 
         stateSubscriptionJob = playerService.state
             .onEach { playerState ->
+                shuffleEnabled = playerState.isShuffle
+                repeatMode = if (playerState.isRepeatAll) {
+                    Player.REPEAT_MODE_ALL
+                } else {
+                    Player.REPEAT_MODE_OFF
+                }
                 mutableState.value = playerState
             }
             .launchIn(scope)
@@ -181,6 +232,10 @@ class AndroidPlayerEngine(
             )
         }
 
+        playbackSnapshot = PlaybackSnapshot(
+            items = mediaItems,
+        )
+
         withContext(Dispatchers.Main) {
             requireNotNull(service).playQueue(
                 tracks = mediaItems,
@@ -201,6 +256,10 @@ class AndroidPlayerEngine(
                 tracklist = tracklist,
             )
         }
+
+        playbackSnapshot = PlaybackSnapshot(
+            items = playbackSnapshot?.items.orEmpty() + mediaItems,
+        )
 
         withContext(Dispatchers.Main) {
             requireNotNull(service).addTracks(mediaItems)
@@ -250,6 +309,8 @@ class AndroidPlayerEngine(
     override suspend fun setShuffleEnabled(enabled: Boolean) {
         prepare()
 
+        shuffleEnabled = enabled
+
         withContext(Dispatchers.Main) {
             requireNotNull(service)
                 .player
@@ -260,20 +321,24 @@ class AndroidPlayerEngine(
     override suspend fun setRepeatMode(mode: RepeatMode) {
         prepare()
 
+        repeatMode = when (mode) {
+            RepeatMode.OFF -> Player.REPEAT_MODE_OFF
+            RepeatMode.ALL -> Player.REPEAT_MODE_ALL
+        }
+
         withContext(Dispatchers.Main) {
             requireNotNull(service)
                 .player
-                .repeatMode = when (mode) {
-                RepeatMode.OFF ->
-                    androidx.media3.common.Player.REPEAT_MODE_OFF
-
-                RepeatMode.ALL ->
-                    androidx.media3.common.Player.REPEAT_MODE_ALL
-            }
+                .repeatMode = repeatMode
         }
     }
 
+    private data class PlaybackSnapshot(
+        val items: List<MediaItem>,
+    )
+
     private companion object {
+        const val TAG = "AndroidPlayerEngine"
         const val SERVICE_CHECK_DELAY_MS = 100L
     }
 }

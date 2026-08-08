@@ -86,6 +86,14 @@ class AndroidPlaybackFeedbackAdapter(
             null
         }
 
+        val isYandexAvailable = if (
+            extras?.containsKey(PlaybackMetadataKeys.YANDEX_AVAILABLE) == true
+        ) {
+            extras.getBoolean(PlaybackMetadataKeys.YANDEX_AVAILABLE)
+        } else {
+            null
+        }
+
         return PlaybackFeedbackMetadata(
             trackId = mediaId,
             itemId = extras
@@ -98,6 +106,7 @@ class AndroidPlaybackFeedbackAdapter(
                 ?: ANDROID_PLAYBACK_REPORT_SOURCE,
             durationMs = metadataDurationMs,
             musicSource = musicSource,
+            isYandexAvailable = isYandexAvailable,
         )
     }
 

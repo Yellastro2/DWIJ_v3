@@ -35,7 +35,10 @@ class AndroidPlayerListener(
             durationMs = player.duration,
         )
 
-        if (reason == Player.MEDIA_ITEM_TRANSITION_REASON_AUTO) {
+        if (
+            mediaItem != null &&
+            player.currentMediaItemIndex != C.INDEX_UNSET
+        ) {
             stateStore.setCurrentIndex(player.currentMediaItemIndex)
         }
 

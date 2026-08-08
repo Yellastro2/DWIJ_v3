@@ -62,6 +62,27 @@ fun DwijApp(
 
     val coroutineScope = rememberCoroutineScope()
 
+    val globalInputModifier =
+        platform.globalInputModifier(
+            hasActiveTrack =
+                track != null,
+            onPlayPause =
+                playerModel::playAudio,
+            onPrevious = {
+                coroutineScope.launch {
+                    playerModel.prevTrack()
+                }
+            },
+            onNext = {
+                coroutineScope.launch {
+                    playerModel.nextTrack()
+                }
+            },
+            onBack = {
+                navController.navigateUp()
+            },
+        )
+
     var compactCover by remember(
         track?.id,
         playbackTrack?.instanceId,
@@ -96,6 +117,7 @@ fun DwijApp(
 
     Scaffold(
         modifier = modifier
+            .then(globalInputModifier)
             .fillMaxSize()
             .background(DwijColors.Background),
         containerColor = DwijColors.Background,

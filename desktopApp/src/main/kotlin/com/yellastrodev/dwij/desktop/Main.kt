@@ -171,6 +171,8 @@ fun main() {
 
                 exitApplication()
             },
+            onKeyEvent =
+                platform::handleWindowKeyEvent,
             state =
                 windowState,
             visible =

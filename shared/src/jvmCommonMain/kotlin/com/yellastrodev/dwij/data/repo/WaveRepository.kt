@@ -169,7 +169,12 @@ class WaveRepository(
                     ?.takeIf { track -> track.source == MusicSource.YANDEX }
                     ?.yandexTrack
                     ?.id
-                val shouldSendCurrentFeedback = currentId != null && !isTrackCached(currentId)
+                val isUnavailableCached =
+                    currentId != null &&
+                        playbackTrack?.yandexTrack?.available == false &&
+                        isTrackCached(currentId)
+                val shouldSendCurrentFeedback =
+                    currentId != null && !isUnavailableCached
 
                 // обновляем позицию для текущего трека
                 if (currentId == lastTrackId) {
@@ -204,7 +209,12 @@ class WaveRepository(
             if (sendFeedback) {
                 remote.sendTrackStarted(it, trackId)
             } else {
-                logger.debug(TAG, "[onTrackStarted] Rotor feedback пропущен: трек в кэше")
+                logger.debug(
+                    TAG,
+                    "[onTrackStarted] Rotor feedback пропущен: " +
+                        "трек недоступен в ЯМ и находится в кэше, " +
+                        "trackId=$trackId",
+                )
             }
             // Следующую пачку запрашиваем при старте последнего трека очереди.
             if (it.tracks.lastOrNull()?.id == trackId) {
@@ -231,12 +241,37 @@ class WaveRepository(
         val result = remote.getNextTracks(wave, lastTrackId)
         when(result){
             is YamResult.Success -> {
-                val dTracks = result.value.tracks.map { tr -> tr.toEntity() }
+                wave.batchId = result.value.batchId
+
+                val knownTrackIds = wave.tracks
+                    .mapTo(mutableSetOf(), TrackShort::id)
+                val uniqueTracks = result.value.tracks.filter { track ->
+                    knownTrackIds.add(track.id)
+                }
+                val duplicateCount =
+                    result.value.tracks.size - uniqueTracks.size
+
+                if (duplicateCount > 0) {
+                    logger.warning(
+                        TAG,
+                        "[updateWave] Отфильтровано повторов=$duplicateCount, " +
+                            "получено=${result.value.tracks.size}",
+                    )
+                }
+
+                if (uniqueTracks.isEmpty()) {
+                    logger.warning(
+                        TAG,
+                        "[updateWave] Новая партия не содержит уникальных треков",
+                    )
+                    return
+                }
+
+                val dTracks = uniqueTracks.map { tr -> tr.toEntity() }
                 trackRepository.putTracks(dTracks)
                 val songs = songRepository.songsForYandexTracks(dTracks)
-                wave.batchId = result.value.batchId
                 wave.tracks = wave.tracks +
-                    result.value.tracks.map { TrackShort(it.id) }
+                    uniqueTracks.map { TrackShort(it.id) }
                 playerRepository.addTracks(songs)
                 logger.debug(TAG, "updateWave: ${wave.tracks.size}")
             }

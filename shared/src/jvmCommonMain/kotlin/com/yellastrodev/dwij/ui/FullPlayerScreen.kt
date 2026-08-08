@@ -744,15 +744,49 @@ private fun FullPlayerProgress(
  * LocalPlayerVolumeControl.current != null.
  */
 @Composable
-private fun PlayerVolumeButton(
+internal fun PlayerVolumeButton(
     volume: Float,
     onVolumeChange: (Float) -> Unit,
+    modifier: Modifier = Modifier,
 ) {
     var popupVisible by
     remember {
         mutableStateOf(
             false,
         )
+    }
+
+    /*
+     * Увеличивается при каждом взаимодействии с громкостью.
+     * Используется как ключ LaunchedEffect, чтобы заново запускать
+     * таймер автоскрытия.
+     */
+    var popupInteractionVersion by
+    remember {
+        mutableStateOf(
+            0,
+        )
+    }
+
+    /*
+     * Popup автоматически закрывается через 3 секунды
+     * после последнего взаимодействия.
+     *
+     * Изменение popupInteractionVersion отменяет предыдущий
+     * LaunchedEffect и запускает новый отсчёт.
+     */
+    LaunchedEffect(
+        popupVisible,
+        popupInteractionVersion,
+    ) {
+        if (!popupVisible) {
+            return@LaunchedEffect
+        }
+
+        delay(3_000L)
+
+        popupVisible =
+            false
     }
 
     val popupHeight =
@@ -781,12 +815,20 @@ private fun PlayerVolumeButton(
         contentAlignment =
             Alignment.Center,
         modifier =
-            Modifier.size(34.dp),
+            modifier.size(34.dp),
     ) {
         IconButton(
             onClick = {
-                popupVisible =
-                    !popupVisible
+                if (popupVisible) {
+                    popupVisible =
+                        false
+                } else {
+                    popupVisible =
+                        true
+
+                    popupInteractionVersion +=
+                        1
+                }
             },
             modifier =
                 Modifier.size(34.dp),
@@ -832,8 +874,19 @@ private fun PlayerVolumeButton(
                 PlayerVolumePopup(
                     volume =
                         volume,
-                    onVolumeChange =
-                        onVolumeChange,
+                    onVolumeChange = { newVolume ->
+                        /*
+                         * Пока пользователь двигает громкость,
+                         * постоянно переносим автоскрытие
+                         * ещё на 3 секунды.
+                         */
+                        popupInteractionVersion +=
+                            1
+
+                        onVolumeChange(
+                            newVolume,
+                        )
+                    },
                     modifier =
                         Modifier.height(
                             popupHeight,

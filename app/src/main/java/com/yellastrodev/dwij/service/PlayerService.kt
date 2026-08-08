@@ -61,6 +61,7 @@ class PlayerService : MediaSessionService() {
 
         player = ExoPlayer.Builder(this)
             .setMediaSourceFactory(DefaultMediaSourceFactory(dataSourceFactory))
+            .setHandleAudioBecomingNoisy(true)
             .build()
 
         player.setAudioAttributes(
@@ -86,6 +87,8 @@ class PlayerService : MediaSessionService() {
         (application as yApplication)
             .playerServiceRegistry
             .attach(this)
+
+        Log.d(TAG, "[onCreate] Сервис и ExoPlayer созданы")
     }
 
     override fun onGetSession(
@@ -99,6 +102,53 @@ class PlayerService : MediaSessionService() {
         player.setMediaItems(tracks, startIndex, 0L)
         player.prepare()
         player.play()
+    }
+
+    /**
+     * Восстанавливает очередь после пересоздания сервиса без автоматического
+     * запуска звука. Исходная пользовательская команда выполняется отдельно.
+     */
+    fun restoreQueue(
+        tracks: List<MediaItem>,
+        startIndex: Int,
+        startPositionMs: Long,
+        durationMs: Long,
+        shuffleEnabled: Boolean,
+        repeatMode: Int,
+    ) {
+        if (tracks.isEmpty()) {
+            return
+        }
+
+        val safeIndex = startIndex.coerceIn(tracks.indices)
+        val safePositionMs = startPositionMs.coerceAtLeast(0L)
+
+        player.playWhenReady = false
+        player.shuffleModeEnabled = shuffleEnabled
+        player.repeatMode = repeatMode
+        player.setMediaItems(
+            tracks,
+            safeIndex,
+            safePositionMs,
+        )
+        player.prepare()
+
+        stateStore.setPlayback(
+            isPlaying = false,
+            currentIndex = safeIndex,
+        )
+        stateStore.setProgress(
+            positionMs = safePositionMs,
+            durationMs = durationMs.coerceAtLeast(0L),
+        )
+        stateStore.setShuffle(shuffleEnabled)
+        stateStore.setRepeatAll(repeatMode == Player.REPEAT_MODE_ALL)
+
+        Log.d(
+            TAG,
+            "[restoreQueue] Очередь восстановлена: size=${tracks.size}, " +
+                    "index=$safeIndex, positionMs=$safePositionMs",
+        )
     }
 
     fun addTracks(items: List<MediaItem>) {
@@ -120,7 +170,7 @@ class PlayerService : MediaSessionService() {
     }
 
     fun pause() {
-        if (player.isPlaying) player.pause() else player.play()
+        if (player.playWhenReady) player.pause() else player.play()
     }
 
     fun skipNext() {
@@ -136,6 +186,8 @@ class PlayerService : MediaSessionService() {
     }
 
     override fun onDestroy() {
+        Log.d(TAG, "[onDestroy] Сервис уничтожается")
+
         if (::player.isInitialized) {
             playbackFeedback.onPlaybackEnded(
                 currentPositionMs = player.currentPosition,

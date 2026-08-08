@@ -43,6 +43,7 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.SideEffect
+import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
@@ -529,6 +530,9 @@ private fun HomeOrbitalPlayerHud(
     alpha: Float,
     modifier: Modifier = Modifier,
 ) {
+    val hasVolumeControl =
+        LocalPlayerVolumeControl.current != null
+
     BoxWithConstraints(
         modifier = modifier.graphicsLayer {
             this.alpha = alpha
@@ -578,7 +582,18 @@ private fun HomeOrbitalPlayerHud(
             modifier = Modifier
                 .align(Alignment.Center)
                 .offset(y = detailsOffset)
-                .width((maxWidth * 0.66f).coerceAtMost(260.dp)),
+                .width(
+                    (
+                        maxWidth * 0.66f -
+                            if (hasVolumeControl) {
+                                44.dp
+                            } else {
+                                0.dp
+                            }
+                    )
+                        .coerceAtLeast(120.dp)
+                        .coerceAtMost(260.dp),
+                ),
         ) {
             Text(
                 text = player.title,
@@ -610,6 +625,9 @@ private fun HomeOrbitalPlayerTouchTargets(
     onDetailsClick: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
+    val volumeControl =
+        LocalPlayerVolumeControl.current
+
     val previousDescription = stringResource(
         Res.string.home_player_previous_content_description,
     )
@@ -647,6 +665,25 @@ private fun HomeOrbitalPlayerTouchTargets(
                 .semantics { contentDescription = detailsDescription }
                 .clickable(role = Role.Button, onClick = onDetailsClick),
         )
+
+        if (volumeControl != null) {
+            val volume by
+                volumeControl.volume
+                    .collectAsState()
+
+            PlayerVolumeButton(
+                volume =
+                    volume,
+                onVolumeChange =
+                    volumeControl::setVolume,
+                modifier = Modifier
+                    .align(Alignment.Center)
+                    .offset(
+                        x = sideControlOffset,
+                        y = detailsOffset,
+                    ),
+            )
+        }
     }
 }
 
@@ -659,6 +696,9 @@ fun HomeCompactPlayer(
     onPlayPauseClick: () -> Unit,
     onNextClick: () -> Unit,
 ) {
+    val volumeControl =
+        LocalPlayerVolumeControl.current
+
     BoxWithConstraints(
         modifier = Modifier
             .fillMaxWidth()
@@ -669,7 +709,17 @@ fun HomeCompactPlayer(
                 onClick = onOpenClick,
             ),
     ) {
-        val detailsWidth = (maxWidth - 22.dp - 64.dp - 10.dp - 84.dp)
+        val volumeSlotWidth =
+            if (volumeControl != null) {
+                38.dp
+            } else {
+                0.dp
+            }
+
+        val detailsWidth = (
+            maxWidth - 22.dp - 64.dp - 10.dp - 84.dp -
+                volumeSlotWidth
+        )
             .coerceAtLeast(72.dp)
         Image(
             painter = painterResource(Res.drawable.bg_home_compact_player),
@@ -732,6 +782,24 @@ fun HomeCompactPlayer(
                 HomePlayerProgress(
                     currentPositionMillis = player.currentPositionMillis,
                     durationMillis = player.durationMillis,
+                )
+            }
+
+            if (volumeControl != null) {
+                val volume by
+                    volumeControl.volume
+                        .collectAsState()
+
+                Spacer(
+                    modifier =
+                        Modifier.width(4.dp),
+                )
+
+                PlayerVolumeButton(
+                    volume =
+                        volume,
+                    onVolumeChange =
+                        volumeControl::setVolume,
                 )
             }
 

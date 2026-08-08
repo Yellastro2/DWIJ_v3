@@ -54,6 +54,13 @@ class AndroidMediaItemMapper {
                     )
                 }
 
+                track.yandexTrack?.available?.let { available ->
+                    putBoolean(
+                        PlaybackMetadataKeys.YANDEX_AVAILABLE,
+                        available,
+                    )
+                }
+
                 (tracklist as? dYaPlaylist)
                     ?.playlistUuid
                     ?.let { playlistUuid ->

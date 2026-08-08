@@ -198,11 +198,15 @@ class PlaybackFeedbackTracker(
             return null
         }
 
-        if (isTrackCached(trackId)) {
+        if (
+            isYandexAvailable == false &&
+            isTrackCached(trackId)
+        ) {
             logger.debug(
                 TAG,
                 "[acceptedOrNull] play-audio пропущен: " +
-                    "Яндекс-трек в кэше, trackId=$trackId",
+                    "Яндекс-трек недоступен в ЯМ и воспроизводится из кэша, " +
+                    "trackId=$trackId",
             )
             return null
         }

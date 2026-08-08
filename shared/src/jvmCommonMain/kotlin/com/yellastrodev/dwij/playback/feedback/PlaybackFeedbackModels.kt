@@ -12,6 +12,7 @@ object PlaybackMetadataKeys {
     const val PLAY_PLAYLIST_ID = "play_audio_playlist_id"
     const val PLAY_DURATION_MS = "play_audio_duration_ms"
     const val PLAY_SOURCE = "play_audio_source"
+    const val YANDEX_AVAILABLE = "play_audio_yandex_available"
 }
 
 data class PlaybackFeedbackMetadata(
@@ -22,6 +23,7 @@ data class PlaybackFeedbackMetadata(
     val reportSource: String,
     val durationMs: Long?,
     val musicSource: MusicSource,
+    val isYandexAvailable: Boolean? = null,
 )
 
 enum class PlaybackTransitionReason {
