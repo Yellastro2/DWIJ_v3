@@ -1,7 +1,7 @@
 package com.yellastrodev.dwij
 
 import android.util.Log
-import com.yellastrodev.yandexmusiclib.YamLogger
+import com.yellastrodev.yamusicsdk.YamLogger
 
 class YamLoggerAndroid : YamLogger {
 

@@ -14,7 +14,7 @@ import com.yellastrodev.dwij.data.entities.LocalTrackEntity
 import com.yellastrodev.dwij.data.entities.LocalTracklist
 import com.yellastrodev.dwij.data.entities.Song
 import com.yellastrodev.dwij.data.source.LocalMediaSource
-import com.yellastrodev.yandexmusiclib.YamLogger
+import com.yellastrodev.yamusicsdk.YamLogger
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.asCoroutineDispatcher
 import kotlinx.coroutines.flow.Flow

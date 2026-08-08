@@ -5,7 +5,7 @@ import com.yellastrodev.dwij.data.dao.SongMatchDao
 import com.yellastrodev.dwij.data.dao.SongWithInstances
 import com.yellastrodev.dwij.data.entities.MusicSource
 import com.yellastrodev.dwij.data.entities.SongMatchCandidateEntity
-import com.yellastrodev.yandexmusiclib.YamLogger
+import com.yellastrodev.yamusicsdk.YamLogger
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Job

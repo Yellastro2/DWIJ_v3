@@ -4,7 +4,7 @@ import androidx.room.Entity
 import androidx.room.ForeignKey
 import androidx.room.Index
 import androidx.room.PrimaryKey
-import com.yellastrodev.yandexmusiclib.entities.YaTrack
+import com.yellastrodev.yamusicsdk.entities.YaTrack
 import androidx.room.Ignore
 
 /** Сохранённые метаданные трека Яндекс Музыки и время проверки его доступности. */

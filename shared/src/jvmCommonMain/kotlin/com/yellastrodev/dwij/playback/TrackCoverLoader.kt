@@ -3,7 +3,7 @@ package com.yellastrodev.dwij.playback
 import com.yellastrodev.dwij.data.DataResult
 import com.yellastrodev.dwij.data.repo.CoverRepository
 import com.yellastrodev.dwij.data.repo.TrackRepository
-import com.yellastrodev.yandexmusiclib.YamLogger
+import com.yellastrodev.yamusicsdk.YamLogger
 
 /**
  * Загружает байты обложки трека.

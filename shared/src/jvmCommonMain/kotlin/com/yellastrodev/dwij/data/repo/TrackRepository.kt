@@ -6,7 +6,7 @@ import com.yellastrodev.dwij.data.dao.dTrackDao
 import com.yellastrodev.dwij.data.source.TrackRemoteSource
 import com.yellastrodev.dwij.data.entities.dPlaylistTrack
 import com.yellastrodev.dwij.data.entities.dYaTrack
-import com.yellastrodev.yandexmusiclib.YamLogger
+import com.yellastrodev.yamusicsdk.YamLogger
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.flow.Flow

@@ -2,7 +2,7 @@ package com.yellastrodev.dwij.data.repo
 
 import com.yellastrodev.dwij.CacheManager
 import com.yellastrodev.dwij.data.DataResult
-import com.yellastrodev.yandexmusiclib.YamLogger
+import com.yellastrodev.yamusicsdk.YamLogger
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import java.io.File

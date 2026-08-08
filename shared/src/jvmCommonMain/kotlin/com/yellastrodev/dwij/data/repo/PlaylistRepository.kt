@@ -10,7 +10,7 @@ import com.yellastrodev.dwij.data.source.PlaylistCacheSource
 import com.yellastrodev.dwij.data.source.PlaylistRemoteSource
 import com.yellastrodev.dwij.data.source.PlaylistSnapshot
 import com.yellastrodev.dwij.utils.PlaylistsDiff.Companion.diffPlaylists
-import com.yellastrodev.yandexmusiclib.YamLogger
+import com.yellastrodev.yamusicsdk.YamLogger
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.flow.Flow

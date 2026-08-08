@@ -1,7 +1,6 @@
 package com.yellastrodev.dwij.models
 
 import androidx.lifecycle.ViewModel
-import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.viewModelScope
 import com.yellastrodev.dwij.data.DataError
 import com.yellastrodev.dwij.data.DataResult
@@ -12,7 +11,7 @@ import com.yellastrodev.dwij.data.repo.CoverData
 import com.yellastrodev.dwij.data.repo.CoverRepository
 import com.yellastrodev.dwij.data.repo.PlaylistRepository
 import com.yellastrodev.dwij.data.repo.TrackRepository
-import com.yellastrodev.yandexmusiclib.entities.CoverSize
+import com.yellastrodev.yamusicsdk.entities.CoverSize
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.map

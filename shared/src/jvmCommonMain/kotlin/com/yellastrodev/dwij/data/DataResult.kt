@@ -1,6 +1,6 @@
 package com.yellastrodev.dwij.data
 
-import com.yellastrodev.yandexmusiclib.network.YamError
+import com.yellastrodev.yamusicsdk.network.YamError
 
 /** Результат app-data слоя, не привязанный к конкретному поставщику музыки. */
 sealed interface DataResult<out T> {

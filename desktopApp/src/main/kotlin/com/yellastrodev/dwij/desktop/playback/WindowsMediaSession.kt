@@ -1,7 +1,7 @@
 package com.yellastrodev.dwij.desktop.playback
 
 import com.yellastrodev.dwij.data.entities.PlaybackTrack
-import com.yellastrodev.yandexmusiclib.YamLogger
+import com.yellastrodev.yamusicsdk.YamLogger
 import io.github.selemba1000.JMTC
 import io.github.selemba1000.JMTCButtonCallback
 import io.github.selemba1000.JMTCCallbacks

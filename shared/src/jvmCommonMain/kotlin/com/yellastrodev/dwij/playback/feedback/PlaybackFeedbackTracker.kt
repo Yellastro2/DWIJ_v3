@@ -2,8 +2,8 @@ package com.yellastrodev.dwij.playback.feedback
 
 import com.yellastrodev.dwij.data.entities.MusicSource
 import com.yellastrodev.dwij.data.source.PlaybackRemoteSource
-import com.yellastrodev.yandexmusiclib.YamLogger
-import com.yellastrodev.yandexmusiclib.tracks.PlayAudioRequest
+import com.yellastrodev.yamusicsdk.YamLogger
+import com.yellastrodev.yamusicsdk.tracks.PlayAudioRequest
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.launch

@@ -6,9 +6,9 @@ import com.yellastrodev.dwij.data.entities.Song
 import com.yellastrodev.dwij.data.entities.dYaWave
 import com.yellastrodev.dwij.data.entities.toEntity
 import com.yellastrodev.dwij.data.source.WaveRemoteSource
-import com.yellastrodev.yandexmusiclib.YamLogger
-import com.yellastrodev.yandexmusiclib.entities.TrackShort
-import com.yellastrodev.yandexmusiclib.network.YamResult
+import com.yellastrodev.yamusicsdk.YamLogger
+import com.yellastrodev.yamusicsdk.entities.TrackShort
+import com.yellastrodev.yamusicsdk.network.YamResult
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job

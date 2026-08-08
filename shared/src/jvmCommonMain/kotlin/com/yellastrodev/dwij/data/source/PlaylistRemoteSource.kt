@@ -7,9 +7,9 @@ import com.yellastrodev.dwij.data.entities.dYaPlaylist
 import com.yellastrodev.dwij.data.entities.dYaTrack
 import com.yellastrodev.dwij.data.entities.toEntity
 import com.yellastrodev.dwij.data.toDataError
-import com.yellastrodev.yandexmusiclib.YamApiClient
-import com.yellastrodev.yandexmusiclib.YamLogger
-import com.yellastrodev.yandexmusiclib.network.YamResult
+import com.yellastrodev.yamusicsdk.YamApiClient
+import com.yellastrodev.yamusicsdk.YamLogger
+import com.yellastrodev.yamusicsdk.network.YamResult
 
 class PlaylistRemoteSource(private val client: YamApiClient,
                            private val logger: YamLogger) {

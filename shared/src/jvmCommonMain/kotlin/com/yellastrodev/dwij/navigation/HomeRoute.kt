@@ -31,7 +31,7 @@ import com.yellastrodev.dwij.ui.RadialMenu
 import com.yellastrodev.dwij.ui.RadialMenuAnimationStyle
 import com.yellastrodev.dwij.ui.search.SearchScreen
 import com.yellastrodev.dwij.ui.toImageBitmapOrNull
-import com.yellastrodev.yandexmusiclib.entities.CoverSize
+import com.yellastrodev.yamusicsdk.entities.CoverSize
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.first

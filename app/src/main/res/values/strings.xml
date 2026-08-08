@@ -12,7 +12,7 @@
     <string name="auth_code_copied">Код скопирован</string>
     <string name="auth_browser_error">Не удалось открыть браузер</string>
     <string name="auth_success">Авторизация выполнена</string>
-    <string name="auth_error_configuration">OAuth не настроен в yandexmusiclib/local.properties</string>
+    <string name="auth_error_configuration">OAuth не настроен в yaMusicSdk/local.properties</string>
     <string name="auth_error_timeout">Время ожидания подтверждения истекло</string>
     <string name="auth_error_network">Не удалось подключиться к Яндексу</string>
     <string name="auth_error_oauth">Яндекс отклонил авторизацию: %1$s</string>

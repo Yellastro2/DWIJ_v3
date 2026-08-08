@@ -65,7 +65,7 @@ dependencies {
 
     /*
      * Нужен desktop Main dispatcher для Lifecycle/ViewModel и Compose.
-     * Версия совпадает с coroutines-core в yandexmusiclib.
+     * Версия совпадает с coroutines-core в yaMusicSdk.
      */
     implementation(
         "org.jetbrains.kotlinx:kotlinx-coroutines-swing:1.8.1",

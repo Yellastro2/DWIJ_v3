@@ -1,8 +1,8 @@
 package com.yellastrodev.dwij.ui
 
 import androidx.compose.runtime.staticCompositionLocalOf
-import com.yellastrodev.yandexmusiclib.NoOpYamLogger
-import com.yellastrodev.yandexmusiclib.YamLogger
+import com.yellastrodev.yamusicsdk.NoOpYamLogger
+import com.yellastrodev.yamusicsdk.YamLogger
 
 /**
  * Доступ к универсальному логгеру из Compose UI.

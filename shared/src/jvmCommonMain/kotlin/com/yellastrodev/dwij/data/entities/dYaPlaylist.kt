@@ -5,7 +5,7 @@ import androidx.room.ForeignKey
 import androidx.room.Ignore
 import androidx.room.Index
 import androidx.room.PrimaryKey
-import com.yellastrodev.yandexmusiclib.entities.YaPlaylist
+import com.yellastrodev.yamusicsdk.entities.YaPlaylist
 
 @Entity(tableName = "playlists")
 open class dYaPlaylist(

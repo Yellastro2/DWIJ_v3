@@ -4,9 +4,9 @@ import com.yellastrodev.dwij.data.cache.FileCacheStore
 import com.yellastrodev.dwij.data.entities.dYaPlaylist
 import com.yellastrodev.dwij.data.entities.dYaTrack
 import com.yellastrodev.dwij.utils.DwLruCache
-import com.yellastrodev.yandexmusiclib.YamApiClient
-import com.yellastrodev.yandexmusiclib.entities.CoverSize
-import com.yellastrodev.yandexmusiclib.network.YamResult
+import com.yellastrodev.yamusicsdk.YamApiClient
+import com.yellastrodev.yamusicsdk.entities.CoverSize
+import com.yellastrodev.yamusicsdk.network.YamResult
 
 data class CoverData(
     val bytes: ByteArray,

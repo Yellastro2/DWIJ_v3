@@ -1,9 +1,9 @@
 package com.yellastrodev.dwij.auth
 
-import com.yellastrodev.yandexmusiclib.YamApiClient
-import com.yellastrodev.yandexmusiclib.YamLogger
-import com.yellastrodev.yandexmusiclib.network.YamError
-import com.yellastrodev.yandexmusiclib.network.YamResult
+import com.yellastrodev.yamusicsdk.YamApiClient
+import com.yellastrodev.yamusicsdk.YamLogger
+import com.yellastrodev.yamusicsdk.network.YamError
+import com.yellastrodev.yamusicsdk.network.YamResult
 
 /**
  * Единственная shared-точка владения YamApiClient и авторизацией.

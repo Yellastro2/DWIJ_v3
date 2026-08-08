@@ -1,7 +1,7 @@
 package com.yellastrodev.dwij.data.entities
 
 import androidx.room.Entity
-import com.yellastrodev.yandexmusiclib.entities.YaLikeTracklist
+import com.yellastrodev.yamusicsdk.entities.YaLikeTracklist
 
 
 @Entity

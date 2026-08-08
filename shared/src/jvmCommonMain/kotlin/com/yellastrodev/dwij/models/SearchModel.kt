@@ -161,7 +161,7 @@ class SearchModel(
         }
     }
 
-    private fun com.yellastrodev.yandexmusiclib.search.SearchResponse.toUiItems():
+    private fun com.yellastrodev.yamusicsdk.search.SearchResponse.toUiItems():
             List<SearchResultItemUiModel> = buildList {
         tracks?.results.orEmpty().forEach { track ->
             add(

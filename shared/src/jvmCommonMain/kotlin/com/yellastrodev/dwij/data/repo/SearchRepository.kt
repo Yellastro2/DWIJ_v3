@@ -2,8 +2,8 @@ package com.yellastrodev.dwij.data.repo
 
 import com.yellastrodev.dwij.data.DataResult
 import com.yellastrodev.dwij.data.source.SearchRemoteSource
-import com.yellastrodev.yandexmusiclib.YamLogger
-import com.yellastrodev.yandexmusiclib.search.SearchResponse
+import com.yellastrodev.yamusicsdk.YamLogger
+import com.yellastrodev.yamusicsdk.search.SearchResponse
 
 /** Репозиторий общего поиска и диагностической сводки декодированного ответа. */
 class SearchRepository(

@@ -2,10 +2,10 @@ package com.yellastrodev.dwij.data.source
 
 import com.yellastrodev.dwij.data.DataResult
 import com.yellastrodev.dwij.data.toDataError
-import com.yellastrodev.yandexmusiclib.YamApiClient
-import com.yellastrodev.yandexmusiclib.network.YamResult
-import com.yellastrodev.yandexmusiclib.search.SearchResponse
-import com.yellastrodev.yandexmusiclib.search.SearchType
+import com.yellastrodev.yamusicsdk.YamApiClient
+import com.yellastrodev.yamusicsdk.network.YamResult
+import com.yellastrodev.yamusicsdk.search.SearchResponse
+import com.yellastrodev.yamusicsdk.search.SearchType
 
 /** Выполняет общий поиск Яндекс Музыки без ограничения категории. */
 class SearchRemoteSource(

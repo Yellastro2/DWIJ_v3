@@ -4,8 +4,8 @@ import com.yellastrodev.dwij.data.DataResult
 import com.yellastrodev.dwij.data.entities.dYaTrack
 import com.yellastrodev.dwij.data.entities.toEntity
 import com.yellastrodev.dwij.data.toDataError
-import com.yellastrodev.yandexmusiclib.YamApiClient
-import com.yellastrodev.yandexmusiclib.network.YamResult
+import com.yellastrodev.yamusicsdk.YamApiClient
+import com.yellastrodev.yamusicsdk.network.YamResult
 
 class TrackRemoteSource(private val client: YamApiClient) {
     suspend fun fetch(track: dYaTrack): DataResult<ByteArray> =

@@ -1,7 +1,7 @@
 package com.yellastrodev.dwij.data.entities
 
-import com.yellastrodev.yandexmusiclib.entities.TrackShort
-import com.yellastrodev.yandexmusiclib.entities.YaWave
+import com.yellastrodev.yamusicsdk.entities.TrackShort
+import com.yellastrodev.yamusicsdk.entities.YaWave
 
 class dYaWave(
     val radioSessionId: String,

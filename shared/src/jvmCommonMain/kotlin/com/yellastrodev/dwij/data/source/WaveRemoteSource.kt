@@ -1,10 +1,10 @@
 package com.yellastrodev.dwij.data.source
 
 import com.yellastrodev.dwij.data.entities.dYaWave
-import com.yellastrodev.yandexmusiclib.YamApiClient
-import com.yellastrodev.yandexmusiclib.YamLogger
-import com.yellastrodev.yandexmusiclib.network.YamResult
-import com.yellastrodev.yandexmusiclib.rotor.RotorBatch
+import com.yellastrodev.yamusicsdk.YamApiClient
+import com.yellastrodev.yamusicsdk.YamLogger
+import com.yellastrodev.yamusicsdk.network.YamResult
+import com.yellastrodev.yamusicsdk.rotor.RotorBatch
 
 class WaveRemoteSource(private val client: YamApiClient, val logger: YamLogger) {
 

@@ -1,6 +1,6 @@
 package com.yellastrodev.dwij.desktop
 
-import com.yellastrodev.yandexmusiclib.YamLogger
+import com.yellastrodev.yamusicsdk.YamLogger
 import java.time.LocalDateTime
 import java.time.format.DateTimeFormatter
 

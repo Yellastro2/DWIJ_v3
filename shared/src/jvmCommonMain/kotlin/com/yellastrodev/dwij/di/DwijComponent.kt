@@ -35,7 +35,7 @@ import com.yellastrodev.dwij.storage.StoredMusicSourceSettings
 import com.yellastrodev.dwij.storage.StoredPlaybackSettings
 import com.yellastrodev.dwij.storage.StoredYandexSessionStore
 import com.yellastrodev.dwij.utils.DwLruCache
-import com.yellastrodev.yandexmusiclib.YamLogger
+import com.yellastrodev.yamusicsdk.YamLogger
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
