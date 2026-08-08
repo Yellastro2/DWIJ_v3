@@ -1,6 +1,7 @@
 package com.yellastrodev.dwij.desktop
 
 import androidx.compose.runtime.CompositionLocalProvider
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.window.Window
@@ -9,6 +10,7 @@ import androidx.compose.ui.window.application
 import androidx.compose.ui.window.rememberWindowState
 import com.yellastrodev.dwij.desktop.models.DesktopPlayerCoverLoader
 import com.yellastrodev.dwij.desktop.navigation.DesktopDwijAppPlatform
+import com.yellastrodev.dwij.desktop.windows.WindowsTaskbarControls
 import com.yellastrodev.dwij.models.PlayerModel
 import com.yellastrodev.dwij.navigation.DwijApp
 import com.yellastrodev.dwij.ui.LocalPlayerVolumeControl
@@ -73,6 +75,40 @@ fun main() {
                 runtime.paths,
         )
 
+    /*
+     * Windows thumbnail toolbar:
+     *
+     * Previous | Play/Pause | Next
+     *
+     * Никакой отдельной playback-логики здесь нет:
+     * используем существующий PlayerRepository.
+     */
+    val taskbarControls =
+        WindowsTaskbarControls(
+            scope =
+                runtime.applicationScope,
+            logger =
+                component.logger,
+            cacheDirectory =
+                runtime.paths
+                    .cacheDirectory,
+            playerState =
+                component.playerRepo
+                    .state,
+            onPrevious = {
+                component.playerRepo
+                    .skipPrev()
+            },
+            onPlayPause = {
+                component.playerRepo
+                    .pause()
+            },
+            onNext = {
+                component.playerRepo
+                    .skipNext()
+            },
+        )
+
     application {
         val windowState =
             rememberWindowState(
@@ -92,6 +128,15 @@ fun main() {
 
         Window(
             onCloseRequest = {
+                /*
+                 * Сначала возвращаем исходный WndProc,
+                 * пока native Window ещё существует.
+                 */
+                taskbarControls.close()
+
+                /*
+                 * Сохраняем размер окна как и раньше.
+                 */
                 runtime.settingsStore.edit {
                     putLong(
                         WINDOW_WIDTH_KEY,
@@ -112,7 +157,12 @@ fun main() {
                     )
                 }
 
+                /*
+                 * Runtime отдельно сохраняет volume
+                 * и закрывает PlayerEngine/SMTC.
+                 */
                 runtime.close()
+
                 exitApplication()
             },
             state =
@@ -126,6 +176,22 @@ fun main() {
                     Res.drawable.dwij,
                 ),
         ) {
+            /*
+             * Здесь ComposeWindow уже реально создан,
+             * поэтому JNA может получить его HWND.
+             */
+            DisposableEffect(
+                window,
+            ) {
+                taskbarControls.attach(
+                    window,
+                )
+
+                onDispose {
+                    taskbarControls.close()
+                }
+            }
+
             CompositionLocalProvider(
                 LocalYamLogger provides
                         component.logger,
