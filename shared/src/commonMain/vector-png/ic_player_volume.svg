@@ -1,0 +1,17 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" width="192" height="192" viewBox="0 0 192 192" fill="none">
+  <!-- speaker -->
+  <path d="M34 84H52L74 66V126L52 108H34Z" fill="#20E2FF" fill-opacity="0.88"/>
+  <path d="M40 84H58L80 66V126L58 108H40Z" fill="#FF0A84" fill-opacity="0.90"/>
+  <path d="M37 84H55L77 66V126L55 108H37Z" fill="#FBF8FC"/>
+
+  <!-- simple speaker texture -->
+  <rect x="44" y="90" width="18" height="2.5" fill="#D8D4E2" fill-opacity="0.85"/>
+  <rect x="44" y="98" width="22" height="2.5" fill="#D8D4E2" fill-opacity="0.85"/>
+  <rect x="44" y="106" width="16" height="2.5" fill="#D8D4E2" fill-opacity="0.85"/>
+
+  <!-- sound waves -->
+  <path d="M90 78A24 24 0 0 1 90 114" stroke="#20E2FF" stroke-width="7" stroke-linecap="round" stroke-opacity="0.88"/>
+  <path d="M96 74A30 30 0 0 1 96 118" stroke="#FF0A84" stroke-width="7" stroke-linecap="round" stroke-opacity="0.92"/>
+  <path d="M112 62A42 42 0 0 1 112 130" stroke="#FFF9FC" stroke-width="4" stroke-linecap="round" stroke-opacity="0.96"/>
+</svg>

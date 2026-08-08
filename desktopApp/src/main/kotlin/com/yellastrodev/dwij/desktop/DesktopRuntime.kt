@@ -3,10 +3,11 @@ package com.yellastrodev.dwij.desktop
 import androidx.room.Room
 import com.yellastrodev.dwij.data.db.DwijDatabase
 import com.yellastrodev.dwij.data.db.buildDwijDatabase
-import com.yellastrodev.dwij.di.DwijComponent
 import com.yellastrodev.dwij.desktop.data.source.DesktopLocalMediaSource
 import com.yellastrodev.dwij.desktop.playback.DesktopPlayerEngine
+import com.yellastrodev.dwij.di.DwijComponent
 import com.yellastrodev.dwij.playback.PlaybackUriResolver
+import com.yellastrodev.dwij.playback.PlayerVolumeControl
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
@@ -22,6 +23,16 @@ class DesktopRuntime private constructor(
 ) {
 
     /**
+     * Опциональная desktop-возможность управления громкостью приложения.
+     *
+     * Наружу отдаётся интерфейс, а не конкретный JavaFX backend.
+     */
+    val playerVolumeControl:
+            PlayerVolumeControl
+        get() =
+            playerEngine
+
+    /**
      * Освобождает платформенный audio backend.
      */
     fun close() {
@@ -29,6 +40,7 @@ class DesktopRuntime private constructor(
     }
 
     companion object {
+
         /**
          * Собирает desktop-аналоги AndroidDwijComponentFactory/yApplication.
          */
@@ -39,7 +51,7 @@ class DesktopRuntime private constructor(
             val applicationScope =
                 CoroutineScope(
                     SupervisorJob() +
-                        Dispatchers.IO,
+                            Dispatchers.IO,
                 )
 
             val logger =
@@ -60,7 +72,7 @@ class DesktopRuntime private constructor(
                 )
 
             lateinit var component:
-                DwijComponent
+                    DwijComponent
 
             /*
              * Resolver требует TrackCacheRepository из уже собранного component.

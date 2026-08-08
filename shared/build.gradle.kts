@@ -26,6 +26,7 @@ val rasterizedSvgAssets = mapOf(
     "ic_player_waveform" to "360x32",
     "ic_player_waveform_head" to "12x32",
     "ic_player_progress_head" to "24x24",
+    "ic_player_volume" to "28x28",
 
     "bg_drive_texture" to "160x92",
     "bg_focus_texture" to "160x92",
@@ -233,6 +234,9 @@ compose.resources {
 }
 
 dependencies {
+    "androidRuntimeClasspath"(
+        "org.jetbrains.compose.ui:ui-tooling:1.10.3",
+    )
     add("kspAndroid", libs.androidx.room.compiler)
     add("kspDesktop", libs.androidx.room.compiler)
 }

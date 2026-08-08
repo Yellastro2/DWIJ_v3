@@ -4,6 +4,7 @@ import com.yellastrodev.dwij.data.entities.PlaybackTrack
 import com.yellastrodev.dwij.data.entities.dTracklist
 import com.yellastrodev.dwij.playback.PlaybackStateStore
 import com.yellastrodev.dwij.playback.PlayerEngine
+import com.yellastrodev.dwij.playback.PlayerVolumeControl
 import com.yellastrodev.dwij.playback.RepeatMode
 import com.yellastrodev.dwij.utils.PlayerEvent
 import com.yellastrodev.dwij.utils.PlayerState
@@ -12,6 +13,7 @@ import javafx.scene.media.Media
 import javafx.scene.media.MediaPlayer
 import javafx.util.Duration
 import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharedFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.launch
@@ -25,37 +27,59 @@ import kotlin.random.Random
  *
  * Использует JavaFX Media только как платформенный декодер/вывод звука.
  * Очередь и публичное состояние остаются в тех же shared-моделях, что Android.
+ *
+ * Дополнительно реализует [PlayerVolumeControl], потому что desktop-версии
+ * нужен собственный регулятор громкости приложения.
  */
 class DesktopPlayerEngine(
     private val scope: CoroutineScope,
     private val logger: YamLogger,
     private val resolveUri:
-        suspend (String) -> String,
-) : PlayerEngine {
+    suspend (String) -> String,
+) : PlayerEngine,
+    PlayerVolumeControl {
 
     private val stateStore =
         PlaybackStateStore()
 
     override val state:
-        StateFlow<PlayerState> =
+            StateFlow<PlayerState> =
         stateStore.state
 
     override val events:
-        SharedFlow<PlayerEvent> =
+            SharedFlow<PlayerEvent> =
         stateStore.events
+
+    private val volumeState =
+        MutableStateFlow(
+            DEFAULT_VOLUME,
+        )
+
+    override val volume:
+            StateFlow<Float> =
+        volumeState
+
+    /**
+     * Последняя ненулевая громкость.
+     *
+     * Нужна, чтобы mute -> unmute возвращал прежнее значение,
+     * а не всегда 100%.
+     */
+    private var lastAudibleVolume =
+        DEFAULT_VOLUME
 
     private val commandMutex =
         Mutex()
 
     private var queue:
-        List<PlaybackTrack> =
+            List<PlaybackTrack> =
         emptyList()
 
     private var currentIndex =
         -1
 
     private var currentPlayer:
-        MediaPlayer? =
+            MediaPlayer? =
         null
 
     private var shuffleEnabled =
@@ -208,7 +232,55 @@ class DesktopPlayerEngine(
 
         stateStore.setRepeatAll(
             mode ==
-                RepeatMode.ALL,
+                    RepeatMode.ALL,
+        )
+    }
+
+    /**
+     * Меняет громкость только DWIJ, не системную громкость Windows.
+     */
+    override fun setVolume(
+        volume: Float,
+    ) {
+        val resolvedVolume =
+            volume.coerceIn(
+                MIN_VOLUME,
+                MAX_VOLUME,
+            )
+
+        if (
+            resolvedVolume >
+            MIN_VOLUME
+        ) {
+            lastAudibleVolume =
+                resolvedVolume
+        }
+
+        volumeState.value =
+            resolvedVolume
+
+        JavaFxRuntime.execute {
+            currentPlayer?.volume =
+                resolvedVolume.toDouble()
+        }
+    }
+
+    /**
+     * Переключает mute с восстановлением последней ненулевой громкости.
+     */
+    override fun toggleMute() {
+        val targetVolume =
+            if (
+                volumeState.value >
+                MIN_VOLUME
+            ) {
+                MIN_VOLUME
+            } else {
+                lastAudibleVolume
+            }
+
+        setVolume(
+            targetVolume,
         )
     }
 
@@ -242,7 +314,7 @@ class DesktopPlayerEngine(
                 logger.error(
                     TAG,
                     "[startTrack] Не удалось получить playback URI " +
-                        "instanceId=${track.instanceId}",
+                            "instanceId=${track.instanceId}",
                     error,
                 )
 
@@ -285,6 +357,16 @@ class DesktopPlayerEngine(
                 MediaPlayer(
                     media,
                 )
+
+            /*
+             * MediaPlayer создаётся заново для каждого трека.
+             *
+             * Поэтому обязательно восстанавливаем громкость
+             * до начала воспроизведения.
+             */
+            player.volume =
+                volumeState.value
+                    .toDouble()
 
             currentPlayer =
                 player
@@ -403,7 +485,7 @@ class DesktopPlayerEngine(
             logger.error(
                 TAG,
                 "[MediaPlayer] Ошибка воспроизведения " +
-                    "index=$index",
+                        "index=$index",
                 error,
             )
 
@@ -474,7 +556,7 @@ class DesktopPlayerEngine(
                 queue.indices
                     .filter { index ->
                         index !=
-                            currentIndex
+                                currentIndex
                     }
 
             return candidates.random(
@@ -515,7 +597,7 @@ class DesktopPlayerEngine(
                 queue.indices
                     .filter { index ->
                         index !=
-                            currentIndex
+                                currentIndex
                     }
 
             return candidates.random(
@@ -569,7 +651,17 @@ class DesktopPlayerEngine(
     }
 
     private companion object {
+
         const val TAG =
             "DesktopPlayerEngine"
+
+        const val MIN_VOLUME =
+            0f
+
+        const val MAX_VOLUME =
+            1f
+
+        const val DEFAULT_VOLUME =
+            1f
     }
 }

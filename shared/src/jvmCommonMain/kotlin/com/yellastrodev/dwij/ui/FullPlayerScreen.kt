@@ -37,6 +37,7 @@ import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.Immutable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -86,6 +87,13 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.emptyFlow
 import java.util.Locale
+import androidx.compose.runtime.collectAsState
+import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.unit.IntOffset
+import androidx.compose.ui.window.Popup
+import androidx.compose.ui.window.PopupProperties
+import com.yellastrodev.dwij.playback.PlayerVolumeControl
+import kotlinx.coroutines.flow.MutableStateFlow
 
 /** Неизменяемый снимок данных, необходимых полноэкранному плееру. */
 @Immutable
@@ -589,46 +597,340 @@ private fun FullPlayerProgress(
     durationMillis: Long,
     onSeek: (Long) -> Unit,
 ) {
-    val safeDuration = durationMillis.coerceAtLeast(0L)
-    val safePosition = currentPositionMillis.coerceIn(0L, safeDuration.coerceAtLeast(0L))
-    var draggedPositionMillis by remember(trackId) { mutableStateOf<Long?>(null) }
-    val displayedPosition = draggedPositionMillis ?: safePosition
-    val sliderMaximum = safeDuration.coerceAtLeast(1L).toFloat()
-    val progressFraction = if (safeDuration > 0L) {
-        (displayedPosition.toFloat() / safeDuration.toFloat()).coerceIn(0f, 1f)
-    } else {
-        0f
+    val volumeControl =
+        LocalPlayerVolumeControl.current
+
+    val safeDuration =
+        durationMillis.coerceAtLeast(0L)
+
+    val safePosition =
+        currentPositionMillis.coerceIn(
+            0L,
+            safeDuration,
+        )
+
+    var draggedPositionMillis by
+    remember(trackId) {
+        mutableStateOf<Long?>(
+            null,
+        )
     }
 
-    Column(
+    val displayedPosition =
+        draggedPositionMillis
+            ?: safePosition
+
+    val sliderMaximum =
+        safeDuration
+            .coerceAtLeast(1L)
+            .toFloat()
+
+    val progressFraction =
+        if (safeDuration > 0L) {
+            (
+                    displayedPosition.toFloat() /
+                            safeDuration.toFloat()
+                    )
+                .coerceIn(
+                    0f,
+                    1f,
+                )
+        } else {
+            0f
+        }
+
+    Row(
+        verticalAlignment =
+            Alignment.Top,
         modifier = Modifier
             .fillMaxWidth()
-            .padding(horizontal = 24.dp, vertical = 6.dp),
+            .padding(
+                horizontal = 24.dp,
+                vertical = 6.dp,
+            ),
     ) {
-        PlayerWaveformSlider(
-            value = displayedPosition.coerceAtMost(safeDuration).toFloat(),
-            valueRange = 0f..sliderMaximum,
-            progressFraction = progressFraction,
-            enabled = safeDuration > 0L,
-            onValueChange = { value -> draggedPositionMillis = value.toLong() },
-            onValueChangeFinished = {
-                draggedPositionMillis?.let(onSeek)
-                draggedPositionMillis = null
-            },
-        )
-        Row(modifier = Modifier.fillMaxWidth()) {
-            Text(
-                text = formatFullPlayerTime(displayedPosition),
-                color = DwijColors.Cyan,
-                fontSize = 10.sp,
+        Column(
+            modifier = Modifier
+                .weight(1f),
+        ) {
+            PlayerWaveformSlider(
+                value =
+                    displayedPosition
+                        .coerceAtMost(
+                            safeDuration,
+                        )
+                        .toFloat(),
+                valueRange =
+                    0f..sliderMaximum,
+                progressFraction =
+                    progressFraction,
+                enabled =
+                    safeDuration > 0L,
+                onValueChange = { value ->
+                    draggedPositionMillis =
+                        value.toLong()
+                },
+                onValueChangeFinished = {
+                    draggedPositionMillis
+                        ?.let(onSeek)
+
+                    draggedPositionMillis =
+                        null
+                },
             )
-            Spacer(modifier = Modifier.weight(1f))
-            Text(
-                text = formatFullPlayerTime(safeDuration),
-                color = DwijColors.SecondaryText,
-                fontSize = 10.sp,
+
+            Row(
+                modifier =
+                    Modifier.fillMaxWidth(),
+            ) {
+                Text(
+                    text =
+                        formatFullPlayerTime(
+                            displayedPosition,
+                        ),
+                    color =
+                        DwijColors.Cyan,
+                    fontSize =
+                        10.sp,
+                )
+
+                Spacer(
+                    modifier =
+                        Modifier.weight(1f),
+                )
+
+                Text(
+                    text =
+                        formatFullPlayerTime(
+                            safeDuration,
+                        ),
+                    color =
+                        DwijColors.SecondaryText,
+                    fontSize =
+                        10.sp,
+                )
+            }
+        }
+
+        /*
+         * На Android LocalPlayerVolumeControl == null,
+         * поэтому ни кнопка, ни занимаемое ей место
+         * вообще не попадают в layout.
+         */
+        if (volumeControl != null) {
+            val volume by
+            volumeControl.volume
+                .collectAsState()
+
+            Spacer(
+                modifier =
+                    Modifier.width(7.dp),
+            )
+
+            PlayerVolumeButton(
+                volume =
+                    volume,
+                onVolumeChange =
+                    volumeControl::setVolume,
             )
         }
+    }
+}
+
+/**
+ * Desktop-only кнопка громкости.
+ *
+ * Сам composable платформенно независим, но вызывается только когда
+ * LocalPlayerVolumeControl.current != null.
+ */
+@Composable
+private fun PlayerVolumeButton(
+    volume: Float,
+    onVolumeChange: (Float) -> Unit,
+) {
+    var popupVisible by
+    remember {
+        mutableStateOf(
+            false,
+        )
+    }
+
+    val popupHeight =
+        154.dp
+
+    val popupGap =
+        7.dp
+
+    val density =
+        LocalDensity.current
+
+    val popupOffsetY =
+        with(density) {
+            -(
+                    popupHeight +
+                            popupGap
+                    ).roundToPx()
+        }
+
+    val volumeDescription =
+        stringResource(
+            Res.string.player_volume_content_description,
+        )
+
+    Box(
+        contentAlignment =
+            Alignment.Center,
+        modifier =
+            Modifier.size(34.dp),
+    ) {
+        IconButton(
+            onClick = {
+                popupVisible =
+                    !popupVisible
+            },
+            modifier =
+                Modifier.size(34.dp),
+        ) {
+            Image(
+                painter =
+                    painterResource(
+                        Res.drawable.ic_player_volume,
+                    ),
+                contentDescription =
+                    volumeDescription,
+                contentScale =
+                    ContentScale.Fit,
+                modifier =
+                    Modifier.size(25.dp),
+            )
+        }
+
+        if (popupVisible) {
+            Popup(
+                alignment =
+                    Alignment.TopCenter,
+                offset =
+                    IntOffset(
+                        x = 0,
+                        y = popupOffsetY,
+                    ),
+                onDismissRequest = {
+                    popupVisible =
+                        false
+                },
+                /*
+                 * focusable нужен в том числе для нормальной
+                 * desktop-клавиатурной обработки и Escape.
+                 *
+                 * dismissOnClickOutside по умолчанию true.
+                 */
+                properties =
+                    PopupProperties(
+                        focusable = true,
+                    ),
+            ) {
+                PlayerVolumePopup(
+                    volume =
+                        volume,
+                    onVolumeChange =
+                        onVolumeChange,
+                    modifier =
+                        Modifier.height(
+                            popupHeight,
+                        ),
+                )
+            }
+        }
+    }
+}
+
+/**
+ * Вертикальный регулятор громкости.
+ *
+ * Используется обычный Slider, развёрнутый вертикально:
+ * значение 0 находится снизу, 1 — сверху.
+ */
+@Composable
+private fun PlayerVolumePopup(
+    volume: Float,
+    onVolumeChange: (Float) -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    val shape =
+        RoundedCornerShape(
+            percent = 50,
+        )
+
+    Box(
+        contentAlignment =
+            Alignment.Center,
+        modifier = modifier
+            .width(52.dp)
+            .clip(shape)
+            .background(
+                DwijColors
+                    .PlayerMainControlBackground,
+            )
+            .border(
+                width = 1.dp,
+                color = DwijColors.Pink
+                    .copy(
+                        alpha = 0.72f,
+                    ),
+                shape = shape,
+            ),
+    ) {
+        /*
+         * Slider остаётся нормальным Material Slider:
+         * мышь, drag и accessibility работают штатно.
+         *
+         * Layout у него горизонтальный 116x40,
+         * а graphicsLayer визуально разворачивает его
+         * в вертикальный 40x116.
+         */
+        Slider(
+            value =
+                volume.coerceIn(
+                    0f,
+                    1f,
+                ),
+            onValueChange = {
+                onVolumeChange(
+                    it.coerceIn(
+                        0f,
+                        1f,
+                    ),
+                )
+            },
+            valueRange =
+                0f..1f,
+            colors =
+                SliderDefaults.colors(
+                    thumbColor =
+                        DwijColors.White,
+                    activeTrackColor =
+                        DwijColors.Pink,
+                    inactiveTrackColor =
+                        DwijColors.Cyan
+                            .copy(
+                                alpha = 0.28f,
+                            ),
+                ),
+            modifier = Modifier
+                .requiredSize(
+                    width = 116.dp,
+                    height = 40.dp,
+                )
+                .graphicsLayer {
+                    /*
+                     * -90 градусов:
+                     * минимум снизу,
+                     * максимум сверху.
+                     */
+                    rotationZ =
+                        -90f
+                },
+        )
     }
 }
 
@@ -1084,16 +1386,77 @@ private fun playlistAccent(title: String): Color {
     return accents[Math.floorMod(title.hashCode(), accents.size)]
 }
 
-/** Показывает полный экран с типичным набором метаданных и переносимыми тегами плейлистов. */
+/** Android/mobile-вариант: управление громкостью платформой не предоставлено. */
 @Preview(
-    name = "Full player",
+    name = "Full player — no volume",
     widthDp = 360,
     heightDp = 800,
     showBackground = true,
     backgroundColor = DwijColors.BackgroundArgb,
 )
 @Composable
-private fun FullPlayerScreenPreview() {
+private fun FullPlayerScreenPreviewNoVolume() {
+    FullPlayerPreviewContent()
+}
+
+/** Desktop-вариант: доступно управление громкостью приложения. */
+@Preview(
+    name = "Full player — desktop volume",
+    widthDp = 520,
+    heightDp = 900,
+    showBackground = true,
+    backgroundColor = DwijColors.BackgroundArgb,
+)
+@Composable
+private fun FullPlayerScreenPreviewWithVolume() {
+    val volumeState =
+        remember {
+            MutableStateFlow(
+                0.68f,
+            )
+        }
+
+    val volumeControl =
+        remember {
+            object : PlayerVolumeControl {
+
+                override val volume =
+                    volumeState
+
+                override fun setVolume(
+                    volume: Float,
+                ) {
+                    volumeState.value =
+                        volume.coerceIn(
+                            0f,
+                            1f,
+                        )
+                }
+
+                override fun toggleMute() {
+                    volumeState.value =
+                        if (
+                            volumeState.value > 0f
+                        ) {
+                            0f
+                        } else {
+                            0.68f
+                        }
+                }
+            }
+        }
+
+    CompositionLocalProvider(
+        LocalPlayerVolumeControl provides
+                volumeControl,
+    ) {
+        FullPlayerPreviewContent()
+    }
+}
+
+/** Общие данные обоих preview, чтобы мобильный и desktop варианты не разъезжались. */
+@Composable
+private fun FullPlayerPreviewContent() {
     FullPlayerScreen(
         state = FullPlayerUiState(
             trackId = "preview",
@@ -1114,7 +1477,11 @@ private fun FullPlayerScreenPreview() {
             showPlaybackModes = true,
             canLike = true,
             isLiked = true,
-            playlistTitles = listOf("В дорогу", "Ночное", "Любимое новое"),
+            playlistTitles = listOf(
+                "В дорогу",
+                "Ночное",
+                "Любимое новое",
+            ),
         ),
         playerEvents = emptyFlow(),
         uiMessages = emptyFlow(),

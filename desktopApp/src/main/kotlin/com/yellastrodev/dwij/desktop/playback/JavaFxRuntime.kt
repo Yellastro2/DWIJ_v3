@@ -36,6 +36,7 @@ object JavaFxRuntime {
                     Platform.setImplicitExit(
                         false,
                     )
+
                     latch.countDown()
                 }
 
@@ -48,10 +49,38 @@ object JavaFxRuntime {
                  */
             }
 
-            started = true
+            started =
+                true
         }
     }
 
+    /**
+     * Запускает короткую команду на JavaFX Application Thread
+     * без ожидания результата.
+     *
+     * Подходит для частых UI-команд вроде изменения громкости.
+     */
+    fun execute(
+        block: () -> Unit,
+    ) {
+        ensureStarted()
+
+        if (
+            Platform.isFxApplicationThread()
+        ) {
+            block()
+            return
+        }
+
+        Platform.runLater(
+            block,
+        )
+    }
+
+    /**
+     * Выполняет команду на JavaFX Application Thread
+     * и suspend-ится до получения результата.
+     */
     suspend fun <T> call(
         block: () -> T,
     ): T {
