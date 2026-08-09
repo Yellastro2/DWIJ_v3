@@ -19,3 +19,4 @@ local.properties
 .codex-tmp
 app/release
 **/build/
+/AGENT.md
