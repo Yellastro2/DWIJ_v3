@@ -26,15 +26,14 @@ import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.catch
+import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.distinctUntilChanged
+import kotlinx.coroutines.flow.filterNotNull
 import kotlinx.coroutines.flow.flatMapLatest
 import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.flow.launchIn
-import kotlinx.coroutines.flow.map
-import kotlinx.coroutines.flow.merge
 import kotlinx.coroutines.flow.onEach
 import kotlinx.coroutines.flow.receiveAsFlow
-import kotlinx.coroutines.flow.scan
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import kotlin.reflect.KClass
@@ -100,6 +99,11 @@ class TracklistModel(
     private val _isLoading = MutableStateFlow(false)
     val isLoading: StateFlow<Boolean> = _isLoading
 
+    private val _totalTrackCount = MutableStateFlow<Int?>(null)
+
+    /** Готовое число уникальных треков объекта до сборки подробных Song. */
+    val totalTrackCount: StateFlow<Int?> = _totalTrackCount
+
     private val _cachedUnavailableSongIds = MutableStateFlow<Set<String>>(emptySet())
 
     /** Песни с недоступным Яндекс-инстансом, который всё ещё есть в файловом кэше. */
@@ -132,6 +136,7 @@ class TracklistModel(
         trackList = emptyList()
         _tracks.value = emptyList()
         _isLoading.value = true
+        _totalTrackCount.value = null
         _cachedUnavailableSongIds.value = emptySet()
         _playlist.value = null
 
@@ -208,22 +213,36 @@ class TracklistModel(
             OBJECT_TYPE_TRACKLIST -> {
                 _playlist.value = dSimpleTracklist()
 
-                val allTracksFlow: Flow<List<dYaTrack>> =
-                    playlistRepo.playlists.flatMapLatest { playlistList ->
-                        if (playlistList.isEmpty()) {
+                val uniqueTrackRefsFlow = combine(
+                    playlistRepo.playlists,
+                    playlistRepo.initialLoadComplete,
+                ) { playlistList, initialLoadComplete ->
+                    if (playlistList.isEmpty() && !initialLoadComplete) {
+                        null
+                    } else {
+                        playlistList
+                            .asSequence()
+                            .flatMap { playlist -> playlist.tracks.asSequence() }
+                            .distinctBy { track -> track.trackId }
+                            .toList()
+                    }
+                }.filterNotNull().distinctUntilChanged()
+
+                val allTracksFlow: Flow<List<dYaTrack>> = uniqueTrackRefsFlow
+                    .onEach { trackRefs ->
+                        _totalTrackCount.value = trackRefs.size
+                        logger.debug(
+                            TAG,
+                            "[setType] Общий список ЯМ: уникальных треков=${trackRefs.size}",
+                        )
+                    }
+                    .flatMapLatest { trackRefs ->
+                        if (trackRefs.isEmpty()) {
                             flowOf(emptyList())
                         } else {
-                            val flows = playlistList.map { playlist ->
-                                trackRepo.tracksFlow(playlist.tracks)
-                            }
-
-                            merge(*flows.toTypedArray())
-                                .scan(emptyMap<String, dYaTrack>()) { acc, newList ->
-                                    acc + newList.associateBy { it.id }
-                                }
-                                .map { it.values.toList() }
+                            trackRepo.tracksFlow(trackRefs)
                         }
-                    }.distinctUntilChanged()
+                    }
 
                 tracksJob = allTracksFlow
                     .onEach { tracks -> publishTracks(tracks) }

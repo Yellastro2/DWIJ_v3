@@ -89,6 +89,7 @@ fun ObjectRoute(
     val playlist by model.playlist.collectAsState()
     val tracks by model.tracks.collectAsState()
     val isLoading by model.isLoading.collectAsState()
+    val totalTrackCount by model.totalTrackCount.collectAsState()
     val cachedUnavailableSongIds by model.cachedUnavailableSongIds.collectAsState()
 
     val yandexPlaylist = playlist as? dYaPlaylist
@@ -104,7 +105,11 @@ fun ObjectRoute(
         else -> stringResource(Res.string.object_loading_title)
     }
 
-    val count = yandexPlaylist?.trackCount ?: tracks.size
+    val count = when {
+        yandexPlaylist != null -> yandexPlaylist.trackCount
+        objectType == DwijDestination.OBJECT_TYPE_TRACKLIST -> totalTrackCount ?: 0
+        else -> tracks.size
+    }
     val subtitle = pluralStringResource(
         Res.plurals.object_track_count,
         count,
