@@ -8,6 +8,7 @@ import com.yellastrodev.dwij.playback.PlayerVolumeControl
 import com.yellastrodev.dwij.playback.RepeatMode
 import com.yellastrodev.dwij.utils.PlayerEvent
 import com.yellastrodev.dwij.utils.PlayerState
+import com.yellastrodev.dwij.utils.TrackChangeDirection
 import com.yellastrodev.yamusicsdk.YamLogger
 import javafx.scene.media.Media
 import javafx.scene.media.MediaPlayer
@@ -110,12 +111,12 @@ class DesktopPlayerEngine(
             logger =
                 logger,
             onPlayRequest = {
-                if (!state.value.isPlaying) {
+                if (!state.value.wantsToPlay) {
                     togglePlayPause()
                 }
             },
             onPauseRequest = {
-                if (state.value.isPlaying) {
+                if (state.value.wantsToPlay) {
                     togglePlayPause()
                 }
             },
@@ -158,6 +159,8 @@ class DesktopPlayerEngine(
                     startIndex,
                 autoPlay =
                     true,
+                direction =
+                    TrackChangeDirection.DIRECT,
             )
         }
     }
@@ -187,23 +190,29 @@ class DesktopPlayerEngine(
                     index,
                 autoPlay =
                     true,
+                direction =
+                    TrackChangeDirection.DIRECT,
             )
         }
     }
 
     override suspend fun togglePlayPause() {
+        val wantsToPlay =
+            !state.value.wantsToPlay
+
+        stateStore.setWantsToPlay(
+            wantsToPlay,
+        )
+
         JavaFxRuntime.call {
             val player =
                 currentPlayer
                     ?: return@call
 
-            if (
-                player.status ==
-                MediaPlayer.Status.PLAYING
-            ) {
-                player.pause()
-            } else {
+            if (wantsToPlay) {
                 player.play()
+            } else {
+                player.pause()
             }
         }
     }
@@ -219,6 +228,8 @@ class DesktopPlayerEngine(
                     nextIndex,
                 autoPlay =
                     true,
+                direction =
+                    TrackChangeDirection.NEXT,
             )
         }
     }
@@ -234,6 +245,8 @@ class DesktopPlayerEngine(
                     previousIndex,
                 autoPlay =
                     true,
+                direction =
+                    TrackChangeDirection.PREVIOUS,
             )
         }
     }
@@ -351,12 +364,20 @@ class DesktopPlayerEngine(
     private suspend fun startTrackLocked(
         index: Int,
         autoPlay: Boolean,
+        direction: TrackChangeDirection? = null,
     ) {
         val track =
             queue.getOrNull(
                 index,
             )
                 ?: return
+
+        if (direction != null) {
+            stateStore.beginTrackChange(
+                direction = direction,
+                wantsToPlay = autoPlay,
+            )
+        }
 
         val resolvedUri =
             try {
@@ -376,6 +397,8 @@ class DesktopPlayerEngine(
                         "Не удалось подготовить трек",
                     ),
                 )
+
+                stateStore.completeTrackChange()
 
                 return
             }
@@ -443,7 +466,7 @@ class DesktopPlayerEngine(
         lastWindowsPositionUpdateNanos =
             0L
 
-        if (autoPlay) {
+        if (state.value.wantsToPlay) {
             JavaFxRuntime.call {
                 if (
                     currentPlayer ===
@@ -526,6 +549,8 @@ class DesktopPlayerEngine(
                 durationMs =
                     durationMs,
             )
+
+            stateStore.completeTrackChange()
 
             windowsMediaSession.setTimeline(
                 durationMs =
@@ -647,6 +672,8 @@ class DesktopPlayerEngine(
                 false,
             )
 
+            stateStore.completeTrackChange()
+
             scope.launch {
                 stateStore.emit(
                     PlayerEvent.ShowError(
@@ -702,6 +729,9 @@ class DesktopPlayerEngine(
                 nextIndex == null
             ) {
                 stateStore.setPlaying(
+                    false,
+                )
+                stateStore.setWantsToPlay(
                     false,
                 )
 

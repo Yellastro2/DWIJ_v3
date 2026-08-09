@@ -16,6 +16,7 @@ import com.yellastrodev.dwij.playback.AndroidPlayerListener
 import com.yellastrodev.dwij.playback.PlaybackStateStore
 import com.yellastrodev.dwij.utils.PlayerEvent
 import com.yellastrodev.dwij.utils.PlayerState
+import com.yellastrodev.dwij.utils.TrackChangeDirection
 import com.yellastrodev.dwij.yApplication
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -99,6 +100,10 @@ class PlayerService : MediaSessionService() {
         tracks: List<MediaItem>,
         startIndex: Int = 0,
     ) {
+        stateStore.beginTrackChange(
+            direction = TrackChangeDirection.DIRECT,
+            wantsToPlay = true,
+        )
         player.setMediaItems(tracks, startIndex, 0L)
         player.prepare()
         player.play()
@@ -137,6 +142,8 @@ class PlayerService : MediaSessionService() {
             isPlaying = false,
             currentIndex = safeIndex,
         )
+        stateStore.setWantsToPlay(false)
+        stateStore.completeTrackChange()
         stateStore.setProgress(
             positionMs = safePositionMs,
             durationMs = durationMs.coerceAtLeast(0L),
@@ -161,6 +168,10 @@ class PlayerService : MediaSessionService() {
             return
         }
 
+        stateStore.beginTrackChange(
+            direction = TrackChangeDirection.DIRECT,
+            wantsToPlay = true,
+        )
         player.seekTo(trackNumber, 0L)
         player.playWhenReady = true
 
@@ -170,15 +181,30 @@ class PlayerService : MediaSessionService() {
     }
 
     fun pause() {
-        if (player.playWhenReady) player.pause() else player.play()
+        val wantsToPlay = !player.playWhenReady
+        stateStore.setWantsToPlay(wantsToPlay)
+
+        if (wantsToPlay) player.play() else player.pause()
     }
 
     fun skipNext() {
+        val previousIndex = player.currentMediaItemIndex
+        stateStore.beginTrackChange(TrackChangeDirection.NEXT)
         player.seekToNext()
+
+        if (player.currentMediaItemIndex == previousIndex) {
+            stateStore.completeTrackChange()
+        }
     }
 
     fun skipPrev() {
+        val previousIndex = player.currentMediaItemIndex
+        stateStore.beginTrackChange(TrackChangeDirection.PREVIOUS)
         player.seekToPrevious()
+
+        if (player.currentMediaItemIndex == previousIndex) {
+            stateStore.completeTrackChange()
+        }
     }
 
     fun seekTo(positionMs: Long) {

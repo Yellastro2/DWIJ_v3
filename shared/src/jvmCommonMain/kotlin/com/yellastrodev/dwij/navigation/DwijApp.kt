@@ -34,6 +34,7 @@ import com.yellastrodev.dwij.resources.home_player_unknown_artist
 import com.yellastrodev.dwij.ui.HomeCompactPlayer
 import com.yellastrodev.dwij.ui.HomeCompactPlayerUiState
 import com.yellastrodev.dwij.ui.theme.DwijColors
+import com.yellastrodev.dwij.utils.TrackChangeDirection
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.flowOn
 import kotlinx.coroutines.launch
@@ -137,11 +138,14 @@ fun DwijApp(
                                     .joinToString(", ")
                                     .ifBlank { unknownArtist },
                                 cover = compactCover,
-                                isPlaying = playerState.isPlaying,
+                                isPlaying = playerState.wantsToPlay,
                                 currentPositionMillis =
                                     playerState.currentPosition,
                                 durationMillis =
                                     playerState.duration,
+                                isNextPending =
+                                    playerState.pendingTrackChange ==
+                                        TrackChangeDirection.NEXT,
                             ),
                             onOpenClick = {
                                 navController.navigate(

@@ -71,7 +71,7 @@ class WindowsTaskbarControls(
 
     @Volatile
     private var latestIsPlaying =
-        playerState.value.isPlaying
+        playerState.value.wantsToPlay
 
     private var appliedIsPlaying:
             Boolean? =
@@ -698,7 +698,7 @@ class WindowsTaskbarControls(
             scope.launch {
                 playerState
                     .map { state ->
-                        state.isPlaying
+                        state.wantsToPlay
                     }
                     .distinctUntilChanged()
                     .collect { isPlaying ->

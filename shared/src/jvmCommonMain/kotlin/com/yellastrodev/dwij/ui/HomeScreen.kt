@@ -360,6 +360,7 @@ data class HomeCompactPlayerUiState(
     val isPlaying: Boolean,
     val currentPositionMillis: Long,
     val durationMillis: Long,
+    val isNextPending: Boolean = false,
 ) {
     val playbackProgress: Float
         get() = if (durationMillis > 0L) {
@@ -833,6 +834,13 @@ fun HomeCompactPlayer(
                     painter = painterResource(Res.drawable.ic_home_player_next),
                     contentDescription = stringResource(
                         Res.string.home_player_next_content_description,
+                    ),
+                    colorFilter = ColorFilter.tint(
+                        if (player.isNextPending) {
+                            DwijColors.Pink
+                        } else {
+                            DwijColors.White
+                        },
                     ),
                     modifier = Modifier.size(28.dp),
                 )

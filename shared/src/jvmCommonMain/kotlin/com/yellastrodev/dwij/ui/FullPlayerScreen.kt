@@ -83,6 +83,7 @@ import androidx.compose.ui.unit.constrainHeight
 import androidx.compose.ui.unit.constrainWidth
 import androidx.compose.ui.unit.sp
 import com.yellastrodev.dwij.utils.PlayerEvent
+import com.yellastrodev.dwij.utils.TrackChangeDirection
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.emptyFlow
@@ -118,6 +119,7 @@ data class FullPlayerUiState(
     val isLiked: Boolean,
     val playlistTitles: List<String>,
     val isWaveLoading: Boolean = false,
+    val pendingTrackChange: TrackChangeDirection? = null,
 )
 
 /**
@@ -226,6 +228,7 @@ fun FullPlayerScreen(
                 onNextClick = onNextClick,
                 onShuffleClick = onShuffleClick,
                 onRepeatClick = onRepeatClick,
+                pendingTrackChange = state.pendingTrackChange,
                 modifier = Modifier
                     .background(DwijColors.Background.copy(alpha = 0.96f))
                     .navigationBarsPadding(),
@@ -1216,6 +1219,7 @@ private fun FullPlayerControls(
     onNextClick: () -> Unit,
     onShuffleClick: () -> Unit,
     onRepeatClick: () -> Unit,
+    pendingTrackChange: TrackChangeDirection?,
     modifier: Modifier = Modifier,
 ) {
     Row(
@@ -1242,6 +1246,8 @@ private fun FullPlayerControls(
             enabled = enabled,
             mirror = true,
             onClick = onPreviousClick,
+            selected =
+                pendingTrackChange == TrackChangeDirection.PREVIOUS,
         )
         PlayerMainControl(
             isPlaying = isPlaying,
@@ -1253,6 +1259,8 @@ private fun FullPlayerControls(
             contentDescription = stringResource(Res.string.home_player_next_content_description),
             enabled = enabled,
             onClick = onNextClick,
+            selected =
+                pendingTrackChange == TrackChangeDirection.NEXT,
         )
         if (showPlaybackModes) {
             PlayerModeControl(
@@ -1363,6 +1371,7 @@ private fun PlayerSmallControl(
     enabled: Boolean,
     onClick: () -> Unit,
     mirror: Boolean = false,
+    selected: Boolean = false,
 ) {
     IconButton(
         onClick = onClick,
@@ -1373,7 +1382,14 @@ private fun PlayerSmallControl(
             painter = painterResource(icon),
             contentDescription = contentDescription,
             colorFilter = ColorFilter.tint(
-                if (enabled) DwijColors.White else DwijColors.SecondaryText.copy(alpha = 0.35f),
+                when {
+                    !enabled ->
+                        DwijColors.SecondaryText.copy(alpha = 0.35f)
+                    selected ->
+                        DwijColors.Pink
+                    else ->
+                        DwijColors.White
+                },
             ),
             modifier = Modifier
                 .size(27.dp)

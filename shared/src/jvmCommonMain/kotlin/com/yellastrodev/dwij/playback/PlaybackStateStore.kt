@@ -2,6 +2,7 @@ package com.yellastrodev.dwij.playback
 
 import com.yellastrodev.dwij.utils.PlayerEvent
 import com.yellastrodev.dwij.utils.PlayerState
+import com.yellastrodev.dwij.utils.TrackChangeDirection
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharedFlow
@@ -29,6 +30,24 @@ class PlaybackStateStore {
 
     fun setPlaying(isPlaying: Boolean) {
         _state.value = _state.value.copy(isPlaying = isPlaying)
+    }
+
+    fun setWantsToPlay(wantsToPlay: Boolean) {
+        _state.value = _state.value.copy(wantsToPlay = wantsToPlay)
+    }
+
+    fun beginTrackChange(
+        direction: TrackChangeDirection,
+        wantsToPlay: Boolean = _state.value.wantsToPlay,
+    ) {
+        _state.value = _state.value.copy(
+            wantsToPlay = wantsToPlay,
+            pendingTrackChange = direction,
+        )
+    }
+
+    fun completeTrackChange() {
+        _state.value = _state.value.copy(pendingTrackChange = null)
     }
 
     fun setProgress(positionMs: Long, durationMs: Long) {

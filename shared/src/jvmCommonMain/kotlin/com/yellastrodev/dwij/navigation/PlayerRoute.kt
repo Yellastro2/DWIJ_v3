@@ -376,7 +376,7 @@ fun PlayerRoute(
             hasUnresolvedMatchCandidate =
                 pendingMatchCandidates.isNotEmpty(),
             cover = cover,
-            isPlaying = playerState.isPlaying,
+            isPlaying = playerState.wantsToPlay,
             currentPositionMillis = playerState.currentPosition,
             durationMillis = playerState.duration,
             isShuffle = playerState.isShuffle,
@@ -386,6 +386,7 @@ fun PlayerRoute(
             isLiked = isLiked,
             playlistTitles = containingPlaylistTitles,
             isWaveLoading = showWaveLoadingPlaceholder,
+            pendingTrackChange = playerState.pendingTrackChange,
         ),
         playerEvents = playerModel.playerEvent,
         uiMessages = uiMessages,

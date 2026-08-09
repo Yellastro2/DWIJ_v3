@@ -25,6 +25,7 @@ import com.yellastrodev.dwij.resources.Res
 import com.yellastrodev.dwij.resources.home_player_unknown_artist
 import com.yellastrodev.dwij.ui.HomeCompactPlayerUiState
 import com.yellastrodev.dwij.ui.HomeScreen
+import com.yellastrodev.dwij.utils.TrackChangeDirection
 import com.yellastrodev.dwij.ui.HomeScreenPlatform
 import com.yellastrodev.dwij.ui.LocalYamLogger
 import com.yellastrodev.dwij.ui.RadialMenu
@@ -228,9 +229,12 @@ fun HomeRoute(
                     .joinToString(", ")
                     .ifBlank { unknownArtist },
                 cover = cover,
-                isPlaying = playerState.isPlaying,
+                isPlaying = playerState.wantsToPlay,
                 currentPositionMillis = playerState.currentPosition,
                 durationMillis = playerState.duration,
+                isNextPending =
+                    playerState.pendingTrackChange ==
+                        TrackChangeDirection.NEXT,
             )
         },
         selectedSource = selectedSource,

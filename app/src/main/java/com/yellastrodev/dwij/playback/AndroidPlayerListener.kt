@@ -40,6 +40,10 @@ class AndroidPlayerListener(
             player.currentMediaItemIndex != C.INDEX_UNSET
         ) {
             stateStore.setCurrentIndex(player.currentMediaItemIndex)
+
+            if (player.playbackState == Player.STATE_READY) {
+                stateStore.completeTrackChange()
+            }
         }
 
         if (mediaItem == null) return
@@ -64,6 +68,10 @@ class AndroidPlayerListener(
             isPlaying = player.isPlaying,
             currentIndex = player.currentMediaItemIndex,
         )
+
+        if (playbackState == Player.STATE_READY) {
+            stateStore.completeTrackChange()
+        }
 
         if (playbackState != Player.STATE_ENDED) return
 
@@ -100,7 +108,15 @@ class AndroidPlayerListener(
         if (isPlaying) startProgressUpdates() else stopProgressUpdates()
     }
 
+    override fun onPlayWhenReadyChanged(
+        playWhenReady: Boolean,
+        reason: Int,
+    ) {
+        stateStore.setWantsToPlay(playWhenReady)
+    }
+
     override fun onPlayerError(error: PlaybackException) {
+        stateStore.completeTrackChange()
         feedback.onPlaybackEnded(
             currentPositionMs = player.currentPosition,
             durationMs = player.duration,
