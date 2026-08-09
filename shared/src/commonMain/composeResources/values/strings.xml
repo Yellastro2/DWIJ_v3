@@ -87,11 +87,14 @@
     <string name="song_match_candidates_load_error">Не удалось загрузить варианты совпадения</string>
     <string name="multi_source_dialog_title">найдены варианты сурс трека</string>
     <string name="multi_source_dialog_empty">Варианты источников пока не найдены</string>
+    <string name="multi_source_confirmed_title">ИСТОЧНИКИ ТРЕКА</string>
+    <string name="multi_source_candidates_title">НЕПОДТВЕРЖДЁННЫЕ ВАРИАНТЫ</string>
     <string name="multi_source_dialog_cancel">Отмена</string>
     <string name="multi_source_dialog_save">Сохранить</string>
     <string name="multi_source_dialog_saving">Сохраняем…</string>
     <string name="multi_source_merge_success">Источники объединены в Song %1$s</string>
     <string name="multi_source_merge_error">Не удалось объединить источники: %1$s</string>
+    <string name="multi_source_priority_error">Не удалось изменить источник по умолчанию: %1$s</string>
     <string name="player_in_playlists">В ПЛЕЙЛИСТАХ</string>
     <string name="player_add_to_playlist">+ В плейлист</string>
     <string name="player_shuffle_content_description">Перемешать очередь</string>

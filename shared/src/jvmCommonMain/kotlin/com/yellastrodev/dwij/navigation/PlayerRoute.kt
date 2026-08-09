@@ -22,6 +22,7 @@ import com.yellastrodev.dwij.resources.Res
 import com.yellastrodev.dwij.resources.home_player_unknown_artist
 import com.yellastrodev.dwij.resources.multi_source_merge_error
 import com.yellastrodev.dwij.resources.multi_source_merge_success
+import com.yellastrodev.dwij.resources.multi_source_priority_error
 import com.yellastrodev.dwij.resources.player_current_queue
 import com.yellastrodev.dwij.resources.player_like_failed
 import com.yellastrodev.dwij.resources.player_no_track
@@ -119,8 +120,14 @@ fun PlayerRoute(
     var isMergingSources by remember(currentTrackId) {
         mutableStateOf(false)
     }
+    var isUpdatingSourcePriority by remember(currentTrackId) {
+        mutableStateOf(false)
+    }
     var mergeSourcesError by remember(currentTrackId) {
         mutableStateOf<String?>(null)
+    }
+    var cachedUnavailableYandexIds by remember(currentTrackId) {
+        mutableStateOf(emptySet<String>())
     }
 
     val pendingMatchCandidates by remember(currentTrackId) {
@@ -222,42 +229,99 @@ fun PlayerRoute(
     val showWaveLoadingPlaceholder =
         isWaveLoading && currentTrackId == null
 
-    val sourceEntries = remember(track, candidateSongs) {
-        (listOfNotNull(track) + candidateSongs)
-            .distinctBy(Song::id)
-            .flatMap { song ->
-                song.instances.map { instance ->
-                    PlayerSourceDialogEntry(
-                        song = song,
-                        instance = instance,
-                    )
-                }
+    val confirmedSourceEntries = remember(track) {
+        track?.instances.orEmpty().map { instance ->
+            PlayerSourceDialogEntry(
+                song = requireNotNull(track),
+                instance = instance,
+            )
+        }
+    }
+
+    val candidateSourceEntries = remember(candidateSongs) {
+        candidateSongs.flatMap { song ->
+            song.instances.map { instance ->
+                PlayerSourceDialogEntry(
+                    song = song,
+                    instance = instance,
+                )
             }
+        }.distinctBy { entry -> entry.instance.id }
+    }
+
+    val sourceEntries = remember(confirmedSourceEntries, candidateSourceEntries) {
+        (confirmedSourceEntries + candidateSourceEntries)
             .distinctBy { entry -> entry.instance.id }
     }
 
-    val sourceOptions = remember(sourceEntries, unknownArtist) {
-        sourceEntries.map { entry ->
-            TrackSourceOptionUiModel(
-                instanceId = entry.instance.id,
-                item = TrackListItemUiModel(
-                    key = entry.instance.id,
-                    trackId = entry.song.id,
-                    title = entry.song.title,
-                    artist = entry.song.artistNames
-                        .joinToString(", ")
-                        .ifBlank { unknownArtist },
-                    isYandexUnavailable =
-                        (entry.instance as? TrackInstance.Yandex)
-                            ?.track
-                            ?.available == false,
-                ),
-                sourceIndicator = when (entry.instance) {
-                    is TrackInstance.Yandex -> TrackSourceIndicator.YANDEX
-                    is TrackInstance.Local -> TrackSourceIndicator.LOCAL
-                },
-            )
+    LaunchedEffect(showMultiSourceDialog, sourceEntries) {
+        if (!showMultiSourceDialog) return@LaunchedEffect
+        val unavailableIds = sourceEntries.mapNotNull { entry ->
+            (entry.instance as? TrackInstance.Yandex)
+                ?.track
+                ?.takeIf { yandexTrack -> !yandexTrack.available }
+                ?.id
+        }.distinct()
+        cachedUnavailableYandexIds = withContext(Dispatchers.IO) {
+            unavailableIds
+                .filter(component.trackCacheRepo::isCached)
+                .toSet()
         }
+    }
+
+    fun PlayerSourceDialogEntry.toOption(): TrackSourceOptionUiModel =
+        TrackSourceOptionUiModel(
+            instanceId = instance.id,
+            item = TrackListItemUiModel(
+                key = instance.id,
+                trackId = song.id,
+                title = song.title,
+                artist = song.artistNames
+                    .joinToString(", ")
+                    .ifBlank { unknownArtist },
+                isYandexUnavailable =
+                    (instance as? TrackInstance.Yandex)
+                        ?.track
+                        ?.available == false,
+            ),
+            sourceIndicator = when (instance) {
+                is TrackInstance.Yandex -> TrackSourceIndicator.YANDEX
+                is TrackInstance.Local -> TrackSourceIndicator.LOCAL
+            },
+            isPlayable = instance.isPlayable(cachedUnavailableYandexIds),
+        )
+
+    val confirmedSourceOptions = remember(
+        confirmedSourceEntries,
+        unknownArtist,
+        cachedUnavailableYandexIds,
+    ) {
+        confirmedSourceEntries.map { entry -> entry.toOption() }
+    }
+
+    val candidateSourceOptions = remember(
+        candidateSourceEntries,
+        unknownArtist,
+        cachedUnavailableYandexIds,
+    ) {
+        candidateSourceEntries.map { entry -> entry.toOption() }
+    }
+
+    val effectivePreferredInstanceId = remember(
+        track,
+        cachedUnavailableYandexIds,
+    ) {
+        track?.preferredInstanceId
+            ?.takeIf { preferredId ->
+                track?.instances?.any { instance ->
+                    instance.id == preferredId &&
+                        instance.isPlayable(cachedUnavailableYandexIds)
+                } == true
+            }
+            ?: track?.localInstances?.firstOrNull()?.id
+            ?: track?.yandexInstances?.firstOrNull { instance ->
+                instance.isPlayable(cachedUnavailableYandexIds)
+            }?.id
     }
 
     val sourceInstancesById = remember(sourceEntries) {
@@ -380,8 +444,19 @@ fun PlayerRoute(
     )
 
     if (showMultiSourceDialog) {
+        val manageConfirmedSources = confirmedSourceOptions.size > 1
         MultiSourceDialog(
-            options = sourceOptions,
+            confirmedOptions = if (manageConfirmedSources) {
+                confirmedSourceOptions
+            } else {
+                emptyList()
+            },
+            candidateOptions = if (manageConfirmedSources) {
+                candidateSourceOptions
+            } else {
+                confirmedSourceOptions + candidateSourceOptions
+            },
+            preferredInstanceId = effectivePreferredInstanceId,
             loadCover = { instanceId ->
                 sourceInstancesById[instanceId]
                     ?.let { instance ->
@@ -392,21 +467,66 @@ fun PlayerRoute(
             onDismiss = {
                 showMultiSourceDialog = false
             },
-            onSave = onSave@{ selectedIds ->
-                val selectedEntries = sourceEntries.filter { entry ->
+            onPreferredInstanceChange = onPreferredInstanceChange@{ instanceId ->
+                val currentSong = track ?: return@onPreferredInstanceChange
+                if (isMergingSources || isUpdatingSourcePriority) {
+                    return@onPreferredInstanceChange
+                }
+                coroutineScope.launch {
+                    isUpdatingSourcePriority = true
+                    mergeSourcesError = null
+                    try {
+                        val updatedSong = withContext(Dispatchers.IO) {
+                            songRepository.setPreferredInstance(currentSong.id, instanceId)
+                            requireNotNull(
+                                songRepository
+                                    .songsByIds(listOf(currentSong.id))
+                                    .firstOrNull(),
+                            ) { "Song ${currentSong.id} не найдена после смены приоритета" }
+                        }
+                        playerModel.applyMergedSong(
+                            sourceSongIds = setOf(currentSong.id),
+                            mergedSong = updatedSong,
+                        )
+                    } catch (error: CancellationException) {
+                        throw error
+                    } catch (error: Exception) {
+                        logger.error(
+                            TAG,
+                            "[updateSourcePriority] Не удалось сохранить приоритет источника",
+                            error,
+                        )
+                        mergeSourcesError = getString(
+                            Res.string.multi_source_priority_error,
+                            error.message ?: error.toString(),
+                        )
+                    } finally {
+                        isUpdatingSourcePriority = false
+                    }
+                }
+            },
+            onSaveCandidates = onSaveCandidates@{ selectedIds ->
+                val selectedEntries = candidateSourceEntries.filter { entry ->
                     entry.instance.id in selectedIds
                 }
 
-                if (selectedEntries.size < 2 || isMergingSources) {
-                    return@onSave
+                val anchorEntry = confirmedSourceEntries.firstOrNull()
+                    ?: return@onSaveCandidates
+                if (
+                    selectedEntries.isEmpty() ||
+                    isMergingSources ||
+                    isUpdatingSourcePriority
+                ) {
+                    return@onSaveCandidates
                 }
+                val entriesToMerge = listOf(anchorEntry) + selectedEntries
 
                 coroutineScope.launch {
                     isMergingSources = true
                     mergeSourcesError = null
 
                     try {
-                        val sourceSongIds = selectedEntries
+                        val sourceSongIds = entriesToMerge
                             .mapTo(
                                 linkedSetOf(),
                                 PlayerSourceDialogEntry::songId,
@@ -415,7 +535,7 @@ fun PlayerRoute(
                         val (mergedSongId, mergedSong) =
                             withContext(Dispatchers.IO) {
                                 val resultId = songRepository.mergeInstances(
-                                    selectedEntries.map(
+                                    entriesToMerge.map(
                                         PlayerSourceDialogEntry::instance,
                                     ),
                                 )
@@ -462,7 +582,9 @@ fun PlayerRoute(
                     }
                 }
             },
-            isSaving = isMergingSources,
+            manageConfirmedSources = manageConfirmedSources,
+            minimumCandidateSelectionCount = if (manageConfirmedSources) 1 else 2,
+            isSaving = isMergingSources || isUpdatingSourcePriority,
             errorMessage = mergeSourcesError,
         )
     }
@@ -476,5 +598,12 @@ private data class PlayerSourceDialogEntry(
     val songId: String
         get() = song.id
 }
+
+/** Локальный файл всегда playable; Яндекс-трек — только при доступности или наличии в кэше. */
+private fun TrackInstance.isPlayable(cachedUnavailableYandexIds: Set<String>): Boolean =
+    when (this) {
+        is TrackInstance.Local -> true
+        is TrackInstance.Yandex -> track.available || track.id in cachedUnavailableYandexIds
+    }
 
 private const val TAG = "PlayerRoute"

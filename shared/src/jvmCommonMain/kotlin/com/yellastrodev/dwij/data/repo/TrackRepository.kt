@@ -133,10 +133,7 @@ class TrackRepository(
                 publishTracks(localTracks)
                 val localById = localTracks.associateBy(dYaTrack::id)
 
-                val missingIds = requestedIds.filter { id ->
-                    val track = localById[id]
-                    track == null || track.albums.isEmpty()
-                }
+                val missingIds = requestedIds.filterNot(localById::containsKey)
                 if (missingIds.isNotEmpty()) {
                     logger.debug(TAG, "[loadTracks] Догружаем отсутствующие треки=${missingIds.size}")
                     when (val remoteResult = fetchAndStoreTracks(missingIds)) {
@@ -164,7 +161,7 @@ class TrackRepository(
                     .toList()
 
                 val resolvedTracks = trackIds.mapNotNull(_tracks.value::get)
-                songRepository.registerYandexTracks(resolvedTracks)
+                songRepository.ensureYandexTracksIndexed(resolvedTracks)
                 DataResult.Success(resolvedTracks)
             } catch (error: CancellationException) {
                 throw error
@@ -191,7 +188,6 @@ class TrackRepository(
             try {
                 when (val result = fetchAndStoreTracks(claimedIds)) {
                     is DataResult.Success -> {
-                        songRepository.registerYandexTracks(result.value)
                         logger.debug(
                             TAG,
                             "[refreshStaleTracksInBackground] Обновлено=${result.value.size}"
@@ -214,7 +210,10 @@ class TrackRepository(
         }
     }
 
-    /** Получает метаданные пачками и сохраняет обновления в Room. */
+    /**
+     * Получает метаданные пачками, сохраняет их и синхронно обновляет производный Song-индекс.
+     * Благодаря этому обычное чтение уже сохранённых треков не выполняет повторные записи в Room.
+     */
     private suspend fun fetchAndStoreTracks(
         trackIds: List<String>
     ): DataResult<List<dYaTrack>> {
@@ -225,6 +224,7 @@ class TrackRepository(
                     local.insertAll(result.value)
                     val storedTracks = local.getTracks(result.value.map(dYaTrack::id))
                     publishTracks(storedTracks)
+                    songRepository.registerYandexTracks(storedTracks)
                     fetchedTracks += storedTracks
                 }
                 is DataResult.Failure -> return result

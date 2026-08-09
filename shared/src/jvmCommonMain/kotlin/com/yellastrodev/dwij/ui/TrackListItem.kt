@@ -48,8 +48,8 @@ enum class TrackSourceIndicator {
 
 /**
  * Универсальная строка трека. В обычном списке показывает доступность и дубли,
- * а в диалоге источников — тип источника и галочку локального выбора. [onLongClick]
- * используется только родительским списком для открытия контекстного меню.
+ * а в диалоге источников — тип источника, галочку локального выбора либо номер приоритета.
+ * [onLongClick] используется только родительским списком для открытия контекстного меню.
  */
 @Composable
 @OptIn(ExperimentalFoundationApi::class)
@@ -61,6 +61,7 @@ fun TrackListItem(
     onLongClick: (() -> Unit)? = null,
     sourceIndicator: TrackSourceIndicator? = null,
     isSelected: Boolean = false,
+    priorityNumber: Int? = null,
 ) {
     val showMultiplicityIndicator = sourceIndicator == null &&
         (item.hasMultipleSources || item.hasUnresolvedMatchCandidate)
@@ -71,7 +72,7 @@ fun TrackListItem(
         showYandexIndicator,
         sourceIndicator == TrackSourceIndicator.LOCAL,
     ).count { it }
-    val hasRightDecoration = topIndicatorCount > 0 || isSelected
+    val hasRightDecoration = topIndicatorCount > 0 || isSelected || priorityNumber != null
     val titleColor = if (item.isPlaybackBlocked) {
         DwijColors.White.copy(alpha = 0.34f)
     } else {
@@ -158,6 +159,16 @@ fun TrackListItem(
                 modifier = Modifier
                     .align(Alignment.BottomEnd)
                     .padding(end = 9.dp, bottom = 7.dp),
+            )
+        } else if (priorityNumber != null) {
+            Text(
+                text = priorityNumber.toString(),
+                color = DwijColors.CyanBright,
+                fontSize = 14.sp,
+                fontWeight = FontWeight.Bold,
+                modifier = Modifier
+                    .align(Alignment.BottomEnd)
+                    .padding(end = 12.dp, bottom = 7.dp),
             )
         }
     }

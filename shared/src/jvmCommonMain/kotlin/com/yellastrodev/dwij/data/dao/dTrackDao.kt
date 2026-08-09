@@ -1,9 +1,12 @@
 package com.yellastrodev.dwij.data.dao
 
 import androidx.room.Dao
+import androidx.room.Embedded
 import androidx.room.Insert
+import androidx.room.Junction
 import androidx.room.OnConflictStrategy
 import androidx.room.Query
+import androidx.room.Relation
 import androidx.room.Transaction
 import androidx.room.Update
 import com.yellastrodev.dwij.data.entities.dTrackAlbumCrossRef
@@ -12,6 +15,37 @@ import com.yellastrodev.dwij.data.entities.dYaAlbum
 import com.yellastrodev.dwij.data.entities.dYaArtist
 import com.yellastrodev.dwij.data.entities.dYaTrack
 import kotlin.collections.forEach
+
+/** Пакетно загружаемый Room-снимок трека с данными, нужными спискам и плееру. */
+data class YandexTrackWithRelations(
+    @Embedded
+    val track: dYaTrack,
+    @Relation(
+        parentColumn = "id",
+        entityColumn = "localId",
+        associateBy = Junction(
+            value = dTrackArtistCrossRef::class,
+            parentColumn = "trackId",
+            entityColumn = "artistLocalId",
+        ),
+    )
+    val artists: List<dYaArtist>,
+    @Relation(
+        parentColumn = "id",
+        entityColumn = "id",
+        associateBy = Junction(
+            value = dTrackAlbumCrossRef::class,
+            parentColumn = "trackId",
+            entityColumn = "albumId",
+        ),
+    )
+    val albums: List<dYaAlbum>,
+) {
+    fun hydrate(): dYaTrack = track.apply {
+        artists = this@YandexTrackWithRelations.artists
+        albums = this@YandexTrackWithRelations.albums
+    }
+}
 
 @Dao
 interface dTrackDao {
@@ -131,64 +165,27 @@ interface dTrackDao {
         insertTrackArtistCrossRefs(artistRefs)
     }
 
+    @Transaction
     @Query("SELECT * FROM tracks WHERE id = :id LIMIT 1")
-    suspend fun getTrackDump(id: String): dYaTrack?
+    suspend fun getTrackWithRelations(id: String): YandexTrackWithRelations?
 
-    @Query("""
-        SELECT a.* FROM albums a
-        INNER JOIN track_albums ta ON a.id = ta.albumId
-        WHERE ta.trackId = :trackId
-    """)
-    suspend fun getAlbumsForTrack(trackId: String): List<dYaAlbum>
-
-    @Query("""
-        SELECT ar.* FROM artists ar
-        INNER JOIN track_artists tar ON ar.localId = tar.artistLocalId
-        WHERE tar.trackId = :trackId
-    """)
-    suspend fun getArtistsForTrack(trackId: String): List<dYaArtist>
-
-    @Query("SELECT DISTINCT playlistUuid FROM playlist_tracks WHERE trackId = :trackId")
-    suspend fun getPlaylistsForTrack(trackId: String): List<String>
-
+    suspend fun getTrack(id: String): dYaTrack? =
+        getTrackWithRelations(id)?.hydrate()
 
     @Transaction
-    suspend fun getTrack(id: String): dYaTrack? {
-        val track = getTrackDump(id) ?: return null
-        val albums = getAlbumsForTrack(id)
-        val artists = getArtistsForTrack(id)
-        val playlists = getPlaylistsForTrack(id)
-        return track.apply { this.albums = albums; this.artists = artists; this.playlists = playlists }
-    }
-
     @Query("SELECT * FROM tracks")
-    suspend fun getAllTracksDump(): List<dYaTrack>
+    suspend fun getAllTracksWithRelations(): List<YandexTrackWithRelations>
+
+    suspend fun getAllTracks(): List<dYaTrack> =
+        getAllTracksWithRelations().map(YandexTrackWithRelations::hydrate)
 
     @Transaction
-    suspend fun getAllTracks(): List<dYaTrack> {
-        val tracks = getAllTracksDump()
-        tracks.forEach { track ->
-            track.artists = getArtistsForTrack(track.id)
-            track.albums = getAlbumsForTrack(track.id)
-            track.playlists = getPlaylistsForTrack(track.id)
-        }
-        return tracks
-    }
-
     @Query("SELECT * FROM tracks WHERE id IN (:ids)")
-    suspend fun getTracksDump(ids: List<String>): List<dYaTrack>
+    suspend fun getTracksWithRelations(ids: List<String>): List<YandexTrackWithRelations>
 
-    @Transaction
     suspend fun getTracks(ids: List<String>): List<dYaTrack> {
         if (ids.isEmpty()) return emptyList()
-
-        val tracks = getTracksDump(ids)
-        tracks.forEach { track ->
-            track.artists = getArtistsForTrack(track.id)
-            track.albums = getAlbumsForTrack(track.id)
-            track.playlists = getPlaylistsForTrack(track.id)
-        }
-        return tracks
+        return getTracksWithRelations(ids).map(YandexTrackWithRelations::hydrate)
     }
 
 

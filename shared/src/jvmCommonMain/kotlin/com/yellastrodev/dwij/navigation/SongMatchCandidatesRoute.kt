@@ -285,7 +285,9 @@ fun SongMatchCandidatesRoute(
         state.selectedCandidateKey != null
     ) {
         MultiSourceDialog(
-            options = sourceOptions,
+            confirmedOptions = emptyList(),
+            candidateOptions = sourceOptions,
+            preferredInstanceId = null,
             loadCover = { instanceId ->
                 sourceInstancesById[instanceId]
                     ?.let { instance ->
@@ -295,8 +297,11 @@ fun SongMatchCandidatesRoute(
             },
             onDismiss =
                 candidatesModel::dismissCandidate,
-            onSave =
+            onPreferredInstanceChange = {},
+            onSaveCandidates =
                 candidatesModel::mergeSources,
+            manageConfirmedSources = false,
+            minimumCandidateSelectionCount = 2,
             isSaving =
                 state.isMergingSources,
             errorMessage =

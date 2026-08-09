@@ -79,6 +79,27 @@ class SongRepository(
         songDao.deleteOrphanSongs()
     }
 
+    /**
+     * Одним чтением проверяет производный индекс и восстанавливает только отсутствующие связи.
+     * Это страхует незавершённую запись или фоновую стартовую индексацию, не обновляя уже
+     * зарегистрированные треки при каждом открытии списка.
+     */
+    suspend fun ensureYandexTracksIndexed(tracks: List<dYaTrack>) {
+        val distinctTracks = tracks.distinctBy(dYaTrack::id)
+        if (distinctTracks.isEmpty()) return
+
+        val indexedSourceIds = songDao.getInstances(
+            source = MusicSource.YANDEX.name,
+            sourceTrackIds = distinctTracks.map(dYaTrack::id),
+        ).mapTo(mutableSetOf(), TrackInstanceEntity::sourceTrackId)
+        val missingTracks = distinctTracks.filterNot { track ->
+            track.id in indexedSourceIds
+        }
+        if (missingTracks.isNotEmpty()) {
+            registerYandexTracks(missingTracks)
+        }
+    }
+
     suspend fun registerLocalTracks(tracks: List<LocalTrackEntity>) {
         tracks.distinctBy(LocalTrackEntity::instanceId).forEach { track ->
             val song = track.toSongEntity()
