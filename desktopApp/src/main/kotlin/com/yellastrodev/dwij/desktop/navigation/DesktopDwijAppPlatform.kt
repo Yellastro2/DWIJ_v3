@@ -17,6 +17,7 @@ import androidx.compose.ui.input.pointer.PointerEventType
 import androidx.compose.ui.input.pointer.isBackPressed
 import androidx.compose.ui.input.pointer.onPointerEvent
 import com.yellastrodev.dwij.desktop.DesktopPaths
+import com.yellastrodev.dwij.desktop.DesktopMusicDirectoryStore
 import com.yellastrodev.dwij.di.DwijComponent
 import com.yellastrodev.dwij.navigation.DwijAppPlatform
 import com.yellastrodev.dwij.navigation.HomeRoutePlatform
@@ -35,6 +36,7 @@ class DesktopDwijAppPlatform(
     private val component: DwijComponent,
     private val applicationScope: CoroutineScope,
     private val paths: DesktopPaths,
+    private val musicDirectoryStore: DesktopMusicDirectoryStore,
 ) : DwijAppPlatform {
 
     override val homeScreenPlatform:
@@ -148,7 +150,10 @@ class DesktopDwijAppPlatform(
     override fun rememberSettingsPlatform():
         SettingsPlatform =
         rememberDesktopSettingsPlatform(
-            paths,
+            paths =
+                paths,
+            musicDirectoryStore =
+                musicDirectoryStore,
         )
 }
 

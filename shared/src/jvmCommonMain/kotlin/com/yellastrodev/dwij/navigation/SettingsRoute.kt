@@ -1,8 +1,16 @@
 package com.yellastrodev.dwij.navigation
 
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.widthIn
+import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.items
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
@@ -17,6 +25,7 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.yellastrodev.dwij.auth.YandexSession
 import com.yellastrodev.dwij.data.DataResult
@@ -36,6 +45,18 @@ import com.yellastrodev.dwij.resources.auth_error_timeout
 import com.yellastrodev.dwij.resources.auth_open_browser
 import com.yellastrodev.dwij.resources.auth_success
 import com.yellastrodev.dwij.resources.multi_source_dialog_cancel
+import com.yellastrodev.dwij.resources.settings_music_directories_add
+import com.yellastrodev.dwij.resources.settings_music_directories_close
+import com.yellastrodev.dwij.resources.settings_music_directories_dialog_title
+import com.yellastrodev.dwij.resources.settings_music_directories_duplicate
+import com.yellastrodev.dwij.resources.settings_music_directories_empty
+import com.yellastrodev.dwij.resources.settings_music_directories_remove
+import com.yellastrodev.dwij.resources.settings_music_directories_remove_message
+import com.yellastrodev.dwij.resources.settings_music_directories_remove_title
+import com.yellastrodev.dwij.resources.settings_music_directories_save_failed
+import com.yellastrodev.dwij.resources.settings_music_directories_saved
+import com.yellastrodev.dwij.resources.settings_music_directories_sync_failed
+import com.yellastrodev.dwij.resources.settings_music_directory_picker_title
 import com.yellastrodev.dwij.ui.LocalYamLogger
 import com.yellastrodev.dwij.ui.SettingsScreen
 import com.yellastrodev.yamusicsdk.YamApiClient
@@ -127,6 +148,20 @@ fun SettingsRoute(
         mutableStateOf("0 B")
     }
 
+    var musicDirectories by remember(platform) {
+        mutableStateOf(
+            platform.musicDirectories,
+        )
+    }
+
+    var showMusicDirectoriesDialog by remember {
+        mutableStateOf(false)
+    }
+
+    var directoryPendingRemoval by remember {
+        mutableStateOf<String?>(null)
+    }
+
     fun showMessage(
         message: String,
     ) {
@@ -204,6 +239,65 @@ fun SettingsRoute(
 
                     "0 B"
                 }
+        }
+    }
+
+    fun replaceMusicDirectories(
+        directories: List<String>,
+    ) {
+        val savedDirectories =
+            try {
+                platform.replaceMusicDirectories(
+                    directories,
+                )
+            } catch (error: Exception) {
+                logger.error(
+                    TAG,
+                    "[replaceMusicDirectories] Не удалось сохранить список музыкальных папок",
+                    error,
+                )
+
+                null
+            }
+
+        if (savedDirectories == null) {
+            coroutineScope.launch {
+                snackbarHostState.showSnackbar(
+                    getString(
+                        Res.string.settings_music_directories_save_failed,
+                    ),
+                )
+            }
+
+            return
+        }
+
+        musicDirectories =
+            savedDirectories
+
+        coroutineScope.launch {
+            when (
+                component
+                    .localMusicRepository
+                    .synchronize(
+                        force =
+                            true,
+                    )
+            ) {
+                is DataResult.Success ->
+                    snackbarHostState.showSnackbar(
+                        getString(
+                            Res.string.settings_music_directories_saved,
+                        ),
+                    )
+
+                is DataResult.Failure ->
+                    snackbarHostState.showSnackbar(
+                        getString(
+                            Res.string.settings_music_directories_sync_failed,
+                        ),
+                    )
+            }
         }
     }
 
@@ -472,11 +566,24 @@ fun SettingsRoute(
     platform.ResumeEffect {
         refreshCacheState()
 
+        musicDirectories =
+            platform.musicDirectories
+
         yandexLogin =
             component
                 .yandexSessionManager
                 .currentLogin()
     }
+
+    val musicDirectoryPickerTitle =
+        stringResource(
+            Res.string.settings_music_directory_picker_title,
+        )
+
+    val duplicateMusicDirectoryMessage =
+        stringResource(
+            Res.string.settings_music_directories_duplicate,
+        )
 
     Box(
         modifier =
@@ -495,6 +602,8 @@ fun SettingsRoute(
                 maxCacheMb,
             occupiedCacheSize =
                 occupiedCacheSize,
+            musicDirectories =
+                musicDirectories,
             onBackClick =
                 onBackClick,
             onAuthClick = {
@@ -525,6 +634,10 @@ fun SettingsRoute(
                     .maxSizeBytes =
                     normalizedMb.toLong() *
                             BYTES_PER_MEGABYTE
+            },
+            onMusicDirectoriesClick = {
+                showMusicDirectoriesDialog =
+                    true
             },
             modifier =
                 Modifier.fillMaxSize(),
@@ -559,6 +672,221 @@ fun SettingsRoute(
         stringResource(
             Res.string.auth_browser_error,
         )
+
+    if (
+        showMusicDirectoriesDialog &&
+        directoryPendingRemoval ==
+        null
+    ) {
+        AlertDialog(
+            onDismissRequest = {
+                showMusicDirectoriesDialog =
+                    false
+            },
+            title = {
+                Text(
+                    stringResource(
+                        Res.string.settings_music_directories_dialog_title,
+                    ),
+                )
+            },
+            text = {
+                val directories =
+                    musicDirectories.orEmpty()
+
+                if (directories.isEmpty()) {
+                    Text(
+                        stringResource(
+                            Res.string.settings_music_directories_empty,
+                        ),
+                    )
+                } else {
+                    LazyColumn(
+                        verticalArrangement =
+                            Arrangement.spacedBy(
+                                8.dp,
+                            ),
+                        modifier =
+                            Modifier
+                                .fillMaxWidth()
+                                .heightIn(
+                                    max = 360.dp,
+                                ),
+                    ) {
+                        items(
+                            items =
+                                directories,
+                            key = { directory ->
+                                directory.lowercase()
+                            },
+                        ) { directory ->
+                            Row(
+                                verticalAlignment =
+                                    Alignment.CenterVertically,
+                                modifier =
+                                    Modifier.fillMaxWidth(),
+                            ) {
+                                Text(
+                                    text =
+                                        directory,
+                                    maxLines =
+                                        2,
+                                    overflow =
+                                        TextOverflow.Ellipsis,
+                                    modifier =
+                                        Modifier.weight(1f),
+                                )
+                                TextButton(
+                                    onClick = {
+                                        directoryPendingRemoval =
+                                            directory
+                                    },
+                                ) {
+                                    Text(
+                                        stringResource(
+                                            Res.string.settings_music_directories_remove,
+                                        ),
+                                    )
+                                }
+                            }
+                        }
+                    }
+                }
+            },
+            confirmButton = {
+                TextButton(
+                    onClick = {
+                        val selectedDirectory =
+                            try {
+                                platform.chooseMusicDirectory(
+                                    musicDirectoryPickerTitle,
+                                )
+                            } catch (error: Exception) {
+                                logger.error(
+                                    TAG,
+                                    "[chooseMusicDirectory] Не удалось открыть выбор музыкальной папки",
+                                    error,
+                                )
+
+                                null
+                            }
+
+                        if (selectedDirectory != null) {
+                            val currentDirectories =
+                                musicDirectories.orEmpty()
+
+                            if (
+                                currentDirectories.any { directory ->
+                                    directory.equals(
+                                        selectedDirectory,
+                                        ignoreCase =
+                                            true,
+                                    )
+                                }
+                            ) {
+                                showMessage(
+                                    duplicateMusicDirectoryMessage,
+                                )
+                            } else {
+                                replaceMusicDirectories(
+                                    currentDirectories +
+                                            selectedDirectory,
+                                )
+                            }
+                        }
+                    },
+                ) {
+                    Text(
+                        stringResource(
+                            Res.string.settings_music_directories_add,
+                        ),
+                    )
+                }
+            },
+            dismissButton = {
+                TextButton(
+                    onClick = {
+                        showMusicDirectoriesDialog =
+                            false
+                    },
+                ) {
+                    Text(
+                        stringResource(
+                            Res.string.settings_music_directories_close,
+                        ),
+                    )
+                }
+            },
+            modifier =
+                Modifier.widthIn(
+                    max = 640.dp,
+                ),
+        )
+    }
+
+    directoryPendingRemoval?.let { directory ->
+        AlertDialog(
+            onDismissRequest = {
+                directoryPendingRemoval =
+                    null
+            },
+            title = {
+                Text(
+                    stringResource(
+                        Res.string.settings_music_directories_remove_title,
+                    ),
+                )
+            },
+            text = {
+                Text(
+                    stringResource(
+                        Res.string.settings_music_directories_remove_message,
+                        directory,
+                    ),
+                )
+            },
+            confirmButton = {
+                TextButton(
+                    onClick = {
+                        directoryPendingRemoval =
+                            null
+
+                        replaceMusicDirectories(
+                            musicDirectories
+                                .orEmpty()
+                                .filterNot { candidate ->
+                                    candidate.equals(
+                                        directory,
+                                        ignoreCase =
+                                            true,
+                                    )
+                                },
+                        )
+                    },
+                ) {
+                    Text(
+                        stringResource(
+                            Res.string.settings_music_directories_remove,
+                        ),
+                    )
+                }
+            },
+            dismissButton = {
+                TextButton(
+                    onClick = {
+                        directoryPendingRemoval =
+                            null
+                    },
+                ) {
+                    Text(
+                        stringResource(
+                            Res.string.multi_source_dialog_cancel,
+                        ),
+                    )
+                }
+            },
+        )
+    }
 
     deviceCode?.let { code ->
         AlertDialog(

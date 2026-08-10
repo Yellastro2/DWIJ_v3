@@ -26,6 +26,7 @@ class DesktopRuntime private constructor(
     val applicationScope: CoroutineScope,
     val paths: DesktopPaths,
     val settingsStore: DesktopLocalKeyValueStore,
+    val musicDirectoryStore: DesktopMusicDirectoryStore,
     val audioMetadataReader: DesktopAudioMetadataReader,
     private val playerEngine: DesktopPlayerEngine,
 ) {
@@ -101,6 +102,14 @@ class DesktopRuntime private constructor(
             val localKeyValueStore =
                 DesktopLocalKeyValueStore(
                     paths.settingsFile,
+                )
+
+            val musicDirectoryStore =
+                DesktopMusicDirectoryStore(
+                    settingsStore =
+                        localKeyValueStore,
+                    defaultDirectories =
+                        paths.musicDirectories,
                 )
 
             val yandexSessionStore =
@@ -222,9 +231,8 @@ class DesktopRuntime private constructor(
                         playerEngine,
                     localMediaSource =
                         DesktopLocalMediaSource(
-                            musicDirectories =
-                                paths
-                                    .musicDirectories,
+                            musicDirectoryStore =
+                                musicDirectoryStore,
                             playlistExportDirectory =
                                 paths
                                     .playlistExportDirectory,
@@ -253,6 +261,8 @@ class DesktopRuntime private constructor(
                     paths,
                 settingsStore =
                     localKeyValueStore,
+                musicDirectoryStore =
+                    musicDirectoryStore,
                 audioMetadataReader =
                     audioMetadataReader,
                 playerEngine =

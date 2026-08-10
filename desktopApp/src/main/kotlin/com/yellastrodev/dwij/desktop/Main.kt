@@ -79,6 +79,8 @@ fun main() {
                 runtime.applicationScope,
             paths =
                 runtime.paths,
+            musicDirectoryStore =
+                runtime.musicDirectoryStore,
         )
 
     val taskbarControls =

@@ -5,6 +5,7 @@ import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -17,6 +18,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Slider
@@ -52,7 +54,7 @@ import java.util.Locale
 import kotlin.math.roundToInt
 
 /**
- * Полностью Compose-экран настроек авторизации и общего файлового кэша.
+ * Полностью Compose-экран авторизации, кэша и платформенных настроек.
  *
  * Экран не читает SharedPreferences и не запускает OAuth самостоятельно: Activity передаёт
  * готовое состояние и обработчики, поэтому интерфейс можно превьюить отдельно.
@@ -65,9 +67,11 @@ fun SettingsScreen(
     minCacheMb: Int,
     maxCacheMb: Int,
     occupiedCacheSize: String,
+    musicDirectories: List<String>?,
     onBackClick: () -> Unit,
     onAuthClick: () -> Unit,
     onCacheLimitCommitted: (megabytes: Int) -> Unit,
+    onMusicDirectoriesClick: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
     val snackbarHostState = remember { SnackbarHostState() }
@@ -90,6 +94,10 @@ fun SettingsScreen(
                 verticalArrangement = Arrangement.spacedBy(14.dp),
                 modifier = Modifier
                     .fillMaxWidth()
+                    .weight(1f)
+                    .verticalScroll(
+                        rememberScrollState(),
+                    )
                     .padding(horizontal = 14.dp, vertical = 10.dp),
             ) {
                 SettingsYandexCard(
@@ -113,6 +121,14 @@ fun SettingsScreen(
                         }
                     },
                 )
+                musicDirectories?.let { directories ->
+                    SettingsMusicDirectoriesCard(
+                        directoryCount =
+                            directories.size,
+                        onClick =
+                            onMusicDirectoriesClick,
+                    )
+                }
             }
         }
         SnackbarHost(
@@ -121,6 +137,81 @@ fun SettingsScreen(
                 .align(Alignment.BottomCenter)
                 .padding(horizontal = 14.dp, vertical = 12.dp),
         )
+    }
+}
+
+/** Открывает desktop-диалог управления каталогами локальной музыки. */
+@Composable
+private fun SettingsMusicDirectoriesCard(
+    directoryCount: Int,
+    onClick: () -> Unit,
+) {
+    SettingsTextureCard(
+        textureRes =
+            Res.drawable.bg_focus_texture,
+        accent =
+            DwijColors.CyanBright,
+        modifier =
+            Modifier
+                .height(92.dp)
+                .clickable(
+                    onClick =
+                        onClick,
+                ),
+    ) {
+        Row(
+            verticalAlignment =
+                Alignment.CenterVertically,
+            modifier =
+                Modifier
+                    .fillMaxSize()
+                    .padding(
+                        horizontal = 18.dp,
+                    ),
+        ) {
+            Column(
+                modifier =
+                    Modifier.weight(1f),
+            ) {
+                Text(
+                    text =
+                        stringResource(
+                            Res.string.settings_music_directories_title,
+                        ),
+                    color =
+                        DwijColors.White,
+                    fontSize =
+                        18.sp,
+                    fontWeight =
+                        FontWeight.Bold,
+                )
+                Text(
+                    text =
+                        stringResource(
+                            Res.string.settings_music_directories_description,
+                            directoryCount,
+                        ),
+                    color =
+                        DwijColors.SecondaryText,
+                    fontSize =
+                        12.sp,
+                    modifier =
+                        Modifier.padding(
+                            top = 5.dp,
+                        ),
+                )
+            }
+            Text(
+                text =
+                    "›",
+                color =
+                    DwijColors.CyanBright,
+                fontSize =
+                    30.sp,
+                fontWeight =
+                    FontWeight.Light,
+            )
+        }
     }
 }
 
@@ -471,8 +562,13 @@ private fun SettingsScreenPreview() {
         minCacheMb = 200,
         maxCacheMb = 8192,
         occupiedCacheSize = "386 МБ",
+        musicDirectories =
+            listOf(
+                "C:\\Users\\Turbo\\Music",
+            ),
         onBackClick = {},
         onAuthClick = {},
         onCacheLimitCommitted = {},
+        onMusicDirectoriesClick = {},
     )
 }

@@ -5,8 +5,10 @@ import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberUpdatedState
 import com.yellastrodev.dwij.desktop.DesktopPaths
+import com.yellastrodev.dwij.desktop.DesktopMusicDirectoryStore
 import com.yellastrodev.dwij.navigation.SettingsPlatform
 import java.awt.Desktop
+import java.awt.EventQueue
 import java.awt.KeyboardFocusManager
 import java.awt.Toolkit
 import java.awt.datatransfer.StringSelection
@@ -14,6 +16,8 @@ import java.beans.PropertyChangeListener
 import java.io.File
 import java.net.URI
 import java.util.Properties
+import javax.swing.JFileChooser
+import javax.swing.UIManager
 
 /**
  * Windows/JVM-внешние действия экрана настроек.
@@ -21,17 +25,23 @@ import java.util.Properties
 @Composable
 fun rememberDesktopSettingsPlatform(
     paths: DesktopPaths,
+    musicDirectoryStore: DesktopMusicDirectoryStore,
 ): SettingsPlatform =
     remember(
         paths,
+        musicDirectoryStore,
     ) {
         DesktopSettingsPlatform(
-            paths,
+            paths =
+                paths,
+            musicDirectoryStore =
+                musicDirectoryStore,
         )
     }
 
 private class DesktopSettingsPlatform(
     private val paths: DesktopPaths,
+    private val musicDirectoryStore: DesktopMusicDirectoryStore,
 ) : SettingsPlatform {
 
     private val localProperties:
@@ -77,6 +87,12 @@ private class DesktopSettingsPlatform(
                     "YANDEX_OAUTH_CLIENT_SECRET",
             )
 
+    override val musicDirectories: List<String>
+        get() =
+            musicDirectoryStore
+                .directories()
+                .map(File::getAbsolutePath)
+
     override fun availableCacheBytes():
         Long =
         paths.cacheDirectory
@@ -118,6 +134,78 @@ private class DesktopSettingsPlatform(
                 URI(url),
             )
         }.isSuccess
+
+    override fun chooseMusicDirectory(
+        dialogTitle: String,
+    ): String? {
+        var selectedDirectory: String? = null
+
+        val showDialog = {
+            runCatching {
+                UIManager.setLookAndFeel(
+                    UIManager.getSystemLookAndFeelClassName(),
+                )
+            }
+
+            val chooser =
+                JFileChooser().apply {
+                    this.dialogTitle =
+                        dialogTitle
+                    fileSelectionMode =
+                        JFileChooser.DIRECTORIES_ONLY
+                    isAcceptAllFileFilterUsed =
+                        false
+                    isMultiSelectionEnabled =
+                        false
+                    currentDirectory =
+                        musicDirectoryStore
+                            .directories()
+                            .firstOrNull()
+                }
+
+            val result =
+                chooser.showOpenDialog(
+                    KeyboardFocusManager
+                        .getCurrentKeyboardFocusManager()
+                        .activeWindow,
+                )
+
+            if (
+                result ==
+                JFileChooser.APPROVE_OPTION
+            ) {
+                selectedDirectory =
+                    chooser.selectedFile
+                        ?.takeIf(File::isDirectory)
+                        ?.let { directory ->
+                            runCatching {
+                                directory.canonicalPath
+                            }.getOrElse {
+                                directory.absolutePath
+                            }
+                        }
+            }
+        }
+
+        if (EventQueue.isDispatchThread()) {
+            showDialog()
+        } else {
+            EventQueue.invokeAndWait {
+                showDialog()
+            }
+        }
+
+        return selectedDirectory
+    }
+
+    override fun replaceMusicDirectories(
+        directories: List<String>,
+    ): List<String> =
+        musicDirectoryStore
+            .replace(
+                directories.map(::File),
+            )
+            .map(File::getAbsolutePath)
 
     @Composable
     override fun ResumeEffect(

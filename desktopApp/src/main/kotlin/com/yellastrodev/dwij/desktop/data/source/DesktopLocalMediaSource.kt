@@ -6,6 +6,7 @@ import com.yellastrodev.dwij.data.entities.LocalTrackEntity
 import com.yellastrodev.dwij.data.source.LocalMediaSnapshot
 import com.yellastrodev.dwij.data.source.LocalMediaSource
 import com.yellastrodev.dwij.data.source.M3uExportResult
+import com.yellastrodev.dwij.desktop.DesktopMusicDirectoryStore
 import java.io.File
 import java.net.URI
 import java.security.MessageDigest
@@ -17,15 +18,21 @@ import java.security.MessageDigest
  * сохраняет прежние fallback'и по имени файла и каталогу для файлов без тегов.
  */
 class DesktopLocalMediaSource(
-    private val musicDirectories: List<File>,
+    private val musicDirectoryStore: DesktopMusicDirectoryStore,
     private val playlistExportDirectory: File,
     private val metadataReader: DesktopAudioMetadataReader,
 ) : LocalMediaSource {
 
-    override fun currentGeneration(): String =
-        generation(
-            audioFiles(),
+    override fun currentGeneration(): String {
+        val musicDirectories =
+            musicDirectoryStore.directories()
+
+        return generation(
+            audioFiles(
+                musicDirectories,
+            ),
         )
+    }
 
     override fun findChangedBackingFiles(
         tracks: List<LocalTrackEntity>,
@@ -62,14 +69,24 @@ class DesktopLocalMediaSource(
         true
 
     override fun scan(): LocalMediaSnapshot {
+        val musicDirectories =
+            musicDirectoryStore.directories()
+
         val files =
-            audioFiles()
+            audioFiles(
+                musicDirectories,
+            )
 
         return LocalMediaSnapshot(
             tracks =
-                files.map(
-                    ::toTrack,
-                ),
+                files.map { file ->
+                    toTrack(
+                        file =
+                            file,
+                        musicDirectories =
+                            musicDirectories,
+                    )
+                },
             /*
              * Импорт произвольных M3U оставляем на следующий проход.
              * Плейлисты, созданные самим DWIJ, сохраняются shared-репозиторием
@@ -154,7 +171,9 @@ class DesktopLocalMediaSource(
         )
     }
 
-    private fun audioFiles(): List<File> =
+    private fun audioFiles(
+        musicDirectories: List<File>,
+    ): List<File> =
         musicDirectories
             .asSequence()
             .filter(File::isDirectory)
@@ -186,6 +205,7 @@ class DesktopLocalMediaSource(
 
     private fun toTrack(
         file: File,
+        musicDirectories: List<File>,
     ): LocalTrackEntity {
         val baseName =
             file.nameWithoutExtension
@@ -298,7 +318,12 @@ class DesktopLocalMediaSource(
                 file.lastModified() /
                     1_000L,
             relativePath =
-                relativePath(file),
+                relativePath(
+                    file =
+                        file,
+                    musicDirectories =
+                        musicDirectories,
+                ),
             absolutePath =
                 file.absolutePath,
         )
@@ -306,6 +331,7 @@ class DesktopLocalMediaSource(
 
     private fun relativePath(
         file: File,
+        musicDirectories: List<File>,
     ): String? =
         musicDirectories
             .firstNotNullOfOrNull { root ->
