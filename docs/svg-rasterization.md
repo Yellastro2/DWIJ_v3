@@ -1,42 +1,57 @@
 # Растеризация тяжёлых SVG
 
-Тяжёлые декоративные изображения хранятся как редактируемые SVG в
-`app/src/main/vector-png`. Во время Android-сборки задача
-`RasterizeSvgToPngTask` создаёт PNG для `mdpi`, `hdpi`, `xhdpi`, `xxhdpi` и
-`xxxhdpi` и подключает их к variant resources.
+Тяжёлые общие декоративные изображения хранятся как редактируемые SVG в
+`shared/src/commonMain/vector-png`. Они принадлежат модулю `:shared`, поэтому
+один набор ресурсов используется Android- и Windows-интерфейсом.
+
+Задача `rasterizeSharedSvgToPng` создаёт PNG для `mdpi`, `hdpi`, `xhdpi`,
+`xxhdpi` и `xxxhdpi`. Затем `mergeSharedComposeResources` объединяет результат
+с обычными ресурсами из `shared/src/commonMain/composeResources`, а Compose
+Multiplatform генерирует общий `Res`-класс.
 
 ## Как запускается
 
-Для каждого Android-варианта регистрируется собственная задача, например:
+Генерация Compose resources автоматически зависит от задач объединения и
+растеризации, поэтому обычная сборка Android или desktop сама создаёт нужные
+PNG. Для отдельной ручной проверки из корня можно выполнить:
 
-- `rasterizeDebugSvgToPng`;
-- `rasterizeReleaseSvgToPng`.
+```powershell
+.\gradlew.bat :shared:rasterizeSharedSvgToPng
+```
 
-Обычные `assembleDebug`, запуск приложения из Android Studio и resource merge
-автоматически вызывают нужную задачу. Результат находится в
-`app/build/generated/res/vectorPng/<variant>/drawable-<density>` и не должен
-добавляться в Git.
+Сгенерированные файлы находятся в:
 
-Задача объявляет SVG-каталог, список ресурсов и density-конфигурацию входами,
-а generated-res каталог — выходом. Поэтому без изменений она получает статус
-`UP-TO-DATE`; при доступном Gradle build cache результат также может быть
-восстановлен со статусом `FROM-CACHE`. `clean` удаляет generated-res каталог,
-после чего PNG создаются заново или восстанавливаются из build cache.
+```text
+shared/build/generated/composeResources/rasterizedCommonMain/drawable-<density>
+```
 
-Если изменился хотя бы один SVG, текущая пакетная задача заново генерирует все
-настроенные PNG. Для этого небольшого набора ресурсов такой подход намеренно
-проще отдельного incremental-учёта каждого файла.
+Объединённый каталог находится в:
+
+```text
+shared/build/generated/composeResources/mergedCommonMain
+```
+
+Оба каталога являются результатом сборки и не должны добавляться в Git или
+редактироваться вручную. `clean` удаляет их; следующая сборка создаёт файлы
+заново либо восстановит их из Gradle build cache.
+
+Задача объявляет каталог SVG, карту ресурсов и коэффициенты плотности входами,
+а generated-каталог — выходом. Без изменений она получает `UP-TO-DATE`. При
+изменении одного SVG текущая пакетная задача заново создаёт весь небольшой
+набор PNG.
 
 ## Где настраивается
 
-Имена и размеры ресурсов задаются в `rasterizedSvgAssets`, а коэффициенты
-плотности — в `rasterizedSvgDensities` внутри `app/build.gradle.kts`. При
-добавлении SVG нужно одновременно добавить его имя и исходный размер в dp.
+Имена и исходные размеры ресурсов задаются в `rasterizedSvgAssets`, а
+коэффициенты плотности — в `rasterizedSvgDensities` внутри
+`shared/build.gradle.kts`. Чтобы добавить ресурс:
+
+1. положите `<имя>.svg` в `shared/src/commonMain/vector-png`;
+2. добавьте то же имя и исходный размер в `rasterizedSvgAssets`;
+3. обращайтесь к сгенерированному ресурсу через общий Compose `Res.drawable`.
+
+Имя нового SVG не должно конфликтовать с файлом в
+`shared/src/commonMain/composeResources/drawable`.
 
 Рендер выполняет Apache Batik `1.19`, подключённый только к build logic через
-`buildSrc`; библиотека не попадает в APK. При первой сборке Gradle скачивает её
-из Maven Central, если зависимости ещё нет в локальном кэше.
-
-Исходные VectorDrawable XML сохранены в `res/drawable` с префиксом `_` как
-отдельные reference-ресурсы для визуального сравнения. Они больше не определяют
-исходные имена `R.drawable`: эти имена создаются только PNG из density-каталогов.
+`buildSrc`; библиотека не попадает в Android-приложение или desktop-дистрибутив.

@@ -4,6 +4,7 @@ import com.yellastrodev.dwij.CacheManager
 import com.yellastrodev.dwij.MusicSourceSelectionStore
 import com.yellastrodev.dwij.MusicSourceSettings
 import com.yellastrodev.dwij.auth.YandexSessionManager
+import com.yellastrodev.dwij.auth.YandexSessionStore
 import com.yellastrodev.dwij.data.cache.FileCacheStore
 import com.yellastrodev.dwij.data.db.DwijDatabase
 import com.yellastrodev.dwij.data.entities.dYaPlaylist
@@ -33,7 +34,6 @@ import com.yellastrodev.dwij.storage.LocalKeyValueStore
 import com.yellastrodev.dwij.storage.StoredCacheSettings
 import com.yellastrodev.dwij.storage.StoredMusicSourceSettings
 import com.yellastrodev.dwij.storage.StoredPlaybackSettings
-import com.yellastrodev.dwij.storage.StoredYandexSessionStore
 import com.yellastrodev.dwij.utils.DwLruCache
 import com.yellastrodev.yamusicsdk.YamLogger
 import kotlinx.coroutines.CancellationException
@@ -50,8 +50,8 @@ import java.util.concurrent.atomic.AtomicBoolean
  * Создаёт YamApiClient, восстанавливает сессию и собирает все общие
  * репозитории и постоянные настройки.
  *
- * Платформа передаёт только системные реализации и низкоуровневое
- * key-value хранилище.
+ * Платформа передаёт системные реализации, низкоуровневое key-value хранилище
+ * обычных настроек и защищённое хранилище авторизации.
  */
 class DwijComponent private constructor(
     private val applicationScope: CoroutineScope,
@@ -343,6 +343,7 @@ class DwijComponent private constructor(
             applicationScope: CoroutineScope,
             logger: YamLogger,
             localKeyValueStore: LocalKeyValueStore,
+            yandexSessionStore: YandexSessionStore,
             db: DwijDatabase,
             trackCacheDirectory: File,
             coverCacheDirectory: File,
@@ -352,11 +353,6 @@ class DwijComponent private constructor(
             platformLifecycle: DwijPlatformLifecycle =
                 NoOpDwijPlatformLifecycle,
         ): DwijComponent {
-
-            val yandexSessionStore =
-                StoredYandexSessionStore(
-                    localKeyValueStore,
-                )
 
             val cacheSettings =
                 StoredCacheSettings(

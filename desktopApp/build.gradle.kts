@@ -12,6 +12,14 @@ val localProperties = Properties().apply {
     }
 }
 
+val desktopJavaHome =
+    localProperties
+        .getProperty(
+            "DESKTOP_JAVA_HOME",
+        )
+        ?.trim()
+        ?.takeIf(String::isNotEmpty)
+
 val yandexOAuthClientId =
     localProperties.getProperty(
         "YANDEX_OAUTH_CLIENT_ID",
@@ -97,11 +105,16 @@ dependencies {
     implementation(
         "net.java.dev.jna:jna-platform:5.14.0",
     )
+
+    testImplementation(libs.junit)
 }
 
 compose.desktop {
     application {
-        javaHome = "C:/Users/Turbo/.jdks/ms-21.0.7"
+        desktopJavaHome?.let { configuredJavaHome ->
+            javaHome = configuredJavaHome
+        }
+
         mainClass =
             "com.yellastrodev.dwij.desktop.MainKt"
 

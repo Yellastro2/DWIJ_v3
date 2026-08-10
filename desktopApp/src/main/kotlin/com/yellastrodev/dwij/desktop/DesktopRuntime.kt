@@ -9,6 +9,9 @@ import com.yellastrodev.dwij.desktop.playback.DesktopPlayerEngine
 import com.yellastrodev.dwij.di.DwijComponent
 import com.yellastrodev.dwij.playback.PlaybackUriResolver
 import com.yellastrodev.dwij.playback.PlayerVolumeControl
+import com.yellastrodev.dwij.storage.MigratingYandexSessionStore
+import com.yellastrodev.dwij.storage.ProtectedYandexSessionStore
+import com.yellastrodev.dwij.storage.StoredYandexSessionStore
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
@@ -93,6 +96,27 @@ class DesktopRuntime private constructor(
                     paths.settingsFile,
                 )
 
+            val yandexSessionStore =
+                MigratingYandexSessionStore(
+                    primary =
+                        ProtectedYandexSessionStore(
+                            WindowsDpapiSessionPayloadStore(
+                                file =
+                                    paths.sessionFile,
+                                logger =
+                                    logger,
+                            ),
+                        ),
+                    legacy =
+                        StoredYandexSessionStore(
+                            localKeyValueStore,
+                        ),
+                    migrationState =
+                        localKeyValueStore,
+                    logger =
+                        logger,
+                )
+
             /*
              * Восстанавливаем громкость до создания PlayerEngine,
              * чтобы первый MediaPlayer сразу получил нужное значение.
@@ -175,6 +199,8 @@ class DesktopRuntime private constructor(
                         logger,
                     localKeyValueStore =
                         localKeyValueStore,
+                    yandexSessionStore =
+                        yandexSessionStore,
                     db =
                         database,
                     trackCacheDirectory =

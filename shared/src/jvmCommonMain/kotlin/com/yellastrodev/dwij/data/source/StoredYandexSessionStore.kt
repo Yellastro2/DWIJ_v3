@@ -9,7 +9,10 @@ import com.yellastrodev.dwij.auth.YandexSession
 import com.yellastrodev.dwij.auth.YandexSessionStore
 
 /**
- * Постоянное shared-хранилище авторизации Яндекс Музыки.
+ * Прежнее plaintext-хранилище авторизации Яндекс Музыки.
+ *
+ * Сохранено только для переноса существующих установок в защищённое
+ * платформенное хранилище и не должно использоваться для новых записей.
  */
 class StoredYandexSessionStore(
     private val storage: LocalKeyValueStore,

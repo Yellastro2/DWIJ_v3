@@ -11,7 +11,11 @@ import com.yellastrodev.dwij.di.DwijComponent
 import com.yellastrodev.dwij.playback.AndroidMediaItemMapper
 import com.yellastrodev.dwij.playback.AndroidPlayerEngine
 import com.yellastrodev.dwij.playback.AndroidPlayerServiceRegistry
+import com.yellastrodev.dwij.storage.AndroidKeystoreSessionPayloadStore
+import com.yellastrodev.dwij.storage.MigratingYandexSessionStore
+import com.yellastrodev.dwij.storage.ProtectedYandexSessionStore
 import com.yellastrodev.dwij.storage.SharedPreferencesLocalKeyValueStore
+import com.yellastrodev.dwij.storage.StoredYandexSessionStore
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
@@ -56,6 +60,27 @@ class AndroidDwijComponentFactory(
                 context,
             )
 
+        val yandexSessionStore =
+            MigratingYandexSessionStore(
+                primary =
+                    ProtectedYandexSessionStore(
+                        AndroidKeystoreSessionPayloadStore(
+                            context =
+                                context,
+                            logger =
+                                logger,
+                        ),
+                    ),
+                legacy =
+                    StoredYandexSessionStore(
+                        localKeyValueStore,
+                    ),
+                migrationState =
+                    localKeyValueStore,
+                logger =
+                    logger,
+            )
+
         return DwijComponent.create(
             applicationScope =
                 applicationScope,
@@ -63,6 +88,8 @@ class AndroidDwijComponentFactory(
                 logger,
             localKeyValueStore =
                 localKeyValueStore,
+            yandexSessionStore =
+                yandexSessionStore,
             db =
                 database,
             trackCacheDirectory =

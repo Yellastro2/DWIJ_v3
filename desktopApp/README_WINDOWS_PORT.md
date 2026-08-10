@@ -1,6 +1,7 @@
-# DWIJ Windows prototype
+# Движ для Windows
 
-Первый desktop-модуль поверх существующего `shared`.
+Windows/JVM-модуль поверх общего `:shared`. Первоначальная настройка репозитория
+и требования описаны в [корневом README](../README.md).
 
 ## Что уже заведено
 
@@ -8,6 +9,8 @@
 - тот же shared Compose `DwijApp`;
 - Room database в `%APPDATA%\DWIJ\dwij.db`;
 - shared key-value settings в `%APPDATA%\DWIJ\settings.properties`;
+- зашифрованная через Windows DPAPI сессия Яндекс Музыки в
+  `%APPDATA%\DWIJ\yandex-session.bin`;
 - кэши в `%LOCALAPPDATA%\DWIJ\cache`;
 - `DesktopPlayerEngine` на JavaFX Media;
 - Swing `Dispatchers.Main` для shared ViewModel/Lifecycle;
@@ -18,30 +21,6 @@
 - clipboard/browser для Settings;
 - возврат фокуса после OAuth browser как аналог Android `ON_RESUME`;
 - Windows `exe`/`msi` target в Compose Desktop.
-
-## Что надо сделать в корне проекта
-
-Нужны три небольшие правки (готовые `.patch` лежат рядом с модулем в архиве):
-
-1. В `gradle/libs.versions.toml` добавить plugin alias:
-
-```toml
-kotlin-jvm = { id = "org.jetbrains.kotlin.jvm", version.ref = "kotlin" }
-```
-
-2. В root `build.gradle.kts` добавить:
-
-```kotlin
-alias(libs.plugins.kotlin.jvm) apply false
-```
-
-3. В `settings.gradle.kts` добавить:
-
-```kotlin
-include(":desktopApp")
-```
-
-Такой отдельный JVM-модуль соответствует текущей рекомендуемой структуре Compose Desktop.
 
 ## Запуск
 
@@ -98,7 +77,7 @@ DWIJ_YANDEX_OAUTH_CLIENT_SECRET
 D:\Music;E:\Audio
 ```
 
-## Ограничения первого прохода
+## Ограничения текущей версии
 
 1. JavaFX backend пока рассчитан на MP3/AAC/M4A/WAV/AIFF.
    FLAC/OGG пока не индексируются.
@@ -108,13 +87,9 @@ D:\Music;E:\Audio
 3. Локальная обложка пока только sidecar `cover.jpg/png`,
    `folder.jpg/png`, `front.jpg/png`.
 4. Импорт чужих M3U пока не реализован. Экспорт DWIJ M3U уже есть.
-5. Нет Windows SMTC/media keys/виджета системного плеера.
-6. Нет FileSystem watcher — синхронизация выполняется на старте и
+5. Нет FileSystem watcher — синхронизация выполняется на старте и
    по существующим кнопкам refresh/sync.
-7. Desktop playback пока не отправляет Android Media3-style
+6. Desktop playback пока не отправляет Android Media3-style
    playback feedback events в `PlaybackFeedbackTracker`.
-8. Shuffle в прототипе выбирает случайный следующий индекс без истории.
+7. Shuffle в прототипе выбирает случайный следующий индекс без истории.
 
-Именно эти места стоит проверять после первого запуска. Если базовое окно,
-Room, Яндекс, очередь и звук стартуют нормально — дальше можно улучшать
-платформенную часть без переделки shared UI/репозиториев.

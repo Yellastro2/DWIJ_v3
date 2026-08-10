@@ -1,4 +1,4 @@
-package com.yellastro.dwij
+package com.yellastrodev.dwij
 
 import org.junit.Test
 

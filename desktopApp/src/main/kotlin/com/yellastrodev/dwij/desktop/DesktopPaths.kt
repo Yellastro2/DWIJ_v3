@@ -12,6 +12,7 @@ data class DesktopPaths(
     val cacheDirectory: File,
     val databaseFile: File,
     val settingsFile: File,
+    val sessionFile: File,
     val trackCacheDirectory: File,
     val coverCacheDirectory: File,
     val musicDirectories: List<File>,
@@ -98,6 +99,11 @@ data class DesktopPaths(
                     File(
                         appDataDirectory,
                         "settings.properties",
+                    ),
+                sessionFile =
+                    File(
+                        appDataDirectory,
+                        "yandex-session.bin",
                     ),
                 trackCacheDirectory =
                     File(
