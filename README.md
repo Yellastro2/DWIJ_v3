@@ -32,15 +32,13 @@ Android-плеер с собственным интерфейсом и кодо�
   загрузка медиа и feedback.
 
 Модуль Яндекс Музыки создан на основе контрактов и поведения
-[MarshalX/yandex-music-api](https://github.com/MarshalX/yandex-music-api), но
+[MarshalX/yandex-music-api](https://github.com/MarshalX/yandex-music-api),
 не является его построчным переносом на Kotlin.
 
-<img src="https://github.com/Yellastro2/porfolio/blob/main/res/photo_2025-11-14_16-22-28.jpg" width="300"/> <img src="https://github.com/Yellastro2/porfolio/blob/main/res/photo_2025-11-14_16-22-28 (2).jpg" width="300"/>
-<img src="https://github.com/Yellastro2/porfolio/blob/main/res/photo_2025-11-14_16-22-28 (3).jpg" width="300"/><img src="https://github.com/Yellastro2/porfolio/blob/main/res/photo_2025-11-14_16-22-28 (4).jpg" width="300"/><img src="https://github.com/Yellastro2/porfolio/blob/main/res/photo_2025-11-14_16-22-28 (5).jpg" width="300"/>
- 
-## Скачать
+## Скриншоты
 
-[Download](https://t.me/c/2042648959/7)
+<img src="docs/screenshots/home.jpg" alt="Главный экран" width="300"/> <img src="docs/screenshots/player.jpg" alt="Экран плеера" width="300"/>
+<img src="docs/screenshots/gallery.jpg" alt="Медиатека" width="300"/> <img src="docs/screenshots/multisource.jpg" alt="Источники музыки" width="300"/>
 
 
 ## Лицензия
