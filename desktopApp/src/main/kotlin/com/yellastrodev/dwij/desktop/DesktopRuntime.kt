@@ -227,6 +227,10 @@ class DesktopRuntime private constructor(
                         DesktopDwijPlatformLifecycle,
                 )
 
+            playerEngine.bindPlaybackFeedback(
+                component.playbackFeedbackTracker,
+            )
+
             component.start()
 
             return DesktopRuntime(

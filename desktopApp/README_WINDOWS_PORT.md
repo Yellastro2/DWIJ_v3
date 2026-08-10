@@ -89,7 +89,4 @@ D:\Music;E:\Audio
 4. Импорт чужих M3U пока не реализован. Экспорт DWIJ M3U уже есть.
 5. Нет FileSystem watcher — синхронизация выполняется на старте и
    по существующим кнопкам refresh/sync.
-6. Desktop playback пока не отправляет Android Media3-style
-   playback feedback events в `PlaybackFeedbackTracker`.
-7. Shuffle в прототипе выбирает случайный следующий индекс без истории.
-
+6. Shuffle в прототипе выбирает случайный следующий индекс без истории.

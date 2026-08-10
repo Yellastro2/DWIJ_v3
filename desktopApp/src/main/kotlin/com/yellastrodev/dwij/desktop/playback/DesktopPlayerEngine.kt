@@ -1,11 +1,15 @@
 package com.yellastrodev.dwij.desktop.playback
 
 import com.yellastrodev.dwij.data.entities.PlaybackTrack
+import com.yellastrodev.dwij.data.entities.dYaPlaylist
 import com.yellastrodev.dwij.data.entities.dTracklist
 import com.yellastrodev.dwij.playback.PlaybackStateStore
 import com.yellastrodev.dwij.playback.PlayerEngine
 import com.yellastrodev.dwij.playback.PlayerVolumeControl
 import com.yellastrodev.dwij.playback.RepeatMode
+import com.yellastrodev.dwij.playback.feedback.PlaybackFeedbackMetadata
+import com.yellastrodev.dwij.playback.feedback.PlaybackFeedbackTracker
+import com.yellastrodev.dwij.playback.feedback.PlaybackTransitionReason
 import com.yellastrodev.dwij.utils.PlayerEvent
 import com.yellastrodev.dwij.utils.PlayerState
 import com.yellastrodev.dwij.utils.TrackChangeDirection
@@ -23,6 +27,7 @@ import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import java.io.File
+import java.util.UUID
 import kotlin.random.Random
 
 /**
@@ -30,7 +35,8 @@ import kotlin.random.Random
  *
  * JavaFX MediaPlayer отвечает за реальное воспроизведение.
  * WindowsMediaSession публикует состояние в Windows SMTC
- * и принимает системные media commands.
+ * и принимает системные media commands. JavaFX callback'и также передают
+ * фактические события прослушивания в общий [PlaybackFeedbackTracker].
  */
 class DesktopPlayerEngine(
     private val scope: CoroutineScope,
@@ -96,6 +102,20 @@ class DesktopPlayerEngine(
         RepeatMode.OFF
 
     @Volatile
+    private var playbackFeedbackTracker:
+            PlaybackFeedbackTracker? =
+        null
+
+    @Volatile
+    private var currentFeedbackMetadata:
+            PlaybackFeedbackMetadata? =
+        null
+
+    private var currentFeedbackPlaylistId:
+            String? =
+        null
+
+    @Volatile
     private var currentTrackInstanceId:
             String? =
         null
@@ -138,6 +158,23 @@ class DesktopPlayerEngine(
         windowsMediaSession.prepare()
     }
 
+    /**
+     * Подключает созданный shared-компонентом tracker после сборки
+     * циклически связанных DesktopPlayerEngine и DwijComponent.
+     */
+    fun bindPlaybackFeedback(
+        tracker: PlaybackFeedbackTracker,
+    ) {
+        check(
+            playbackFeedbackTracker == null,
+        ) {
+            "PlaybackFeedbackTracker уже подключён"
+        }
+
+        playbackFeedbackTracker =
+            tracker
+    }
+
     override suspend fun setQueue(
         tracks: List<PlaybackTrack>,
         startIndex: Int,
@@ -154,6 +191,10 @@ class DesktopPlayerEngine(
             queue =
                 tracks.toList()
 
+            currentFeedbackPlaylistId =
+                (tracklist as? dYaPlaylist)
+                    ?.playlistUuid
+
             startTrackLocked(
                 index =
                     startIndex,
@@ -161,6 +202,8 @@ class DesktopPlayerEngine(
                     true,
                 direction =
                     TrackChangeDirection.DIRECT,
+                feedbackReason =
+                    PlaybackTransitionReason.PLAYLIST_CHANGED,
             )
         }
     }
@@ -192,6 +235,8 @@ class DesktopPlayerEngine(
                     true,
                 direction =
                     TrackChangeDirection.DIRECT,
+                feedbackReason =
+                    PlaybackTransitionReason.OTHER,
             )
         }
     }
@@ -230,6 +275,8 @@ class DesktopPlayerEngine(
                     true,
                 direction =
                     TrackChangeDirection.NEXT,
+                feedbackReason =
+                    PlaybackTransitionReason.OTHER,
             )
         }
     }
@@ -247,6 +294,8 @@ class DesktopPlayerEngine(
                     true,
                 direction =
                     TrackChangeDirection.PREVIOUS,
+                feedbackReason =
+                    PlaybackTransitionReason.OTHER,
             )
         }
     }
@@ -349,6 +398,15 @@ class DesktopPlayerEngine(
     }
 
     fun close() {
+        finishCurrentFeedback(
+            positionMs =
+                state.value.currentPosition,
+            durationMs =
+                state.value.duration,
+            completed =
+                false,
+        )
+
         currentTrackInstanceId =
             null
 
@@ -365,6 +423,7 @@ class DesktopPlayerEngine(
         index: Int,
         autoPlay: Boolean,
         direction: TrackChangeDirection? = null,
+        feedbackReason: PlaybackTransitionReason,
     ) {
         val track =
             queue.getOrNull(
@@ -454,6 +513,23 @@ class DesktopPlayerEngine(
 
                 player
             }
+
+        currentFeedbackMetadata =
+            track.toFeedbackMetadata()
+
+        playbackFeedbackTracker
+            ?.onMediaItemTransition(
+                metadata =
+                    currentFeedbackMetadata,
+                reason =
+                    feedbackReason,
+                isPlaying =
+                    false,
+                currentPositionMs =
+                    0L,
+                durationMs =
+                    track.durationMs,
+            )
 
         windowsMediaSession.setTrack(
             track,
@@ -559,6 +635,13 @@ class DesktopPlayerEngine(
                     positionMs,
             )
 
+            notifyFeedbackProgress(
+                positionMs =
+                    positionMs,
+                durationMs =
+                    durationMs,
+            )
+
             lastWindowsPositionUpdateNanos =
                 System.nanoTime()
         }
@@ -574,6 +657,13 @@ class DesktopPlayerEngine(
                 windowsMediaSession.setPlaying(
                     true,
                 )
+
+                notifyFeedbackPlaying(
+                    player =
+                        player,
+                    isPlaying =
+                        true,
+                )
             }
         }
 
@@ -588,6 +678,13 @@ class DesktopPlayerEngine(
                 windowsMediaSession.setPlaying(
                     false,
                 )
+
+                notifyFeedbackPlaying(
+                    player =
+                        player,
+                    isPlaying =
+                        false,
+                )
             }
         }
 
@@ -601,6 +698,13 @@ class DesktopPlayerEngine(
 
                 windowsMediaSession.setPlaying(
                     false,
+                )
+
+                notifyFeedbackPlaying(
+                    player =
+                        player,
+                    isPlaying =
+                        false,
                 )
             }
         }
@@ -633,6 +737,13 @@ class DesktopPlayerEngine(
                     maybeUpdateWindowsPosition(
                         positionMs,
                     )
+
+                    notifyFeedbackProgress(
+                        positionMs =
+                            positionMs,
+                        durationMs =
+                            durationMs,
+                    )
                 }
             }
 
@@ -642,6 +753,17 @@ class DesktopPlayerEngine(
             ) {
                 return@setOnEndOfMedia
             }
+
+            finishCurrentFeedback(
+                positionMs =
+                    player.currentTime
+                        .toMillisSafe(),
+                durationMs =
+                    player.totalDuration
+                        .toMillisSafe(),
+                completed =
+                    true,
+            )
 
             scope.launch {
                 handleTrackEnded(
@@ -670,6 +792,17 @@ class DesktopPlayerEngine(
 
             windowsMediaSession.setPlaying(
                 false,
+            )
+
+            finishCurrentFeedback(
+                positionMs =
+                    player.currentTime
+                        .toMillisSafe(),
+                durationMs =
+                    player.totalDuration
+                        .toMillisSafe(),
+                completed =
+                    false,
             )
 
             stateStore.completeTrackChange()
@@ -753,8 +886,104 @@ class DesktopPlayerEngine(
                     nextIndex,
                 autoPlay =
                     true,
+                feedbackReason =
+                    PlaybackTransitionReason.AUTO,
             )
         }
+    }
+
+    private fun PlaybackTrack.toFeedbackMetadata():
+            PlaybackFeedbackMetadata =
+        PlaybackFeedbackMetadata(
+            trackId =
+                id,
+            itemId =
+                UUID.randomUUID()
+                    .toString(),
+            albumId =
+                yandexTrack
+                    ?.albums
+                    ?.firstOrNull()
+                    ?.id
+                    ?.toString(),
+            playlistId =
+                currentFeedbackPlaylistId,
+            reportSource =
+                DESKTOP_PLAYBACK_REPORT_SOURCE,
+            durationMs =
+                durationMs,
+            musicSource =
+                source,
+            isYandexAvailable =
+                yandexTrack
+                    ?.available,
+        )
+
+    private fun notifyFeedbackPlaying(
+        player: MediaPlayer,
+        isPlaying: Boolean,
+    ) {
+        playbackFeedbackTracker
+            ?.onIsPlayingChanged(
+                metadata =
+                    currentFeedbackMetadata,
+                isPlaying =
+                    isPlaying,
+                currentPositionMs =
+                    player.currentTime
+                        .toMillisSafe(),
+                durationMs =
+                    player.totalDuration
+                        .toMillisSafe()
+                        .takeIf {
+                            it > 0L
+                        },
+            )
+    }
+
+    private fun notifyFeedbackProgress(
+        positionMs: Long,
+        durationMs: Long,
+    ) {
+        playbackFeedbackTracker
+            ?.onProgress(
+                trackId =
+                    currentFeedbackMetadata
+                        ?.trackId,
+                currentPositionMs =
+                    positionMs,
+                durationMs =
+                    durationMs
+                        .takeIf {
+                            it > 0L
+                        },
+            )
+    }
+
+    private fun finishCurrentFeedback(
+        positionMs: Long,
+        durationMs: Long,
+        completed: Boolean,
+    ) {
+        if (currentFeedbackMetadata == null) {
+            return
+        }
+
+        playbackFeedbackTracker
+            ?.onPlaybackEnded(
+                currentPositionMs =
+                    positionMs,
+                durationMs =
+                    durationMs
+                        .takeIf {
+                            it > 0L
+                        },
+                completed =
+                    completed,
+            )
+
+        currentFeedbackMetadata =
+            null
     }
 
     private fun nextIndex():
@@ -879,6 +1108,9 @@ class DesktopPlayerEngine(
 
         const val TAG =
             "DesktopPlayerEngine"
+
+        const val DESKTOP_PLAYBACK_REPORT_SOURCE =
+            "dwij-desktop"
 
         const val MIN_VOLUME =
             0f
