@@ -100,6 +100,10 @@ dependencies {
     )
 
     implementation(
+        "net.jthink:jaudiotagger:3.0.1",
+    )
+
+    implementation(
         "net.java.dev.jna:jna:5.14.0",
     )
     implementation(

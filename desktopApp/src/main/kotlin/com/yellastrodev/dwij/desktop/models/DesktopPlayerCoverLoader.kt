@@ -4,6 +4,7 @@ import androidx.compose.ui.graphics.ImageBitmap
 import androidx.compose.ui.graphics.toComposeImageBitmap
 import com.yellastrodev.dwij.data.entities.TrackInstance
 import com.yellastrodev.dwij.data.repo.CoverRepository
+import com.yellastrodev.dwij.desktop.data.source.DesktopAudioMetadataReader
 import com.yellastrodev.dwij.models.PlayerCoverLoader
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
@@ -14,10 +15,11 @@ import java.io.File
  * Desktop-реализация обложек для общего PlayerModel.
  *
  * Яндекс-обложки берутся из общего CoverRepository.
- * Для локальных файлов первый прототип ищет sidecar cover/folder/front JPEG/PNG.
+ * Для локальных файлов сначала читается embedded artwork, затем sidecar.
  */
 class DesktopPlayerCoverLoader(
     private val coverRepository: CoverRepository,
+    private val metadataReader: DesktopAudioMetadataReader,
 ) : PlayerCoverLoader {
 
     override suspend fun load(
@@ -39,9 +41,15 @@ class DesktopPlayerCoverLoader(
                             ?.bytes
 
                     is TrackInstance.Local ->
-                        localCoverBytes(
-                            instance,
-                        )
+                        instance.track
+                            .absolutePath
+                            ?.let(::File)
+                            ?.takeIf(
+                                File::isFile,
+                            )
+                            ?.let(
+                                metadataReader::readArtwork,
+                            )
 
                     null ->
                         null
@@ -58,61 +66,4 @@ class DesktopPlayerCoverLoader(
                     }
             }.getOrNull()
         }
-
-    private fun localCoverBytes(
-        instance: TrackInstance.Local,
-    ): ByteArray? {
-        val audioFile =
-            instance.track
-                .absolutePath
-                ?.let(::File)
-                ?.takeIf(File::isFile)
-                ?: return null
-
-        val directory =
-            audioFile.parentFile
-                ?: return null
-
-        val candidates =
-            listOf(
-                File(
-                    directory,
-                    "cover.jpg",
-                ),
-                File(
-                    directory,
-                    "cover.png",
-                ),
-                File(
-                    directory,
-                    "folder.jpg",
-                ),
-                File(
-                    directory,
-                    "folder.png",
-                ),
-                File(
-                    directory,
-                    "front.jpg",
-                ),
-                File(
-                    directory,
-                    "front.png",
-                ),
-                File(
-                    directory,
-                    "${audioFile.nameWithoutExtension}.jpg",
-                ),
-                File(
-                    directory,
-                    "${audioFile.nameWithoutExtension}.png",
-                ),
-            )
-
-        return candidates
-            .firstOrNull(
-                File::isFile,
-            )
-            ?.readBytes()
-    }
 }

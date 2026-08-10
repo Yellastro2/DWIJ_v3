@@ -3,6 +3,7 @@ package com.yellastrodev.dwij.desktop.playback
 import com.yellastrodev.dwij.CacheManager
 import com.yellastrodev.dwij.data.entities.PlaybackTrack
 import com.yellastrodev.dwij.data.repo.CoverRepository
+import com.yellastrodev.dwij.desktop.data.source.DesktopAudioMetadataReader
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import java.io.File
@@ -15,13 +16,13 @@ import java.security.MessageDigest
  * CoverRepository -> существующий memory/disk/network cache ->
  * SMTC-friendly JPG/PNG в desktop cover cache.
  *
- * Local:
- * используется существующий sidecar cover/folder/front JPG/PNG.
+ * Local: embedded artwork -> sidecar -> desktop cover cache.
  */
 class DesktopMediaArtworkProvider(
     private val coverRepository: CoverRepository,
     private val coverCacheDirectory: File,
     private val cacheManager: CacheManager,
+    private val metadataReader: DesktopAudioMetadataReader,
 ) {
 
     suspend fun resolve(
@@ -30,14 +31,15 @@ class DesktopMediaArtworkProvider(
         withContext(
             Dispatchers.IO,
         ) {
-            resolveLocalCover(
+            resolveLocalCoverBytes(
                 track,
-            )?.let { file ->
-                file.setLastModified(
-                    System.currentTimeMillis(),
+            )?.let { bytes ->
+                return@withContext materializeCover(
+                    key =
+                        "local:${track.instanceId}:${bytes.sha256()}",
+                    bytes =
+                        bytes,
                 )
-
-                return@withContext file
             }
 
             val yandexTrack =
@@ -52,17 +54,17 @@ class DesktopMediaArtworkProvider(
                     ?.bytes
                     ?: return@withContext null
 
-            materializeYandexCover(
-                track =
-                    track,
+            materializeCover(
+                key =
+                    "yandex:${track.instanceId}:${track.artworkUri.orEmpty()}",
                 bytes =
                     bytes,
             )
         }
 
-    private fun resolveLocalCover(
+    private fun resolveLocalCoverBytes(
         track: PlaybackTrack,
-    ): File? {
+    ): ByteArray? {
         val audioFile =
             track.localTrack
                 ?.absolutePath
@@ -70,54 +72,13 @@ class DesktopMediaArtworkProvider(
                 ?.takeIf(File::isFile)
                 ?: return null
 
-        val directory =
-            audioFile.parentFile
-                ?: return null
-
-        val candidates =
-            listOf(
-                File(
-                    directory,
-                    "cover.jpg",
-                ),
-                File(
-                    directory,
-                    "cover.png",
-                ),
-                File(
-                    directory,
-                    "folder.jpg",
-                ),
-                File(
-                    directory,
-                    "folder.png",
-                ),
-                File(
-                    directory,
-                    "front.jpg",
-                ),
-                File(
-                    directory,
-                    "front.png",
-                ),
-                File(
-                    directory,
-                    "${audioFile.nameWithoutExtension}.jpg",
-                ),
-                File(
-                    directory,
-                    "${audioFile.nameWithoutExtension}.png",
-                ),
-            )
-
-        return candidates
-            .firstOrNull(
-                File::isFile,
-            )
+        return metadataReader.readArtwork(
+            audioFile,
+        )
     }
 
-    private suspend fun materializeYandexCover(
-        track: PlaybackTrack,
+    private suspend fun materializeCover(
+        key: String,
         bytes: ByteArray,
     ): File? {
         val extension =
@@ -127,17 +88,6 @@ class DesktopMediaArtworkProvider(
                 ?: return null
 
         coverCacheDirectory.mkdirs()
-
-        val key =
-            buildString {
-                append(
-                    track.instanceId,
-                )
-                append('|')
-                append(
-                    track.artworkUri.orEmpty(),
-                )
-            }
 
         val target =
             File(
@@ -240,6 +190,23 @@ class DesktopMediaArtworkProvider(
                 toByteArray(
                     Charsets.UTF_8,
                 ),
+            )
+            .joinToString(
+                separator = "",
+            ) { byte ->
+                "%02x".format(
+                    byte,
+                )
+            }
+
+    private fun ByteArray.sha256():
+            String =
+        MessageDigest
+            .getInstance(
+                "SHA-256",
+            )
+            .digest(
+                this,
             )
             .joinToString(
                 separator = "",

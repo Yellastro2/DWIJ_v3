@@ -17,6 +17,8 @@ Windows/JVM-модуль поверх общего `:shared`. Первонача
 - Yandex `ya://trackId` проходит через существующий `PlaybackUriResolver`,
   поэтому скачивание/кэш остаются shared;
 - базовое чтение локальной музыки из `%USERPROFILE%\Music`;
+- ID3/MP4/WAV/AIFF metadata, duration и embedded artwork через
+  `jaudiotagger`, с fallback на имя файла, каталог и sidecar-картинки;
 - экспорт DWIJ M3U8;
 - clipboard/browser для Settings;
 - возврат фокуса после OAuth browser как аналог Android `ON_RESUME`;
@@ -64,7 +66,8 @@ DWIJ_YANDEX_OAUTH_CLIENT_SECRET
 
 ## Музыкальные каталоги
 
-По умолчанию сканируется:
+Автоматического поиска музыки по устройству пока нет. По умолчанию desktop-клиент
+рекурсивно сканирует только один каталог:
 
 ```text
 %USERPROFILE%\Music
@@ -81,12 +84,9 @@ D:\Music;E:\Audio
 
 1. JavaFX backend пока рассчитан на MP3/AAC/M4A/WAV/AIFF.
    FLAC/OGG пока не индексируются.
-2. Локальные ID3/Vorbis metadata пока не читаются:
-   title/artist грубо определяются по `Artist - Title.ext`,
-   album — по имени папки, duration в БД сначала `0`.
-3. Локальная обложка пока только sidecar `cover.jpg/png`,
-   `folder.jpg/png`, `front.jpg/png`.
-4. Импорт чужих M3U пока не реализован. Экспорт DWIJ M3U уже есть.
-5. Нет FileSystem watcher — синхронизация выполняется на старте и
+   У raw AAC без контейнера теги и duration могут остаться недоступны;
+   для него сохраняется fallback по имени файла и каталогу.
+2. Импорт чужих M3U пока не реализован. Экспорт DWIJ M3U уже есть.
+3. Нет FileSystem watcher — синхронизация выполняется на старте и
    по существующим кнопкам refresh/sync.
-6. Shuffle в прототипе выбирает случайный следующий индекс без истории.
+4. Shuffle в прототипе выбирает случайный следующий индекс без истории.

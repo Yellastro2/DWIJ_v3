@@ -66,6 +66,8 @@ fun main() {
                 DesktopPlayerCoverLoader(
                     coverRepository =
                         component.coverRepository,
+                    metadataReader =
+                        runtime.audioMetadataReader,
                 ),
         )
 

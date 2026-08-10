@@ -3,6 +3,7 @@ package com.yellastrodev.dwij.desktop
 import androidx.room.Room
 import com.yellastrodev.dwij.data.db.DwijDatabase
 import com.yellastrodev.dwij.data.db.buildDwijDatabase
+import com.yellastrodev.dwij.desktop.data.source.DesktopAudioMetadataReader
 import com.yellastrodev.dwij.desktop.data.source.DesktopLocalMediaSource
 import com.yellastrodev.dwij.desktop.playback.DesktopMediaArtworkProvider
 import com.yellastrodev.dwij.desktop.playback.DesktopPlayerEngine
@@ -25,6 +26,7 @@ class DesktopRuntime private constructor(
     val applicationScope: CoroutineScope,
     val paths: DesktopPaths,
     val settingsStore: DesktopLocalKeyValueStore,
+    val audioMetadataReader: DesktopAudioMetadataReader,
     private val playerEngine: DesktopPlayerEngine,
 ) {
 
@@ -81,6 +83,11 @@ class DesktopRuntime private constructor(
 
             val logger =
                 YamLoggerDesktop()
+
+            val audioMetadataReader =
+                DesktopAudioMetadataReader(
+                    logger,
+                )
 
             val database =
                 buildDwijDatabase(
@@ -165,6 +172,8 @@ class DesktopRuntime private constructor(
                     cacheManager =
                         component
                             .cacheManager,
+                    metadataReader =
+                        audioMetadataReader,
                 )
             }
 
@@ -219,6 +228,8 @@ class DesktopRuntime private constructor(
                             playlistExportDirectory =
                                 paths
                                     .playlistExportDirectory,
+                            metadataReader =
+                                audioMetadataReader,
                         ),
                     canReadAudio = {
                         true
@@ -242,6 +253,8 @@ class DesktopRuntime private constructor(
                     paths,
                 settingsStore =
                     localKeyValueStore,
+                audioMetadataReader =
+                    audioMetadataReader,
                 playerEngine =
                     playerEngine,
             )

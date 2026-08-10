@@ -11,15 +11,15 @@ import java.net.URI
 import java.security.MessageDigest
 
 /**
- * Первый Windows-аналог Android MediaStore.
+ * Windows-аналог Android MediaStore.
  *
- * Сканирует обычные музыкальные каталоги файловой системы.
- * На первом проходе метаданные берутся из имени файла; полноценный tag reader
- * можно добавить после проверки базового desktop-порта.
+ * Сканирует музыкальные каталоги файловой системы, читает доступные теги и
+ * сохраняет прежние fallback'и по имени файла и каталогу для файлов без тегов.
  */
 class DesktopLocalMediaSource(
     private val musicDirectories: List<File>,
     private val playlistExportDirectory: File,
+    private val metadataReader: DesktopAudioMetadataReader,
 ) : LocalMediaSource {
 
     override fun currentGeneration(): String =
@@ -219,6 +219,11 @@ class DesktopLocalMediaSource(
                 baseName
             }
 
+        val metadata =
+            metadataReader.readMetadata(
+                file,
+            )
+
         val normalizedPath =
             file.absolutePath
                 .replace(
@@ -258,22 +263,33 @@ class DesktopLocalMediaSource(
             displayName =
                 file.name,
             title =
-                title,
+                metadata
+                    ?.title
+                    ?: title,
             artist =
-                artist,
+                metadata
+                    ?.artist
+                    ?: artist,
             album =
-                file.parentFile
-                    ?.name,
+                metadata
+                    ?.album
+                    ?: file.parentFile
+                        ?.name,
             albumId =
                 null,
             durationMs =
-                0L,
+                metadata
+                    ?.durationMs
+                    ?: 0L,
             trackNumber =
-                null,
+                metadata
+                    ?.trackNumber,
             discNumber =
-                null,
+                metadata
+                    ?.discNumber,
             year =
-                null,
+                metadata
+                    ?.year,
             mimeType =
                 mimeType(file),
             sizeBytes =
@@ -333,7 +349,7 @@ class DesktopLocalMediaSource(
                 }
             }
 
-        return "desktop:" +
+        return DESKTOP_GENERATION_PREFIX +
             sha256(
                 payload.toByteArray(
                     Charsets.UTF_8,
@@ -404,6 +420,9 @@ class DesktopLocalMediaSource(
 
         const val HASH_LENGTH =
             24
+
+        const val DESKTOP_GENERATION_PREFIX =
+            "desktop:metadata-v2:"
 
         val SUPPORTED_EXTENSIONS =
             setOf(
