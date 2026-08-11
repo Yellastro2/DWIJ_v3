@@ -114,6 +114,8 @@
     <string name="player_shuffle_content_description">Перемешать очередь</string>
     <string name="player_repeat_content_description">Повторять очередь</string>
     <string name="player_back_content_description">Вернуться назад</string>
+    <string name="player_more_content_description">Дополнительное меню</string>
+    <string name="player_track_wave">Волна по треку</string>
     <string name="player_like_content_description">Поставить лайк</string>
     <string name="player_unlike_content_description">Убрать лайк</string>
     <string name="local_playlists_title">Локальные плейлисты</string>

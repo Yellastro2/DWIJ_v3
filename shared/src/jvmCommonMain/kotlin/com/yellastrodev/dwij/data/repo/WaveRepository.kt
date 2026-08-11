@@ -96,6 +96,29 @@ class WaveRepository(
         return true
     }
 
+    /** Запускает Яндекс-волну, построенную вокруг конкретного трека. */
+    fun requestTrackWave(
+        trackId: String,
+        trackTitle: String,
+    ): Boolean {
+        val normalizedTrackId = trackId.trim()
+
+        if (normalizedTrackId.isEmpty()) {
+            logger.warning(
+                TAG,
+                "[requestTrackWave] Не указан идентификатор трека",
+            )
+            return false
+        }
+
+        return requestWave(
+            TrackWaveSeed(
+                trackId = normalizedTrackId,
+                trackTitle = trackTitle,
+            ),
+        )
+    }
+
     /**
      * Загружает и запускает первую пачку в coroutine вызывающего слоя.
      *
@@ -287,4 +310,24 @@ class WaveRepository(
         observeJob = null
     }
 
+}
+
+
+/** Адаптирует Яндекс-трек к существующему контракту seed-объекта rotor. */
+private data class TrackWaveSeed(
+    val trackId: String,
+    val trackTitle: String,
+) : dTracklist {
+
+    override fun getdId(): String = trackId
+
+    override fun getDTitle(): String = trackTitle.ifBlank { "Трек" }
+
+    override fun getType(): String = TYPE
+
+    override fun getWaveId(): String = "track:$trackId"
+
+    private companion object {
+        const val TYPE = "ya_track_wave_seed"
+    }
 }

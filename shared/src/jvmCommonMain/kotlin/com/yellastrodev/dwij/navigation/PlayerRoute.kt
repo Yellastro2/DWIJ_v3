@@ -382,6 +382,7 @@ fun PlayerRoute(
             isShuffle = playerState.isShuffle,
             isRepeatAll = playerState.isRepeatAll,
             showPlaybackModes = !shuffleBlocked,
+            canStartTrackWave = yandexTrack != null,
             canLike = yandexTrack != null,
             isLiked = isLiked,
             playlistTitles = containingPlaylistTitles,
@@ -405,6 +406,14 @@ fun PlayerRoute(
         onSeek = playerModel::seekTo,
         onShuffleClick = playerModel::shuffle,
         onRepeatClick = playerModel::rotate,
+        onTrackWaveClick = {
+            yandexTrack?.let { currentYandexTrack ->
+                component.waveRepository.requestTrackWave(
+                    trackId = currentYandexTrack.id,
+                    trackTitle = currentYandexTrack.title,
+                )
+            }
+        },
         onLikeClick = {
             coroutineScope.launch {
                 try {

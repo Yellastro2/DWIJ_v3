@@ -28,7 +28,6 @@ import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import java.io.File
 import java.util.UUID
-import kotlin.random.Random
 
 /**
  * JVM/Windows backend общего [PlayerEngine].
@@ -97,6 +96,9 @@ class DesktopPlayerEngine(
 
     private var shuffleEnabled =
         false
+
+    private val shuffleOrder =
+        DesktopShuffleOrder()
 
     private var repeatMode =
         RepeatMode.OFF
@@ -191,6 +193,15 @@ class DesktopPlayerEngine(
             queue =
                 tracks.toList()
 
+            if (shuffleEnabled) {
+                shuffleOrder.reset(
+                    queueSize =
+                        queue.size,
+                    currentIndex =
+                        startIndex,
+                )
+            }
+
             currentFeedbackPlaylistId =
                 (tracklist as? dYaPlaylist)
                     ?.playlistUuid
@@ -214,8 +225,20 @@ class DesktopPlayerEngine(
     ) {
         commandMutex.withLock {
             if (tracks.isNotEmpty()) {
+                val previousQueueSize =
+                    queue.size
+
                 queue =
                     queue + tracks
+
+                if (shuffleEnabled) {
+                    shuffleOrder.append(
+                        previousQueueSize =
+                            previousQueueSize,
+                        newQueueSize =
+                            queue.size,
+                    )
+                }
             }
         }
     }
@@ -226,6 +249,12 @@ class DesktopPlayerEngine(
         commandMutex.withLock {
             if (index !in queue.indices) {
                 return
+            }
+
+            if (shuffleEnabled) {
+                shuffleOrder.select(
+                    index,
+                )
             }
 
             startTrackLocked(
@@ -336,12 +365,29 @@ class DesktopPlayerEngine(
     override suspend fun setShuffleEnabled(
         enabled: Boolean,
     ) {
-        shuffleEnabled =
-            enabled
+        commandMutex.withLock {
+            if (shuffleEnabled == enabled) {
+                return@withLock
+            }
 
-        stateStore.setShuffle(
-            enabled,
-        )
+            shuffleEnabled =
+                enabled
+
+            if (enabled) {
+                shuffleOrder.reset(
+                    queueSize =
+                        queue.size,
+                    currentIndex =
+                        currentIndex,
+                )
+            } else {
+                shuffleOrder.clear()
+            }
+
+            stateStore.setShuffle(
+                enabled,
+            )
+        }
     }
 
     override suspend fun setRepeatMode(
@@ -997,18 +1043,12 @@ class DesktopPlayerEngine(
         }
 
         if (
-            shuffleEnabled &&
-            queue.size > 1
+            shuffleEnabled
         ) {
-            val candidates =
-                queue.indices
-                    .filter { index ->
-                        index !=
-                                currentIndex
-                    }
-
-            return candidates.random(
-                Random.Default,
+            return shuffleOrder.next(
+                repeatAll =
+                    repeatMode ==
+                    RepeatMode.ALL,
             )
         }
 
@@ -1040,19 +1080,9 @@ class DesktopPlayerEngine(
         }
 
         if (
-            shuffleEnabled &&
-            queue.size > 1
+            shuffleEnabled
         ) {
-            val candidates =
-                queue.indices
-                    .filter { index ->
-                        index !=
-                                currentIndex
-                    }
-
-            return candidates.random(
-                Random.Default,
-            )
+            return shuffleOrder.previous()
         }
 
         if (

@@ -297,11 +297,7 @@ private fun ObjectHeader(
                 ObjectPlayButton(onClick = onPlayClick)
                 if (showWave) {
                     Spacer(modifier = Modifier.width(12.dp))
-                    ObjectActionButton(
-                        text = stringResource(Res.string.object_wave),
-                        accent = DwijColors.Pink,
-                        onClick = onWaveClick,
-                    )
+                    ObjectWaveButton(onClick = onWaveClick)
                 }
             }
             Canvas(
@@ -388,6 +384,35 @@ private fun ObjectPlayButton(onClick: () -> Unit) {
             contentScale = ContentScale.FillBounds,
             modifier = Modifier.requiredSize(width = 225.dp, height = 150.dp),
         )
+    }
+}
+
+/** Показывает фирменную радио-иконку как компактное действие запуска волны по объекту. */
+@Composable
+private fun ObjectWaveButton(onClick: () -> Unit) {
+    val shape = RoundedCornerShape(12.dp)
+    Box(
+        contentAlignment = Alignment.Center,
+        modifier = Modifier
+            .width(100.dp)
+            .height(48.dp),
+    ) {
+        Box(
+            contentAlignment = Alignment.Center,
+            modifier = Modifier
+                .size(48.dp)
+                .clip(shape)
+                .background(DwijColors.ObjectFooterBackground)
+                .border(1.dp, DwijColors.Pink.copy(alpha = 0.72f), shape)
+                .clickable(onClick = onClick),
+        ) {
+            Image(
+                painter = painterResource(Res.drawable.ic_radio),
+                contentDescription = stringResource(Res.string.object_wave),
+                contentScale = ContentScale.Fit,
+                modifier = Modifier.size(46.dp),
+            )
+        }
     }
 }
 

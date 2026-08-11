@@ -564,7 +564,7 @@ private fun SettingsScreenPreview() {
         occupiedCacheSize = "386 МБ",
         musicDirectories =
             listOf(
-                "C:\\Users\\Turbo\\Music",
+                "C:\\Music",
             ),
         onBackClick = {},
         onAuthClick = {},

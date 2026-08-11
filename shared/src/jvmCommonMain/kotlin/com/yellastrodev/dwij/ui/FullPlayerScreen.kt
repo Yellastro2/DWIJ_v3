@@ -29,6 +29,8 @@ import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.DropdownMenu
+import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.Slider
 import androidx.compose.material3.SliderDefaults
@@ -115,6 +117,7 @@ data class FullPlayerUiState(
     val isShuffle: Boolean,
     val isRepeatAll: Boolean,
     val showPlaybackModes: Boolean,
+    val canStartTrackWave: Boolean,
     val canLike: Boolean,
     val isLiked: Boolean,
     val playlistTitles: List<String>,
@@ -138,6 +141,7 @@ fun FullPlayerScreen(
     onSeek: (Long) -> Unit,
     onShuffleClick: () -> Unit,
     onRepeatClick: () -> Unit,
+    onTrackWaveClick: () -> Unit,
     onLikeClick: () -> Unit,
     onAddToPlaylistClick: () -> Unit,
     onSourcesClick: () -> Unit,
@@ -179,7 +183,9 @@ fun FullPlayerScreen(
                 queuePosition = state.queuePosition,
                 showSourcesIndicator = state.hasMultipleSources ||
                     state.hasUnresolvedMatchCandidate,
+                canStartTrackWave = state.canStartTrackWave,
                 onSourcesClick = onSourcesClick,
+                onTrackWaveClick = onTrackWaveClick,
                 onBackClick = onBackClick,
             )
             Column(
@@ -257,10 +263,14 @@ private fun FullPlayerTopBar(
     queueTitle: String,
     queuePosition: Int,
     showSourcesIndicator: Boolean,
+    canStartTrackWave: Boolean,
     onSourcesClick: () -> Unit,
+    onTrackWaveClick: () -> Unit,
     onBackClick: () -> Unit,
 ) {
     val backDescription = stringResource(Res.string.player_back_content_description)
+    val moreDescription = stringResource(Res.string.player_more_content_description)
+    var isMoreMenuExpanded by remember { mutableStateOf(false) }
     Row(
         verticalAlignment = Alignment.CenterVertically,
         modifier = Modifier
@@ -341,8 +351,49 @@ private fun FullPlayerTopBar(
             ) {
                 MultipleSourcesIndicator(modifier = Modifier.size(34.dp))
             }
-        } else {
-            Spacer(modifier = Modifier.width(46.dp))
+        }
+        Box {
+            Box(
+                contentAlignment = Alignment.Center,
+                modifier = Modifier
+                    .size(46.dp)
+                    .clickable(
+                        role = Role.Button,
+                        onClick = { isMoreMenuExpanded = true },
+                    )
+                    .semantics {
+                        contentDescription = moreDescription
+                    },
+            ) {
+                Image(
+                    painter = painterResource(Res.drawable.ic_more_vertical),
+                    contentDescription = null,
+                    modifier = Modifier.size(24.dp),
+                )
+            }
+            DropdownMenu(
+                expanded = isMoreMenuExpanded,
+                onDismissRequest = { isMoreMenuExpanded = false },
+                modifier = Modifier.background(DwijColors.PlayerSnackbarBackground),
+            ) {
+                DropdownMenuItem(
+                    text = {
+                        Text(
+                            text = stringResource(Res.string.player_track_wave),
+                            color = if (canStartTrackWave) {
+                                DwijColors.White
+                            } else {
+                                DwijColors.White.copy(alpha = 0.38f)
+                            },
+                        )
+                    },
+                    enabled = canStartTrackWave,
+                    onClick = {
+                        isMoreMenuExpanded = false
+                        onTrackWaveClick()
+                    },
+                )
+            }
         }
     }
 }
@@ -1544,6 +1595,7 @@ private fun FullPlayerPreviewContent() {
             isShuffle = false,
             isRepeatAll = true,
             showPlaybackModes = true,
+            canStartTrackWave = true,
             canLike = true,
             isLiked = true,
             playlistTitles = listOf(
@@ -1561,6 +1613,7 @@ private fun FullPlayerPreviewContent() {
         onSeek = {},
         onShuffleClick = {},
         onRepeatClick = {},
+        onTrackWaveClick = {},
         onLikeClick = {},
         onAddToPlaylistClick = {},
         onSourcesClick = {},
