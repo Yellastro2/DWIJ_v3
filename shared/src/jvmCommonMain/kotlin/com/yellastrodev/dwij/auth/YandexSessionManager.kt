@@ -3,6 +3,7 @@ package com.yellastrodev.dwij.auth
 import com.yellastrodev.yamusicsdk.YamApiClient
 import com.yellastrodev.yamusicsdk.YamLogger
 import com.yellastrodev.yamusicsdk.network.YamError
+import com.yellastrodev.yamusicsdk.network.YamProxyConfig
 import com.yellastrodev.yamusicsdk.network.YamResult
 
 /**
@@ -55,6 +56,15 @@ class YandexSessionManager private constructor(
         )
     }
 
+    /** Применяет прокси ко всем новым соединениям живого клиента. */
+    fun updateProxyConfig(
+        proxyConfig: YamProxyConfig?,
+    ) {
+        client.updateProxyConfig(
+            proxyConfig,
+        )
+    }
+
     companion object {
         private const val TAG = "YandexSessionManager"
         private const val DEFAULT_LOGIN = "nologin"
@@ -69,6 +79,7 @@ class YandexSessionManager private constructor(
         suspend fun create(
             store: YandexSessionStore,
             logger: YamLogger,
+            proxyConfig: YamProxyConfig? = null,
         ): YandexSessionManager {
             val saved = store.read()
 
@@ -83,7 +94,10 @@ class YandexSessionManager private constructor(
 
                 return YandexSessionManager(
                     store = store,
-                    client = emptyClient(logger),
+                    client = emptyClient(
+                        logger = logger,
+                        proxyConfig = proxyConfig,
+                    ),
                     logger = logger,
                 )
             }
@@ -99,6 +113,7 @@ class YandexSessionManager private constructor(
                         accessToken = saved.accessToken,
                         userId = savedUserId,
                         logger = logger,
+                        proxyConfig = proxyConfig,
                     ),
                     logger = logger,
                 )
@@ -108,6 +123,7 @@ class YandexSessionManager private constructor(
                 accessToken = saved.accessToken,
                 userId = "",
                 logger = logger,
+                proxyConfig = proxyConfig,
             )
 
             return when (
@@ -132,7 +148,10 @@ class YandexSessionManager private constructor(
 
                         YandexSessionManager(
                             store = store,
-                            client = emptyClient(logger),
+                            client = emptyClient(
+                                logger = logger,
+                                proxyConfig = proxyConfig,
+                            ),
                             logger = logger,
                         )
                     } else {
@@ -158,6 +177,7 @@ class YandexSessionManager private constructor(
                                     restoredSession.accessToken,
                                 userId = resolvedUserId,
                                 logger = logger,
+                                proxyConfig = proxyConfig,
                             ),
                             logger = logger,
                         )
@@ -173,7 +193,10 @@ class YandexSessionManager private constructor(
 
                     YandexSessionManager(
                         store = store,
-                        client = emptyClient(logger),
+                        client = emptyClient(
+                            logger = logger,
+                            proxyConfig = proxyConfig,
+                        ),
                         logger = logger,
                     )
                 }
@@ -182,11 +205,13 @@ class YandexSessionManager private constructor(
 
         private fun emptyClient(
             logger: YamLogger,
+            proxyConfig: YamProxyConfig?,
         ): YamApiClient =
             YamApiClient(
                 accessToken = "",
                 userId = "",
                 logger = logger,
+                proxyConfig = proxyConfig,
             )
 
         private fun YamError.safeName(): String =

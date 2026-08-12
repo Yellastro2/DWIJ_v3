@@ -51,6 +51,25 @@ class SongRepository(
         assemble(relations, pendingSongIds)
     }
 
+    /** ID логических песен, чьи Yandex-инстансы находятся в локальном liked-плейлисте. */
+    val likedSongIds: Flow<Set<String>> = songDao
+        .observeLikedSongIds()
+        .map { ids -> ids.toSet() }
+        .distinctUntilChanged()
+
+    /** Наблюдает одну Song, включая подтверждённый локальной БД статус лайка. */
+    fun song(songId: String): Flow<Song?> = combine(
+        songDao.observeSong(songId),
+        matchDao.observePendingCandidatesForSong(songId),
+    ) { relation, pendingCandidates ->
+        relation?.let {
+            assemble(
+                relations = listOf(it),
+                pendingSongIds = if (pendingCandidates.isEmpty()) emptySet() else setOf(songId),
+            ).firstOrNull()
+        }
+    }.distinctUntilChanged()
+
     /** Индексирует уже сохранённые записи после запуска или миграции приложения. */
     suspend fun indexExistingTracks() {
         val yandexIds = songDao.getUnindexedYandexTrackIds(MusicSource.YANDEX.name)
@@ -231,6 +250,7 @@ class SongRepository(
             relation.song.toDomain(
                 instances = instances,
                 hasPendingMatchCandidate = relation.song.songId in pendingSongIds,
+                isLiked = relation.isLiked,
             )
         }
     }
@@ -271,6 +291,7 @@ class SongRepository(
     private fun SongEntity.toDomain(
         instances: List<TrackInstance>,
         hasPendingMatchCandidate: Boolean,
+        isLiked: Boolean,
     ): Song = Song(
         id = songId,
         title = title,
@@ -319,6 +340,7 @@ class SongRepository(
         instances = instances,
         preferredInstanceId = preferredInstanceId,
         hasPendingMatchCandidate = hasPendingMatchCandidate,
+        isLiked = isLiked,
     )
 
     private fun matchKey(

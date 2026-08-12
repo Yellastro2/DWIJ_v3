@@ -71,6 +71,7 @@ fun SettingsScreen(
     onBackClick: () -> Unit,
     onAuthClick: () -> Unit,
     onCacheLimitCommitted: (megabytes: Int) -> Unit,
+    onProxyClick: () -> Unit,
     onMusicDirectoriesClick: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
@@ -105,6 +106,10 @@ fun SettingsScreen(
                     isAuthInProgress = isAuthInProgress,
                     onAuthClick = onAuthClick,
                 )
+                SettingsProxyCard(
+                    onClick =
+                        onProxyClick,
+                )
                 SettingsCacheCard(
                     cacheLimitMb = cacheLimitMb,
                     minCacheMb = minCacheMb,
@@ -137,6 +142,79 @@ fun SettingsScreen(
                 .align(Alignment.BottomCenter)
                 .padding(horizontal = 14.dp, vertical = 12.dp),
         )
+    }
+}
+
+/** Открывает диалог прокси отдельных внешних сервисов. */
+@Composable
+private fun SettingsProxyCard(
+    onClick: () -> Unit,
+) {
+    SettingsTextureCard(
+        textureRes =
+            Res.drawable.bg_focus_texture,
+        accent =
+            DwijColors.Pink,
+        modifier =
+            Modifier
+                .height(92.dp)
+                .clickable(
+                    onClick =
+                        onClick,
+                ),
+    ) {
+        Row(
+            verticalAlignment =
+                Alignment.CenterVertically,
+            modifier =
+                Modifier
+                    .fillMaxSize()
+                    .padding(
+                        horizontal = 18.dp,
+                    ),
+        ) {
+            Column(
+                modifier =
+                    Modifier.weight(1f),
+            ) {
+                Text(
+                    text =
+                        stringResource(
+                            Res.string.settings_proxy_title,
+                        ),
+                    color =
+                        DwijColors.White,
+                    fontSize =
+                        18.sp,
+                    fontWeight =
+                        FontWeight.Bold,
+                )
+                Text(
+                    text =
+                        stringResource(
+                            Res.string.settings_proxy_description,
+                        ),
+                    color =
+                        DwijColors.SecondaryText,
+                    fontSize =
+                        12.sp,
+                    modifier =
+                        Modifier.padding(
+                            top = 5.dp,
+                        ),
+                )
+            }
+            Text(
+                text =
+                    "›",
+                color =
+                    DwijColors.Pink,
+                fontSize =
+                    30.sp,
+                fontWeight =
+                    FontWeight.Light,
+            )
+        }
     }
 }
 
@@ -569,6 +647,7 @@ private fun SettingsScreenPreview() {
         onBackClick = {},
         onAuthClick = {},
         onCacheLimitCommitted = {},
+        onProxyClick = {},
         onMusicDirectoriesClick = {},
     )
 }

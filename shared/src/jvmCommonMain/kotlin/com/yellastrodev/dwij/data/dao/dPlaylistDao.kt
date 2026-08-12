@@ -48,6 +48,17 @@ interface dPlaylistDao {
     )
     suspend fun getTracksForPlaylist(id: String): List<dPlaylistTrack>
 
+    /** Проверяет статус по уже закоммиченным строкам локального liked-плейлиста. */
+    @Query(
+        "SELECT EXISTS(" +
+            "SELECT 1 FROM playlist_tracks " +
+            "INNER JOIN playlists " +
+            "ON playlists.playlistUuid = playlist_tracks.playlistUuid " +
+            "WHERE playlists.kind = 'liked' AND playlist_tracks.trackId = :trackId" +
+        ")"
+    )
+    suspend fun isTrackLiked(trackId: String): Boolean
+
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun insertPlaylistDump(playlist: dYaPlaylist)
 

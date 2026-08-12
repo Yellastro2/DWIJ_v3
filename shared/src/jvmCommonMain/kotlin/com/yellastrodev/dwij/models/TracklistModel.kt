@@ -91,6 +91,7 @@ class TracklistModel(
 
     private var trackList: List<Song> = emptyList()
     private var tracksJob: Job? = null
+    private var likedSongsJob: Job? = null
     private var listIdentity: String? = null
 
     private val _tracks = MutableStateFlow<List<Song>>(emptyList())
@@ -132,6 +133,7 @@ class TracklistModel(
         logger.debug(TAG, "[setType] type=$type, value=$value")
 
         tracksJob?.cancel()
+        likedSongsJob?.cancel()
         listIdentity = newIdentity
         trackList = emptyList()
         _tracks.value = emptyList()
@@ -139,6 +141,19 @@ class TracklistModel(
         _totalTrackCount.value = null
         _cachedUnavailableSongIds.value = emptySet()
         _playlist.value = null
+
+        likedSongsJob = songRepo.likedSongIds
+            .onEach { likedSongIds ->
+                val updated = trackList.map { song ->
+                    val isLiked = song.id in likedSongIds
+                    if (song.isLiked == isLiked) song else song.copy(isLiked = isLiked)
+                }
+                if (updated != trackList) {
+                    trackList = updated
+                    _tracks.value = updated
+                }
+            }
+            .launchIn(viewModelScope)
 
         var resetScrollOnFirstList = true
         val unavailableCacheChecks = mutableMapOf<String, Boolean>()

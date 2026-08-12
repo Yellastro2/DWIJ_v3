@@ -58,6 +58,7 @@ import com.yellastrodev.dwij.resources.settings_music_directories_saved
 import com.yellastrodev.dwij.resources.settings_music_directories_sync_failed
 import com.yellastrodev.dwij.resources.settings_music_directory_picker_title
 import com.yellastrodev.dwij.ui.LocalYamLogger
+import com.yellastrodev.dwij.ui.ProxySettingsDialog
 import com.yellastrodev.dwij.ui.SettingsScreen
 import com.yellastrodev.yamusicsdk.YamApiClient
 import com.yellastrodev.yamusicsdk.YamLogger
@@ -156,6 +157,30 @@ fun SettingsRoute(
 
     var showMusicDirectoriesDialog by remember {
         mutableStateOf(false)
+    }
+
+    var showProxyDialog by remember {
+        mutableStateOf(false)
+    }
+
+    var yandexProxyUrl by remember(component) {
+        mutableStateOf(
+            component
+                .yandexProxySettings
+                .url,
+        )
+    }
+
+    var yandexProxyEnabled by remember(component) {
+        val settings =
+            component.yandexProxySettings
+
+        mutableStateOf(
+            settings.enabled &&
+                settings.parseConfig(
+                    settings.url,
+                ) != null,
+        )
     }
 
     var directoryPendingRemoval by remember {
@@ -314,6 +339,76 @@ fun SettingsRoute(
         )
     }
 
+    fun applyCurrentProxySettings() {
+        component
+            .yandexSessionManager
+            .updateProxyConfig(
+                component
+                    .yandexProxySettings
+                    .activeConfigOrNull(),
+            )
+    }
+
+    fun commitYandexProxyUrl() {
+        val normalized =
+            yandexProxyUrl.trim()
+
+        yandexProxyUrl =
+            normalized
+
+        val settings =
+            component.yandexProxySettings
+
+        settings.url =
+            normalized
+
+        if (
+            settings.parseConfig(
+                normalized,
+            ) == null
+        ) {
+            yandexProxyEnabled =
+                false
+
+            settings.enabled =
+                false
+        }
+
+        applyCurrentProxySettings()
+    }
+
+    fun setYandexProxyEnabled(
+        enabled: Boolean,
+    ) {
+        val settings =
+            component.yandexProxySettings
+
+        val proxyConfig =
+            settings.parseConfig(
+                yandexProxyUrl,
+            )
+
+        val resolvedEnabled =
+            enabled &&
+                proxyConfig != null
+
+        yandexProxyEnabled =
+            resolvedEnabled
+
+        settings.enabled =
+            resolvedEnabled
+
+        component
+            .yandexSessionManager
+            .updateProxyConfig(
+                if (resolvedEnabled) {
+                    proxyConfig
+                } else {
+                    null
+                },
+            )
+    }
+
     suspend fun saveToken(
         token: OAuthToken,
     ): SettingsAccountSaveResult {
@@ -325,6 +420,10 @@ fun SettingsRoute(
                             token.accessToken,
                         userId = "",
                         logger = logger,
+                        proxyConfig =
+                            component
+                                .yandexProxySettings
+                                .activeConfigOrNull(),
                     ).accountStatus()
             ) {
                 is YamResult.Success ->
@@ -469,6 +568,10 @@ fun SettingsRoute(
                                         .oauthClientSecret,
                                 logger =
                                     logger,
+                                proxyConfig =
+                                    component
+                                        .yandexProxySettings
+                                        .activeConfigOrNull(),
                             ).authorize(
                                 onCode = { code ->
                                     deviceCode = code
@@ -635,6 +738,22 @@ fun SettingsRoute(
                     normalizedMb.toLong() *
                             BYTES_PER_MEGABYTE
             },
+            onProxyClick = {
+                val settings =
+                    component.yandexProxySettings
+
+                yandexProxyUrl =
+                    settings.url
+
+                yandexProxyEnabled =
+                    settings.enabled &&
+                        settings.parseConfig(
+                            settings.url,
+                        ) != null
+
+                showProxyDialog =
+                    true
+            },
             onMusicDirectoriesClick = {
                 showMusicDirectoriesDialog =
                     true
@@ -655,6 +774,33 @@ fun SettingsRoute(
                         horizontal = 14.dp,
                         vertical = 12.dp,
                     ),
+        )
+    }
+
+    if (showProxyDialog) {
+        ProxySettingsDialog(
+            proxyUrl =
+                yandexProxyUrl,
+            enabled =
+                yandexProxyEnabled,
+            isProxyUrlValid =
+                component
+                    .yandexProxySettings
+                    .parseConfig(
+                        yandexProxyUrl,
+                    ) != null,
+            onProxyUrlChange = { value ->
+                yandexProxyUrl =
+                    value
+            },
+            onProxyUrlCommitted =
+                ::commitYandexProxyUrl,
+            onEnabledChange =
+                ::setYandexProxyEnabled,
+            onDismiss = {
+                showProxyDialog =
+                    false
+            },
         )
     }
 

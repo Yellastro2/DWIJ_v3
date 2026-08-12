@@ -6,7 +6,6 @@ import com.yellastrodev.dwij.data.DataError
 import com.yellastrodev.dwij.data.DataResult
 import com.yellastrodev.dwij.data.entities.Song
 import com.yellastrodev.dwij.data.entities.TrackInstance
-import com.yellastrodev.dwij.data.entities.dYaLikeTracklist
 import com.yellastrodev.dwij.data.repo.PlayerRepository
 import com.yellastrodev.dwij.data.repo.PlaylistRepository
 import kotlinx.coroutines.Dispatchers
@@ -116,6 +115,11 @@ class PlayerModel(
         )
     }
 
+    /** Передаёт подтверждённый Room-снимок Song в уже играющую очередь. */
+    fun applyUpdatedSong(song: Song) {
+        playerRepo.applyUpdatedSong(song)
+    }
+
     suspend fun nextTrack() {
         playerRepo.skipNext()
     }
@@ -140,45 +144,19 @@ class PlayerModel(
         playerRepo.rotate()
     }
 
-    fun isTrackLiked(): Boolean {
-        val yandexTrackId = track.value
-            ?.yandexInstances
-            ?.firstOrNull()
-            ?.track
-            ?.id
-            ?: return false
-
-        val likeList = playlistRepo
-            .playlists
-            .value
-            .find { playlist ->
-                playlist.kind ==
-                        dYaLikeTracklist.KIND_LIKED
-            }
-
-        return likeList
-            ?.tracks
-            ?.any { item ->
-                item.trackId == yandexTrackId
-            }
-            ?: false
-    }
-
-    suspend fun likeTrack(): DataResult<Unit> {
-        val trackId = track.value
-            ?.yandexInstances
-            ?.firstOrNull()
-            ?.track
-            ?.id
-            ?: return DataResult.Failure(
+    /** Меняет лайк на явно запрошенное состояние, не вычисляя его из устаревшей очереди. */
+    suspend fun likeTrack(trackId: String, liked: Boolean): DataResult<Unit> {
+        if (trackId.isBlank()) {
+            return DataResult.Failure(
                 DataError.InvalidData(
-                    "У текущей песни отсутствует Яндекс-инстанс",
+                    "Для изменения лайка отсутствует Yandex trackId",
                 ),
             )
+        }
 
         return playlistRepo.setTrackLiked(
             trackId = trackId,
-            liked = !isTrackLiked(),
+            liked = liked,
         )
     }
 

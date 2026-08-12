@@ -13,6 +13,7 @@ import com.yellastrodev.dwij.utils.PlaylistsDiff.Companion.diffPlaylists
 import com.yellastrodev.yamusicsdk.YamLogger
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
@@ -22,6 +23,8 @@ import kotlinx.coroutines.flow.filterNotNull
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
 import kotlin.collections.map
 
 class PlaylistRepository(
@@ -35,6 +38,8 @@ class PlaylistRepository(
 
     private val _playlistMap = MutableStateFlow<Map<String, dYaPlaylist>>(emptyMap())
     private val _initialLoadComplete = MutableStateFlow(false)
+    private val likeMutationMutex = Mutex()
+    private val playlistSaveMutex = Mutex()
     val initialLoadComplete: StateFlow<Boolean> = _initialLoadComplete
     val playlists: StateFlow<List<dYaPlaylist>> =
         _playlistMap.map { it.values.toList() }
@@ -297,39 +302,106 @@ class PlaylistRepository(
     fun getLikeList(): dYaPlaylist? =
         _playlistMap.value.values.find { it.kind == KIND_LIKED }
 
-    suspend fun setTrackLiked(trackId: String, liked: Boolean): DataResult<Unit> {
-        logger.debug(TAG, "[setTrackLiked] Начато: trackId=$trackId, liked=$liked")
-        return when (val remoteResult = remote.setTrackLiked(trackId, liked)) {
-            is DataResult.Success -> {
-                logger.debug(TAG, "[setTrackLiked] Яндекс подтвердил изменение, обновляем список лайков")
-                val likeList = getLikeList()
-                val refreshResult = if (likeList == null) {
-                    refreshLikedPlaylist()
-                } else {
-                    refreshPlaylist(likeList.playlistUuid)
-                }
-                when (refreshResult) {
-                    is DataResult.Success -> logger.debug(
+    suspend fun setTrackLiked(trackId: String, liked: Boolean): DataResult<Unit> =
+        likeMutationMutex.withLock {
+            logger.debug(TAG, "[setTrackLiked] Начато: trackId=$trackId, liked=$liked")
+            when (val remoteResult = remote.setTrackLiked(trackId, liked)) {
+                is DataResult.Success -> {
+                    logger.debug(
                         TAG,
-                        "[setTrackLiked] Завершено: trackId=$trackId, liked=$liked, " +
-                            "локальный список обновлён",
+                        "[setTrackLiked] Яндекс подтвердил изменение, ждём новое состояние списка лайков",
                     )
-                    is DataResult.Failure -> logger.error(
-                        TAG,
-                        "[setTrackLiked] Яндекс изменил лайк, но список не обновлён: " +
-                            "${refreshResult.error}",
+                    val refreshResult = refreshLikedPlaylistUntil(
+                        trackId = trackId,
+                        liked = liked,
                     )
+                    when (refreshResult) {
+                        is DataResult.Success -> logger.debug(
+                            TAG,
+                            "[setTrackLiked] Завершено: trackId=$trackId, liked=$liked, " +
+                                "локальный список обновлён",
+                        )
+                        is DataResult.Failure -> logger.error(
+                            TAG,
+                            "[setTrackLiked] Яндекс изменил лайк, но список не обновлён: " +
+                                "${refreshResult.error}",
+                        )
+                    }
+                    refreshResult
                 }
-                refreshResult
-            }
-            is DataResult.Failure -> {
-                logger.error(
-                    TAG,
-                    "[setTrackLiked] Яндекс не изменил лайк: ${remoteResult.error}",
-                )
-                remoteResult
+                is DataResult.Failure -> {
+                    logger.error(
+                        TAG,
+                        "[setTrackLiked] Яндекс не изменил лайк: ${remoteResult.error}",
+                    )
+                    remoteResult
+                }
             }
         }
+
+    /**
+     * Повторяет чтение liked-плейлиста, пока удалённый снимок не содержит ожидаемую мутацию,
+     * затем сохраняет его и отдельно проверяет уже закоммиченное состояние Room.
+     */
+    private suspend fun refreshLikedPlaylistUntil(
+        trackId: String,
+        liked: Boolean,
+    ): DataResult<Unit> {
+        repeat(LIKE_CONFIRMATION_ATTEMPTS) { attempt ->
+            when (val result = remote.fetchLikelist()) {
+                is DataResult.Success -> {
+                    val playlist = result.value
+                    val remoteLiked = playlist.tracks.any { item -> item.trackId == trackId }
+                    if (remoteLiked == liked) {
+                        when (val tracksResult = trackRepo.getTracks(
+                            playlist.tracks.map { it.trackId }
+                        )) {
+                            is DataResult.Success -> Unit
+                            is DataResult.Failure -> return tracksResult
+                        }
+                        when (val saveResult = savePlaylist(playlist)) {
+                            is DataResult.Success -> Unit
+                            is DataResult.Failure -> return saveResult
+                        }
+
+                        val localLiked = local.isTrackLiked(trackId)
+                        if (localLiked != liked) {
+                            return DataResult.Failure(
+                                DataError.Storage(
+                                    IllegalStateException(
+                                        "Room не подтвердил liked=$liked для trackId=$trackId"
+                                    )
+                                )
+                            )
+                        }
+                        logger.debug(
+                            TAG,
+                            "[refreshLikedPlaylistUntil] Room подтвердил: " +
+                                "trackId=$trackId, liked=$liked",
+                        )
+                        return DataResult.Success(Unit)
+                    }
+
+                    logger.debug(
+                        TAG,
+                        "[refreshLikedPlaylistUntil] Снимок ещё не обновился: " +
+                            "trackId=$trackId, liked=$liked, попытка=${attempt + 1}",
+                    )
+                }
+                is DataResult.Failure -> return result
+            }
+
+            if (attempt < LIKE_CONFIRMATION_ATTEMPTS - 1) {
+                delay(LIKE_CONFIRMATION_DELAYS_MS[attempt])
+            }
+        }
+
+        return DataResult.Failure(
+            DataError.InvalidData(
+                "Яндекс подтвердил изменение, но liked-плейлист не получил " +
+                    "liked=$liked для trackId=$trackId"
+            )
+        )
     }
 
     private suspend fun refreshLikedPlaylist(): DataResult<Unit> {
@@ -374,19 +446,36 @@ class PlaylistRepository(
         }
     }
 
-    private suspend fun savePlaylist(playlist: dYaPlaylist): DataResult<Unit> {
-        return try {
-            cache.put(playlist)
-            local.insert(playlist)
-            _playlistMap.value = _playlistMap.value +
-                (playlist.playlistUuid to playlist)
-            DataResult.Success(Unit)
-        } catch (error: CancellationException) {
-            throw error
-        } catch (error: Exception) {
-            DataResult.Failure(DataError.Storage(error))
+    private suspend fun savePlaylist(playlist: dYaPlaylist): DataResult<Unit> =
+        playlistSaveMutex.withLock {
+            try {
+                val storedRevision = local
+                    .getPlaylistEntity(playlist.playlistUuid)
+                    ?.revision
+                    ?: Int.MIN_VALUE
+                val publishedRevision = _playlistMap.value[playlist.playlistUuid]
+                    ?.revision
+                    ?: Int.MIN_VALUE
+                if (playlist.revision < maxOf(storedRevision, publishedRevision)) {
+                    logger.warning(
+                        TAG,
+                        "[savePlaylist] Пропущен устаревший снимок: " +
+                            "uuid=${playlist.playlistUuid}, revision=${playlist.revision}",
+                    )
+                    return@withLock DataResult.Success(Unit)
+                }
+
+                cache.put(playlist)
+                local.insert(playlist)
+                _playlistMap.value = _playlistMap.value +
+                    (playlist.playlistUuid to playlist)
+                DataResult.Success(Unit)
+            } catch (error: CancellationException) {
+                throw error
+            } catch (error: Exception) {
+                DataResult.Failure(DataError.Storage(error))
+            }
         }
-    }
 
     private suspend fun deletePlaylist(uuid: String): DataResult<Unit> {
         return try {
@@ -403,5 +492,7 @@ class PlaylistRepository(
 
     private companion object {
         const val TAG = "PlaylistRepository"
+        const val LIKE_CONFIRMATION_ATTEMPTS = 5
+        val LIKE_CONFIRMATION_DELAYS_MS = longArrayOf(200L, 400L, 800L, 1_200L)
     }
 }

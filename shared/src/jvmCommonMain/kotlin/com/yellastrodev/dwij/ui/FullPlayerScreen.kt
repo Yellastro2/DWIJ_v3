@@ -1,12 +1,18 @@
 package com.yellastrodev.dwij.ui
 
+import androidx.compose.animation.core.RepeatMode
+import androidx.compose.animation.core.animateFloat
 import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.core.infiniteRepeatable
+import androidx.compose.animation.core.rememberInfiniteTransition
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.gestures.awaitEachGesture
+import androidx.compose.foundation.gestures.awaitFirstDown
 import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -53,6 +59,7 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.drawWithContent
 import androidx.compose.ui.geometry.CornerRadius
 import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.geometry.Rect
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.ColorFilter
@@ -67,6 +74,8 @@ import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.layout.Layout
 import androidx.compose.ui.layout.Placeable
+import androidx.compose.ui.layout.boundsInParent
+import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
@@ -120,6 +129,7 @@ data class FullPlayerUiState(
     val canStartTrackWave: Boolean,
     val canLike: Boolean,
     val isLiked: Boolean,
+    val isLikePending: Boolean,
     val playlistTitles: List<String>,
     val isWaveLoading: Boolean = false,
     val pendingTrackChange: TrackChangeDirection? = null,
@@ -128,6 +138,7 @@ data class FullPlayerUiState(
 /**
  * Полноэкранный плеер в визуальном стиле Движа.
  * Позиция ползунка меняется локально во время жеста, а seek отправляется плееру только при отпускании.
+ * Горизонтальный свайп центральной секции переключает трек; область прогресса сохраняет собственные жесты.
  */
 @Composable
 fun FullPlayerScreen(
@@ -149,6 +160,13 @@ fun FullPlayerScreen(
 ) {
     val backgroundColor = DwijColors.Background
     val snackbarHostState = remember { SnackbarHostState() }
+    val currentOnPreviousClick by rememberUpdatedState(onPreviousClick)
+    val currentOnNextClick by rememberUpdatedState(onNextClick)
+    var progressBounds by remember { mutableStateOf<Rect?>(null) }
+    val isTrackSwipeEnabled =
+        state.trackId != null &&
+            !state.isWaveLoading &&
+            state.pendingTrackChange == null
 
     LaunchedEffect(playerEvents) {
         playerEvents.collect { event ->
@@ -193,7 +211,65 @@ fun FullPlayerScreen(
                 modifier = Modifier
                     .fillMaxWidth()
                     .weight(1f)
-                    .padding(bottom = 6.dp),
+                    .padding(bottom = 6.dp)
+                    .pointerInput(isTrackSwipeEnabled, progressBounds) {
+                        if (!isTrackSwipeEnabled) return@pointerInput
+
+                        val switchThreshold = 72.dp.toPx()
+                        awaitEachGesture {
+                            val down = awaitFirstDown(requireUnconsumed = false)
+                            if (progressBounds?.contains(down.position) == true) {
+                                return@awaitEachGesture
+                            }
+
+                            var isHorizontalDrag = false
+                            var releasedPosition: Offset? = null
+                            while (true) {
+                                val event = awaitPointerEvent()
+                                val change = event.changes.firstOrNull { it.id == down.id }
+                                    ?: break
+                                val displacement = change.position - down.position
+                                val horizontalDistance = kotlin.math.abs(displacement.x)
+                                val verticalDistance = kotlin.math.abs(displacement.y)
+
+                                if (!isHorizontalDrag) {
+                                    if (
+                                        verticalDistance > viewConfiguration.touchSlop &&
+                                        verticalDistance >= horizontalDistance
+                                    ) {
+                                        break
+                                    }
+                                    if (
+                                        horizontalDistance > viewConfiguration.touchSlop &&
+                                        horizontalDistance > verticalDistance * 1.2f
+                                    ) {
+                                        isHorizontalDrag = true
+                                    }
+                                }
+
+                                if (isHorizontalDrag) {
+                                    change.consume()
+                                }
+                                if (!change.pressed) {
+                                    releasedPosition = change.position
+                                    break
+                                }
+                            }
+
+                            val horizontalDisplacement =
+                                releasedPosition?.x?.minus(down.position.x) ?: 0f
+                            if (
+                                isHorizontalDrag &&
+                                kotlin.math.abs(horizontalDisplacement) >= switchThreshold
+                            ) {
+                                if (horizontalDisplacement < 0f) {
+                                    currentOnNextClick()
+                                } else {
+                                    currentOnPreviousClick()
+                                }
+                            }
+                        }
+                    },
             ) {
                 FullPlayerCover(
                     trackId = state.trackId,
@@ -201,6 +277,7 @@ fun FullPlayerScreen(
                     isWaveLoading = state.isWaveLoading,
                     canLike = state.canLike,
                     isLiked = state.isLiked,
+                    isLikePending = state.isLikePending,
                     onLikeClick = onLikeClick,
                     modifier = Modifier.weight(1f),
                 )
@@ -215,6 +292,9 @@ fun FullPlayerScreen(
                     currentPositionMillis = state.currentPositionMillis,
                     durationMillis = state.durationMillis,
                     onSeek = onSeek,
+                    modifier = Modifier.onGloballyPositioned { coordinates ->
+                        progressBounds = coordinates.boundsInParent()
+                    },
                 )
                 if (state.canLike) {
                     PlayerPlaylistMemberships(
@@ -406,11 +486,13 @@ private fun FullPlayerCover(
     isWaveLoading: Boolean,
     canLike: Boolean,
     isLiked: Boolean,
+    isLikePending: Boolean,
     onLikeClick: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
     val currentOnLikeClick by rememberUpdatedState(onLikeClick)
     val currentIsLiked by rememberUpdatedState(isLiked)
+    val currentIsLikePending by rememberUpdatedState(isLikePending)
     var previewRequest by remember(trackId) { mutableStateOf(0) }
     var previewVisible by remember(trackId) { mutableStateOf(false) }
     var previewIsLiked by remember(trackId) { mutableStateOf(isLiked) }
@@ -418,11 +500,18 @@ private fun FullPlayerCover(
     LaunchedEffect(isLiked) {
         previewIsLiked = isLiked
     }
-    LaunchedEffect(previewRequest) {
+    LaunchedEffect(isLikePending) {
+        if (!isLikePending) {
+            previewIsLiked = isLiked
+        }
+    }
+    LaunchedEffect(previewRequest, isLikePending) {
         if (previewRequest == 0) return@LaunchedEffect
         previewVisible = true
-        delay(800L)
-        previewVisible = false
+        if (!isLikePending) {
+            delay(800L)
+            previewVisible = false
+        }
     }
     Box(
         contentAlignment = Alignment.Center,
@@ -438,14 +527,14 @@ private fun FullPlayerCover(
                 .pointerInput(trackId, canLike) {
                     detectTapGestures(
                         onPress = {
-                            if (canLike) {
+                            if (canLike && !currentIsLikePending) {
                                 previewIsLiked = currentIsLiked
                                 previewRequest += 1
                             }
                             tryAwaitRelease()
                         },
                         onDoubleTap = {
-                            if (canLike) {
+                            if (canLike && !currentIsLikePending) {
                                 previewIsLiked = !currentIsLiked
                                 previewRequest += 1
                                 currentOnLikeClick()
@@ -492,6 +581,7 @@ private fun FullPlayerCover(
                 PlayerHeartPreview(
                     isLiked = previewIsLiked,
                     visible = previewVisible,
+                    isPending = isLikePending,
                     modifier = Modifier
                         .align(Alignment.Center)
                         .fillMaxSize(0.48f),
@@ -542,6 +632,7 @@ private fun GlitchCoverFrame(modifier: Modifier = Modifier) {
 private fun PlayerHeartPreview(
     isLiked: Boolean,
     visible: Boolean,
+    isPending: Boolean,
     modifier: Modifier = Modifier,
 ) {
     val previewAlpha by animateFloatAsState(
@@ -558,12 +649,31 @@ private fun PlayerHeartPreview(
         animationSpec = tween(if (visible) 90 else 280),
         label = "playerHeartScale",
     )
+    val pendingTransition = rememberInfiniteTransition(label = "playerHeartPending")
+    val pendingScale by pendingTransition.animateFloat(
+        initialValue = 0.92f,
+        targetValue = 1.06f,
+        animationSpec = infiniteRepeatable(
+            animation = tween(520),
+            repeatMode = RepeatMode.Reverse,
+        ),
+        label = "playerHeartPendingScale",
+    )
+    val pendingAlpha by pendingTransition.animateFloat(
+        initialValue = 0.68f,
+        targetValue = 1f,
+        animationSpec = infiniteRepeatable(
+            animation = tween(520),
+            repeatMode = RepeatMode.Reverse,
+        ),
+        label = "playerHeartPendingAlpha",
+    )
 
     Canvas(
         modifier = modifier.graphicsLayer {
-            alpha = previewAlpha
-            scaleX = previewScale
-            scaleY = previewScale
+            alpha = previewAlpha * if (isPending) pendingAlpha else 1f
+            scaleX = previewScale * if (isPending) pendingScale else 1f
+            scaleY = previewScale * if (isPending) pendingScale else 1f
         },
     ) {
         val heartWidth = size.width
@@ -650,6 +760,7 @@ private fun FullPlayerProgress(
     currentPositionMillis: Long,
     durationMillis: Long,
     onSeek: (Long) -> Unit,
+    modifier: Modifier = Modifier,
 ) {
     val volumeControl =
         LocalPlayerVolumeControl.current
@@ -696,7 +807,7 @@ private fun FullPlayerProgress(
     Row(
         verticalAlignment =
             Alignment.Top,
-        modifier = Modifier
+        modifier = modifier
             .fillMaxWidth()
             .padding(
                 horizontal = 24.dp,
@@ -1598,6 +1709,7 @@ private fun FullPlayerPreviewContent() {
             canStartTrackWave = true,
             canLike = true,
             isLiked = true,
+            isLikePending = false,
             playlistTitles = listOf(
                 "В дорогу",
                 "Ночное",

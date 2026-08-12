@@ -65,6 +65,8 @@ data class Song(
     val instances: List<TrackInstance>,
     val preferredInstanceId: String?,
     val hasPendingMatchCandidate: Boolean,
+    /** Производный статус из локального Room-списка лайков. */
+    val isLiked: Boolean,
 ) {
     val artistNames: List<String>
         get() = artists.map(Artist::name)

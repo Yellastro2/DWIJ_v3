@@ -1,6 +1,7 @@
 package com.yellastrodev.dwij.data.dao
 
 import androidx.room.Dao
+import androidx.room.ColumnInfo
 import androidx.room.Embedded
 import androidx.room.Insert
 import androidx.room.OnConflictStrategy
@@ -20,17 +21,21 @@ data class SongWithInstances(
         entityColumn = "songId",
     )
     val instances: List<TrackInstanceEntity>,
+    @ColumnInfo(name = "isLiked") val isLiked: Boolean,
 )
 
 @Dao
 abstract class SongDao {
     @Transaction
-    @Query("SELECT * FROM songs ORDER BY title COLLATE NOCASE, artistNames COLLATE NOCASE")
+    @Query(
+        "SELECT songs.*, " + IS_LIKED_SQL + " AS isLiked FROM songs " +
+            "ORDER BY title COLLATE NOCASE, artistNames COLLATE NOCASE"
+    )
     abstract fun observeSongs(): Flow<List<SongWithInstances>>
 
     @Transaction
     @Query(
-        "SELECT DISTINCT songs.* FROM songs " +
+        "SELECT DISTINCT songs.*, " + IS_LIKED_SQL + " AS isLiked FROM songs " +
             "INNER JOIN track_instances ON track_instances.songId = songs.songId " +
             "WHERE track_instances.source = :source " +
             "ORDER BY songs.title COLLATE NOCASE, songs.artistNames COLLATE NOCASE"
@@ -40,7 +45,7 @@ abstract class SongDao {
     /** Локальный каталог не показывает экземпляры, скрытые пользователем в Движе. */
     @Transaction
     @Query(
-        "SELECT DISTINCT songs.* FROM songs " +
+        "SELECT DISTINCT songs.*, " + IS_LIKED_SQL + " AS isLiked FROM songs " +
             "INNER JOIN track_instances ON track_instances.songId = songs.songId " +
             "INNER JOIN local_tracks ON local_tracks.instanceId = track_instances.sourceTrackId " +
             "WHERE track_instances.source = :source AND local_tracks.isHidden = 0 " +
@@ -49,19 +54,42 @@ abstract class SongDao {
     abstract fun observeSongsForVisibleLocalTracks(source: String): Flow<List<SongWithInstances>>
 
     @Transaction
-    @Query("SELECT * FROM songs WHERE songId IN (:songIds)")
+    @Query(
+        "SELECT songs.*, " + IS_LIKED_SQL + " AS isLiked FROM songs " +
+            "WHERE songId IN (:songIds)"
+    )
     abstract suspend fun getSongs(songIds: List<String>): List<SongWithInstances>
+
+    @Transaction
+    @Query(
+        "SELECT songs.*, " + IS_LIKED_SQL + " AS isLiked FROM songs " +
+            "WHERE songId = :songId LIMIT 1"
+    )
+    abstract fun observeSong(songId: String): Flow<SongWithInstances?>
+
+    @Query(
+        "SELECT DISTINCT songs.songId FROM songs " +
+            "INNER JOIN track_instances " +
+            "ON track_instances.songId = songs.songId " +
+            "INNER JOIN playlist_tracks " +
+            "ON playlist_tracks.trackId = track_instances.sourceTrackId " +
+            "INNER JOIN playlists " +
+            "ON playlists.playlistUuid = playlist_tracks.playlistUuid " +
+            "WHERE track_instances.source = 'YANDEX' AND playlists.kind = 'liked'"
+    )
+    abstract fun observeLikedSongIds(): Flow<List<String>>
 
     @Query("SELECT * FROM songs WHERE songId = :songId LIMIT 1")
     abstract suspend fun getSong(songId: String): SongEntity?
 
     @Transaction
-    @Query("SELECT * FROM songs")
+    @Query("SELECT songs.*, " + IS_LIKED_SQL + " AS isLiked FROM songs")
     abstract suspend fun getAllSongs(): List<SongWithInstances>
 
     @Transaction
     @Query(
-        "SELECT * FROM songs WHERE matchResolverVersion < :resolverVersion " +
+        "SELECT songs.*, " + IS_LIKED_SQL + " AS isLiked FROM songs " +
+            "WHERE matchResolverVersion < :resolverVersion " +
             "ORDER BY songId LIMIT :limit"
     )
     abstract suspend fun getUnscannedSongs(
@@ -244,5 +272,19 @@ abstract class SongDao {
         )
         deleteSongs(sourceSongIds.filterNot { songId -> songId == targetSongId })
         return targetSongId
+    }
+
+    private companion object {
+        const val IS_LIKED_SQL =
+            "EXISTS (" +
+                "SELECT 1 FROM track_instances liked_instance " +
+                "INNER JOIN playlist_tracks liked_relation " +
+                "ON liked_relation.trackId = liked_instance.sourceTrackId " +
+                "INNER JOIN playlists liked_playlist " +
+                "ON liked_playlist.playlistUuid = liked_relation.playlistUuid " +
+                "WHERE liked_instance.songId = songs.songId " +
+                "AND liked_instance.source = 'YANDEX' " +
+                "AND liked_playlist.kind = 'liked'" +
+            ")"
     }
 }

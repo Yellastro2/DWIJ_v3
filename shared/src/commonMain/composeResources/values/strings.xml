@@ -23,6 +23,11 @@
     <string name="settings_button_content_description">Открыть настройки</string>
     <string name="settings_title">Настройки</string>
     <string name="settings_yandex_music">Яндекс Музыка</string>
+    <string name="settings_proxy_title">Прокси</string>
+    <string name="settings_proxy_description">Настроить прокси для сервисов</string>
+    <string name="settings_proxy_dialog_title">Прокси</string>
+    <string name="settings_proxy_url_hint">http://host:port</string>
+    <string name="settings_proxy_close">Закрыть</string>
     <string name="settings_cache_title">Хранилище</string>
     <string name="settings_cache_description">Общий предел для кэша треков и обложек</string>
     <string name="settings_cache_limit">ЛИМИТ</string>

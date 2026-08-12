@@ -453,6 +453,16 @@ class PlayerRepository(
         }
     }
 
+    /** Обновляет данные существующей Song в очереди без смены позиции и перезапуска плеера. */
+    fun applyUpdatedSong(updatedSong: Song) {
+        currentSongQueue = currentSongQueue.map { song ->
+            if (song.id == updatedSong.id) updatedSong else song
+        }
+        if (currentSong.value?.id == updatedSong.id) {
+            mutableCurrentSong.value = updatedSong
+        }
+    }
+
     private companion object {
         const val TAG = "PlayerRepository"
     }

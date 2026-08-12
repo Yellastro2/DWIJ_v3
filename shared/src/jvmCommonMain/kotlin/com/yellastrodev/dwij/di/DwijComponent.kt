@@ -34,6 +34,7 @@ import com.yellastrodev.dwij.storage.LocalKeyValueStore
 import com.yellastrodev.dwij.storage.StoredCacheSettings
 import com.yellastrodev.dwij.storage.StoredMusicSourceSettings
 import com.yellastrodev.dwij.storage.StoredPlaybackSettings
+import com.yellastrodev.dwij.storage.YandexProxySettings
 import com.yellastrodev.dwij.utils.DwLruCache
 import com.yellastrodev.yamusicsdk.YamLogger
 import kotlinx.coroutines.CancellationException
@@ -58,6 +59,7 @@ class DwijComponent private constructor(
     val logger: YamLogger,
     val yandexSessionManager: YandexSessionManager,
     val cacheSettings: CacheSettings,
+    val yandexProxySettings: YandexProxySettings,
     private val db: DwijDatabase,
     private val trackCacheDirectory: File,
     private val coverCacheDirectory: File,
@@ -369,6 +371,11 @@ class DwijComponent private constructor(
                     localKeyValueStore,
                 )
 
+            val yandexProxySettings =
+                YandexProxySettings(
+                    localKeyValueStore,
+                )
+
             val sessionManager =
                 runBlocking(
                     Dispatchers.IO,
@@ -378,6 +385,9 @@ class DwijComponent private constructor(
                             yandexSessionStore,
                         logger =
                             logger,
+                        proxyConfig =
+                            yandexProxySettings
+                                .activeConfigOrNull(),
                     )
                 }
 
@@ -390,6 +400,8 @@ class DwijComponent private constructor(
                     sessionManager,
                 cacheSettings =
                     cacheSettings,
+                yandexProxySettings =
+                    yandexProxySettings,
                 db =
                     db,
                 trackCacheDirectory =
