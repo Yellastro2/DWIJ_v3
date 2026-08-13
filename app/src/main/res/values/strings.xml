@@ -179,4 +179,12 @@
     <string name="search_result_third_title">Тихий район</string>
     <string name="search_result_third_subtitle">Движ · спокойный микс</string>
     <string name="player_like_failed">Не удалось изменить лайк</string>
+    <string name="local_track_download_channel_name">Локальные треки</string>
+    <string name="local_track_download_channel_description">Прогресс сохранения треков Яндекс Музыки</string>
+    <string name="local_track_download_notification_title">Сохранение трека</string>
+    <string name="local_track_download_preparing">Подготовка загрузки…</string>
+    <string name="local_track_download_progress">%1$d%% · %2$s</string>
+    <string name="local_track_download_count">Скачано %1$d из %2$d</string>
+    <string name="local_track_download_complete">Трек сохранён локально</string>
+    <string name="local_track_download_failed">Не удалось сохранить трек</string>
 </resources>

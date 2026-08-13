@@ -69,6 +69,8 @@ fun DwijApp(
     val playerState by playerModel.playerState.collectAsState()
 
     val coroutineScope = rememberCoroutineScope()
+    val localTrackDownloadRequester =
+        platform.rememberLocalTrackDownloadRequester()
 
     var showAuthorizationRequiredDialog by remember(component) {
         mutableStateOf(false)
@@ -235,6 +237,8 @@ fun DwijApp(
                             DwijDestination.PLAYER,
                         )
                     },
+                    onRequestLocalTrackDownload =
+                        localTrackDownloadRequester::request,
                 )
             }
 
@@ -330,6 +334,8 @@ fun DwijApp(
                             DwijDestination.PLAYER,
                         )
                     },
+                    onRequestLocalTrackDownload =
+                        localTrackDownloadRequester::request,
                 )
             }
 
@@ -345,6 +351,8 @@ fun DwijApp(
                             DwijDestination.playlistsAddRoute(trackId),
                         )
                     },
+                    onRequestLocalTrackDownload =
+                        localTrackDownloadRequester::request,
                 )
             }
 

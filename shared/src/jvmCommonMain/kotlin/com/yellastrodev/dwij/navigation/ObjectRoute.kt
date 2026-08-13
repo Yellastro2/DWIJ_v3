@@ -4,8 +4,10 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.rememberLazyListState
+import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
+import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
@@ -39,6 +41,10 @@ import com.yellastrodev.dwij.resources.object_track_count
 import com.yellastrodev.dwij.resources.track_list_all_title
 import com.yellastrodev.dwij.resources.track_list_empty
 import com.yellastrodev.dwij.resources.track_unavailable_yandex
+import com.yellastrodev.dwij.resources.track_save_locally
+import com.yellastrodev.dwij.resources.track_saved_locally
+import com.yellastrodev.dwij.resources.track_saving_locally
+import com.yellastrodev.dwij.resources.track_save_locally_started
 import com.yellastrodev.dwij.ui.LocalYamLogger
 import com.yellastrodev.dwij.ui.MultiSourceDialog
 import com.yellastrodev.dwij.ui.ObjectScreen
@@ -64,6 +70,7 @@ fun ObjectRoute(
     objectValue: String,
     onBackClick: () -> Unit,
     onOpenPlayer: () -> Unit,
+    onRequestLocalTrackDownload: (trackId: String, title: String) -> Unit,
     modifier: Modifier = Modifier,
 ) {
     val logger = LocalYamLogger.current
@@ -93,11 +100,31 @@ fun ObjectRoute(
     val isLoading by model.isLoading.collectAsState()
     val totalTrackCount by model.totalTrackCount.collectAsState()
     val cachedUnavailableSongIds by model.cachedUnavailableSongIds.collectAsState()
+    val localStorageRevision by
+        component.trackCacheRepo.localStorageRevision.collectAsState()
+    val localDownloads by component.trackCacheRepo.localDownloads.collectAsState()
+
+    var savedYandexTrackIds by remember {
+        mutableStateOf(emptySet<String>())
+    }
+
+    LaunchedEffect(tracks, localStorageRevision) {
+        val yandexTrackIds = tracks
+            .mapNotNull(Song::localSaveYandexTrackId)
+            .distinct()
+        savedYandexTrackIds = withContext(Dispatchers.IO) {
+            yandexTrackIds
+                .filter(component.trackCacheRepo::isSavedLocally)
+                .toSet()
+        }
+    }
 
     val yandexPlaylist = playlist as? dYaPlaylist
     val objectId = yandexPlaylist?.playlistUuid
     val unknownArtist = stringResource(Res.string.home_player_unknown_artist)
     val unavailableMessage = stringResource(Res.string.track_unavailable_yandex)
+    val saveLocallyStartedMessage =
+        stringResource(Res.string.track_save_locally_started)
 
     val title = when {
         objectType == DwijDestination.OBJECT_TYPE_TRACKLIST ->
@@ -121,11 +148,15 @@ fun ObjectRoute(
     val trackItems = remember(
         tracks,
         cachedUnavailableSongIds,
+        savedYandexTrackIds,
+        localDownloads,
         unknownArtist,
     ) {
         tracks.toObjectTrackListItems(
             unknownArtist = unknownArtist,
             cachedUnavailableSongIds = cachedUnavailableSongIds,
+            savedYandexTrackIds = savedYandexTrackIds,
+            savingYandexTrackIds = localDownloads.keys,
         )
     }
 
@@ -437,6 +468,29 @@ fun ObjectRoute(
                     }
                 }
             },
+            trackContextMenuContent = { _, item, onDismiss ->
+                item.yandexTrackId?.let { yandexTrackId ->
+                    DropdownMenuItem(
+                        text = {
+                            Text(
+                                stringResource(
+                                    when {
+                                        item.isSavedLocally -> Res.string.track_saved_locally
+                                        item.isSavingLocally -> Res.string.track_saving_locally
+                                        else -> Res.string.track_save_locally
+                                    },
+                                ),
+                            )
+                        },
+                        enabled = !item.isSavedLocally && !item.isSavingLocally,
+                        onClick = {
+                            onDismiss()
+                            onRequestLocalTrackDownload(yandexTrackId, item.title)
+                            showSnackbar(saveLocallyStartedMessage)
+                        },
+                    )
+                }
+            },
             onShareClick = {
                 logger.debug(
                     TAG,
@@ -617,6 +671,8 @@ fun ObjectRoute(
 private fun List<Song>.toObjectTrackListItems(
     unknownArtist: String,
     cachedUnavailableSongIds: Set<String>,
+    savedYandexTrackIds: Set<String>,
+    savingYandexTrackIds: Set<String>,
 ): List<TrackListItemUiModel> {
     val occurrences = mutableMapOf<String, Int>()
 
@@ -634,6 +690,7 @@ private fun List<Song>.toObjectTrackListItems(
             instance.track.available ||
                 song.id in cachedUnavailableSongIds
         }
+        val localSaveYandexTrackId = song.localSaveYandexTrackId()
 
         TrackListItemUiModel(
             key = "${song.id}:$occurrence",
@@ -643,14 +700,28 @@ private fun List<Song>.toObjectTrackListItems(
                 .joinToString(", ")
                 .ifBlank { unknownArtist },
             shouldLoadCover = song.coverUri != null,
+            yandexTrackId = localSaveYandexTrackId,
             isYandexUnavailable = yandexUnavailable,
             isPlaybackBlocked =
                 song.localInstances.isEmpty() && !yandexPlayable,
             hasMultipleSources = song.instances.size > 1,
             hasUnresolvedMatchCandidate = song.hasPendingMatchCandidate,
+            isSavedLocally = localSaveYandexTrackId != null &&
+                localSaveYandexTrackId in savedYandexTrackIds,
+            isSavingLocally = localSaveYandexTrackId != null &&
+                localSaveYandexTrackId in savingYandexTrackIds,
         )
     }
 }
+
+/** Выбирает ЯМ-инстанс строки: сначала preferred, затем первый доступный. */
+private fun Song.localSaveYandexTrackId(): String? =
+    instances
+        .firstOrNull { instance -> instance.id == preferredInstanceId }
+        ?.let { instance -> instance as? TrackInstance.Yandex }
+        ?.track
+        ?.id
+        ?: yandexInstances.firstOrNull()?.track?.id
 
 /** Связывает вариант диалога с Song, к которой он относился до merge. */
 private data class ObjectSourceDialogEntry(

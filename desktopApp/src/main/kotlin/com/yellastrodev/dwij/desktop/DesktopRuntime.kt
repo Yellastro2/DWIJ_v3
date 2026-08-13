@@ -224,6 +224,9 @@ class DesktopRuntime private constructor(
                     trackCacheDirectory =
                         paths
                             .trackCacheDirectory,
+                    localYandexTrackDirectory =
+                        paths
+                            .localYandexTrackDirectory,
                     coverCacheDirectory =
                         paths
                             .coverCacheDirectory,

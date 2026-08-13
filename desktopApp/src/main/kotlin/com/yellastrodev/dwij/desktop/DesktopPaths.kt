@@ -14,6 +14,7 @@ data class DesktopPaths(
     val settingsFile: File,
     val sessionFile: File,
     val trackCacheDirectory: File,
+    val localYandexTrackDirectory: File,
     val coverCacheDirectory: File,
     val musicDirectories: List<File>,
     val playlistExportDirectory: File,
@@ -109,6 +110,13 @@ data class DesktopPaths(
                     File(
                         cacheDirectory,
                         "tracks",
+                    ).apply {
+                        mkdirs()
+                    },
+                localYandexTrackDirectory =
+                    File(
+                        appDataDirectory,
+                        "yandex-tracks",
                     ).apply {
                         mkdirs()
                     },

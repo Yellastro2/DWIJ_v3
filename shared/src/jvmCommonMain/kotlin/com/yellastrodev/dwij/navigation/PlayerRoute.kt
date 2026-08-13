@@ -31,6 +31,7 @@ import com.yellastrodev.dwij.resources.player_source_local
 import com.yellastrodev.dwij.resources.player_source_yandex
 import com.yellastrodev.dwij.resources.player_wave_loading_artist
 import com.yellastrodev.dwij.resources.player_wave_loading_title
+import com.yellastrodev.dwij.resources.track_save_locally_started
 import com.yellastrodev.dwij.ui.FullPlayerScreen
 import com.yellastrodev.dwij.ui.FullPlayerUiState
 import com.yellastrodev.dwij.ui.LocalYamLogger
@@ -58,6 +59,7 @@ fun PlayerRoute(
     playerModel: PlayerModel,
     onBackClick: () -> Unit,
     onAddToPlaylist: (trackId: String) -> Unit,
+    onRequestLocalTrackDownload: (trackId: String, title: String) -> Unit,
 ) {
     val logger = LocalYamLogger.current
     val songMatchRepository = component.songMatchRepository
@@ -114,6 +116,25 @@ fun PlayerRoute(
     }
 
     val currentTrackId = track?.id
+    val localStorageRevision by
+        component.trackCacheRepo.localStorageRevision.collectAsState()
+    val localDownloads by component.trackCacheRepo.localDownloads.collectAsState()
+    val currentYandexDownloadTrackId = playbackTrack
+        ?.takeIf { current -> current.source == MusicSource.YANDEX }
+        ?.id
+    var isCurrentTrackSavedLocally by remember(currentYandexDownloadTrackId) {
+        mutableStateOf(false)
+    }
+
+    LaunchedEffect(currentYandexDownloadTrackId, localStorageRevision) {
+        isCurrentTrackSavedLocally = currentYandexDownloadTrackId
+            ?.let { trackId ->
+                withContext(Dispatchers.IO) {
+                    component.trackCacheRepo.isSavedLocally(trackId)
+                }
+            }
+            ?: false
+    }
 
     val databaseTrack by remember(currentTrackId) {
         currentTrackId
@@ -350,6 +371,8 @@ fun PlayerRoute(
 
         null -> null
     }
+    val saveLocallyStartedMessage =
+        stringResource(Res.string.track_save_locally_started)
 
     FullPlayerScreen(
         state = FullPlayerUiState(
@@ -386,6 +409,10 @@ fun PlayerRoute(
                 (track?.instances?.size ?: 0) > 1,
             hasUnresolvedMatchCandidate =
                 pendingMatchCandidates.isNotEmpty(),
+            canSaveLocally = currentYandexDownloadTrackId != null,
+            isSavedLocally = isCurrentTrackSavedLocally,
+            isSavingLocally = currentYandexDownloadTrackId != null &&
+                currentYandexDownloadTrackId in localDownloads,
             cover = cover,
             isPlaying = playerState.wantsToPlay,
             currentPositionMillis = playerState.currentPosition,
@@ -504,6 +531,16 @@ fun PlayerRoute(
         onSourcesClick = {
             mergeSourcesError = null
             showMultiSourceDialog = true
+        },
+        onSaveLocallyClick = {
+            val trackId = currentYandexDownloadTrackId
+            if (trackId != null && !isCurrentTrackSavedLocally) {
+                onRequestLocalTrackDownload(
+                    trackId,
+                    track?.title ?: playbackTrack?.title ?: trackId,
+                )
+                uiMessages.tryEmit(saveLocallyStartedMessage)
+            }
         },
     )
 

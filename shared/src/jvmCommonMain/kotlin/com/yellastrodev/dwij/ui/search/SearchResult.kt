@@ -6,8 +6,13 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material3.Text
+import androidx.compose.material3.DropdownMenu
+import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
@@ -17,6 +22,7 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.yellastrodev.dwij.models.SearchResultItemUiModel
+import com.yellastrodev.dwij.models.SearchTrackSource
 import com.yellastrodev.dwij.models.SearchUiState
 import com.yellastrodev.dwij.resources.Res
 import com.yellastrodev.dwij.resources.*
@@ -37,6 +43,9 @@ fun SearchResult(
     loadTrackCover: suspend (SearchResultItemUiModel.Track) -> ImageBitmap?,
     loadEntityCover: suspend (key: String, uri: String) -> ImageBitmap?,
     onItemClick: (SearchResultItemUiModel) -> Unit,
+    savedYandexTrackIds: Set<String>,
+    savingYandexTrackIds: Set<String>,
+    onRequestLocalTrackDownload: (trackId: String, title: String) -> Unit,
     modifier: Modifier = Modifier,
 ) {
     when {
@@ -81,16 +90,58 @@ fun SearchResult(
                 when (item) {
                     is SearchResultItemUiModel.Track -> {
                         val coverState = remember(item.key) { TrackCoverState() }
+                        val yandexTrackId =
+                            (item.source as? SearchTrackSource.Yandex)?.track?.id
+                        val row = item.row.copy(
+                            yandexTrackId = yandexTrackId,
+                            isSavedLocally = yandexTrackId != null &&
+                                yandexTrackId in savedYandexTrackIds,
+                            isSavingLocally = yandexTrackId != null &&
+                                yandexTrackId in savingYandexTrackIds,
+                        )
+                        var isContextMenuExpanded by remember(item.key) {
+                            mutableStateOf(false)
+                        }
                         TrackCoverLoader(
                             trackId = item.key,
                             coverState = coverState,
                             loadCover = { loadTrackCover(item) },
                         )
-                        TrackListItem(
-                            item = item.row,
-                            coverState = coverState,
-                            onClick = { onItemClick(item) },
-                        )
+                        Box {
+                            TrackListItem(
+                                item = row,
+                                coverState = coverState,
+                                onClick = { onItemClick(item) },
+                                onLongClick = yandexTrackId?.let {
+                                    { isContextMenuExpanded = true }
+                                },
+                            )
+                            DropdownMenu(
+                                expanded = isContextMenuExpanded,
+                                onDismissRequest = { isContextMenuExpanded = false },
+                            ) {
+                                yandexTrackId?.let { trackId ->
+                                    DropdownMenuItem(
+                                        text = {
+                                            Text(
+                                                stringResource(
+                                                    when {
+                                                        row.isSavedLocally -> Res.string.track_saved_locally
+                                                        row.isSavingLocally -> Res.string.track_saving_locally
+                                                        else -> Res.string.track_save_locally
+                                                    },
+                                                ),
+                                            )
+                                        },
+                                        enabled = !row.isSavedLocally && !row.isSavingLocally,
+                                        onClick = {
+                                            isContextMenuExpanded = false
+                                            onRequestLocalTrackDownload(trackId, row.title)
+                                        },
+                                    )
+                                }
+                            }
+                        }
                     }
                     is SearchResultItemUiModel.Entity -> SearchEntityItem(
                         item = item,
@@ -132,5 +183,8 @@ private fun SearchResultAwaitingQueryPreview() {
         loadTrackCover = { null },
         loadEntityCover = { _, _ -> null },
         onItemClick = {},
+        savedYandexTrackIds = emptySet(),
+        savingYandexTrackIds = emptySet(),
+        onRequestLocalTrackDownload = { _, _ -> },
     )
 }

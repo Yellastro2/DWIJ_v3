@@ -39,4 +39,13 @@ interface DwijAppPlatform {
 
     @Composable
     fun rememberSettingsPlatform(): SettingsPlatform
+
+    /** Возвращает платформенный запуск надёжного сохранения ЯМ-трека. */
+    @Composable
+    fun rememberLocalTrackDownloadRequester(): LocalTrackDownloadRequester
+}
+
+/** Платформенно ставит один ЯМ-трек в очередь постоянного сохранения. */
+fun interface LocalTrackDownloadRequester {
+    fun request(trackId: String, title: String)
 }

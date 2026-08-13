@@ -199,4 +199,18 @@
     <string name="search_result_third_subtitle">Движ · спокойный микс</string>
     <string name="player_like_failed">Не удалось изменить лайк</string>
     <string name="player_volume_content_description">Громкость</string>
+    <string name="track_save_locally">Сохранить локально</string>
+    <string name="track_saving_locally">Сохраняется…</string>
+    <string name="track_saved_locally">Сохранено локально</string>
+    <string name="track_save_locally_started">Сохранение запущено</string>
+    <string name="settings_local_storage_title">Локальное хранение</string>
+    <string name="settings_local_storage_description">Постоянно сохранённые треки Яндекс Музыки</string>
+    <string name="settings_local_storage_occupied">Занято: %1$s</string>
+    <string name="settings_local_storage_clear">Очистить</string>
+    <string name="settings_local_storage_close">Закрыть</string>
+    <string name="settings_local_storage_clear_title">Очистить локальное хранение?</string>
+    <string name="settings_local_storage_clear_message">Будут удалены только постоянно сохранённые треки Яндекс Музыки. Обычный кэш и локальная медиатека останутся.</string>
+    <string name="settings_local_storage_cleared">Локальное хранение очищено</string>
+    <string name="settings_local_storage_clear_failed">Не удалось удалить часть локальных файлов</string>
+    <string name="settings_local_storage_cancel">Отмена</string>
 </resources>

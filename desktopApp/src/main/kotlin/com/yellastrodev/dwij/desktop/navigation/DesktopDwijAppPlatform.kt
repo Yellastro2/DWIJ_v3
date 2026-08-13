@@ -1,6 +1,7 @@
 package com.yellastrodev.dwij.desktop.navigation
 
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.remember
 import androidx.compose.ui.ExperimentalComposeUiApi
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.input.key.Key
@@ -22,6 +23,7 @@ import com.yellastrodev.dwij.di.DwijComponent
 import com.yellastrodev.dwij.navigation.DwijAppPlatform
 import com.yellastrodev.dwij.navigation.HomeRoutePlatform
 import com.yellastrodev.dwij.navigation.LocalLibraryPlatform
+import com.yellastrodev.dwij.navigation.LocalTrackDownloadRequester
 import com.yellastrodev.dwij.navigation.SettingsPlatform
 import com.yellastrodev.dwij.ui.HomeScreenPlatform
 import com.yellastrodev.dwij.ui.NoOpHomeScreenPlatform
@@ -155,6 +157,16 @@ class DesktopDwijAppPlatform(
             musicDirectoryStore =
                 musicDirectoryStore,
         )
+
+    @Composable
+    override fun rememberLocalTrackDownloadRequester(): LocalTrackDownloadRequester =
+        remember(component, applicationScope) {
+            LocalTrackDownloadRequester { trackId, _ ->
+                applicationScope.launch {
+                    component.trackCacheRepo.saveLocally(trackId)
+                }
+            }
+        }
 }
 
 private enum class DesktopPlaybackAction {

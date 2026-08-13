@@ -63,6 +63,7 @@ class DwijComponent private constructor(
     val yandexProxySettings: YandexProxySettings,
     private val db: DwijDatabase,
     private val trackCacheDirectory: File,
+    private val localYandexTrackDirectory: File,
     private val coverCacheDirectory: File,
     private val playbackSettings: PlaybackSettings,
     private val playerEngine: PlayerEngine,
@@ -153,6 +154,7 @@ class DwijComponent private constructor(
     val trackCacheRepo: TrackCacheRepository by lazy {
         TrackCacheRepository(
             cacheDir = trackCacheDirectory,
+            persistentDir = localYandexTrackDirectory,
             trackRepo = trackRepository,
             cacheManager = cacheManager,
             logger = logger,
@@ -362,6 +364,7 @@ class DwijComponent private constructor(
             yandexSessionStore: YandexSessionStore,
             db: DwijDatabase,
             trackCacheDirectory: File,
+            localYandexTrackDirectory: File,
             coverCacheDirectory: File,
             playerEngine: PlayerEngine,
             localMediaSource: LocalMediaSource,
@@ -420,6 +423,8 @@ class DwijComponent private constructor(
                     db,
                 trackCacheDirectory =
                     trackCacheDirectory,
+                localYandexTrackDirectory =
+                    localYandexTrackDirectory,
                 coverCacheDirectory =
                     coverCacheDirectory,
                 playbackSettings =

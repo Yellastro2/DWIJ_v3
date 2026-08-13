@@ -68,10 +68,12 @@ fun SettingsScreen(
     minCacheMb: Int,
     maxCacheMb: Int,
     occupiedCacheSize: String,
+    occupiedLocalStorageSize: String,
     musicDirectories: List<String>?,
     onBackClick: () -> Unit,
     onAuthClick: () -> Unit,
     onCacheLimitCommitted: (megabytes: Int) -> Unit,
+    onLocalStorageClick: () -> Unit,
     onProxyClick: () -> Unit,
     onMusicDirectoriesClick: () -> Unit,
     modifier: Modifier = Modifier,
@@ -126,6 +128,10 @@ fun SettingsScreen(
                             }
                         }
                     },
+                )
+                SettingsLocalStorageCard(
+                    occupiedSize = occupiedLocalStorageSize,
+                    onClick = onLocalStorageClick,
                 )
                 musicDirectories?.let { directories ->
                     SettingsMusicDirectoriesCard(
@@ -527,6 +533,44 @@ private fun SettingsCacheCard(
     }
 }
 
+/** Открывает управление постоянными app-private ЯМ-файлами. */
+@Composable
+private fun SettingsLocalStorageCard(
+    occupiedSize: String,
+    onClick: () -> Unit,
+) {
+    SettingsTextureCard(
+        textureRes = Res.drawable.bg_focus_texture,
+        accent = DwijColors.Pink,
+        modifier = Modifier
+            .height(108.dp)
+            .clickable(onClick = onClick),
+    ) {
+        Column(
+            modifier = Modifier
+                .fillMaxSize()
+                .padding(horizontal = 18.dp, vertical = 16.dp),
+        ) {
+            Text(
+                text = stringResource(Res.string.settings_local_storage_title),
+                color = DwijColors.White,
+                fontSize = 20.sp,
+                fontWeight = FontWeight.Bold,
+            )
+            Text(
+                text = stringResource(
+                    Res.string.settings_local_storage_occupied,
+                    occupiedSize,
+                ),
+                color = DwijColors.CyanBright,
+                fontSize = 14.sp,
+                fontWeight = FontWeight.SemiBold,
+                modifier = Modifier.padding(top = 7.dp),
+            )
+        }
+    }
+}
+
 /** Рисует одно значение хранилища с подписью. */
 @Composable
 private fun SettingsCacheValue(
@@ -662,6 +706,7 @@ private fun SettingsScreenPreview() {
         minCacheMb = 200,
         maxCacheMb = 8192,
         occupiedCacheSize = "386 МБ",
+        occupiedLocalStorageSize = "128 МБ",
         musicDirectories =
             listOf(
                 "C:\\Music",
@@ -669,6 +714,7 @@ private fun SettingsScreenPreview() {
         onBackClick = {},
         onAuthClick = {},
         onCacheLimitCommitted = {},
+        onLocalStorageClick = {},
         onProxyClick = {},
         onMusicDirectoriesClick = {},
     )

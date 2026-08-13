@@ -97,6 +97,11 @@ class AndroidDwijComponentFactory(
                     application.cacheDir,
                     DIR_TRACK_CACHE,
                 ),
+            localYandexTrackDirectory =
+                File(
+                    application.noBackupFilesDir,
+                    DIR_LOCAL_YANDEX_TRACKS,
+                ),
             coverCacheDirectory =
                 File(
                     application.cacheDir,
@@ -132,5 +137,7 @@ class AndroidDwijComponentFactory(
     private companion object {
         const val DATABASE_NAME =
             "my_database"
+        const val DIR_LOCAL_YANDEX_TRACKS =
+            "yandex-tracks"
     }
 }

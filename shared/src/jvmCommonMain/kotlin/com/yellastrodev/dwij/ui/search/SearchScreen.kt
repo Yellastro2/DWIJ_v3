@@ -54,6 +54,9 @@ fun SearchScreen(
     loadTrackCover: suspend (SearchResultItemUiModel.Track) -> ImageBitmap?,
     loadEntityCover: suspend (key: String, uri: String) -> ImageBitmap?,
     onResultClick: (SearchResultItemUiModel) -> Unit,
+    savedYandexTrackIds: Set<String>,
+    savingYandexTrackIds: Set<String>,
+    onRequestLocalTrackDownload: (trackId: String, title: String) -> Unit,
     modifier: Modifier = Modifier,
 ) {
     val recentQueries = listOf(
@@ -86,6 +89,9 @@ fun SearchScreen(
             loadTrackCover = loadTrackCover,
             loadEntityCover = loadEntityCover,
             onItemClick = onResultClick,
+            savedYandexTrackIds = savedYandexTrackIds,
+            savingYandexTrackIds = savingYandexTrackIds,
+            onRequestLocalTrackDownload = onRequestLocalTrackDownload,
             modifier = Modifier
                 .weight(1f)
                 .padding(top = 10.dp),
@@ -226,6 +232,9 @@ private fun SearchScreenPreview() {
             loadTrackCover = { null },
             loadEntityCover = { _, _ -> null },
             onResultClick = {},
+            savedYandexTrackIds = emptySet(),
+            savingYandexTrackIds = emptySet(),
+            onRequestLocalTrackDownload = { _, _ -> },
         )
     }
 }

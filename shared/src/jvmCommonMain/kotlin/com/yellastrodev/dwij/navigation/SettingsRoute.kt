@@ -18,6 +18,7 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -31,32 +32,7 @@ import com.yellastrodev.dwij.auth.YandexSession
 import com.yellastrodev.dwij.data.DataResult
 import com.yellastrodev.dwij.di.DwijComponent
 import com.yellastrodev.dwij.resources.Res
-import com.yellastrodev.dwij.resources.auth_browser_error
-import com.yellastrodev.dwij.resources.auth_clip_label
-import com.yellastrodev.dwij.resources.auth_code_copied
-import com.yellastrodev.dwij.resources.auth_device_message
-import com.yellastrodev.dwij.resources.auth_device_title
-import com.yellastrodev.dwij.resources.auth_error_account
-import com.yellastrodev.dwij.resources.auth_error_configuration
-import com.yellastrodev.dwij.resources.auth_error_network
-import com.yellastrodev.dwij.resources.auth_error_oauth
-import com.yellastrodev.dwij.resources.auth_error_response
-import com.yellastrodev.dwij.resources.auth_error_timeout
-import com.yellastrodev.dwij.resources.auth_open_browser
-import com.yellastrodev.dwij.resources.auth_success
-import com.yellastrodev.dwij.resources.multi_source_dialog_cancel
-import com.yellastrodev.dwij.resources.settings_music_directories_add
-import com.yellastrodev.dwij.resources.settings_music_directories_close
-import com.yellastrodev.dwij.resources.settings_music_directories_dialog_title
-import com.yellastrodev.dwij.resources.settings_music_directories_duplicate
-import com.yellastrodev.dwij.resources.settings_music_directories_empty
-import com.yellastrodev.dwij.resources.settings_music_directories_remove
-import com.yellastrodev.dwij.resources.settings_music_directories_remove_message
-import com.yellastrodev.dwij.resources.settings_music_directories_remove_title
-import com.yellastrodev.dwij.resources.settings_music_directories_save_failed
-import com.yellastrodev.dwij.resources.settings_music_directories_saved
-import com.yellastrodev.dwij.resources.settings_music_directories_sync_failed
-import com.yellastrodev.dwij.resources.settings_music_directory_picker_title
+import com.yellastrodev.dwij.resources.*
 import com.yellastrodev.dwij.ui.LocalYamLogger
 import com.yellastrodev.dwij.ui.ProxySettingsDialog
 import com.yellastrodev.dwij.ui.SettingsScreen
@@ -149,6 +125,25 @@ fun SettingsRoute(
 
     var occupiedCacheSize by remember {
         mutableStateOf("0 B")
+    }
+
+    var occupiedLocalStorageSize by remember {
+        mutableStateOf("0 B")
+    }
+
+    val localStorageRevision by
+        component.trackCacheRepo.localStorageRevision.collectAsState()
+
+    var showLocalStorageDialog by remember {
+        mutableStateOf(false)
+    }
+
+    var showLocalStorageClearConfirmation by remember {
+        mutableStateOf(false)
+    }
+
+    var isClearingLocalStorage by remember {
+        mutableStateOf(false)
     }
 
     var musicDirectories by remember(platform) {
@@ -278,6 +273,27 @@ fun SettingsRoute(
 
                     "0 B"
                 }
+        }
+    }
+
+    fun refreshLocalStorageState() {
+        coroutineScope.launch {
+            occupiedLocalStorageSize = try {
+                withContext(Dispatchers.IO) {
+                    formatSettingsSize(
+                        component.trackCacheRepo.localStorageSizeBytes(),
+                    )
+                }
+            } catch (error: CancellationException) {
+                throw error
+            } catch (error: Exception) {
+                logger.error(
+                    TAG,
+                    "[refreshLocalStorageState] Не удалось вычислить размер локальных треков",
+                    error,
+                )
+                "0 B"
+            }
         }
     }
 
@@ -728,10 +744,16 @@ fun SettingsRoute(
         platform,
     ) {
         refreshCacheState()
+        refreshLocalStorageState()
+    }
+
+    LaunchedEffect(localStorageRevision) {
+        refreshLocalStorageState()
     }
 
     platform.ResumeEffect {
         refreshCacheState()
+        refreshLocalStorageState()
 
         musicDirectories =
             platform.musicDirectories
@@ -771,6 +793,8 @@ fun SettingsRoute(
                 maxCacheMb,
             occupiedCacheSize =
                 occupiedCacheSize,
+            occupiedLocalStorageSize =
+                occupiedLocalStorageSize,
             musicDirectories =
                 musicDirectories,
             onBackClick =
@@ -803,6 +827,9 @@ fun SettingsRoute(
                     .maxSizeBytes =
                     normalizedMb.toLong() *
                             BYTES_PER_MEGABYTE
+            },
+            onLocalStorageClick = {
+                showLocalStorageDialog = true
             },
             onProxyClick = {
                 val settings =
@@ -851,6 +878,117 @@ fun SettingsRoute(
                         horizontal = 14.dp,
                         vertical = 12.dp,
                     ),
+        )
+    }
+
+    if (showLocalStorageDialog && !showLocalStorageClearConfirmation) {
+        AlertDialog(
+            onDismissRequest = {
+                if (!isClearingLocalStorage) showLocalStorageDialog = false
+            },
+            title = {
+                Text(stringResource(Res.string.settings_local_storage_title))
+            },
+            text = {
+                Column {
+                    Text(
+                        stringResource(
+                            Res.string.settings_local_storage_description,
+                        ),
+                    )
+                    Text(
+                        stringResource(
+                            Res.string.settings_local_storage_occupied,
+                            occupiedLocalStorageSize,
+                        ),
+                        modifier = Modifier.padding(top = 10.dp),
+                    )
+                }
+            },
+            confirmButton = {
+                TextButton(
+                    enabled = !isClearingLocalStorage,
+                    onClick = {
+                        showLocalStorageClearConfirmation = true
+                    },
+                ) {
+                    Text(stringResource(Res.string.settings_local_storage_clear))
+                }
+            },
+            dismissButton = {
+                TextButton(
+                    enabled = !isClearingLocalStorage,
+                    onClick = { showLocalStorageDialog = false },
+                ) {
+                    Text(stringResource(Res.string.settings_local_storage_close))
+                }
+            },
+        )
+    }
+
+    if (showLocalStorageClearConfirmation) {
+        AlertDialog(
+            onDismissRequest = {
+                if (!isClearingLocalStorage) {
+                    showLocalStorageClearConfirmation = false
+                }
+            },
+            title = {
+                Text(stringResource(Res.string.settings_local_storage_clear_title))
+            },
+            text = {
+                Text(stringResource(Res.string.settings_local_storage_clear_message))
+            },
+            confirmButton = {
+                TextButton(
+                    enabled = !isClearingLocalStorage,
+                    onClick = {
+                        if (!isClearingLocalStorage) {
+                            coroutineScope.launch {
+                                isClearingLocalStorage = true
+                                val cleared = try {
+                                    component.trackCacheRepo.clearLocalStorage()
+                                } catch (error: CancellationException) {
+                                    throw error
+                                } catch (error: Exception) {
+                                    logger.error(
+                                        TAG,
+                                        "[clearLocalStorage] Не удалось очистить локальные треки",
+                                        error,
+                                    )
+                                    false
+                                } finally {
+                                    isClearingLocalStorage = false
+                                }
+                                showLocalStorageClearConfirmation = false
+                                showLocalStorageDialog = false
+                                refreshLocalStorageState()
+                                showMessage(
+                                    getString(
+                                        if (cleared) {
+                                            Res.string.settings_local_storage_cleared
+                                        } else {
+                                            Res.string.settings_local_storage_clear_failed
+                                        },
+                                    ),
+                                )
+                            }
+                        }
+                    },
+                ) {
+                    Text(stringResource(Res.string.settings_local_storage_clear))
+                }
+            },
+            dismissButton = {
+                TextButton(
+                    enabled = !isClearingLocalStorage,
+                    onClick = {
+                        showLocalStorageClearConfirmation = false
+                    },
+                ) {
+                    Text(stringResource(Res.string.settings_local_storage_cancel))
+                }
+            },
         )
     }
 

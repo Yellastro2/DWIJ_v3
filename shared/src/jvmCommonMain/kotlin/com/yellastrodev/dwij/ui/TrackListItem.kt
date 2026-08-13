@@ -67,10 +67,12 @@ fun TrackListItem(
         (item.hasMultipleSources || item.hasUnresolvedMatchCandidate)
     val showYandexIndicator = sourceIndicator == TrackSourceIndicator.YANDEX ||
         (sourceIndicator == null && item.isYandexUnavailable)
+    val showSavedIndicator = sourceIndicator == null && item.isSavedLocally
     val topIndicatorCount = listOf(
         showMultiplicityIndicator,
         showYandexIndicator,
         sourceIndicator == TrackSourceIndicator.LOCAL,
+        showSavedIndicator,
     ).count { it }
     val hasRightDecoration = topIndicatorCount > 0 || isSelected || priorityNumber != null
     val titleColor = if (item.isPlaybackBlocked) {
@@ -111,7 +113,8 @@ fun TrackListItem(
                     .padding(
                         start = 12.dp,
                         end = when {
-                            topIndicatorCount >= 2 -> 54.dp
+                            topIndicatorCount > 0 ->
+                                (topIndicatorCount * 22 + 10).dp
                             hasRightDecoration -> 30.dp
                             else -> 8.dp
                         },
@@ -151,6 +154,9 @@ fun TrackListItem(
                         isUnavailable = item.isYandexUnavailable,
                     )
                     sourceIndicator == TrackSourceIndicator.LOCAL -> LocalSourceIndicator()
+                }
+                if (showSavedIndicator) {
+                    SavedLocalTrackIndicator()
                 }
             }
         }
@@ -206,6 +212,16 @@ private fun YandexSourceIndicator(
 private fun LocalSourceIndicator(modifier: Modifier = Modifier) {
     Image(
         painter = painterResource(Res.drawable.ic_source_local_storage),
+        contentDescription = null,
+        modifier = modifier.size(22.dp),
+    )
+}
+
+/** Показывает постоянную app-private копию ЯМ-трека. */
+@Composable
+internal fun SavedLocalTrackIndicator(modifier: Modifier = Modifier) {
+    Image(
+        painter = painterResource(Res.drawable.ic_track_saved_local),
         contentDescription = null,
         modifier = modifier.size(22.dp),
     )

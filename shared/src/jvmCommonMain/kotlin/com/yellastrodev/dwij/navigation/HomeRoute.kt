@@ -59,6 +59,7 @@ fun HomeRoute(
     onOpenLocalTracks: () -> Unit,
     onOpenYandexTracks: () -> Unit,
     onOpenPlayer: () -> Unit,
+    onRequestLocalTrackDownload: (trackId: String, title: String) -> Unit,
     modifier: Modifier = Modifier,
 ) {
     val logger = LocalYamLogger.current
@@ -85,6 +86,25 @@ fun HomeRoute(
     )
 
     val searchState by searchModel.state.collectAsState()
+    val localStorageRevision by
+        component.trackCacheRepo.localStorageRevision.collectAsState()
+    val localDownloads by component.trackCacheRepo.localDownloads.collectAsState()
+    var savedSearchYandexTrackIds by remember {
+        mutableStateOf(emptySet<String>())
+    }
+
+    LaunchedEffect(searchState.results, localStorageRevision) {
+        val yandexTrackIds = searchState.results.mapNotNull { item ->
+            ((item as? SearchResultItemUiModel.Track)?.source as? SearchTrackSource.Yandex)
+                ?.track
+                ?.id
+        }
+        savedSearchYandexTrackIds = withContext(Dispatchers.IO) {
+            yandexTrackIds
+                .filter(component.trackCacheRepo::isSavedLocally)
+                .toSet()
+        }
+    }
     val track by playerModel.track.collectAsState()
     val playbackTrack by playerModel.playbackTrack.collectAsState()
     val playerState by playerModel.playerState.collectAsState()
@@ -311,6 +331,9 @@ fun HomeRoute(
                         )
                     }
                 },
+                savedYandexTrackIds = savedSearchYandexTrackIds,
+                savingYandexTrackIds = localDownloads.keys,
+                onRequestLocalTrackDownload = onRequestLocalTrackDownload,
                 modifier = searchModifier,
             )
         },

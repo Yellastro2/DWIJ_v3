@@ -19,6 +19,7 @@ import kotlinx.coroutines.flow.onStart
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
+import java.io.OutputStream
 
 /**
  * Отдаёт треки из Room немедленно и лениво освежает их сетевые метаданные по TTL.
@@ -272,6 +273,21 @@ class TrackRepository(
             is DataResult.Failure -> result
         }
     }
+
+    /** Загружает трек непосредственно в файл/поток и не держит mp3 целиком в heap. */
+    suspend fun downloadTrackTo(
+        trackId: String,
+        output: OutputStream,
+        onProgress: (downloadedBytes: Long, totalBytes: Long?) -> Unit = { _, _ -> },
+    ): DataResult<Long> =
+        when (val result = getTrack(trackId)) {
+            is DataResult.Success -> remote.fetchTo(
+                track = result.value,
+                output = output,
+                onProgress = onProgress,
+            )
+            is DataResult.Failure -> result
+        }
 
     private companion object {
         const val AVAILABILITY_TTL_MILLIS = 12L * 60L * 60L * 1_000L

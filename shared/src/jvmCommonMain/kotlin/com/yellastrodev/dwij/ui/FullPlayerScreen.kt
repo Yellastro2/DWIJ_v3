@@ -119,6 +119,9 @@ data class FullPlayerUiState(
     val sourceLabel: String?,
     val hasMultipleSources: Boolean,
     val hasUnresolvedMatchCandidate: Boolean,
+    val canSaveLocally: Boolean = false,
+    val isSavedLocally: Boolean = false,
+    val isSavingLocally: Boolean = false,
     val cover: ImageBitmap?,
     val isPlaying: Boolean,
     val currentPositionMillis: Long,
@@ -156,6 +159,7 @@ fun FullPlayerScreen(
     onLikeClick: () -> Unit,
     onAddToPlaylistClick: () -> Unit,
     onSourcesClick: () -> Unit,
+    onSaveLocallyClick: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
     val backgroundColor = DwijColors.Background
@@ -202,8 +206,12 @@ fun FullPlayerScreen(
                 showSourcesIndicator = state.hasMultipleSources ||
                     state.hasUnresolvedMatchCandidate,
                 canStartTrackWave = state.canStartTrackWave,
+                canSaveLocally = state.canSaveLocally,
+                isSavedLocally = state.isSavedLocally,
+                isSavingLocally = state.isSavingLocally,
                 onSourcesClick = onSourcesClick,
                 onTrackWaveClick = onTrackWaveClick,
+                onSaveLocallyClick = onSaveLocallyClick,
                 onBackClick = onBackClick,
             )
             Column(
@@ -344,8 +352,12 @@ private fun FullPlayerTopBar(
     queuePosition: Int,
     showSourcesIndicator: Boolean,
     canStartTrackWave: Boolean,
+    canSaveLocally: Boolean,
+    isSavedLocally: Boolean,
+    isSavingLocally: Boolean,
     onSourcesClick: () -> Unit,
     onTrackWaveClick: () -> Unit,
+    onSaveLocallyClick: () -> Unit,
     onBackClick: () -> Unit,
 ) {
     val backDescription = stringResource(Res.string.player_back_content_description)
@@ -422,14 +434,26 @@ private fun FullPlayerTopBar(
                 overflow = TextOverflow.Ellipsis,
             )
         }
-        if (showSourcesIndicator) {
-            Box(
-                contentAlignment = Alignment.Center,
+        if (showSourcesIndicator || isSavedLocally) {
+            Column(
+                horizontalAlignment = Alignment.CenterHorizontally,
+                verticalArrangement = Arrangement.Top,
                 modifier = Modifier
                     .size(46.dp)
-                    .clickable(role = Role.Button, onClick = onSourcesClick),
+                    .padding(top = 1.dp),
             ) {
-                MultipleSourcesIndicator(modifier = Modifier.size(34.dp))
+                if (showSourcesIndicator) {
+                    MultipleSourcesIndicator(
+                        modifier = Modifier
+                            .size(22.dp)
+                            .clickable(role = Role.Button, onClick = onSourcesClick),
+                    )
+                }
+                if (isSavedLocally) {
+                    SavedLocalTrackIndicator(
+                        modifier = Modifier.size(22.dp),
+                    )
+                }
             }
         }
         Box {
@@ -473,6 +497,31 @@ private fun FullPlayerTopBar(
                         onTrackWaveClick()
                     },
                 )
+                if (canSaveLocally) {
+                    DropdownMenuItem(
+                        text = {
+                            Text(
+                                text = stringResource(
+                                    when {
+                                        isSavedLocally -> Res.string.track_saved_locally
+                                        isSavingLocally -> Res.string.track_saving_locally
+                                        else -> Res.string.track_save_locally
+                                    },
+                                ),
+                                color = if (!isSavedLocally && !isSavingLocally) {
+                                    DwijColors.White
+                                } else {
+                                    DwijColors.White.copy(alpha = 0.38f)
+                                },
+                            )
+                        },
+                        enabled = !isSavedLocally && !isSavingLocally,
+                        onClick = {
+                            isMoreMenuExpanded = false
+                            onSaveLocallyClick()
+                        },
+                    )
+                }
             }
         }
     }
@@ -1699,6 +1748,8 @@ private fun FullPlayerPreviewContent() {
             sourceLabel = "ЯНДЕКС МУЗЫКА",
             hasMultipleSources = true,
             hasUnresolvedMatchCandidate = false,
+            canSaveLocally = true,
+            isSavedLocally = true,
             cover = null,
             isPlaying = true,
             currentPositionMillis = 84_000L,
@@ -1729,5 +1780,6 @@ private fun FullPlayerPreviewContent() {
         onLikeClick = {},
         onAddToPlaylistClick = {},
         onSourcesClick = {},
+        onSaveLocallyClick = {},
     )
 }
