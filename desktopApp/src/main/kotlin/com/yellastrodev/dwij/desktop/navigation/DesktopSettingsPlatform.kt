@@ -44,6 +44,13 @@ private class DesktopSettingsPlatform(
     private val musicDirectoryStore: DesktopMusicDirectoryStore,
 ) : SettingsPlatform {
 
+    override val appVersion: String
+        get() =
+            System.getProperty(
+                "dwij.app.version",
+                "unknown",
+            )
+
     private val localProperties:
         Properties by lazy {
             Properties().apply {

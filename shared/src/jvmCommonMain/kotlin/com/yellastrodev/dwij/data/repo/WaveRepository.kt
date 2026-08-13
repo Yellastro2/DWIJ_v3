@@ -9,6 +9,7 @@ import com.yellastrodev.dwij.data.source.WaveRemoteSource
 import com.yellastrodev.yamusicsdk.YamLogger
 import com.yellastrodev.yamusicsdk.entities.TrackShort
 import com.yellastrodev.yamusicsdk.network.YamResult
+import com.yellastrodev.yamusicsdk.network.YamError
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
@@ -30,7 +31,8 @@ class WaveRepository(
     val playerRepository: PlaybackQueue,
     private val isTrackCached: (String) -> Boolean,
     private val scope: CoroutineScope,
-    private val logger: YamLogger
+    private val logger: YamLogger,
+    private val onAuthorizationRequired: () -> Unit,
 ) {
 
     val TAG = "WaveRepository"
@@ -65,6 +67,9 @@ class WaveRepository(
             }
 
             is YamResult.Failure -> {
+                if (result.error == YamError.Unauthorized) {
+                    onAuthorizationRequired()
+                }
                 logger.error(TAG, "[getWave] Волну загрузить не удалось: ${result.error}")
                 emptyList()
             }

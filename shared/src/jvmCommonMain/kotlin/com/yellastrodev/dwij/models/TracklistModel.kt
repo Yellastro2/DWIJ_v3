@@ -4,6 +4,8 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.viewModelScope
 import androidx.lifecycle.viewmodel.CreationExtras
+import com.yellastrodev.dwij.data.DataError
+import com.yellastrodev.dwij.data.DataResult
 import com.yellastrodev.dwij.data.entities.Song
 import com.yellastrodev.dwij.data.entities.dSimpleTracklist
 import com.yellastrodev.dwij.data.entities.dTracklist
@@ -282,7 +284,7 @@ class TracklistModel(
     }
 
     /** Принудительно обновляет текущий плейлист с сервера. */
-    suspend fun refreshObject() {
+    suspend fun refreshObject(): DataResult<Unit> {
         val current = requireNotNull(_playlist.value) {
             "Невозможно обновить: плейлист не загружен"
         }
@@ -291,9 +293,14 @@ class TracklistModel(
 
         if (yandexPlaylist != null) {
             logger.debug(TAG, "Обновляем плейлист: ${yandexPlaylist.playlistUuid}")
-            playlistRepo.refreshPlaylist(yandexPlaylist.playlistUuid)
+            return playlistRepo.refreshPlaylist(yandexPlaylist.playlistUuid)
         } else {
             logger.warning(TAG, "Неизвестный тип плейлиста: ${current.getType()}")
+            return DataResult.Failure(
+                DataError.InvalidData(
+                    "Обновление недоступно для типа ${current.getType()}",
+                ),
+            )
         }
     }
 

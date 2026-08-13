@@ -199,6 +199,12 @@ kotlin {
         val desktopMain by getting {
             dependsOn(jvmCommonMain)
         }
+
+        val desktopTest by getting {
+            dependencies {
+                implementation(kotlin("test"))
+            }
+        }
     }
 }
 

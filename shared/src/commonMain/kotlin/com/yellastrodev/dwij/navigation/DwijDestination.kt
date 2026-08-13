@@ -13,6 +13,7 @@ object DwijDestination {
     const val PLAYER = "player"
     const val SONG_MATCHES = "song-matches"
     const val SETTINGS = "settings"
+    const val SETTINGS_AUTH = "settings/authorize"
 
     const val OBJECT_TYPE_TRACK = "track"
     const val OBJECT_TYPE_PLAYLIST = "playlist"

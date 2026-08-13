@@ -5,6 +5,7 @@ import com.yellastrodev.dwij.MusicSourceSelectionStore
 import com.yellastrodev.dwij.MusicSourceSettings
 import com.yellastrodev.dwij.auth.YandexSessionManager
 import com.yellastrodev.dwij.auth.YandexSessionStore
+import com.yellastrodev.dwij.auth.YandexAuthorizationRequiredNotifier
 import com.yellastrodev.dwij.data.cache.FileCacheStore
 import com.yellastrodev.dwij.data.db.DwijDatabase
 import com.yellastrodev.dwij.data.entities.dYaPlaylist
@@ -71,11 +72,20 @@ class DwijComponent private constructor(
     private val platformLifecycle: DwijPlatformLifecycle,
 ) {
 
+    val yandexAuthorizationRequiredNotifier =
+        YandexAuthorizationRequiredNotifier()
+
     private val started =
         AtomicBoolean(false)
 
     private val yamClient =
         yandexSessionManager.client
+
+    /** Сбрасывает непринятую сессию и просит корень приложения предложить повторный вход. */
+    fun requireYandexAuthorization() {
+        yandexSessionManager.clear()
+        yandexAuthorizationRequiredNotifier.notifyRequired()
+    }
 
     val songRepository: SongRepository by lazy {
         SongRepository(
@@ -146,6 +156,8 @@ class DwijComponent private constructor(
             trackRepo = trackRepository,
             cacheManager = cacheManager,
             logger = logger,
+            onAuthorizationRequired =
+                ::requireYandexAuthorization,
         )
     }
 
@@ -214,6 +226,8 @@ class DwijComponent private constructor(
                 trackCacheRepo::isCached,
             scope = applicationScope,
             logger = logger,
+            onAuthorizationRequired =
+                ::requireYandexAuthorization,
         )
     }
 

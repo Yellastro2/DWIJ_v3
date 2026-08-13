@@ -10,6 +10,7 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.graphics.ImageBitmap
 import com.yellastrodev.dwij.TrackListItemUiModel
+import com.yellastrodev.dwij.data.DataError
 import com.yellastrodev.dwij.data.DataResult
 import com.yellastrodev.dwij.data.entities.MusicSource
 import com.yellastrodev.dwij.data.entities.Song
@@ -468,11 +469,16 @@ fun PlayerRoute(
                             }
 
                             is DataResult.Failure -> {
+                                if (result.error == DataError.Unauthorized) {
+                                    component.requireYandexAuthorization()
+                                }
                                 logger.error(
                                     TAG,
                                     "[likeTrack] Лайк не изменён: ${result.error}",
                                 )
-                                uiMessages.emit(likeFailedMessage)
+                                if (result.error != DataError.Unauthorized) {
+                                    uiMessages.emit(likeFailedMessage)
+                                }
                             }
                         }
                     } catch (error: CancellationException) {

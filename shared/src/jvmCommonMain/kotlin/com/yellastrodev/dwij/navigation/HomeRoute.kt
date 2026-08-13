@@ -75,6 +75,8 @@ fun HomeRoute(
             trackRepository = component.trackRepository,
             songRepository = component.songRepository,
             playerRepository = component.playerRepo,
+            onAuthorizationRequired =
+                component::requireYandexAuthorization,
         )
     }
 

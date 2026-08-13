@@ -15,6 +15,7 @@ import androidx.lifecycle.viewmodel.compose.viewModel
 import com.yellastrodev.dwij.HomeMusicSource
 import com.yellastrodev.dwij.MusicSourceSelectionStore
 import com.yellastrodev.dwij.data.DataResult
+import com.yellastrodev.dwij.data.DataError
 import com.yellastrodev.dwij.data.entities.LocalPlaylistEntity
 import com.yellastrodev.dwij.data.entities.LocalPlaylistOrigin
 import com.yellastrodev.dwij.data.entities.LocalPlaylistSummary
@@ -41,6 +42,7 @@ data class PlaylistGridDependencies(
     val coverRepository: CoverRepository,
     val localMusicRepository: LocalMusicRepository,
     val musicSourceSelectionStore: MusicSourceSelectionStore,
+    val onAuthorizationRequired: () -> Unit,
 )
 
 /** Тексты экрана плейлистов. */
@@ -262,6 +264,17 @@ fun PlaylistGridRoute(
         )
     }
 
+    fun showYandexFailure(
+        error: DataError,
+        fallback: PlaylistGridMessage,
+    ) {
+        if (error == DataError.Unauthorized) {
+            dependencies.onAuthorizationRequired()
+        } else {
+            showMessage(fallback)
+        }
+    }
+
     fun selectMusicSource(source: HomeMusicSource) {
         if (
             source == musicSource ||
@@ -337,8 +350,9 @@ fun PlaylistGridRoute(
                 }
 
                 is DataResult.Failure -> {
-                    showMessage(
-                        PlaylistGridMessage.TrackLoadFailed,
+                    showYandexFailure(
+                        error = result.error,
+                        fallback = PlaylistGridMessage.TrackLoadFailed,
                     )
                 }
             }
@@ -410,8 +424,9 @@ fun PlaylistGridRoute(
                             is DataResult.Failure -> {
                                 isCreatingPlaylist = false
 
-                                showMessage(
-                                    PlaylistGridMessage.CreateFailed,
+                                showYandexFailure(
+                                    error = result.error,
+                                    fallback = PlaylistGridMessage.CreateFailed,
                                 )
                             }
                         }
@@ -582,7 +597,7 @@ fun PlaylistGridRoute(
                         else -> {
                             coroutineScope.launch {
                                 when (
-                                    model.addTrackToPlaylist(
+                                    val result = model.addTrackToPlaylist(
                                         playlist = playlist,
                                         trackId = trackToAdd,
                                     )
@@ -592,9 +607,9 @@ fun PlaylistGridRoute(
                                     }
 
                                     is DataResult.Failure -> {
-                                        showMessage(
-                                            PlaylistGridMessage
-                                                .TrackAddFailed,
+                                        showYandexFailure(
+                                            error = result.error,
+                                            fallback = PlaylistGridMessage.TrackAddFailed,
                                         )
                                     }
                                 }
@@ -649,13 +664,11 @@ fun PlaylistGridRoute(
 
                     coroutineScope.launch {
                         try {
-                            if (
-                                model.refreshPlaylists()
-                                        is DataResult.Failure
-                            ) {
-                                showMessage(
-                                    PlaylistGridMessage
-                                        .RefreshFailed,
+                            val result = model.refreshPlaylists()
+                            if (result is DataResult.Failure) {
+                                showYandexFailure(
+                                    error = result.error,
+                                    fallback = PlaylistGridMessage.RefreshFailed,
                                 )
                             }
                         } finally {
@@ -694,15 +707,15 @@ fun PlaylistGridRoute(
 
             if (request != null) {
                 coroutineScope.launch {
-                    if (
+                    val result =
                         model.removeTrackFromPlaylist(
                             playlist = request.first,
                             track = request.second,
-                        ) is DataResult.Failure
-                    ) {
-                        showMessage(
-                            PlaylistGridMessage
-                                .TrackRemoveFailed,
+                        )
+                    if (result is DataResult.Failure) {
+                        showYandexFailure(
+                            error = result.error,
+                            fallback = PlaylistGridMessage.TrackRemoveFailed,
                         )
                     }
                 }

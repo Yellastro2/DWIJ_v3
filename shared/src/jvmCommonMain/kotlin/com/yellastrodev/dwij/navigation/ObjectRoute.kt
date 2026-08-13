@@ -20,6 +20,8 @@ import androidx.compose.ui.graphics.ImageBitmap
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.yellastrodev.dwij.TrackListItemUiModel
+import com.yellastrodev.dwij.data.DataError
+import com.yellastrodev.dwij.data.DataResult
 import com.yellastrodev.dwij.data.entities.Song
 import com.yellastrodev.dwij.data.entities.SongMatchCandidateEntity
 import com.yellastrodev.dwij.data.entities.TrackInstance
@@ -374,7 +376,13 @@ fun ObjectRoute(
                         isRefreshing = true
 
                         try {
-                            model.refreshObject()
+                            val result = model.refreshObject()
+                            if (
+                                result is DataResult.Failure &&
+                                result.error == DataError.Unauthorized
+                            ) {
+                                component.requireYandexAuthorization()
+                            }
                         } catch (error: CancellationException) {
                             throw error
                         } catch (error: Exception) {

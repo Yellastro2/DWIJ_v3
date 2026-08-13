@@ -68,6 +68,7 @@ import com.yellastrodev.yamusicsdk.auth.DeviceCode
 import com.yellastrodev.yamusicsdk.auth.OAuthToken
 import com.yellastrodev.yamusicsdk.auth.YandexDeviceAuth
 import com.yellastrodev.yamusicsdk.network.YamError
+import com.yellastrodev.yamusicsdk.network.YamProxyType
 import com.yellastrodev.yamusicsdk.network.YamResult
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
@@ -88,6 +89,7 @@ fun SettingsRoute(
     component: DwijComponent,
     platform: SettingsPlatform,
     onBackClick: () -> Unit,
+    startAuthorization: Boolean = false,
     modifier: Modifier = Modifier,
 ) {
     val logger =
@@ -163,11 +165,22 @@ fun SettingsRoute(
         mutableStateOf(false)
     }
 
-    var yandexProxyUrl by remember(component) {
+    var yandexProxyType by remember(component) {
         mutableStateOf(
             component
                 .yandexProxySettings
-                .url,
+                .selectedType,
+        )
+    }
+
+    var yandexProxyUrl by remember(component) {
+        val settings =
+            component.yandexProxySettings
+
+        mutableStateOf(
+            settings.urlFor(
+                settings.selectedType,
+            ),
         )
     }
 
@@ -179,6 +192,7 @@ fun SettingsRoute(
             settings.enabled &&
                 settings.parseConfig(
                     settings.url,
+                    settings.selectedType,
                 ) != null,
         )
     }
@@ -359,12 +373,15 @@ fun SettingsRoute(
         val settings =
             component.yandexProxySettings
 
-        settings.url =
-            normalized
+        settings.setUrl(
+            type = yandexProxyType,
+            value = normalized,
+        )
 
         if (
             settings.parseConfig(
                 normalized,
+                yandexProxyType,
             ) == null
         ) {
             yandexProxyEnabled =
@@ -386,6 +403,7 @@ fun SettingsRoute(
         val proxyConfig =
             settings.parseConfig(
                 yandexProxyUrl,
+                yandexProxyType,
             )
 
         val resolvedEnabled =
@@ -403,6 +421,46 @@ fun SettingsRoute(
             .updateProxyConfig(
                 if (resolvedEnabled) {
                     proxyConfig
+                } else {
+                    null
+                },
+            )
+    }
+
+    fun selectYandexProxyType(
+        type: YamProxyType,
+    ) {
+        if (type == yandexProxyType) {
+            return
+        }
+
+        val settings =
+            component.yandexProxySettings
+
+        val nextUrl =
+            settings.urlFor(type)
+
+        val nextConfig =
+            settings.selectType(type)
+
+        val remainsEnabled =
+            settings.enabled &&
+                nextConfig != null
+
+        yandexProxyType =
+            type
+
+        yandexProxyUrl =
+            nextUrl
+
+        yandexProxyEnabled =
+            remainsEnabled
+
+        component
+            .yandexSessionManager
+            .updateProxyConfig(
+                if (remainsEnabled) {
+                    nextConfig
                 } else {
                     null
                 },
@@ -659,6 +717,12 @@ fun SettingsRoute(
             }
     }
 
+    LaunchedEffect(startAuthorization) {
+        if (startAuthorization) {
+            startYandexAuth()
+        }
+    }
+
     LaunchedEffect(
         component,
         platform,
@@ -693,6 +757,8 @@ fun SettingsRoute(
             modifier.fillMaxSize(),
     ) {
         SettingsScreen(
+            appVersion =
+                platform.appVersion,
             yandexLogin =
                 yandexLogin,
             isAuthInProgress =
@@ -742,13 +808,24 @@ fun SettingsRoute(
                 val settings =
                     component.yandexProxySettings
 
+                val selectedType =
+                    settings.selectedType
+
+                yandexProxyType =
+                    selectedType
+
                 yandexProxyUrl =
-                    settings.url
+                    settings.urlFor(
+                        selectedType,
+                    )
 
                 yandexProxyEnabled =
                     settings.enabled &&
                         settings.parseConfig(
-                            settings.url,
+                            settings.urlFor(
+                                selectedType,
+                            ),
+                            selectedType,
                         ) != null
 
                 showProxyDialog =
@@ -779,6 +856,8 @@ fun SettingsRoute(
 
     if (showProxyDialog) {
         ProxySettingsDialog(
+            proxyType =
+                yandexProxyType,
             proxyUrl =
                 yandexProxyUrl,
             enabled =
@@ -788,6 +867,7 @@ fun SettingsRoute(
                     .yandexProxySettings
                     .parseConfig(
                         yandexProxyUrl,
+                        yandexProxyType,
                     ) != null,
             onProxyUrlChange = { value ->
                 yandexProxyUrl =
@@ -795,6 +875,8 @@ fun SettingsRoute(
             },
             onProxyUrlCommitted =
                 ::commitYandexProxyUrl,
+            onProxyTypeChange =
+                ::selectYandexProxyType,
             onEnabledChange =
                 ::setYandexProxyEnabled,
             onDismiss = {

@@ -9,6 +9,9 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material3.Scaffold
+import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
@@ -31,6 +34,10 @@ import com.yellastrodev.dwij.di.DwijComponent
 import com.yellastrodev.dwij.models.PlayerModel
 import com.yellastrodev.dwij.resources.Res
 import com.yellastrodev.dwij.resources.home_player_unknown_artist
+import com.yellastrodev.dwij.resources.auth_required_cancel
+import com.yellastrodev.dwij.resources.auth_required_confirm
+import com.yellastrodev.dwij.resources.auth_required_message
+import com.yellastrodev.dwij.resources.auth_required_title
 import com.yellastrodev.dwij.ui.HomeCompactPlayer
 import com.yellastrodev.dwij.ui.HomeCompactPlayerUiState
 import com.yellastrodev.dwij.ui.theme.DwijColors
@@ -62,6 +69,19 @@ fun DwijApp(
     val playerState by playerModel.playerState.collectAsState()
 
     val coroutineScope = rememberCoroutineScope()
+
+    var showAuthorizationRequiredDialog by remember(component) {
+        mutableStateOf(false)
+    }
+
+    LaunchedEffect(component) {
+        component
+            .yandexAuthorizationRequiredNotifier
+            .events
+            .collect {
+                showAuthorizationRequiredDialog = true
+            }
+    }
 
     val globalInputModifier =
         platform.globalInputModifier(
@@ -391,7 +411,70 @@ fun DwijApp(
                     },
                 )
             }
+
+            composable(DwijDestination.SETTINGS_AUTH) {
+                SettingsRoute(
+                    component = component,
+                    platform =
+                        platform.rememberSettingsPlatform(),
+                    onBackClick = {
+                        navController.navigateUp()
+                    },
+                    startAuthorization = true,
+                )
+            }
         }
+    }
+
+    if (showAuthorizationRequiredDialog) {
+        AlertDialog(
+            onDismissRequest = {
+                showAuthorizationRequiredDialog = false
+            },
+            title = {
+                Text(
+                    stringResource(
+                        Res.string.auth_required_title,
+                    ),
+                )
+            },
+            text = {
+                Text(
+                    stringResource(
+                        Res.string.auth_required_message,
+                    ),
+                )
+            },
+            confirmButton = {
+                TextButton(
+                    onClick = {
+                        showAuthorizationRequiredDialog = false
+                        navController.navigate(
+                            DwijDestination.SETTINGS_AUTH,
+                        )
+                    },
+                ) {
+                    Text(
+                        stringResource(
+                            Res.string.auth_required_confirm,
+                        ),
+                    )
+                }
+            },
+            dismissButton = {
+                TextButton(
+                    onClick = {
+                        showAuthorizationRequiredDialog = false
+                    },
+                ) {
+                    Text(
+                        stringResource(
+                            Res.string.auth_required_cancel,
+                        ),
+                    )
+                }
+            },
+        )
     }
 }
 

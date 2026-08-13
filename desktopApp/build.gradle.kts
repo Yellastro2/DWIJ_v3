@@ -32,6 +32,9 @@ val yandexOAuthClientSecret =
         "",
     )
 
+val desktopAppVersion =
+    "0.1.4"
+
 plugins {
     alias(libs.plugins.kotlin.jvm)
     alias(libs.plugins.kotlin.compose)
@@ -127,6 +130,8 @@ compose.desktop {
             "-Dstdout.encoding=UTF-8",
             "-Dstderr.encoding=UTF-8",
 
+            "-Ddwij.app.version=$desktopAppVersion",
+
             "-Ddwij.yandex.clientId=$yandexOAuthClientId",
             "-Ddwij.yandex.clientSecret=$yandexOAuthClientSecret",
         )
@@ -141,7 +146,7 @@ compose.desktop {
                 "DWIJ"
 
             packageVersion =
-                "0.1.4"
+                desktopAppVersion
 
             description =
                 "DWIJ desktop prototype"

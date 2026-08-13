@@ -5,7 +5,7 @@ import com.yellastrodev.yamusicsdk.network.YamProxyType
 import java.net.URI
 
 /**
- * Хранит адрес и состояние HTTP-прокси Яндекс Музыки.
+ * Хранит выбранный тип, отдельные адреса HTTP/SOCKS5 и состояние прокси Яндекс Музыки.
  *
  * Адрес сохраняется обычной строкой, включая учётные данные, если они указаны.
  */
@@ -13,26 +13,30 @@ class YandexProxySettings(
     private val storage: LocalKeyValueStore,
 ) {
 
-    var url: String
+    var selectedType: YamProxyType
         get() =
             storage
-                .getString(KEY_URL)
-                .orEmpty()
+                .getString(KEY_SELECTED_TYPE)
+                ?.let(::typeFromStorage)
+                ?: YamProxyType.HTTP
 
         set(value) {
-            val normalized =
-                value.trim()
-
             storage.edit {
-                if (normalized.isEmpty()) {
-                    remove(KEY_URL)
-                } else {
-                    putString(
-                        KEY_URL,
-                        normalized,
-                    )
-                }
+                putString(
+                    KEY_SELECTED_TYPE,
+                    value.storageValue,
+                )
             }
+        }
+
+    /** Адрес выбранного режима. Старый HTTP-ключ сохраняется для миграции без потери данных. */
+    var url: String
+        get() = urlFor(selectedType)
+        set(value) {
+            setUrl(
+                type = selectedType,
+                value = value,
+            )
         }
 
     var enabled: Boolean
@@ -52,14 +56,70 @@ class YandexProxySettings(
     /** Возвращает активный конфиг либо null для выключенного/некорректного прокси. */
     fun activeConfigOrNull(): YamProxyConfig? =
         if (enabled) {
-            parseConfig(url)
+            parseConfig(
+                value = url,
+                type = selectedType,
+            )
         } else {
             null
         }
 
-    /** Разбирает строку вида `http://[user:password@]host:port`. */
+    /** Возвращает последнее сохранённое значение для указанного режима. */
+    fun urlFor(
+        type: YamProxyType,
+    ): String =
+        storage
+            .getString(type.urlStorageKey)
+            .orEmpty()
+
+    /** Сохраняет адрес независимо от адреса второго режима. */
+    fun setUrl(
+        type: YamProxyType,
+        value: String,
+    ) {
+        val normalized =
+            value.trim()
+
+        storage.edit {
+            if (normalized.isEmpty()) {
+                remove(type.urlStorageKey)
+            } else {
+                putString(
+                    type.urlStorageKey,
+                    normalized,
+                )
+            }
+        }
+    }
+
+    /**
+     * Выбирает режим и отключает активный прокси, если его сохранённый адрес некорректен.
+     * Возвращает разобранный конфиг независимо от текущего состояния [enabled].
+     */
+    fun selectType(
+        type: YamProxyType,
+    ): YamProxyConfig? {
+        selectedType =
+            type
+
+        val config =
+            parseConfig(
+                value = urlFor(type),
+                type = type,
+            )
+
+        if (enabled && config == null) {
+            enabled =
+                false
+        }
+
+        return config
+    }
+
+    /** Разбирает строку выбранного режима: HTTP или SOCKS5. */
     fun parseConfig(
         value: String,
+        type: YamProxyType = selectedType,
     ): YamProxyConfig? {
         val normalized =
             value.trim()
@@ -76,7 +136,7 @@ class YandexProxySettings(
 
         if (
             !uri.scheme.equals(
-                HTTP_SCHEME,
+                type.uriScheme,
                 ignoreCase = true,
             ) ||
             uri.host.isNullOrBlank() ||
@@ -109,7 +169,7 @@ class YandexProxySettings(
             YamProxyConfig(
                 host = uri.host,
                 port = uri.port,
-                type = YamProxyType.HTTP,
+                type = type,
                 username = username,
                 password = password,
             )
@@ -120,16 +180,49 @@ class YandexProxySettings(
         const val KEY_URL =
             "yandex_proxy_url"
 
+        const val KEY_SOCKS5_URL =
+            "yandex_proxy_socks5_url"
+
+        const val KEY_SELECTED_TYPE =
+            "yandex_proxy_type"
+
         const val KEY_ENABLED =
             "yandex_proxy_enabled"
-
-        const val HTTP_SCHEME =
-            "http"
 
         const val MIN_PORT =
             1
 
         const val MAX_PORT =
             65_535
+
+        val YamProxyType.urlStorageKey: String
+            get() =
+                when (this) {
+                    YamProxyType.HTTP -> KEY_URL
+                    YamProxyType.SOCKS -> KEY_SOCKS5_URL
+                }
+
+        val YamProxyType.uriScheme: String
+            get() =
+                when (this) {
+                    YamProxyType.HTTP -> "http"
+                    YamProxyType.SOCKS -> "socks5"
+                }
+
+        val YamProxyType.storageValue: String
+            get() = uriScheme
+
+        fun typeFromStorage(
+            value: String,
+        ): YamProxyType? =
+            when {
+                value.equals("http", ignoreCase = true) ->
+                    YamProxyType.HTTP
+                value.equals("socks5", ignoreCase = true) ||
+                    value.equals("socks", ignoreCase = true) ->
+                    YamProxyType.SOCKS
+                else ->
+                    null
+            }
     }
 }

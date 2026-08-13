@@ -56,11 +56,12 @@ import kotlin.math.roundToInt
 /**
  * Полностью Compose-экран авторизации, кэша и платформенных настроек.
  *
- * Экран не читает SharedPreferences и не запускает OAuth самостоятельно: Activity передаёт
- * готовое состояние и обработчики, поэтому интерфейс можно превьюить отдельно.
+ * Экран не читает платформенные сведения и не запускает OAuth самостоятельно: хост передаёт
+ * версию сборки, готовое состояние и обработчики, поэтому интерфейс можно превьюить отдельно.
  */
 @Composable
 fun SettingsScreen(
+    appVersion: String,
     yandexLogin: String?,
     isAuthInProgress: Boolean,
     cacheLimitMb: Int,
@@ -135,6 +136,26 @@ fun SettingsScreen(
                     )
                 }
             }
+            Text(
+                text =
+                    stringResource(
+                        Res.string.settings_version,
+                        appVersion,
+                    ),
+                color =
+                    Color.White.copy(
+                        alpha = 0.42f,
+                    ),
+                fontSize =
+                    12.sp,
+                modifier =
+                    Modifier
+                        .align(Alignment.CenterHorizontally)
+                        .padding(
+                            horizontal = 14.dp,
+                            vertical = 10.dp,
+                        ),
+            )
         }
         SnackbarHost(
             hostState = snackbarHostState,
@@ -634,6 +655,7 @@ private fun formatCacheMegabytes(
 @Composable
 private fun SettingsScreenPreview() {
     SettingsScreen(
+        appVersion = "0.1.4",
         yandexLogin = "night_driver",
         isAuthInProgress = false,
         cacheLimitMb = 2048,

@@ -50,6 +50,8 @@ fun PlaylistGridRoute(
                     component.localMusicRepository,
                 musicSourceSelectionStore =
                     component.musicSourceSelectionStore,
+                onAuthorizationRequired =
+                    component::requireYandexAuthorization,
             )
         }
 

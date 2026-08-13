@@ -82,6 +82,7 @@ class SearchModel(
     private val trackRepository: TrackRepository,
     private val songRepository: SongRepository,
     private val playerRepository: PlayerRepository,
+    private val onAuthorizationRequired: () -> Unit,
 ) : ViewModel() {
 
     private val _state = MutableStateFlow(SearchUiState())
@@ -139,6 +140,9 @@ class SearchModel(
                         }
 
                         is DataResult.Failure -> {
+                            if (result.error == DataError.Unauthorized) {
+                                onAuthorizationRequired()
+                            }
                             _state.value = _state.value.copy(
                                 isLoading = false,
                                 hasSearched = true,
@@ -251,6 +255,7 @@ class SearchModel(
         private val trackRepository: TrackRepository,
         private val songRepository: SongRepository,
         private val playerRepository: PlayerRepository,
+        private val onAuthorizationRequired: () -> Unit,
     ) : ViewModelProvider.Factory {
 
         @Suppress("UNCHECKED_CAST")
@@ -265,6 +270,7 @@ class SearchModel(
                     trackRepository = trackRepository,
                     songRepository = songRepository,
                     playerRepository = playerRepository,
+                    onAuthorizationRequired = onAuthorizationRequired,
                 ) as T
             }
 

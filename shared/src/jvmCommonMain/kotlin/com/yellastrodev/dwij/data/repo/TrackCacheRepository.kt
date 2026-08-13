@@ -2,6 +2,7 @@ package com.yellastrodev.dwij.data.repo
 
 import com.yellastrodev.dwij.CacheManager
 import com.yellastrodev.dwij.data.DataResult
+import com.yellastrodev.dwij.data.DataError
 import com.yellastrodev.yamusicsdk.YamLogger
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
@@ -12,7 +13,8 @@ class TrackCacheRepository(
     private val cacheDir: File,
     val trackRepo: TrackRepository,
     private val cacheManager: CacheManager,
-    private val logger: YamLogger
+    private val logger: YamLogger,
+    private val onAuthorizationRequired: () -> Unit,
 ) {
 
 
@@ -39,6 +41,9 @@ class TrackCacheRepository(
                         )
                     }
                     is DataResult.Failure -> {
+                        if (result.error == DataError.Unauthorized) {
+                            onAuthorizationRequired()
+                        }
                         logger.error("TrackCacheRepository", "Ошибка при скачивании трека $trackId: ${result.error}")
                         throw Exception(result.error.toString())
                     }

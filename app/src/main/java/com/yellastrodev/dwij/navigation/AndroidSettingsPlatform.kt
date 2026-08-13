@@ -38,6 +38,10 @@ private class AndroidSettingsPlatform(
     private val context: Context,
 ) : SettingsPlatform {
 
+    override val appVersion: String
+        get() =
+            BuildConfig.VERSION_NAME
+
     override val oauthClientId: String
         get() =
             BuildConfig.YANDEX_OAUTH_CLIENT_ID

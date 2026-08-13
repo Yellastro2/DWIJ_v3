@@ -11,6 +11,9 @@ import androidx.compose.runtime.Composable
  */
 interface SettingsPlatform {
 
+    /** Отображаемая версия текущей платформенной сборки. */
+    val appVersion: String
+
     val oauthClientId: String
 
     val oauthClientSecret: String
