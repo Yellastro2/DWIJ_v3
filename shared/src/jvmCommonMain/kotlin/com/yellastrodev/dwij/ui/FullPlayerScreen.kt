@@ -115,6 +115,7 @@ data class FullPlayerUiState(
     val queuePosition: Int,
     val title: String,
     val artist: String,
+    val canOpenArtist: Boolean = false,
     val album: String?,
     val sourceLabel: String?,
     val hasMultipleSources: Boolean,
@@ -157,6 +158,7 @@ fun FullPlayerScreen(
     onRepeatClick: () -> Unit,
     onTrackWaveClick: () -> Unit,
     onLikeClick: () -> Unit,
+    onArtistClick: () -> Unit,
     onAddToPlaylistClick: () -> Unit,
     onSourcesClick: () -> Unit,
     onSaveLocallyClick: () -> Unit,
@@ -294,6 +296,8 @@ fun FullPlayerScreen(
                     artist = state.artist,
                     album = state.album,
                     sourceLabel = state.sourceLabel,
+                    canOpenArtist = state.canOpenArtist,
+                    onArtistClick = onArtistClick,
                 )
                 FullPlayerProgress(
                     trackId = state.trackId,
@@ -760,6 +764,8 @@ private fun FullPlayerMetadata(
     artist: String,
     album: String?,
     sourceLabel: String?,
+    canOpenArtist: Boolean,
+    onArtistClick: () -> Unit,
 ) {
     Column(
         horizontalAlignment = Alignment.CenterHorizontally,
@@ -797,7 +803,18 @@ private fun FullPlayerMetadata(
             textAlign = TextAlign.Center,
             maxLines = 1,
             overflow = TextOverflow.Ellipsis,
-            modifier = Modifier.padding(top = 4.dp),
+            modifier = Modifier
+                .padding(top = 4.dp)
+                .then(
+                    if (canOpenArtist) {
+                        Modifier.clickable(
+                            role = Role.Button,
+                            onClick = onArtistClick,
+                        )
+                    } else {
+                        Modifier
+                    },
+                ),
         )
     }
 }
@@ -1744,6 +1761,7 @@ private fun FullPlayerPreviewContent() {
             queuePosition = 4,
             title = "Ночной город",
             artist = "Три дня дождя",
+            canOpenArtist = true,
             album = "Когда ты откроешь глаза",
             sourceLabel = "ЯНДЕКС МУЗЫКА",
             hasMultipleSources = true,
@@ -1778,6 +1796,7 @@ private fun FullPlayerPreviewContent() {
         onRepeatClick = {},
         onTrackWaveClick = {},
         onLikeClick = {},
+        onArtistClick = {},
         onAddToPlaylistClick = {},
         onSourcesClick = {},
         onSaveLocallyClick = {},

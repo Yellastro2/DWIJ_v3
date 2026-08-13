@@ -54,6 +54,7 @@ sealed interface SearchResultItemUiModel {
     data class Entity(
         override val key: String,
         override val coverUri: String?,
+        val externalId: Int,
         val title: String,
         val kind: SearchEntityKind,
         val artistNames: List<String> = emptyList(),
@@ -190,6 +191,7 @@ class SearchModel(
                 SearchResultItemUiModel.Entity(
                     key = "album:${album.id}",
                     coverUri = album.ogImageUri ?: album.coverUri,
+                    externalId = album.id,
                     title = album.title,
                     kind = SearchEntityKind.Album,
                     artistNames = album.artists.map { it.name },
@@ -205,6 +207,7 @@ class SearchModel(
                 SearchResultItemUiModel.Entity(
                     key = "artist:${artist.id ?: artist.name}",
                     coverUri = artist.cover?.uri ?: artist.ogImageUri,
+                    externalId = artist.id ?: return@forEach,
                     title = artist.name,
                     kind = SearchEntityKind.Artist,
                     genres = artist.genres.orEmpty(),

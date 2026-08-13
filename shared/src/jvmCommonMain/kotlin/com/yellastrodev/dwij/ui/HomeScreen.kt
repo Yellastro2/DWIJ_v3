@@ -50,6 +50,7 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.rememberUpdatedState
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -110,7 +111,7 @@ fun HomeScreen(
 ) {
     var isRadialMenuVisible by remember { mutableStateOf(false) }
     var isPlayerPressed by remember { mutableStateOf(false) }
-    var selectedTab by remember { mutableStateOf(HomeNavigationTab.Main) }
+    var selectedTab by rememberSaveable { mutableStateOf(HomeNavigationTab.Main) }
     val logger = LocalYamLogger.current
     val navigationTimingTracker = remember(logger) {
         HomeNavigationTimingTracker(logger)

@@ -7,6 +7,7 @@ import androidx.sqlite.SQLiteConnection
 import androidx.sqlite.execSQL
 import androidx.sqlite.driver.bundled.BundledSQLiteDriver
 import com.yellastrodev.dwij.data.dao.LocalLibraryDao
+import com.yellastrodev.dwij.data.dao.CatalogDao
 import com.yellastrodev.dwij.data.dao.SongDao
 import com.yellastrodev.dwij.data.dao.SongMatchDao
 import com.yellastrodev.dwij.data.dao.dPlaylistDao
@@ -17,6 +18,13 @@ import com.yellastrodev.dwij.data.db.DatabaseMigrations.Companion.MIGRATION_5_6
 import com.yellastrodev.dwij.data.db.DatabaseMigrations.Companion.MIGRATION_6_7
 import com.yellastrodev.dwij.data.db.DatabaseMigrations.Companion.MIGRATION_7_8
 import com.yellastrodev.dwij.data.db.DatabaseMigrations.Companion.MIGRATION_8_9
+import com.yellastrodev.dwij.data.db.DatabaseMigrations.Companion.MIGRATION_9_10
+import com.yellastrodev.dwij.data.db.DatabaseMigrations.Companion.MIGRATION_10_11
+import com.yellastrodev.dwij.data.entities.CatalogAlbumEntity
+import com.yellastrodev.dwij.data.entities.CatalogAlbumMetadataEntity
+import com.yellastrodev.dwij.data.entities.CatalogAlbumTrackEntity
+import com.yellastrodev.dwij.data.entities.CatalogArtistEntity
+import com.yellastrodev.dwij.data.entities.CatalogArtistMetadataEntity
 import com.yellastrodev.dwij.data.entities.LocalLibraryStateEntity
 import com.yellastrodev.dwij.data.entities.LocalPlaylistEntity
 import com.yellastrodev.dwij.data.entities.LocalPlaylistEntryEntity
@@ -49,10 +57,16 @@ import kotlinx.coroutines.Dispatchers
         SongEntity::class,
         TrackInstanceEntity::class,
         SongMatchCandidateEntity::class,
+        CatalogArtistEntity::class,
+        CatalogArtistMetadataEntity::class,
+        CatalogAlbumEntity::class,
+        CatalogAlbumMetadataEntity::class,
+        CatalogAlbumTrackEntity::class,
     ],
-    version = 9,
+    version = 11,
 )
 abstract class DwijDatabase : RoomDatabase() {
+    abstract fun catalogDao(): CatalogDao
     abstract fun dPlaylistDao(): dPlaylistDao
     abstract fun dTrackDao(): dTrackDao
     abstract fun localLibraryDao(): LocalLibraryDao
@@ -72,7 +86,9 @@ fun buildDwijDatabase(
             MIGRATION_5_6,
             MIGRATION_6_7,
             MIGRATION_7_8,
-            MIGRATION_8_9
+            MIGRATION_8_9,
+            MIGRATION_9_10,
+            MIGRATION_10_11,
         )
         .build()
 }

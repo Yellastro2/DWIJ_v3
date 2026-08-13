@@ -10,6 +10,7 @@ import com.yellastrodev.dwij.data.cache.FileCacheStore
 import com.yellastrodev.dwij.data.db.DwijDatabase
 import com.yellastrodev.dwij.data.entities.dYaPlaylist
 import com.yellastrodev.dwij.data.repo.CoverRepository
+import com.yellastrodev.dwij.data.repo.CatalogRepository
 import com.yellastrodev.dwij.data.repo.LocalMusicRepository
 import com.yellastrodev.dwij.data.repo.PlayerRepository
 import com.yellastrodev.dwij.data.repo.PlaylistRepository
@@ -20,6 +21,7 @@ import com.yellastrodev.dwij.data.repo.TrackCacheRepository
 import com.yellastrodev.dwij.data.repo.TrackRepository
 import com.yellastrodev.dwij.data.repo.WaveRepository
 import com.yellastrodev.dwij.data.source.LocalMediaSource
+import com.yellastrodev.dwij.data.source.CatalogRemoteSource
 import com.yellastrodev.dwij.data.source.PlaybackRemoteSource
 import com.yellastrodev.dwij.data.source.PlaylistCacheSource
 import com.yellastrodev.dwij.data.source.PlaylistRemoteSource
@@ -174,6 +176,16 @@ class DwijComponent private constructor(
         CoverRepository(
             yamClient = yamClient,
             fileCache = coverFileCache,
+        )
+    }
+
+    val catalogRepository: CatalogRepository by lazy {
+        CatalogRepository(
+            local = db.catalogDao(),
+            remote = CatalogRemoteSource(yamClient),
+            trackRepository = trackRepository,
+            songRepository = songRepository,
+            logger = logger,
         )
     }
 

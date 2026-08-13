@@ -58,6 +58,7 @@ fun HomeRoute(
     onOpenPlaylists: () -> Unit,
     onOpenLocalTracks: () -> Unit,
     onOpenYandexTracks: () -> Unit,
+    onOpenCatalogObject: (type: String, externalId: Int) -> Unit,
     onOpenPlayer: () -> Unit,
     onRequestLocalTrackDownload: (trackId: String, title: String) -> Unit,
     modifier: Modifier = Modifier,
@@ -321,14 +322,20 @@ fun HomeRoute(
                     }
                 },
                 onResultClick = { item ->
-                    if (item is SearchResultItemUiModel.Track) {
-                        searchModel.playTrack(item)
-                        onOpenPlayer()
-                    } else {
-                        logger.debug(
-                            TAG,
-                            "[onSearchResultClick] Нажат результат key=${item.key}",
-                        )
+                    when (item) {
+                        is SearchResultItemUiModel.Track -> {
+                            searchModel.playTrack(item)
+                            onOpenPlayer()
+                        }
+                        is SearchResultItemUiModel.Entity -> {
+                            val type = when (item.kind) {
+                                com.yellastrodev.dwij.models.SearchEntityKind.Artist ->
+                                    DwijDestination.OBJECT_TYPE_ARTIST
+                                com.yellastrodev.dwij.models.SearchEntityKind.Album ->
+                                    DwijDestination.OBJECT_TYPE_ALBUM
+                            }
+                            onOpenCatalogObject(type, item.externalId)
+                        }
                     }
                 },
                 savedYandexTrackIds = savedSearchYandexTrackIds,

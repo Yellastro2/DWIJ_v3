@@ -30,6 +30,9 @@ import com.yellastrodev.dwij.data.entities.TrackInstance
 import com.yellastrodev.dwij.data.entities.dYaPlaylist
 import com.yellastrodev.dwij.di.DwijComponent
 import com.yellastrodev.dwij.models.PlayerModel
+import com.yellastrodev.dwij.models.CatalogObjectKind
+import com.yellastrodev.dwij.models.CatalogObjectModel
+import com.yellastrodev.dwij.models.CatalogObjectUiState
 import com.yellastrodev.dwij.models.TracklistModel
 import com.yellastrodev.dwij.resources.Res
 import com.yellastrodev.dwij.resources.home_player_unknown_artist
@@ -40,6 +43,11 @@ import com.yellastrodev.dwij.resources.object_loading_title
 import com.yellastrodev.dwij.resources.object_track_count
 import com.yellastrodev.dwij.resources.track_list_all_title
 import com.yellastrodev.dwij.resources.track_list_empty
+import com.yellastrodev.dwij.resources.catalog_artist_popular_empty
+import com.yellastrodev.dwij.resources.catalog_likes_count
+import com.yellastrodev.dwij.resources.catalog_load_error
+import com.yellastrodev.dwij.resources.catalog_monthly_listeners
+import com.yellastrodev.dwij.resources.catalog_yandex_track_count
 import com.yellastrodev.dwij.resources.track_unavailable_yandex
 import com.yellastrodev.dwij.resources.track_save_locally
 import com.yellastrodev.dwij.resources.track_saved_locally
@@ -73,6 +81,23 @@ fun ObjectRoute(
     onRequestLocalTrackDownload: (trackId: String, title: String) -> Unit,
     modifier: Modifier = Modifier,
 ) {
+    val catalogKind = when (objectType) {
+        DwijDestination.OBJECT_TYPE_ARTIST -> CatalogObjectKind.Artist
+        DwijDestination.OBJECT_TYPE_ALBUM -> CatalogObjectKind.Album
+        else -> null
+    }
+    if (catalogKind != null) {
+        CatalogObjectRoute(
+            component = component,
+            kind = catalogKind,
+            externalId = objectValue.toIntOrNull(),
+            onBackClick = onBackClick,
+            onOpenPlayer = onOpenPlayer,
+            modifier = modifier,
+        )
+        return
+    }
+
     val logger = LocalYamLogger.current
     val songMatchRepository = component.songMatchRepository
     val songRepository = component.songRepository
@@ -665,6 +690,164 @@ fun ObjectRoute(
             errorMessage = mergeSourcesError,
         )
     }
+}
+
+/** Экран альбома или артиста ЯМ поверх общих canonical Song и ObjectScreen. */
+@Composable
+private fun CatalogObjectRoute(
+    component: DwijComponent,
+    kind: CatalogObjectKind,
+    externalId: Int?,
+    onBackClick: () -> Unit,
+    onOpenPlayer: () -> Unit,
+    modifier: Modifier,
+) {
+    val factory = remember(component) {
+        CatalogObjectModel.Factory(
+            catalogRepository = component.catalogRepository,
+            coverRepository = component.coverRepository,
+            playerRepository = component.playerRepo,
+        )
+    }
+    val model = viewModel<CatalogObjectModel>(
+        key = "catalog:${kind.name}:$externalId",
+        factory = factory,
+    )
+    val state by model.state.collectAsState()
+    val unknownArtist = stringResource(Res.string.home_player_unknown_artist)
+    var cover by remember(state.externalId, state.coverUri) {
+        mutableStateOf<ImageBitmap?>(null)
+    }
+
+    LaunchedEffect(kind, externalId) {
+        if (externalId != null) {
+            model.load(kind, externalId)
+        }
+    }
+    LaunchedEffect(state.coverUri) {
+        cover = model.objectCover()?.toImageBitmapOrNull()
+    }
+    LaunchedEffect(state.error) {
+        if (state.error == DataError.Unauthorized) {
+            component.requireYandexAuthorization()
+        }
+    }
+
+    val trackItems = remember(state.tracks, unknownArtist) {
+        state.tracks.toObjectTrackListItems(
+            unknownArtist = unknownArtist,
+            cachedUnavailableSongIds = emptySet(),
+            savedYandexTrackIds = emptySet(),
+            savingYandexTrackIds = emptySet(),
+        )
+    }
+    val subtitle = when (kind) {
+        CatalogObjectKind.Artist -> buildList {
+            state.lastMonthListeners?.let { listeners ->
+                add(
+                    stringResource(
+                        Res.string.catalog_monthly_listeners,
+                        listeners.toCompactMetric(),
+                    ),
+                )
+            }
+            state.trackCount?.let { trackCount ->
+                add(
+                    pluralStringResource(
+                        Res.plurals.catalog_yandex_track_count,
+                        trackCount,
+                        trackCount,
+                    ),
+                )
+            }
+        }.joinToString(" · ")
+
+        CatalogObjectKind.Album -> buildList {
+            state.artistNames.takeIf { it.isNotEmpty() }?.joinToString(", ")?.let(::add)
+            state.albumYear()?.let(::add)
+            state.likesCount?.let { likes ->
+                add(stringResource(Res.string.catalog_likes_count, likes))
+            }
+        }.joinToString(" · ")
+    }
+    val emptyMessage = when {
+        state.error != null -> stringResource(Res.string.catalog_load_error)
+        kind == CatalogObjectKind.Artist ->
+            stringResource(Res.string.catalog_artist_popular_empty)
+        else -> stringResource(Res.string.track_list_empty)
+    }
+
+    ObjectScreen(
+        title = state.title.ifBlank {
+            stringResource(Res.string.object_loading_title)
+        },
+        subtitle = subtitle,
+        description = state.description,
+        cover = cover,
+        tracks = trackItems,
+        onBackClick = onBackClick,
+        onPlayClick = {
+            val firstPlayable = trackItems.indexOfFirst { !it.isPlaybackBlocked }
+            if (firstPlayable >= 0 && model.play(firstPlayable)) {
+                onOpenPlayer()
+            }
+        },
+        onTrackClick = { index, item ->
+            if (!item.isPlaybackBlocked && model.play(index)) {
+                onOpenPlayer()
+            }
+        },
+        loadTrackCover = { songId ->
+            model.trackCover(songId)?.toImageBitmapOrNull()
+        },
+        showShare = false,
+        showWave = kind == CatalogObjectKind.Artist && externalId != null,
+        onWaveClick = {
+            val artistId = externalId
+            if (
+                kind == CatalogObjectKind.Artist &&
+                artistId != null &&
+                component.waveRepository.requestArtistWave(
+                    artistId = artistId,
+                    artistName = state.title,
+                )
+            ) {
+                onOpenPlayer()
+            }
+        },
+        emptyMessage = emptyMessage,
+        isLoading = state.isLoading && state.tracks.isEmpty(),
+        isRefreshing = state.isLoading && state.tracks.isNotEmpty(),
+        onRefresh = model::refresh,
+        modifier = modifier,
+    )
+}
+
+/** Для экрана альбома оставляет от полной даты только год. */
+private fun CatalogObjectUiState.albumYear(): String? =
+    releaseDate
+        ?.trim()
+        ?.take(4)
+        ?.takeIf { value -> value.length == 4 && value.all(Char::isDigit) }
+        ?: year?.toString()
+
+/** Компактно показывает счётчик максимум тремя значащими цифрами. */
+private fun Long.toCompactMetric(): String {
+    val (scaled, suffix) = when {
+        this >= 1_000_000L -> this / 1_000_000.0 to "М"
+        this >= 1_000L -> this / 1_000.0 to "К"
+        else -> return toString()
+    }
+    val decimals = when {
+        scaled >= 100.0 -> 0
+        scaled >= 10.0 -> 1
+        else -> 2
+    }
+    return java.lang.String
+        .format(java.util.Locale.ROOT, "%.${decimals}f", scaled)
+        .trimEnd('0')
+        .trimEnd('.')
+        .replace('.', ',') + suffix
 }
 
 /** Создаёт уникальные ключи для повторяющихся Song внутри одного объекта. */

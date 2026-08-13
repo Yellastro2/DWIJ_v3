@@ -19,6 +19,7 @@ object DwijDestination {
     const val OBJECT_TYPE_PLAYLIST = "playlist"
     const val OBJECT_TYPE_TRACKLIST = "tracklist"
     const val OBJECT_TYPE_ARTIST = "artist"
+    const val OBJECT_TYPE_ALBUM = "album"
 
     const val LOCAL_MODE_PLAYLISTS = "playlists"
     const val LOCAL_MODE_ALL_TRACKS = "all_tracks"

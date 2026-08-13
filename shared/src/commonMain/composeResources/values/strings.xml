@@ -61,6 +61,19 @@
     <string name="home_tracks">Треки</string>
     <string name="track_list_all_title">Все треки</string>
     <string name="track_list_empty">Треков пока нет</string>
+    <string name="catalog_artist_popular_empty">Популярных треков пока нет</string>
+    <string name="catalog_load_error">Не удалось загрузить объект</string>
+    <string name="catalog_monthly_listeners">%1$s в м.</string>
+    <plurals name="catalog_yandex_track_count">
+        <item quantity="one">%1$d трек в ЯМ</item>
+        <item quantity="few">%1$d трека в ЯМ</item>
+        <item quantity="many">%1$d треков в ЯМ</item>
+        <item quantity="other">%1$d трека в ЯМ</item>
+    </plurals>
+    <string name="catalog_likes_count">%1$d лайков</string>
+    <string name="catalog_metadata_yandex">данные Яндекс Музыки</string>
+    <string name="player_choose_artist_title">Выберите артиста</string>
+    <string name="player_choose_artist_cancel">Отмена</string>
     <string name="list_loading_placeholder">Сейчас загрузится…</string>
     <string name="track_unavailable_indicator">Я</string>
     <string name="track_unavailable_yandex">Трек не доступен в ЯМузыке</string>

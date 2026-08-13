@@ -232,6 +232,14 @@ fun DwijApp(
                             ),
                         )
                     },
+                    onOpenCatalogObject = { type, externalId ->
+                        navController.navigate(
+                            DwijDestination.objectRoute(
+                                type = type,
+                                value = externalId.toString(),
+                            ),
+                        )
+                    },
                     onOpenPlayer = {
                         navController.navigate(
                             DwijDestination.PLAYER,
@@ -349,6 +357,14 @@ fun DwijApp(
                     onAddToPlaylist = { trackId ->
                         navController.navigate(
                             DwijDestination.playlistsAddRoute(trackId),
+                        )
+                    },
+                    onOpenArtist = { artistId ->
+                        navController.navigate(
+                            DwijDestination.objectRoute(
+                                type = DwijDestination.OBJECT_TYPE_ARTIST,
+                                value = artistId.toString(),
+                            ),
                         )
                     },
                     onRequestLocalTrackDownload =

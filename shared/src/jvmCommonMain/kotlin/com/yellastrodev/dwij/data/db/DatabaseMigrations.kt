@@ -299,5 +299,109 @@ class DatabaseMigrations {
                 )
             }
         }
+
+        /** Добавляет канонические объекты каталога и явно source-размеченную метадату ЯМ. */
+        val MIGRATION_9_10 = object : Migration(9, 10) {
+            override fun migrate(connection: SQLiteConnection) {
+                connection.execSQL(
+                    "CREATE TABLE IF NOT EXISTS catalog_artists (" +
+                        "artistId TEXT NOT NULL PRIMARY KEY, name TEXT NOT NULL)",
+                )
+                connection.execSQL(
+                    """
+                    CREATE TABLE IF NOT EXISTS catalog_artist_metadata (
+                        artistId TEXT NOT NULL,
+                        source TEXT NOT NULL,
+                        externalId TEXT NOT NULL,
+                        coverUri TEXT,
+                        genres TEXT NOT NULL,
+                        likesCount INTEGER,
+                        lastMonthListeners INTEGER,
+                        lastMonthListenersDelta INTEGER,
+                        refreshedAt INTEGER NOT NULL,
+                        PRIMARY KEY(artistId, source),
+                        FOREIGN KEY(artistId) REFERENCES catalog_artists(artistId)
+                            ON UPDATE NO ACTION ON DELETE CASCADE
+                    )
+                    """.trimIndent(),
+                )
+                connection.execSQL(
+                    "CREATE INDEX IF NOT EXISTS index_catalog_artist_metadata_artistId " +
+                        "ON catalog_artist_metadata(artistId)",
+                )
+                connection.execSQL(
+                    "CREATE UNIQUE INDEX IF NOT EXISTS " +
+                        "index_catalog_artist_metadata_source_externalId " +
+                        "ON catalog_artist_metadata(source, externalId)",
+                )
+                connection.execSQL(
+                    "CREATE TABLE IF NOT EXISTS catalog_albums (" +
+                        "albumId TEXT NOT NULL PRIMARY KEY, title TEXT NOT NULL)",
+                )
+                connection.execSQL(
+                    """
+                    CREATE TABLE IF NOT EXISTS catalog_album_metadata (
+                        albumId TEXT NOT NULL,
+                        source TEXT NOT NULL,
+                        externalId TEXT NOT NULL,
+                        coverUri TEXT,
+                        artistNames TEXT NOT NULL,
+                        genre TEXT,
+                        releaseDate TEXT,
+                        year INTEGER,
+                        type TEXT,
+                        description TEXT,
+                        likesCount INTEGER,
+                        trackCount INTEGER,
+                        refreshedAt INTEGER NOT NULL,
+                        PRIMARY KEY(albumId, source),
+                        FOREIGN KEY(albumId) REFERENCES catalog_albums(albumId)
+                            ON UPDATE NO ACTION ON DELETE CASCADE
+                    )
+                    """.trimIndent(),
+                )
+                connection.execSQL(
+                    "CREATE INDEX IF NOT EXISTS index_catalog_album_metadata_albumId " +
+                        "ON catalog_album_metadata(albumId)",
+                )
+                connection.execSQL(
+                    "CREATE UNIQUE INDEX IF NOT EXISTS " +
+                        "index_catalog_album_metadata_source_externalId " +
+                        "ON catalog_album_metadata(source, externalId)",
+                )
+                connection.execSQL(
+                    """
+                    CREATE TABLE IF NOT EXISTS catalog_album_tracks (
+                        albumId TEXT NOT NULL,
+                        source TEXT NOT NULL,
+                        position INTEGER NOT NULL,
+                        sourceTrackId TEXT NOT NULL,
+                        discNumber INTEGER,
+                        trackNumber INTEGER,
+                        PRIMARY KEY(albumId, source, position),
+                        FOREIGN KEY(albumId) REFERENCES catalog_albums(albumId)
+                            ON UPDATE NO ACTION ON DELETE CASCADE
+                    )
+                    """.trimIndent(),
+                )
+                connection.execSQL(
+                    "CREATE INDEX IF NOT EXISTS index_catalog_album_tracks_albumId " +
+                        "ON catalog_album_tracks(albumId)",
+                )
+                connection.execSQL(
+                    "CREATE INDEX IF NOT EXISTS index_catalog_album_tracks_sourceTrackId " +
+                        "ON catalog_album_tracks(sourceTrackId)",
+                )
+            }
+        }
+
+        /** Добавляет известное ЯМ количество треков артиста в source-метадату. */
+        val MIGRATION_10_11 = object : Migration(10, 11) {
+            override fun migrate(connection: SQLiteConnection) {
+                connection.execSQL(
+                    "ALTER TABLE catalog_artist_metadata ADD COLUMN trackCount INTEGER",
+                )
+            }
+        }
     }
 }

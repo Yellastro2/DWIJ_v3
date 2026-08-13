@@ -124,6 +124,27 @@ class WaveRepository(
         )
     }
 
+    /** Запускает Яндекс-волну, построенную вокруг конкретного артиста. */
+    fun requestArtistWave(
+        artistId: Int,
+        artistName: String,
+    ): Boolean {
+        if (artistId <= 0) {
+            logger.warning(
+                TAG,
+                "[requestArtistWave] Некорректный идентификатор артиста=$artistId",
+            )
+            return false
+        }
+
+        return requestWave(
+            ArtistWaveSeed(
+                artistId = artistId,
+                artistName = artistName,
+            ),
+        )
+    }
+
     /**
      * Загружает и запускает первую пачку в coroutine вызывающего слоя.
      *
@@ -334,5 +355,25 @@ private data class TrackWaveSeed(
 
     private companion object {
         const val TYPE = "ya_track_wave_seed"
+    }
+}
+
+
+/** Адаптирует Яндекс-артиста к существующему контракту seed-объекта rotor. */
+private data class ArtistWaveSeed(
+    val artistId: Int,
+    val artistName: String,
+) : dTracklist {
+
+    override fun getdId(): String = artistId.toString()
+
+    override fun getDTitle(): String = artistName.ifBlank { "Артист" }
+
+    override fun getType(): String = TYPE
+
+    override fun getWaveId(): String = "artist:$artistId"
+
+    private companion object {
+        const val TYPE = "ya_artist_wave_seed"
     }
 }

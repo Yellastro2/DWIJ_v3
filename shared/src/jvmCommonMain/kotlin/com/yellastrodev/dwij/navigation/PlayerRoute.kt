@@ -1,5 +1,10 @@
 package com.yellastrodev.dwij.navigation
 
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
@@ -9,6 +14,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.graphics.ImageBitmap
+import androidx.compose.ui.Modifier
 import com.yellastrodev.dwij.TrackListItemUiModel
 import com.yellastrodev.dwij.data.DataError
 import com.yellastrodev.dwij.data.DataResult
@@ -16,6 +22,7 @@ import com.yellastrodev.dwij.data.entities.MusicSource
 import com.yellastrodev.dwij.data.entities.Song
 import com.yellastrodev.dwij.data.entities.SongMatchCandidateEntity
 import com.yellastrodev.dwij.data.entities.TrackInstance
+import com.yellastrodev.dwij.data.entities.dYaArtist
 import com.yellastrodev.dwij.data.entities.dYaLikeTracklist.Companion.KIND_LIKED
 import com.yellastrodev.dwij.di.DwijComponent
 import com.yellastrodev.dwij.models.PlayerModel
@@ -25,6 +32,8 @@ import com.yellastrodev.dwij.resources.multi_source_merge_error
 import com.yellastrodev.dwij.resources.multi_source_merge_success
 import com.yellastrodev.dwij.resources.multi_source_priority_error
 import com.yellastrodev.dwij.resources.player_current_queue
+import com.yellastrodev.dwij.resources.player_choose_artist_cancel
+import com.yellastrodev.dwij.resources.player_choose_artist_title
 import com.yellastrodev.dwij.resources.player_like_failed
 import com.yellastrodev.dwij.resources.player_no_track
 import com.yellastrodev.dwij.resources.player_source_local
@@ -59,6 +68,7 @@ fun PlayerRoute(
     playerModel: PlayerModel,
     onBackClick: () -> Unit,
     onAddToPlaylist: (trackId: String) -> Unit,
+    onOpenArtist: (artistId: Int) -> Unit,
     onRequestLocalTrackDownload: (trackId: String, title: String) -> Unit,
 ) {
     val logger = LocalYamLogger.current
@@ -160,6 +170,9 @@ fun PlayerRoute(
     var showMultiSourceDialog by remember(currentTrackId) {
         mutableStateOf(false)
     }
+    var showArtistDialog by remember(currentTrackId) {
+        mutableStateOf(false)
+    }
     var candidateSongs by remember(currentTrackId) {
         mutableStateOf(emptyList<Song>())
     }
@@ -218,12 +231,29 @@ fun PlayerRoute(
         }
     }
 
-    val yandexTrack = track
-        ?.yandexInstances
-        ?.firstOrNull()
+    val yandexTrack = track?.yandexInstances
+        ?.firstOrNull { instance ->
+            playbackTrack?.source == MusicSource.YANDEX &&
+                instance.track.id == playbackTrack?.id
+        }
         ?.track
+        ?: track?.yandexInstances
+            ?.firstOrNull { instance ->
+                instance.id == track?.preferredInstanceId
+            }
+            ?.track
+        ?: track?.yandexInstances
+            ?.firstOrNull()
+            ?.track
 
     val yandexTrackId = yandexTrack?.id
+    val yandexArtists = remember(yandexTrack) {
+        yandexTrack
+            ?.artists
+            .orEmpty()
+            .filter { artist -> artist.id != null }
+            .distinctBy { artist -> artist.id }
+    }
     val playlistKeys = yandexTrack?.playlists.orEmpty()
 
     val containingPlaylists = remember(
@@ -401,6 +431,7 @@ fun PlayerRoute(
                     ?.takeIf(String::isNotBlank)
                     ?: unknownArtist
             },
+            canOpenArtist = yandexArtists.isNotEmpty() && !showWaveLoadingPlaceholder,
             album = track
                 ?.albumTitle
                 ?.takeIf(String::isNotBlank),
@@ -525,6 +556,13 @@ fun PlayerRoute(
                 }
             }
         },
+        onArtistClick = {
+            when (yandexArtists.size) {
+                0 -> Unit
+                1 -> onOpenArtist(requireNotNull(yandexArtists.single().id))
+                else -> showArtistDialog = true
+            }
+        },
         onAddToPlaylistClick = {
             yandexTrackId?.let(onAddToPlaylist)
         },
@@ -543,6 +581,19 @@ fun PlayerRoute(
             }
         },
     )
+
+    if (showArtistDialog) {
+        ArtistSelectionDialog(
+            artists = yandexArtists,
+            onArtistClick = { artist ->
+                showArtistDialog = false
+                artist.id?.let(onOpenArtist)
+            },
+            onDismiss = {
+                showArtistDialog = false
+            },
+        )
+    }
 
     if (showMultiSourceDialog) {
         val manageConfirmedSources = confirmedSourceOptions.size > 1
@@ -689,6 +740,42 @@ fun PlayerRoute(
             errorMessage = mergeSourcesError,
         )
     }
+}
+
+/** Показывает выбор, когда текущий трек относится к нескольким артистам ЯМ. */
+@Composable
+private fun ArtistSelectionDialog(
+    artists: List<dYaArtist>,
+    onArtistClick: (dYaArtist) -> Unit,
+    onDismiss: () -> Unit,
+) {
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = {
+            Text(stringResource(Res.string.player_choose_artist_title))
+        },
+        text = {
+            Column {
+                artists.forEach { artist ->
+                    TextButton(
+                        onClick = { onArtistClick(artist) },
+                        modifier = Modifier.fillMaxWidth(),
+                    ) {
+                        Text(
+                            text = artist.name,
+                            modifier = Modifier.fillMaxWidth(),
+                        )
+                    }
+                }
+            }
+        },
+        confirmButton = {},
+        dismissButton = {
+            TextButton(onClick = onDismiss) {
+                Text(stringResource(Res.string.player_choose_artist_cancel))
+            }
+        },
+    )
 }
 
 /** Связывает отображаемый source-инстанс с исходной Song до объединения. */
