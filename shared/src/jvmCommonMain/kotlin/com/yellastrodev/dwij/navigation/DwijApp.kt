@@ -71,6 +71,7 @@ fun DwijApp(
     val coroutineScope = rememberCoroutineScope()
     val localTrackDownloadRequester =
         platform.rememberLocalTrackDownloadRequester()
+    val shareRequester = platform.rememberShareRequester()
 
     var showAuthorizationRequiredDialog by remember(component) {
         mutableStateOf(false)
@@ -247,6 +248,7 @@ fun DwijApp(
                     },
                     onRequestLocalTrackDownload =
                         localTrackDownloadRequester::request,
+                    onShareYandexUrl = shareRequester::share,
                 )
             }
 
@@ -344,6 +346,7 @@ fun DwijApp(
                     },
                     onRequestLocalTrackDownload =
                         localTrackDownloadRequester::request,
+                    onShareYandexUrl = shareRequester::share,
                 )
             }
 
@@ -369,6 +372,7 @@ fun DwijApp(
                     },
                     onRequestLocalTrackDownload =
                         localTrackDownloadRequester::request,
+                    onShareYandexUrl = shareRequester::share,
                 )
             }
 

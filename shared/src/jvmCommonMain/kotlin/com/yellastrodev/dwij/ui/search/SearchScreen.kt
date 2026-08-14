@@ -57,6 +57,7 @@ fun SearchScreen(
     savedYandexTrackIds: Set<String>,
     savingYandexTrackIds: Set<String>,
     onRequestLocalTrackDownload: (trackId: String, title: String) -> Unit,
+    onShareYandexTrack: (trackId: String) -> Unit,
     modifier: Modifier = Modifier,
 ) {
     val recentQueries = listOf(
@@ -92,6 +93,7 @@ fun SearchScreen(
             savedYandexTrackIds = savedYandexTrackIds,
             savingYandexTrackIds = savingYandexTrackIds,
             onRequestLocalTrackDownload = onRequestLocalTrackDownload,
+            onShareYandexTrack = onShareYandexTrack,
             modifier = Modifier
                 .weight(1f)
                 .padding(top = 10.dp),
@@ -235,6 +237,7 @@ private fun SearchScreenPreview() {
             savedYandexTrackIds = emptySet(),
             savingYandexTrackIds = emptySet(),
             onRequestLocalTrackDownload = { _, _ -> },
+            onShareYandexTrack = {},
         )
     }
 }

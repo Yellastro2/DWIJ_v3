@@ -70,6 +70,7 @@ fun PlayerRoute(
     onAddToPlaylist: (trackId: String) -> Unit,
     onOpenArtist: (artistId: Int) -> Unit,
     onRequestLocalTrackDownload: (trackId: String, title: String) -> Unit,
+    onShareYandexUrl: (String) -> Unit,
 ) {
     val logger = LocalYamLogger.current
     val songMatchRepository = component.songMatchRepository
@@ -447,6 +448,7 @@ fun PlayerRoute(
             hasUnresolvedMatchCandidate =
                 pendingMatchCandidates.isNotEmpty(),
             canSaveLocally = currentYandexDownloadTrackId != null,
+            canShare = yandexTrackId != null,
             isSavedLocally = isCurrentTrackSavedLocally,
             isSavingLocally = currentYandexDownloadTrackId != null &&
                 currentYandexDownloadTrackId in localDownloads,
@@ -584,6 +586,11 @@ fun PlayerRoute(
                     track?.title ?: playbackTrack?.title ?: trackId,
                 )
                 uiMessages.tryEmit(saveLocallyStartedMessage)
+            }
+        },
+        onShareClick = {
+            yandexTrackId?.let { trackId ->
+                onShareYandexUrl(YandexMusicShareLinks.track(trackId))
             }
         },
     )

@@ -24,12 +24,15 @@ import com.yellastrodev.dwij.navigation.DwijAppPlatform
 import com.yellastrodev.dwij.navigation.HomeRoutePlatform
 import com.yellastrodev.dwij.navigation.LocalLibraryPlatform
 import com.yellastrodev.dwij.navigation.LocalTrackDownloadRequester
+import com.yellastrodev.dwij.navigation.ShareRequester
 import com.yellastrodev.dwij.navigation.SettingsPlatform
 import com.yellastrodev.dwij.ui.HomeScreenPlatform
 import com.yellastrodev.dwij.ui.NoOpHomeScreenPlatform
 import com.yellastrodev.dwij.ui.playlist.PlaylistGridPlatform
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.launch
+import java.awt.Toolkit
+import java.awt.datatransfer.StringSelection
 
 /**
  * Windows-набор платформенных адаптеров для shared DwijApp.
@@ -167,6 +170,15 @@ class DesktopDwijAppPlatform(
                 }
             }
         }
+
+    @Composable
+    override fun rememberShareRequester(): ShareRequester = remember {
+        ShareRequester { url ->
+            Toolkit.getDefaultToolkit()
+                .systemClipboard
+                .setContents(StringSelection(url), null)
+        }
+    }
 }
 
 private enum class DesktopPlaybackAction {

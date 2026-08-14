@@ -3,6 +3,8 @@ package com.yellastrodev.dwij.ui.search
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.Image
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material3.Text
@@ -31,6 +33,7 @@ import com.yellastrodev.dwij.ui.TrackCoverLoader
 import com.yellastrodev.dwij.ui.TrackCoverState
 import com.yellastrodev.dwij.ui.TrackListItem
 import org.jetbrains.compose.resources.stringResource
+import org.jetbrains.compose.resources.painterResource
 import org.jetbrains.compose.ui.tooling.preview.Preview
 
 /**
@@ -46,6 +49,7 @@ fun SearchResult(
     savedYandexTrackIds: Set<String>,
     savingYandexTrackIds: Set<String>,
     onRequestLocalTrackDownload: (trackId: String, title: String) -> Unit,
+    onShareYandexTrack: (trackId: String) -> Unit,
     modifier: Modifier = Modifier,
 ) {
     when {
@@ -123,6 +127,22 @@ fun SearchResult(
                                 yandexTrackId?.let { trackId ->
                                     DropdownMenuItem(
                                         text = {
+                                            Text(stringResource(Res.string.object_share))
+                                        },
+                                        leadingIcon = {
+                                            Image(
+                                                painter = painterResource(Res.drawable.ic_share),
+                                                contentDescription = null,
+                                                modifier = Modifier.size(22.dp),
+                                            )
+                                        },
+                                        onClick = {
+                                            isContextMenuExpanded = false
+                                            onShareYandexTrack(trackId)
+                                        },
+                                    )
+                                    DropdownMenuItem(
+                                        text = {
                                             Text(
                                                 stringResource(
                                                     when {
@@ -186,5 +206,6 @@ private fun SearchResultAwaitingQueryPreview() {
         savedYandexTrackIds = emptySet(),
         savingYandexTrackIds = emptySet(),
         onRequestLocalTrackDownload = { _, _ -> },
+        onShareYandexTrack = {},
     )
 }

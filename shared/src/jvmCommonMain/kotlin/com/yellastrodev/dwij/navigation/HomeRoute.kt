@@ -61,6 +61,7 @@ fun HomeRoute(
     onOpenCatalogObject: (type: String, externalId: Int) -> Unit,
     onOpenPlayer: () -> Unit,
     onRequestLocalTrackDownload: (trackId: String, title: String) -> Unit,
+    onShareYandexUrl: (String) -> Unit,
     modifier: Modifier = Modifier,
 ) {
     val logger = LocalYamLogger.current
@@ -341,6 +342,9 @@ fun HomeRoute(
                 savedYandexTrackIds = savedSearchYandexTrackIds,
                 savingYandexTrackIds = localDownloads.keys,
                 onRequestLocalTrackDownload = onRequestLocalTrackDownload,
+                onShareYandexTrack = { trackId ->
+                    onShareYandexUrl(YandexMusicShareLinks.track(trackId))
+                },
                 modifier = searchModifier,
             )
         },

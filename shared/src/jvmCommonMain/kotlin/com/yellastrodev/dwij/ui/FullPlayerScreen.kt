@@ -121,6 +121,7 @@ data class FullPlayerUiState(
     val hasMultipleSources: Boolean,
     val hasUnresolvedMatchCandidate: Boolean,
     val canSaveLocally: Boolean = false,
+    val canShare: Boolean = false,
     val isSavedLocally: Boolean = false,
     val isSavingLocally: Boolean = false,
     val cover: ImageBitmap?,
@@ -162,6 +163,7 @@ fun FullPlayerScreen(
     onAddToPlaylistClick: () -> Unit,
     onSourcesClick: () -> Unit,
     onSaveLocallyClick: () -> Unit,
+    onShareClick: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
     val backgroundColor = DwijColors.Background
@@ -209,11 +211,13 @@ fun FullPlayerScreen(
                     state.hasUnresolvedMatchCandidate,
                 canStartTrackWave = state.canStartTrackWave,
                 canSaveLocally = state.canSaveLocally,
+                canShare = state.canShare,
                 isSavedLocally = state.isSavedLocally,
                 isSavingLocally = state.isSavingLocally,
                 onSourcesClick = onSourcesClick,
                 onTrackWaveClick = onTrackWaveClick,
                 onSaveLocallyClick = onSaveLocallyClick,
+                onShareClick = onShareClick,
                 onBackClick = onBackClick,
             )
             Column(
@@ -357,11 +361,13 @@ private fun FullPlayerTopBar(
     showSourcesIndicator: Boolean,
     canStartTrackWave: Boolean,
     canSaveLocally: Boolean,
+    canShare: Boolean,
     isSavedLocally: Boolean,
     isSavingLocally: Boolean,
     onSourcesClick: () -> Unit,
     onTrackWaveClick: () -> Unit,
     onSaveLocallyClick: () -> Unit,
+    onShareClick: () -> Unit,
     onBackClick: () -> Unit,
 ) {
     val backDescription = stringResource(Res.string.player_back_content_description)
@@ -501,6 +507,27 @@ private fun FullPlayerTopBar(
                         onTrackWaveClick()
                     },
                 )
+                if (canShare) {
+                    DropdownMenuItem(
+                        text = {
+                            Text(
+                                text = stringResource(Res.string.object_share),
+                                color = DwijColors.White,
+                            )
+                        },
+                        leadingIcon = {
+                            Image(
+                                painter = painterResource(Res.drawable.ic_share),
+                                contentDescription = null,
+                                modifier = Modifier.size(22.dp),
+                            )
+                        },
+                        onClick = {
+                            isMoreMenuExpanded = false
+                            onShareClick()
+                        },
+                    )
+                }
                 if (canSaveLocally) {
                     DropdownMenuItem(
                         text = {
@@ -1767,6 +1794,7 @@ private fun FullPlayerPreviewContent() {
             hasMultipleSources = true,
             hasUnresolvedMatchCandidate = false,
             canSaveLocally = true,
+            canShare = true,
             isSavedLocally = true,
             cover = null,
             isPlaying = true,
@@ -1800,5 +1828,6 @@ private fun FullPlayerPreviewContent() {
         onAddToPlaylistClick = {},
         onSourcesClick = {},
         onSaveLocallyClick = {},
+        onShareClick = {},
     )
 }

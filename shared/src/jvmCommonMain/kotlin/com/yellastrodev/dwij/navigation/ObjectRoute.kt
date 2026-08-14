@@ -3,6 +3,8 @@ package com.yellastrodev.dwij.navigation
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.Image
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.SnackbarHost
@@ -36,10 +38,12 @@ import com.yellastrodev.dwij.models.CatalogObjectUiState
 import com.yellastrodev.dwij.models.TracklistModel
 import com.yellastrodev.dwij.resources.Res
 import com.yellastrodev.dwij.resources.home_player_unknown_artist
+import com.yellastrodev.dwij.resources.ic_share
 import com.yellastrodev.dwij.resources.multi_source_merge_error
 import com.yellastrodev.dwij.resources.multi_source_merge_success
 import com.yellastrodev.dwij.resources.multi_source_priority_error
 import com.yellastrodev.dwij.resources.object_loading_title
+import com.yellastrodev.dwij.resources.object_share
 import com.yellastrodev.dwij.resources.object_track_count
 import com.yellastrodev.dwij.resources.track_list_all_title
 import com.yellastrodev.dwij.resources.track_list_empty
@@ -67,6 +71,7 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import org.jetbrains.compose.resources.getString
 import org.jetbrains.compose.resources.pluralStringResource
+import org.jetbrains.compose.resources.painterResource
 import org.jetbrains.compose.resources.stringResource
 
 /** Shared-route абстрактного музыкального объекта и его списка треков. */
@@ -79,6 +84,7 @@ fun ObjectRoute(
     onBackClick: () -> Unit,
     onOpenPlayer: () -> Unit,
     onRequestLocalTrackDownload: (trackId: String, title: String) -> Unit,
+    onShareYandexUrl: (String) -> Unit,
     modifier: Modifier = Modifier,
 ) {
     val catalogKind = when (objectType) {
@@ -93,6 +99,7 @@ fun ObjectRoute(
             externalId = objectValue.toIntOrNull(),
             onBackClick = onBackClick,
             onOpenPlayer = onOpenPlayer,
+            onShareYandexUrl = onShareYandexUrl,
             modifier = modifier,
         )
         return
@@ -421,7 +428,9 @@ fun ObjectRoute(
             cover = objectCover,
             tracks = trackItems,
             listState = listState,
-            showShare = objectType == DwijDestination.OBJECT_TYPE_PLAYLIST,
+            showShare =
+                objectType == DwijDestination.OBJECT_TYPE_PLAYLIST &&
+                    yandexPlaylist != null,
             showWave = objectType == DwijDestination.OBJECT_TYPE_PLAYLIST,
             emptyMessage = stringResource(Res.string.track_list_empty),
             isLoading = isLoading,
@@ -495,6 +504,12 @@ fun ObjectRoute(
             },
             trackContextMenuContent = { _, item, onDismiss ->
                 item.yandexTrackId?.let { yandexTrackId ->
+                    YandexShareMenuItem(
+                        onClick = {
+                            onDismiss()
+                            onShareYandexUrl(YandexMusicShareLinks.track(yandexTrackId))
+                        },
+                    )
                     DropdownMenuItem(
                         text = {
                             Text(
@@ -517,10 +532,9 @@ fun ObjectRoute(
                 }
             },
             onShareClick = {
-                logger.debug(
-                    TAG,
-                    "[shareObject] Поделиться объектом пока не подключено",
-                )
+                yandexPlaylist?.playlistUuid?.let { playlistUuid ->
+                    onShareYandexUrl(YandexMusicShareLinks.playlist(playlistUuid))
+                }
             },
             onWaveClick = {
                 model.requestWave()
@@ -700,6 +714,7 @@ private fun CatalogObjectRoute(
     externalId: Int?,
     onBackClick: () -> Unit,
     onOpenPlayer: () -> Unit,
+    onShareYandexUrl: (String) -> Unit,
     modifier: Modifier,
 ) {
     val factory = remember(component) {
@@ -797,10 +812,29 @@ private fun CatalogObjectRoute(
                 onOpenPlayer()
             }
         },
+        trackContextMenuContent = { _, item, onDismiss ->
+            item.yandexTrackId?.let { trackId ->
+                YandexShareMenuItem(
+                    onClick = {
+                        onDismiss()
+                        onShareYandexUrl(YandexMusicShareLinks.track(trackId))
+                    },
+                )
+            }
+        },
         loadTrackCover = { songId ->
             model.trackCover(songId)?.toImageBitmapOrNull()
         },
-        showShare = false,
+        showShare = externalId != null,
+        onShareClick = {
+            externalId?.let { id ->
+                val url = when (kind) {
+                    CatalogObjectKind.Artist -> YandexMusicShareLinks.artist(id)
+                    CatalogObjectKind.Album -> YandexMusicShareLinks.album(id)
+                }
+                onShareYandexUrl(url)
+            }
+        },
         showWave = kind == CatalogObjectKind.Artist && externalId != null,
         onWaveClick = {
             val artistId = externalId
@@ -820,6 +854,22 @@ private fun CatalogObjectRoute(
         isRefreshing = state.isLoading && state.tracks.isNotEmpty(),
         onRefresh = model::refresh,
         modifier = modifier,
+    )
+}
+
+/** Единый пункт отправки ссылки на ЯМ-трек в контекстных меню списков. */
+@Composable
+private fun YandexShareMenuItem(onClick: () -> Unit) {
+    DropdownMenuItem(
+        text = { Text(stringResource(Res.string.object_share)) },
+        leadingIcon = {
+            Image(
+                painter = painterResource(Res.drawable.ic_share),
+                contentDescription = null,
+                modifier = Modifier.size(22.dp),
+            )
+        },
+        onClick = onClick,
     )
 }
 

@@ -43,9 +43,18 @@ interface DwijAppPlatform {
     /** Возвращает платформенный запуск надёжного сохранения ЯМ-трека. */
     @Composable
     fun rememberLocalTrackDownloadRequester(): LocalTrackDownloadRequester
+
+    /** Возвращает платформенное системное действие «Поделиться». */
+    @Composable
+    fun rememberShareRequester(): ShareRequester
 }
 
 /** Платформенно ставит один ЯМ-трек в очередь постоянного сохранения. */
 fun interface LocalTrackDownloadRequester {
     fun request(trackId: String, title: String)
+}
+
+/** Передаёт ссылку системному share-механизму платформы. */
+fun interface ShareRequester {
+    fun share(url: String)
 }

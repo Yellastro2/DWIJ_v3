@@ -1,6 +1,7 @@
 package com.yellastrodev.dwij.navigation
 
 import android.Manifest
+import android.content.Intent
 import android.content.pm.PackageManager
 import android.os.Build
 import android.util.Log
@@ -14,6 +15,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.platform.LocalContext
 import androidx.core.content.ContextCompat
 import com.yellastrodev.dwij.AndroidHomeScreenPlatform
+import com.yellastrodev.dwij.R
 import com.yellastrodev.dwij.service.LocalTrackDownloadService
 import com.yellastrodev.dwij.ui.HomeScreenPlatform
 import com.yellastrodev.dwij.ui.playlist.PlaylistGridPlatform
@@ -83,6 +85,25 @@ object AndroidDwijAppPlatform : DwijAppPlatform {
             } else {
                 pendingRequest = trackId to title
                 permissionLauncher.launch(Manifest.permission.POST_NOTIFICATIONS)
+            }
+        }
+    }
+
+    @Composable
+    override fun rememberShareRequester(): ShareRequester {
+        val context = LocalContext.current
+        return remember(context) {
+            ShareRequester { url ->
+                val sendIntent = Intent(Intent.ACTION_SEND).apply {
+                    type = "text/plain"
+                    putExtra(Intent.EXTRA_TEXT, url)
+                }
+                context.startActivity(
+                    Intent.createChooser(
+                        sendIntent,
+                        context.getString(R.string.object_share),
+                    ),
+                )
             }
         }
     }

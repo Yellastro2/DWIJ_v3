@@ -34,7 +34,6 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.geometry.Offset
-import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.ImageBitmap
 import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.layout.ContentScale
@@ -287,11 +286,7 @@ private fun ObjectHeader(
                 modifier = Modifier.padding(top = 17.dp),
             ) {
                 if (showShare) {
-                    ObjectActionButton(
-                        text = stringResource(Res.string.object_share),
-                        accent = DwijColors.Cyan,
-                        onClick = onShareClick,
-                    )
+                    ObjectShareButton(onClick = onShareClick)
                     Spacer(modifier = Modifier.width(12.dp))
                 }
                 ObjectPlayButton(onClick = onPlayClick)
@@ -416,30 +411,32 @@ private fun ObjectWaveButton(onClick: () -> Unit) {
     }
 }
 
-/** Рисует небольшое вторичное действие без тяжёлого фонового ресурса. */
+/** Показывает пользовательскую share-иконку как компактное действие объекта. */
 @Composable
-private fun ObjectActionButton(
-    text: String,
-    accent: Color,
-    onClick: () -> Unit,
-) {
+private fun ObjectShareButton(onClick: () -> Unit) {
+    val shape = RoundedCornerShape(12.dp)
     Box(
         contentAlignment = Alignment.Center,
         modifier = Modifier
             .width(100.dp)
-            .height(48.dp)
-            .clip(RoundedCornerShape(12.dp))
-            .background(DwijColors.ObjectFooterBackground)
-            .border(1.dp, accent.copy(alpha = 0.72f), RoundedCornerShape(12.dp))
-            .clickable(onClick = onClick),
+            .height(48.dp),
     ) {
-        Text(
-            text = text,
-            color = DwijColors.White,
-            fontSize = 12.sp,
-            fontWeight = FontWeight.Medium,
-            maxLines = 1,
-        )
+        Box(
+            contentAlignment = Alignment.Center,
+            modifier = Modifier
+                .size(48.dp)
+                .clip(shape)
+                .background(DwijColors.ObjectFooterBackground)
+                .border(1.dp, DwijColors.Cyan.copy(alpha = 0.72f), shape)
+                .clickable(onClick = onClick),
+        ) {
+            Image(
+                painter = painterResource(Res.drawable.ic_share),
+                contentDescription = stringResource(Res.string.object_share),
+                contentScale = ContentScale.Fit,
+                modifier = Modifier.size(42.dp),
+            )
+        }
     }
 }
 
