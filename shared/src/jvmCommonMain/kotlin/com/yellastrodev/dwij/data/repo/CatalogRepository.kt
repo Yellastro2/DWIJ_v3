@@ -5,15 +5,16 @@ import com.yellastrodev.dwij.data.DataResult
 import com.yellastrodev.dwij.data.dao.CatalogDao
 import com.yellastrodev.dwij.data.entities.CATALOG_SOURCE_YANDEX
 import com.yellastrodev.dwij.data.entities.CATALOG_VALUE_SEPARATOR
-import com.yellastrodev.dwij.data.entities.CatalogAlbumEntity
 import com.yellastrodev.dwij.data.entities.CatalogAlbumMetadataEntity
 import com.yellastrodev.dwij.data.entities.CatalogAlbumTrackEntity
-import com.yellastrodev.dwij.data.entities.CatalogArtistEntity
 import com.yellastrodev.dwij.data.entities.CatalogArtistMetadataEntity
 import com.yellastrodev.dwij.data.entities.Song
+import com.yellastrodev.dwij.data.entities.dYaArtist
 import com.yellastrodev.dwij.data.entities.toEntity
 import com.yellastrodev.dwij.data.source.CatalogRemoteSource
 import com.yellastrodev.yamusicsdk.YamLogger
+import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.map
 
 /** Собранная страница артиста с явно обозначенным источником метаданных. */
 data class CatalogArtistPage(
@@ -52,9 +53,24 @@ class CatalogRepository(
     private val songRepository: SongRepository,
     private val logger: YamLogger,
 ) {
+    /**
+     * Наблюдает ЯМ-артистов, подтверждённых любым source-инстансом песни.
+     * Поэтому локальный трек получает навигацию к артисту без создания фальшивого ЯМ-инстанса.
+     */
+    fun observeYandexArtistsForSong(songId: String): Flow<List<dYaArtist>> =
+        local.observeArtistSourceRefsForSong(
+            songId = songId,
+            source = CATALOG_SOURCE_YANDEX,
+        ).map { artists ->
+            artists.mapNotNull { artist ->
+                artist.externalId.toIntOrNull()?.let { yandexId ->
+                    dYaArtist(id = yandexId, name = artist.name)
+                }
+            }
+        }
+
     /** Обновляет профиль и популярные треки артиста либо возвращает сохранённую шапку. */
     suspend fun artist(yandexId: Int): DataResult<CatalogArtistPage> {
-        val artistId = yandexCatalogId(yandexId)
         return when (val result = remote.artist(yandexId)) {
             is DataResult.Success -> {
                 val brief = result.value
@@ -65,8 +81,11 @@ class CatalogRepository(
                 trackRepository.putTracks(tracks)
                 val songs = songRepository.songsForYandexTracks(tracks)
                 val refreshedAt = System.currentTimeMillis()
+                val artistId = local.ensureYandexArtist(
+                    yandexId = yandexId,
+                    name = artist.name,
+                )
 
-                local.upsertArtist(CatalogArtistEntity(artistId, artist.name))
                 local.upsertArtistMetadata(
                     CatalogArtistMetadataEntity(
                         artistId = artistId,
@@ -97,13 +116,12 @@ class CatalogRepository(
                 )
             }
 
-            is DataResult.Failure -> cachedArtist(artistId) ?: result
+            is DataResult.Failure -> cachedArtist(yandexId) ?: result
         }
     }
 
     /** Обновляет альбом и его порядок треков либо собирает сохранённую копию. */
     suspend fun album(yandexId: Int): DataResult<CatalogAlbumPage> {
-        val albumId = yandexCatalogId(yandexId)
         return when (val result = remote.album(yandexId)) {
             is DataResult.Success -> {
                 val album = result.value
@@ -113,8 +131,8 @@ class CatalogRepository(
                 val songs = songRepository.songsForYandexTracks(tracks)
                 val refreshedAt = System.currentTimeMillis()
                 val coverUri = album.ogImageUri ?: album.coverUri
+                val albumId = local.ensureYandexAlbum(yandexId, album.title)
 
-                local.upsertAlbum(CatalogAlbumEntity(albumId, album.title))
                 local.upsertAlbumMetadata(
                     CatalogAlbumMetadataEntity(
                         albumId = albumId,
@@ -173,27 +191,36 @@ class CatalogRepository(
                 )
             }
 
-            is DataResult.Failure -> cachedAlbum(albumId) ?: result
+            is DataResult.Failure -> {
+                val metadata = local.getAlbumMetadataByExternalId(
+                    source = CATALOG_SOURCE_YANDEX,
+                    externalId = yandexId.toString(),
+                )
+                metadata?.albumId?.let { cachedAlbum(it) } ?: result
+            }
         }
     }
 
-    private suspend fun cachedArtist(artistId: String): DataResult<CatalogArtistPage>? {
+    private suspend fun cachedArtist(yandexId: Int): DataResult<CatalogArtistPage>? {
+        val metadata = local.getArtistMetadataByExternalId(
+            source = CATALOG_SOURCE_YANDEX,
+            externalId = yandexId.toString(),
+        ) ?: return null
+        val artistId = metadata.artistId
         val artist = local.getArtist(artistId) ?: return null
-        val metadata = local.getArtistMetadata(artistId, CATALOG_SOURCE_YANDEX)
         logger.debug(TAG, "[cachedArtist] Использована сохранённая метадата artistId=$artistId")
         return DataResult.Success(
             CatalogArtistPage(
                 artistId = artistId,
                 name = artist.name,
-                coverUri = metadata?.coverUri,
-                genres = metadata?.genres
-                    ?.split(CATALOG_VALUE_SEPARATOR)
-                    ?.filter(String::isNotBlank)
-                    .orEmpty(),
-                likesCount = metadata?.likesCount,
-                trackCount = metadata?.trackCount,
-                lastMonthListeners = metadata?.lastMonthListeners,
-                metadataSource = metadata?.source,
+                coverUri = metadata.coverUri,
+                genres = metadata.genres
+                    .split(CATALOG_VALUE_SEPARATOR)
+                    .filter(String::isNotBlank),
+                likesCount = metadata.likesCount,
+                trackCount = metadata.trackCount,
+                lastMonthListeners = metadata.lastMonthListeners,
+                metadataSource = metadata.source,
                 tracks = emptyList(),
             ),
         )
@@ -231,8 +258,6 @@ class CatalogRepository(
             ),
         )
     }
-
-    private fun yandexCatalogId(externalId: Int): String = "yandex:$externalId"
 
     private companion object {
         const val TAG = "CatalogRepository"

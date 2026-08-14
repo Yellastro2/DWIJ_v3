@@ -5,6 +5,7 @@ import com.yellastrodev.dwij.data.repo.LocalMusicRepository
 import com.yellastrodev.dwij.data.source.LocalLibraryMonitor
 import com.yellastrodev.dwij.di.DwijPlatformLifecycle
 import com.yellastrodev.dwij.work.LocalLibrarySyncWorker
+import com.yellastrodev.dwij.work.LocalCatalogResolveWorker
 import kotlinx.coroutines.CoroutineScope
 
 /**
@@ -31,6 +32,9 @@ class AndroidDwijPlatformLifecycle(
         val newMonitor = LocalLibraryMonitor(
             repository = repository,
             scope = scope,
+            onSynchronized = {
+                LocalCatalogResolveWorker.enqueue(context)
+            },
         )
 
         LocalLibraryMonitor
@@ -47,6 +51,7 @@ class AndroidDwijPlatformLifecycle(
         monitor = newMonitor
 
         LocalLibrarySyncWorker.schedule(context)
+        LocalCatalogResolveWorker.enqueue(context)
 
         if (repository.hasAudioPermission()) {
             LocalLibrarySyncWorker

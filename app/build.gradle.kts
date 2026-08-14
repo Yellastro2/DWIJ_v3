@@ -1,5 +1,7 @@
 import java.util.Properties
 
+val appVersion = providers.gradleProperty("version.name").get()
+
 val localProperties = Properties().apply {
     val propertiesFile = rootProject.file("local.properties")
     if (propertiesFile.isFile) {
@@ -27,7 +29,7 @@ android {
         minSdk = 26
         targetSdk = 35
         versionCode = 1
-        versionName = "0.1.4"
+        versionName = appVersion
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
 

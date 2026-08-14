@@ -403,5 +403,333 @@ class DatabaseMigrations {
                 )
             }
         }
+
+        /**
+         * Отделяет внутренний ID артиста от external ID ЯМ и связывает известных артистов
+         * с конкретными Yandex-инстансами песен. Локальные строки артистов не разбираются.
+         */
+        val MIGRATION_11_12 = object : Migration(11, 12) {
+            override fun migrate(connection: SQLiteConnection) {
+                connection.execSQL(
+                    "CREATE TABLE migration_catalog_artist_ids (" +
+                        "oldArtistId TEXT NOT NULL PRIMARY KEY, " +
+                        "newArtistId TEXT NOT NULL UNIQUE)",
+                )
+                connection.execSQL(
+                    "INSERT INTO migration_catalog_artist_ids(oldArtistId, newArtistId) " +
+                        "SELECT artistId, lower(hex(randomblob(16))) FROM catalog_artists",
+                )
+                connection.execSQL(
+                    "CREATE TABLE catalog_artists_new (" +
+                        "artistId TEXT NOT NULL PRIMARY KEY, name TEXT NOT NULL)",
+                )
+                connection.execSQL(
+                    """
+                    CREATE TABLE catalog_artist_metadata_new (
+                        artistId TEXT NOT NULL,
+                        source TEXT NOT NULL,
+                        externalId TEXT NOT NULL,
+                        coverUri TEXT,
+                        genres TEXT NOT NULL,
+                        likesCount INTEGER,
+                        trackCount INTEGER,
+                        lastMonthListeners INTEGER,
+                        lastMonthListenersDelta INTEGER,
+                        refreshedAt INTEGER NOT NULL,
+                        PRIMARY KEY(artistId, source),
+                        FOREIGN KEY(artistId) REFERENCES catalog_artists_new(artistId)
+                            ON UPDATE NO ACTION ON DELETE CASCADE
+                    )
+                    """.trimIndent(),
+                )
+                connection.execSQL(
+                    "INSERT INTO catalog_artists_new(artistId, name) " +
+                        "SELECT ids.newArtistId, artists.name FROM catalog_artists artists " +
+                        "INNER JOIN migration_catalog_artist_ids ids " +
+                        "ON ids.oldArtistId = artists.artistId",
+                )
+                connection.execSQL(
+                    """
+                    INSERT INTO catalog_artist_metadata_new(
+                        artistId, source, externalId, coverUri, genres, likesCount,
+                        trackCount, lastMonthListeners, lastMonthListenersDelta, refreshedAt
+                    )
+                    SELECT ids.newArtistId, metadata.source, metadata.externalId,
+                        metadata.coverUri, metadata.genres, metadata.likesCount,
+                        metadata.trackCount, metadata.lastMonthListeners,
+                        metadata.lastMonthListenersDelta, metadata.refreshedAt
+                    FROM catalog_artist_metadata metadata
+                    INNER JOIN migration_catalog_artist_ids ids
+                        ON ids.oldArtistId = metadata.artistId
+                    """.trimIndent(),
+                )
+                connection.execSQL(
+                    "CREATE TABLE migration_yandex_artist_ids (" +
+                        "externalId TEXT NOT NULL PRIMARY KEY, " +
+                        "artistId TEXT NOT NULL UNIQUE, name TEXT NOT NULL)",
+                )
+                connection.execSQL(
+                    """
+                    INSERT INTO migration_yandex_artist_ids(externalId, artistId, name)
+                    SELECT metadata.externalId, ids.newArtistId, artists.name
+                    FROM catalog_artist_metadata metadata
+                    INNER JOIN migration_catalog_artist_ids ids
+                        ON ids.oldArtistId = metadata.artistId
+                    INNER JOIN catalog_artists artists
+                        ON artists.artistId = metadata.artistId
+                    WHERE metadata.source = 'YANDEX'
+                    """.trimIndent(),
+                )
+                connection.execSQL(
+                    """
+                    INSERT OR IGNORE INTO migration_yandex_artist_ids(externalId, artistId, name)
+                    SELECT CAST(id AS TEXT), lower(hex(randomblob(16))), MIN(name)
+                    FROM artists
+                    WHERE id IS NOT NULL
+                    GROUP BY id
+                    """.trimIndent(),
+                )
+                connection.execSQL(
+                    "INSERT OR IGNORE INTO catalog_artists_new(artistId, name) " +
+                        "SELECT artistId, name FROM migration_yandex_artist_ids",
+                )
+                connection.execSQL(
+                    """
+                    INSERT INTO catalog_artist_metadata_new(
+                        artistId, source, externalId, coverUri, genres, likesCount,
+                        trackCount, lastMonthListeners, lastMonthListenersDelta, refreshedAt
+                    )
+                    SELECT identities.artistId, 'YANDEX', identities.externalId,
+                        NULL, '', NULL, NULL, NULL, NULL, 0
+                    FROM migration_yandex_artist_ids identities
+                    WHERE NOT EXISTS (
+                        SELECT 1 FROM catalog_artist_metadata_new metadata
+                        WHERE metadata.source = 'YANDEX'
+                            AND metadata.externalId = identities.externalId
+                    )
+                    """.trimIndent(),
+                )
+
+                connection.execSQL("DROP TABLE catalog_artist_metadata")
+                connection.execSQL("DROP TABLE catalog_artists")
+                connection.execSQL("ALTER TABLE catalog_artists_new RENAME TO catalog_artists")
+                connection.execSQL(
+                    "ALTER TABLE catalog_artist_metadata_new " +
+                        "RENAME TO catalog_artist_metadata",
+                )
+                connection.execSQL(
+                    "CREATE INDEX index_catalog_artist_metadata_artistId " +
+                        "ON catalog_artist_metadata(artistId)",
+                )
+                connection.execSQL(
+                    "CREATE UNIQUE INDEX index_catalog_artist_metadata_source_externalId " +
+                        "ON catalog_artist_metadata(source, externalId)",
+                )
+                connection.execSQL(
+                    """
+                    CREATE TABLE track_instance_artists (
+                        instanceId TEXT NOT NULL,
+                        artistId TEXT NOT NULL,
+                        position INTEGER NOT NULL,
+                        PRIMARY KEY(instanceId, artistId),
+                        FOREIGN KEY(instanceId) REFERENCES track_instances(instanceId)
+                            ON UPDATE NO ACTION ON DELETE CASCADE,
+                        FOREIGN KEY(artistId) REFERENCES catalog_artists(artistId)
+                            ON UPDATE NO ACTION ON DELETE CASCADE
+                    )
+                    """.trimIndent(),
+                )
+                connection.execSQL(
+                    "CREATE INDEX index_track_instance_artists_instanceId " +
+                        "ON track_instance_artists(instanceId)",
+                )
+                connection.execSQL(
+                    "CREATE INDEX index_track_instance_artists_artistId " +
+                        "ON track_instance_artists(artistId)",
+                )
+                connection.execSQL(
+                    """
+                    INSERT OR IGNORE INTO track_instance_artists(instanceId, artistId, position)
+                    SELECT instances.instanceId, identities.artistId, MIN(relations.artistLocalId)
+                    FROM track_instances instances
+                    INNER JOIN track_artists relations
+                        ON relations.trackId = instances.sourceTrackId
+                    INNER JOIN artists source_artists
+                        ON source_artists.localId = relations.artistLocalId
+                    INNER JOIN migration_yandex_artist_ids identities
+                        ON identities.externalId = CAST(source_artists.id AS TEXT)
+                    WHERE instances.source = 'YANDEX' AND source_artists.id IS NOT NULL
+                    GROUP BY instances.instanceId, identities.artistId
+                    """.trimIndent(),
+                )
+                connection.execSQL("DROP TABLE migration_yandex_artist_ids")
+                connection.execSQL("DROP TABLE migration_catalog_artist_ids")
+            }
+        }
+
+        /** Разделяет локальный хеш метадаты и состояние завершённого онлайн-резолвинга. */
+        val MIGRATION_12_13 = object : Migration(12, 13) {
+            override fun migrate(connection: SQLiteConnection) {
+                connection.execSQL(
+                    "ALTER TABLE local_tracks ADD COLUMN currentHash " +
+                        "TEXT NOT NULL DEFAULT ''",
+                )
+                connection.execSQL(
+                    "ALTER TABLE local_tracks ADD COLUMN onlineSyncedHash TEXT",
+                )
+                connection.execSQL(
+                    "ALTER TABLE local_tracks ADD COLUMN onlineResolverVersion " +
+                        "INTEGER NOT NULL DEFAULT 0",
+                )
+
+                connection.execSQL(
+                    "CREATE TABLE migration_catalog_album_ids (" +
+                        "oldAlbumId TEXT NOT NULL PRIMARY KEY, " +
+                        "newAlbumId TEXT NOT NULL UNIQUE)",
+                )
+                connection.execSQL(
+                    "INSERT INTO migration_catalog_album_ids(oldAlbumId, newAlbumId) " +
+                        "SELECT albumId, lower(hex(randomblob(16))) FROM catalog_albums",
+                )
+                connection.execSQL(
+                    "CREATE TABLE catalog_albums_new (" +
+                        "albumId TEXT NOT NULL PRIMARY KEY, title TEXT NOT NULL)",
+                )
+                connection.execSQL(
+                    "INSERT INTO catalog_albums_new(albumId, title) " +
+                        "SELECT ids.newAlbumId, albums.title FROM catalog_albums albums " +
+                        "INNER JOIN migration_catalog_album_ids ids " +
+                        "ON ids.oldAlbumId = albums.albumId",
+                )
+                connection.execSQL(
+                    """
+                    CREATE TABLE catalog_album_metadata_new (
+                        albumId TEXT NOT NULL,
+                        source TEXT NOT NULL,
+                        externalId TEXT NOT NULL,
+                        coverUri TEXT,
+                        artistNames TEXT NOT NULL,
+                        genre TEXT,
+                        releaseDate TEXT,
+                        year INTEGER,
+                        type TEXT,
+                        description TEXT,
+                        likesCount INTEGER,
+                        trackCount INTEGER,
+                        refreshedAt INTEGER NOT NULL,
+                        PRIMARY KEY(albumId, source),
+                        FOREIGN KEY(albumId) REFERENCES catalog_albums_new(albumId)
+                            ON UPDATE NO ACTION ON DELETE CASCADE
+                    )
+                    """.trimIndent(),
+                )
+                connection.execSQL(
+                    """
+                    INSERT INTO catalog_album_metadata_new(
+                        albumId, source, externalId, coverUri, artistNames, genre,
+                        releaseDate, year, type, description, likesCount, trackCount, refreshedAt
+                    )
+                    SELECT ids.newAlbumId, metadata.source, metadata.externalId,
+                        metadata.coverUri, metadata.artistNames, metadata.genre,
+                        metadata.releaseDate, metadata.year, metadata.type,
+                        metadata.description, metadata.likesCount, metadata.trackCount,
+                        metadata.refreshedAt
+                    FROM catalog_album_metadata metadata
+                    INNER JOIN migration_catalog_album_ids ids
+                        ON ids.oldAlbumId = metadata.albumId
+                    """.trimIndent(),
+                )
+                connection.execSQL(
+                    """
+                    CREATE TABLE catalog_album_tracks_new (
+                        albumId TEXT NOT NULL,
+                        source TEXT NOT NULL,
+                        position INTEGER NOT NULL,
+                        sourceTrackId TEXT NOT NULL,
+                        discNumber INTEGER,
+                        trackNumber INTEGER,
+                        PRIMARY KEY(albumId, source, position),
+                        FOREIGN KEY(albumId) REFERENCES catalog_albums_new(albumId)
+                            ON UPDATE NO ACTION ON DELETE CASCADE
+                    )
+                    """.trimIndent(),
+                )
+                connection.execSQL(
+                    """
+                    INSERT INTO catalog_album_tracks_new(
+                        albumId, source, position, sourceTrackId, discNumber, trackNumber
+                    )
+                    SELECT ids.newAlbumId, tracks.source, tracks.position,
+                        tracks.sourceTrackId, tracks.discNumber, tracks.trackNumber
+                    FROM catalog_album_tracks tracks
+                    INNER JOIN migration_catalog_album_ids ids
+                        ON ids.oldAlbumId = tracks.albumId
+                    """.trimIndent(),
+                )
+                connection.execSQL("DROP TABLE catalog_album_tracks")
+                connection.execSQL("DROP TABLE catalog_album_metadata")
+                connection.execSQL("DROP TABLE catalog_albums")
+                connection.execSQL("ALTER TABLE catalog_albums_new RENAME TO catalog_albums")
+                connection.execSQL(
+                    "ALTER TABLE catalog_album_metadata_new RENAME TO catalog_album_metadata",
+                )
+                connection.execSQL(
+                    "ALTER TABLE catalog_album_tracks_new RENAME TO catalog_album_tracks",
+                )
+                connection.execSQL(
+                    "CREATE INDEX index_catalog_album_metadata_albumId " +
+                        "ON catalog_album_metadata(albumId)",
+                )
+                connection.execSQL(
+                    "CREATE UNIQUE INDEX index_catalog_album_metadata_source_externalId " +
+                        "ON catalog_album_metadata(source, externalId)",
+                )
+                connection.execSQL(
+                    "CREATE INDEX index_catalog_album_tracks_albumId " +
+                        "ON catalog_album_tracks(albumId)",
+                )
+                connection.execSQL(
+                    "CREATE INDEX index_catalog_album_tracks_sourceTrackId " +
+                        "ON catalog_album_tracks(sourceTrackId)",
+                )
+                connection.execSQL(
+                    """
+                    CREATE TABLE track_instance_albums (
+                        instanceId TEXT NOT NULL,
+                        albumId TEXT NOT NULL,
+                        position INTEGER NOT NULL,
+                        PRIMARY KEY(instanceId, albumId),
+                        FOREIGN KEY(instanceId) REFERENCES track_instances(instanceId)
+                            ON UPDATE NO ACTION ON DELETE CASCADE,
+                        FOREIGN KEY(albumId) REFERENCES catalog_albums(albumId)
+                            ON UPDATE NO ACTION ON DELETE CASCADE
+                    )
+                    """.trimIndent(),
+                )
+                connection.execSQL(
+                    "CREATE INDEX index_track_instance_albums_instanceId " +
+                        "ON track_instance_albums(instanceId)",
+                )
+                connection.execSQL(
+                    "CREATE INDEX index_track_instance_albums_albumId " +
+                        "ON track_instance_albums(albumId)",
+                )
+                connection.execSQL(
+                    """
+                    INSERT OR IGNORE INTO track_instance_albums(instanceId, albumId, position)
+                    SELECT instances.instanceId, metadata.albumId, MIN(relations.albumId)
+                    FROM track_instances instances
+                    INNER JOIN track_albums relations
+                        ON relations.trackId = instances.sourceTrackId
+                    INNER JOIN catalog_album_metadata metadata
+                        ON metadata.source = 'YANDEX'
+                        AND metadata.externalId = CAST(relations.albumId AS TEXT)
+                    WHERE instances.source = 'YANDEX'
+                    GROUP BY instances.instanceId, metadata.albumId
+                    """.trimIndent(),
+                )
+                connection.execSQL("DROP TABLE migration_catalog_album_ids")
+            }
+        }
     }
 }

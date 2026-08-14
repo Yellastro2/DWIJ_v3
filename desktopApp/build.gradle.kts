@@ -33,7 +33,7 @@ val yandexOAuthClientSecret =
     )
 
 val desktopAppVersion =
-    "0.1.4"
+    providers.gradleProperty("version.name").get()
 
 plugins {
     alias(libs.plugins.kotlin.jvm)

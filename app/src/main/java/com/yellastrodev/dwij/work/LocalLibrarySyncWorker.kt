@@ -17,17 +17,22 @@ class LocalLibrarySyncWorker(
     appContext: Context,
     params: WorkerParameters,
 ) : CoroutineWorker(appContext, params) {
-    override suspend fun doWork(): Result = when (
-        val result =
+    override suspend fun doWork(): Result {
+        return when (
+            val result =
             (applicationContext as yApplication)
                 .component
                 .localMusicRepository
                 .synchronize(force = false)
-    ) {
-        is DataResult.Success -> Result.success()
-        is DataResult.Failure -> when (result.error) {
-            DataError.Unauthorized -> Result.success()
-            else -> Result.retry()
+        ) {
+            is DataResult.Success -> {
+                LocalCatalogResolveWorker.enqueue(applicationContext)
+                Result.success()
+            }
+            is DataResult.Failure -> when (result.error) {
+                DataError.Unauthorized -> Result.success()
+                else -> Result.retry()
+            }
         }
     }
 

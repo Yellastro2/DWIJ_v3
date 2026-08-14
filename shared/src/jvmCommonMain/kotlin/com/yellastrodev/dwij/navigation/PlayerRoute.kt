@@ -247,10 +247,16 @@ fun PlayerRoute(
             ?.track
 
     val yandexTrackId = yandexTrack?.id
-    val yandexArtists = remember(yandexTrack) {
-        yandexTrack
-            ?.artists
-            .orEmpty()
+    val catalogYandexArtists by remember(currentTrackId, component.catalogRepository) {
+        currentTrackId
+            ?.let(component.catalogRepository::observeYandexArtistsForSong)
+            ?: flowOf(emptyList<dYaArtist>())
+    }.collectAsState(emptyList())
+    val yandexArtists = remember(yandexTrack, catalogYandexArtists) {
+        buildList {
+            addAll(yandexTrack?.artists.orEmpty())
+            addAll(catalogYandexArtists)
+        }
             .filter { artist -> artist.id != null }
             .distinctBy { artist -> artist.id }
     }

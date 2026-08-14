@@ -1,6 +1,7 @@
 package com.yellastrodev.dwij.data.repo
 
 import com.yellastrodev.dwij.data.dao.LocalLibraryDao
+import com.yellastrodev.dwij.data.dao.CatalogDao
 import com.yellastrodev.dwij.data.dao.SongDao
 import com.yellastrodev.dwij.data.dao.SongMatchDao
 import com.yellastrodev.dwij.data.dao.SongWithInstances
@@ -30,6 +31,7 @@ class SongRepository(
     private val matchDao: SongMatchDao,
     private val yandexTrackDao: dTrackDao,
     private val localTrackDao: LocalLibraryDao,
+    private val catalogDao: CatalogDao,
 ) {
     private val pendingSongIds: Flow<Set<String>> = matchDao
         .observePendingSongIds()
@@ -85,14 +87,23 @@ class SongRepository(
     suspend fun registerYandexTracks(tracks: List<dYaTrack>) {
         tracks.distinctBy(dYaTrack::id).forEach { track ->
             val song = track.toSongEntity()
+            val instance = TrackInstanceEntity(
+                instanceId = yandexInstanceId(track.id),
+                songId = song.songId,
+                source = MusicSource.YANDEX.name,
+                sourceTrackId = track.id,
+            )
             songDao.link(
                 song = song,
-                instance = TrackInstanceEntity(
-                    instanceId = yandexInstanceId(track.id),
-                    songId = song.songId,
-                    source = MusicSource.YANDEX.name,
-                    sourceTrackId = track.id,
-                ),
+                instance = instance,
+            )
+            catalogDao.replaceTrackArtistsFromYandex(
+                instanceId = instance.instanceId,
+                artists = track.artists,
+            )
+            catalogDao.replaceTrackAlbumsFromYandex(
+                instanceId = instance.instanceId,
+                albums = track.albums,
             )
         }
         songDao.deleteOrphanSongs()

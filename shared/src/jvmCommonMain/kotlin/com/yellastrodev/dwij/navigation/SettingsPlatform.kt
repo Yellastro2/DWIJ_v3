@@ -33,6 +33,9 @@ interface SettingsPlatform {
         url: String,
     ): Boolean
 
+    /** Платформа может немедленно возобновить ожидающую сетевую работу после входа. */
+    fun onYandexAuthorizationSaved() = Unit
+
     /** Открывает системный выбор каталога и возвращает выбранный путь. */
     fun chooseMusicDirectory(
         dialogTitle: String,

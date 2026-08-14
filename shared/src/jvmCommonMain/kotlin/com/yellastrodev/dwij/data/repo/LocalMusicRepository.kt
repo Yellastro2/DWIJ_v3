@@ -13,6 +13,7 @@ import com.yellastrodev.dwij.data.entities.LocalPlaylistSummary
 import com.yellastrodev.dwij.data.entities.LocalTrackEntity
 import com.yellastrodev.dwij.data.entities.LocalTracklist
 import com.yellastrodev.dwij.data.entities.Song
+import com.yellastrodev.dwij.data.entities.toScanUpdate
 import com.yellastrodev.dwij.data.source.LocalMediaSource
 import com.yellastrodev.yamusicsdk.YamLogger
 import kotlinx.coroutines.CancellationException
@@ -128,6 +129,9 @@ class LocalMusicRepository(
             val savedGeneration = dao.getState(LocalLibraryDao.LAST_GENERATION_KEY)
             val storedTrackList = dao.getAllTracks()
             val changedBackingFiles = mediaStore.findChangedBackingFiles(storedTrackList)
+            val needsCurrentHashBackfill = storedTrackList.any { track ->
+                track.currentHash.isBlank()
+            }
             if (changedBackingFiles.isNotEmpty()) {
                 logger.debug(
                     TAG,
@@ -137,6 +141,7 @@ class LocalMusicRepository(
             }
             if (
                 !force &&
+                !needsCurrentHashBackfill &&
                 changedBackingFiles.isEmpty() &&
                 currentGeneration == savedGeneration &&
                 !currentGeneration.contains(":-1")
@@ -149,12 +154,15 @@ class LocalMusicRepository(
             val scannedTracks = snapshot.tracks
                 .map { scanned ->
                     scanned.copy(
-                        isHidden = storedTracks[scanned.instanceId]?.isHidden ?: false,
+                        currentHash = localCatalogInputHash(
+                            title = scanned.title,
+                            artist = scanned.artist,
+                        ),
                     )
                 }
                 .associateBy(LocalTrackEntity::instanceId)
             val changedTracks = scannedTracks.values.filter { track ->
-                storedTracks[track.instanceId] != track
+                storedTracks[track.instanceId]?.toScanUpdate() != track.toScanUpdate()
             }
             val removedTrackIds = storedTracks.keys.minus(scannedTracks.keys).toList()
             val dwijExternalUris = dao.getPlaylistsByOrigin()

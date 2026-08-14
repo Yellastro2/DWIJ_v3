@@ -559,6 +559,7 @@ fun SettingsRoute(
                             userId,
                     ),
                 )
+            platform.onYandexAuthorizationSaved()
 
             logger.info(
                 TAG,

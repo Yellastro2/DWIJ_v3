@@ -17,6 +17,7 @@ import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleEventObserver
 import androidx.lifecycle.compose.LocalLifecycleOwner
 import com.yellastrodev.dwij.BuildConfig
+import com.yellastrodev.dwij.work.LocalCatalogResolveWorker
 
 /**
  * Android-внешние действия экрана настроек.
@@ -96,6 +97,10 @@ private class AndroidSettingsPlatform(
 
             false
         }
+
+    override fun onYandexAuthorizationSaved() {
+        LocalCatalogResolveWorker.enqueue(context)
+    }
 
     @Composable
     override fun ResumeEffect(

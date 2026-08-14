@@ -13,10 +13,17 @@ class SearchRemoteSource(
 ) {
     /** Запрашивает одновременно все поддерживаемые API категории результатов. */
     suspend fun searchAll(query: String): DataResult<SearchResponse> =
+        search(query = query, type = SearchType.ALL)
+
+    /** Запрашивает одну категорию, чтобы фоновые потребители не загружали лишние разделы. */
+    suspend fun search(
+        query: String,
+        type: SearchType,
+    ): DataResult<SearchResponse> =
         when (
             val result = client.search(
                 text = query,
-                type = SearchType.ALL,
+                type = type,
             )
         ) {
             is YamResult.Success -> DataResult.Success(result.value)

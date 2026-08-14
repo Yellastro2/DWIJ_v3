@@ -41,6 +41,58 @@ data class CatalogArtistMetadataEntity(
     val refreshedAt: Long,
 )
 
+/** Связь артиста каталога с конкретным source-инстансом песни. */
+@Entity(
+    tableName = "track_instance_artists",
+    primaryKeys = ["instanceId", "artistId"],
+    foreignKeys = [
+        ForeignKey(
+            entity = TrackInstanceEntity::class,
+            parentColumns = ["instanceId"],
+            childColumns = ["instanceId"],
+            onDelete = ForeignKey.CASCADE,
+        ),
+        ForeignKey(
+            entity = CatalogArtistEntity::class,
+            parentColumns = ["artistId"],
+            childColumns = ["artistId"],
+            onDelete = ForeignKey.CASCADE,
+        ),
+    ],
+    indices = [Index("instanceId"), Index("artistId")],
+)
+data class TrackInstanceArtistEntity(
+    val instanceId: String,
+    val artistId: String,
+    val position: Int,
+)
+
+/** Связь альбома каталога с конкретным source-инстансом песни. */
+@Entity(
+    tableName = "track_instance_albums",
+    primaryKeys = ["instanceId", "albumId"],
+    foreignKeys = [
+        ForeignKey(
+            entity = TrackInstanceEntity::class,
+            parentColumns = ["instanceId"],
+            childColumns = ["instanceId"],
+            onDelete = ForeignKey.CASCADE,
+        ),
+        ForeignKey(
+            entity = CatalogAlbumEntity::class,
+            parentColumns = ["albumId"],
+            childColumns = ["albumId"],
+            onDelete = ForeignKey.CASCADE,
+        ),
+    ],
+    indices = [Index("instanceId"), Index("albumId")],
+)
+data class TrackInstanceAlbumEntity(
+    val instanceId: String,
+    val albumId: String,
+    val position: Int,
+)
+
 /** Канонический альбом, который позднее может получить несколько source-привязок. */
 @Entity(tableName = "catalog_albums", primaryKeys = ["albumId"])
 data class CatalogAlbumEntity(

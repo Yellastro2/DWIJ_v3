@@ -43,6 +43,62 @@ data class LocalTrackEntity(
     val absolutePath: String?,
     /** Пользователь скрыл запись в Движе; MediaStore и сам файл не изменяются. */
     val isHidden: Boolean = false,
+    /** Стабильный хеш локальных полей, от которых зависит поиск внешней метадаты. */
+    val currentHash: String = "",
+    /** [currentHash], для которого онлайн-резолвер полностью завершил работу. */
+    val onlineSyncedHash: String? = null,
+    /** Версия алгоритма, успешно обработавшего [onlineSyncedHash]. */
+    val onlineResolverVersion: Int = 0,
+)
+
+/**
+ * Поля `local_tracks`, которыми владеет импорт MediaStore.
+ *
+ * Partial-update этой моделью намеренно не затрагивает пользовательскую видимость и состояние
+ * онлайн-резолвера, даже если сканер повторно импортирует существующий файл.
+ */
+data class LocalTrackScanUpdate(
+    val instanceId: String,
+    val mediaStoreId: Long,
+    val volumeName: String,
+    val contentUri: String,
+    val displayName: String,
+    val title: String,
+    val artist: String?,
+    val album: String?,
+    val albumId: Long?,
+    val durationMs: Long,
+    val trackNumber: Int?,
+    val discNumber: Int?,
+    val year: Int?,
+    val mimeType: String?,
+    val sizeBytes: Long?,
+    val dateModifiedSeconds: Long,
+    val relativePath: String?,
+    val absolutePath: String?,
+    val currentHash: String,
+)
+
+fun LocalTrackEntity.toScanUpdate(): LocalTrackScanUpdate = LocalTrackScanUpdate(
+    instanceId = instanceId,
+    mediaStoreId = mediaStoreId,
+    volumeName = volumeName,
+    contentUri = contentUri,
+    displayName = displayName,
+    title = title,
+    artist = artist,
+    album = album,
+    albumId = albumId,
+    durationMs = durationMs,
+    trackNumber = trackNumber,
+    discNumber = discNumber,
+    year = year,
+    mimeType = mimeType,
+    sizeBytes = sizeBytes,
+    dateModifiedSeconds = dateModifiedSeconds,
+    relativePath = relativePath,
+    absolutePath = absolutePath,
+    currentHash = currentHash,
 )
 
 /** Плейлист из Движа, старого MediaStore API или M3U-файла. */

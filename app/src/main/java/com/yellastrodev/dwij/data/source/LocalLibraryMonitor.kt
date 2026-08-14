@@ -7,6 +7,7 @@ import android.os.Handler
 import android.os.Looper
 import android.provider.MediaStore
 import android.util.Log
+import com.yellastrodev.dwij.data.DataResult
 import com.yellastrodev.dwij.data.repo.LocalMusicRepository
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Job
@@ -17,6 +18,7 @@ import kotlinx.coroutines.launch
 class LocalLibraryMonitor(
     private val repository: LocalMusicRepository,
     private val scope: CoroutineScope,
+    private val onSynchronized: () -> Unit,
 ) : ContentObserver(Handler(Looper.getMainLooper())) {
     private var pendingSync: Job? = null
 
@@ -25,7 +27,9 @@ class LocalLibraryMonitor(
         pendingSync = scope.launch {
             delay(DEBOUNCE_MS)
             Log.d(TAG, "[onChange] MediaStore изменился: uri=$uri")
-            repository.synchronize(force = true)
+            if (repository.synchronize(force = true) is DataResult.Success) {
+                onSynchronized()
+            }
         }
     }
 

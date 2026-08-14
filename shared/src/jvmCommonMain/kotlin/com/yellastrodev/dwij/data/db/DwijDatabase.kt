@@ -20,6 +20,8 @@ import com.yellastrodev.dwij.data.db.DatabaseMigrations.Companion.MIGRATION_7_8
 import com.yellastrodev.dwij.data.db.DatabaseMigrations.Companion.MIGRATION_8_9
 import com.yellastrodev.dwij.data.db.DatabaseMigrations.Companion.MIGRATION_9_10
 import com.yellastrodev.dwij.data.db.DatabaseMigrations.Companion.MIGRATION_10_11
+import com.yellastrodev.dwij.data.db.DatabaseMigrations.Companion.MIGRATION_11_12
+import com.yellastrodev.dwij.data.db.DatabaseMigrations.Companion.MIGRATION_12_13
 import com.yellastrodev.dwij.data.entities.CatalogAlbumEntity
 import com.yellastrodev.dwij.data.entities.CatalogAlbumMetadataEntity
 import com.yellastrodev.dwij.data.entities.CatalogAlbumTrackEntity
@@ -32,6 +34,8 @@ import com.yellastrodev.dwij.data.entities.LocalTrackEntity
 import com.yellastrodev.dwij.data.entities.SongEntity
 import com.yellastrodev.dwij.data.entities.SongMatchCandidateEntity
 import com.yellastrodev.dwij.data.entities.TrackInstanceEntity
+import com.yellastrodev.dwij.data.entities.TrackInstanceArtistEntity
+import com.yellastrodev.dwij.data.entities.TrackInstanceAlbumEntity
 import com.yellastrodev.dwij.data.entities.dPlaylistTrack
 import com.yellastrodev.dwij.data.entities.dTrackAlbumCrossRef
 import com.yellastrodev.dwij.data.entities.dTrackArtistCrossRef
@@ -59,11 +63,13 @@ import kotlinx.coroutines.Dispatchers
         SongMatchCandidateEntity::class,
         CatalogArtistEntity::class,
         CatalogArtistMetadataEntity::class,
+        TrackInstanceArtistEntity::class,
+        TrackInstanceAlbumEntity::class,
         CatalogAlbumEntity::class,
         CatalogAlbumMetadataEntity::class,
         CatalogAlbumTrackEntity::class,
     ],
-    version = 11,
+    version = 13,
 )
 abstract class DwijDatabase : RoomDatabase() {
     abstract fun catalogDao(): CatalogDao
@@ -89,6 +95,8 @@ fun buildDwijDatabase(
             MIGRATION_8_9,
             MIGRATION_9_10,
             MIGRATION_10_11,
+            MIGRATION_11_12,
+            MIGRATION_12_13,
         )
         .build()
 }

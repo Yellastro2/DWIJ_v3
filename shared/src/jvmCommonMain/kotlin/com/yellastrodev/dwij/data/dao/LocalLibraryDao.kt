@@ -1,8 +1,11 @@
 package com.yellastrodev.dwij.data.dao
 
 import androidx.room.Dao
+import androidx.room.Insert
+import androidx.room.OnConflictStrategy
 import androidx.room.Query
 import androidx.room.Transaction
+import androidx.room.Update
 import androidx.room.Upsert
 import com.yellastrodev.dwij.data.entities.LocalLibraryStateEntity
 import com.yellastrodev.dwij.data.entities.LocalPlaylistEntity
@@ -10,6 +13,8 @@ import com.yellastrodev.dwij.data.entities.LocalPlaylistEntryEntity
 import com.yellastrodev.dwij.data.entities.LocalPlaylistOrigin
 import com.yellastrodev.dwij.data.entities.LocalPlaylistSummary
 import com.yellastrodev.dwij.data.entities.LocalTrackEntity
+import com.yellastrodev.dwij.data.entities.LocalTrackScanUpdate
+import com.yellastrodev.dwij.data.entities.toScanUpdate
 import kotlinx.coroutines.flow.Flow
 import kotlin.collections.forEach
 
@@ -114,14 +119,53 @@ abstract class LocalLibraryDao {
     @Query("SELECT * FROM local_tracks WHERE instanceId IN (:trackIds)")
     abstract suspend fun getTracks(trackIds: List<String>): List<LocalTrackEntity>
 
+    @Query("SELECT * FROM local_tracks WHERE instanceId = :instanceId LIMIT 1")
+    abstract suspend fun getTrack(instanceId: String): LocalTrackEntity?
+
     @Query("UPDATE local_tracks SET isHidden = :isHidden WHERE instanceId = :instanceId")
     abstract suspend fun setTrackHidden(instanceId: String, isHidden: Boolean): Int
 
     @Query("UPDATE local_tracks SET isHidden = :isHidden WHERE instanceId IN (:instanceIds)")
     abstract suspend fun setTracksHidden(instanceIds: List<String>, isHidden: Boolean): Int
 
-    @Upsert
-    abstract suspend fun upsertTracks(tracks: List<LocalTrackEntity>)
+    @Insert(onConflict = OnConflictStrategy.IGNORE)
+    protected abstract suspend fun insertScannedTracks(tracks: List<LocalTrackEntity>)
+
+    @Update(entity = LocalTrackEntity::class)
+    protected abstract suspend fun updateScannedTracks(tracks: List<LocalTrackScanUpdate>)
+
+    /**
+     * Вставляет новые строки целиком, а у существующих обновляет только поля локального сканера.
+     * `isHidden`, `onlineSyncedHash` и `onlineResolverVersion` этот путь физически не записывает.
+     */
+    @Transaction
+    open suspend fun upsertScannedTracks(tracks: List<LocalTrackEntity>) {
+        if (tracks.isEmpty()) return
+        insertScannedTracks(tracks)
+        updateScannedTracks(tracks.map(LocalTrackEntity::toScanUpdate))
+    }
+
+    @Query(
+        "SELECT * FROM local_tracks WHERE currentHash != '' AND (" +
+            "onlineSyncedHash IS NULL OR onlineSyncedHash != currentHash OR " +
+            "onlineResolverVersion != :resolverVersion) " +
+            "ORDER BY instanceId",
+    )
+    abstract suspend fun getTracksPendingOnlineResolution(
+        resolverVersion: Int,
+    ): List<LocalTrackEntity>
+
+    /** Ставит онлайн-отметку, только если локальные входные данные не изменились во время работы. */
+    @Query(
+        "UPDATE local_tracks SET onlineSyncedHash = :processedHash, " +
+            "onlineResolverVersion = :resolverVersion " +
+            "WHERE instanceId = :instanceId AND currentHash = :processedHash",
+    )
+    abstract suspend fun markOnlineResolutionCompleted(
+        instanceId: String,
+        processedHash: String,
+        resolverVersion: Int,
+    ): Int
 
     @Query("DELETE FROM local_tracks")
     abstract suspend fun deleteAllTracks()
@@ -167,7 +211,7 @@ abstract class LocalLibraryDao {
         entries: List<LocalPlaylistEntryEntity>,
         generation: String,
     ) {
-        if (tracksToUpsert.isNotEmpty()) upsertTracks(tracksToUpsert)
+        if (tracksToUpsert.isNotEmpty()) upsertScannedTracks(tracksToUpsert)
         if (trackIdsToDelete.isNotEmpty()) deleteTracks(trackIdsToDelete)
 
         if (playlists.isEmpty()) {

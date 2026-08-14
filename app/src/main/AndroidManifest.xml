@@ -47,6 +47,11 @@
             android:exported="false"
             android:foregroundServiceType="dataSync" />
 
+        <service
+            android:name="androidx.work.impl.foreground.SystemForegroundService"
+            android:foregroundServiceType="dataSync"
+            tools:node="merge" />
+
     <activity
         android:name=".activities.MainActivity"
         android:exported="true"

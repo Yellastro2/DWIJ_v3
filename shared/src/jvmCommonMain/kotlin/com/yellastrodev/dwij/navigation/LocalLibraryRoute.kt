@@ -34,7 +34,7 @@ import com.yellastrodev.dwij.resources.local_track_hide_confirm_message
 import com.yellastrodev.dwij.resources.local_track_hide_confirm_title
 import com.yellastrodev.dwij.resources.playlists_cancel
 import com.yellastrodev.dwij.ui.LocalLibraryScreen
-import com.yellastrodev.dwij.ui.LocalPlaylistObjectScreen
+import com.yellastrodev.dwij.ui.LocalTrackCollectionObjectScreen
 import kotlinx.coroutines.flow.firstOrNull
 import org.jetbrains.compose.resources.stringResource
 
@@ -148,7 +148,7 @@ fun LocalLibraryRoute(
             val playlistTitle = state.playlist?.name
                 ?: stringResource(Res.string.local_playlist_title)
 
-            LocalPlaylistObjectScreen(
+            LocalTrackCollectionObjectScreen(
                 title = playlistTitle,
                 tracks = loadedTracks,
                 onBackClick = onBackClick,
@@ -181,12 +181,16 @@ fun LocalLibraryRoute(
             val tracks = state.tracks
             val loadedTracks = tracks.orEmpty()
 
-            LocalLibraryScreen(
+            LocalTrackCollectionObjectScreen(
                 title = allTracksTitle,
-                playlists = null,
                 tracks = loadedTracks,
                 onBackClick = onBackClick,
-                onPlaylistClick = {},
+                onPlayClick = {
+                    localLibraryModel.play(
+                        index = 0,
+                        tracklistName = allTracksTitle,
+                    )
+                },
                 loadTrackCover = ::loadTrackCover,
                 onTrackClick = { index, _ ->
                     localLibraryModel.play(

@@ -11,6 +11,8 @@ import com.yellastrodev.dwij.data.db.DwijDatabase
 import com.yellastrodev.dwij.data.entities.dYaPlaylist
 import com.yellastrodev.dwij.data.repo.CoverRepository
 import com.yellastrodev.dwij.data.repo.CatalogRepository
+import com.yellastrodev.dwij.data.repo.LocalCatalogResolver
+import com.yellastrodev.dwij.data.repo.LocalCatalogSynchronizer
 import com.yellastrodev.dwij.data.repo.LocalMusicRepository
 import com.yellastrodev.dwij.data.repo.PlayerRepository
 import com.yellastrodev.dwij.data.repo.PlaylistRepository
@@ -96,6 +98,7 @@ class DwijComponent private constructor(
             matchDao = db.songMatchDao(),
             yandexTrackDao = db.dTrackDao(),
             localTrackDao = db.localLibraryDao(),
+            catalogDao = db.catalogDao(),
         )
     }
 
@@ -254,6 +257,16 @@ class DwijComponent private constructor(
                     yamClient,
                 ),
             logger = logger,
+        )
+    }
+
+    /** Готовый pipeline локального online-resolve; планировщик к нему пока не подключён. */
+    val localCatalogSynchronizer: LocalCatalogSynchronizer by lazy {
+        LocalCatalogSynchronizer(
+            resolver = LocalCatalogResolver(searchRepository),
+            database = db,
+            localDao = db.localLibraryDao(),
+            catalogDao = db.catalogDao(),
         )
     }
 

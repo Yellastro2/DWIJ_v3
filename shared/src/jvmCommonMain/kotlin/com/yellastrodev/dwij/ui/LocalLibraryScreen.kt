@@ -85,13 +85,13 @@ fun LocalLibraryScreen(
 }
 
 /**
- * Показывает локальный плейлист через общую шапку музыкального объекта.
+ * Показывает локальную коллекцию треков через общий экран музыкального объекта.
  *
- * У локального плейлиста пока нет собственной обложки, поэтому [ObjectScreen] получает `null`
+ * У локальной коллекции пока нет собственной обложки, поэтому [ObjectScreen] получает `null`
  * и рисует штатную фирменную заглушку. Очередь и загрузка миниатюр остаются локальными.
  */
 @Composable
-fun LocalPlaylistObjectScreen(
+fun LocalTrackCollectionObjectScreen(
     title: String,
     tracks: List<Song>,
     onBackClick: () -> Unit,
