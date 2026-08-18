@@ -57,6 +57,11 @@
     <string name="settings_music_directories_sync_failed">Папки сохранены, но обновить медиатеку не удалось</string>
     <string name="settings_music_directories_save_failed">Не удалось сохранить список папок</string>
     <string name="settings_music_directory_picker_title">Выберите папку с музыкой</string>
+    <string name="settings_logs_title">Диагностика</string>
+    <string name="settings_logs_description">Две последние сессии приложения в ZIP-архиве</string>
+    <string name="settings_logs_share">Отправить</string>
+    <string name="settings_logs_chooser_title">Отправить журналы приложения</string>
+    <string name="settings_logs_share_error">Не удалось подготовить или отправить журналы</string>
     <string name="home_playlists">Плейлисты</string>
     <string name="home_tracks">Треки</string>
     <string name="track_list_all_title">Все треки</string>

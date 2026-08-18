@@ -76,6 +76,8 @@ fun SettingsScreen(
     onLocalStorageClick: () -> Unit,
     onProxyClick: () -> Unit,
     onMusicDirectoriesClick: () -> Unit,
+    onShareLogsClick: (() -> Unit)?,
+    isSharingLogs: Boolean,
     modifier: Modifier = Modifier,
 ) {
     val snackbarHostState = remember { SnackbarHostState() }
@@ -141,6 +143,14 @@ fun SettingsScreen(
                             onMusicDirectoriesClick,
                     )
                 }
+                onShareLogsClick?.let { onClick ->
+                    SettingsLogsCard(
+                        isSharing =
+                            isSharingLogs,
+                        onClick =
+                            onClick,
+                    )
+                }
             }
             Text(
                 text =
@@ -169,6 +179,81 @@ fun SettingsScreen(
                 .align(Alignment.BottomCenter)
                 .padding(horizontal = 14.dp, vertical = 12.dp),
         )
+    }
+}
+
+/** Показывает Android-действие формирования и отправки диагностического архива. */
+@Composable
+private fun SettingsLogsCard(
+    isSharing: Boolean,
+    onClick: () -> Unit,
+) {
+    SettingsTextureCard(
+        textureRes =
+            Res.drawable.bg_focus_texture,
+        accent =
+            DwijColors.CyanBright,
+        modifier =
+            Modifier.height(
+                92.dp,
+            ),
+    ) {
+        Row(
+            verticalAlignment =
+                Alignment.CenterVertically,
+            modifier =
+                Modifier
+                    .fillMaxSize()
+                    .padding(
+                        horizontal = 18.dp,
+                    ),
+        ) {
+            Column(
+                modifier =
+                    Modifier.weight(1f),
+            ) {
+                Text(
+                    text =
+                        stringResource(
+                            Res.string.settings_logs_title,
+                        ),
+                    color =
+                        DwijColors.White,
+                    fontSize =
+                        18.sp,
+                    fontWeight =
+                        FontWeight.Bold,
+                )
+                Text(
+                    text =
+                        stringResource(
+                            Res.string.settings_logs_description,
+                        ),
+                    color =
+                        DwijColors.SecondaryText,
+                    fontSize =
+                        12.sp,
+                    modifier =
+                        Modifier.padding(
+                            top = 5.dp,
+                        ),
+                )
+            }
+            SettingsActionButton(
+                text =
+                    stringResource(
+                        Res.string.settings_logs_share,
+                    ),
+                enabled =
+                    !isSharing,
+                isLoading =
+                    isSharing,
+                accent =
+                    DwijColors.CyanBright,
+                onClick =
+                    onClick,
+            )
+        }
     }
 }
 
@@ -717,5 +802,7 @@ private fun SettingsScreenPreview() {
         onLocalStorageClick = {},
         onProxyClick = {},
         onMusicDirectoriesClick = {},
+        onShareLogsClick = {},
+        isSharingLogs = false,
     )
 }

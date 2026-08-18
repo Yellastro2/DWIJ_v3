@@ -13,10 +13,12 @@ import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.ui.platform.LocalContext
+import androidx.core.content.FileProvider
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleEventObserver
 import androidx.lifecycle.compose.LocalLifecycleOwner
 import com.yellastrodev.dwij.BuildConfig
+import com.yellastrodev.dwij.util.AppSessionLogStore
 import com.yellastrodev.dwij.work.LocalCatalogResolveWorker
 
 /**
@@ -50,6 +52,9 @@ private class AndroidSettingsPlatform(
     override val oauthClientSecret: String
         get() =
             BuildConfig.YANDEX_OAUTH_CLIENT_SECRET
+
+    override val canShareLogs: Boolean
+        get() = true
 
     override fun availableCacheBytes(): Long =
         StatFs(
@@ -97,6 +102,59 @@ private class AndroidSettingsPlatform(
 
             false
         }
+
+    /** Создаёт ZIP последних сессий и передаёт его выбранному приложению на чтение. */
+    override suspend fun shareLogs(
+        chooserTitle: String,
+    ) {
+        Log.i(
+            TAG,
+            "[shareLogs] Готовим архив журналов приложения для отправки",
+        )
+
+        val archive =
+            AppSessionLogStore.createShareArchive(
+                context,
+            )
+
+        val archiveUri =
+            FileProvider.getUriForFile(
+                context,
+                "${BuildConfig.APPLICATION_ID}.dwij-files",
+                archive,
+            )
+
+        val shareIntent =
+            Intent(
+                Intent.ACTION_SEND,
+            )
+                .setType(
+                    "application/zip",
+                )
+                .putExtra(
+                    Intent.EXTRA_STREAM,
+                    archiveUri,
+                )
+                .addFlags(
+                    Intent.FLAG_GRANT_READ_URI_PERMISSION,
+                )
+
+        shareIntent.clipData =
+            ClipData.newUri(
+                context.contentResolver,
+                archive.name,
+                archiveUri,
+            )
+
+        context.startActivity(
+            Intent.createChooser(
+                shareIntent,
+                chooserTitle,
+            ).addFlags(
+                Intent.FLAG_ACTIVITY_NEW_TASK,
+            ),
+        )
+    }
 
     override fun onYandexAuthorizationSaved() {
         LocalCatalogResolveWorker.enqueue(context)

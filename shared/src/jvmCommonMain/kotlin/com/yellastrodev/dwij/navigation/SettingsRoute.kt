@@ -146,6 +146,10 @@ fun SettingsRoute(
         mutableStateOf(false)
     }
 
+    var isSharingLogs by remember {
+        mutableStateOf(false)
+    }
+
     var musicDirectories by remember(platform) {
         mutableStateOf(
             platform.musicDirectories,
@@ -619,6 +623,7 @@ fun SettingsRoute(
         }
     }
 
+    /** Запускает OAuth Device Flow и закрывает его транспорт после получения результата. */
     fun startYandexAuth() {
         if (
             authJob?.isActive ==
@@ -647,11 +652,13 @@ fun SettingsRoute(
                                     component
                                         .yandexProxySettings
                                         .activeConfigOrNull(),
-                            ).authorize(
-                                onCode = { code ->
-                                    deviceCode = code
-                                },
-                            )
+                            ).use { auth ->
+                                auth.authorize(
+                                    onCode = { code ->
+                                        deviceCode = code
+                                    },
+                                )
+                            }
                     ) {
                         is DeviceAuthResult.Success -> {
                             when (
@@ -775,6 +782,16 @@ fun SettingsRoute(
             Res.string.settings_music_directories_duplicate,
         )
 
+    val logsChooserTitle =
+        stringResource(
+            Res.string.settings_logs_chooser_title,
+        )
+
+    val logsShareErrorMessage =
+        stringResource(
+            Res.string.settings_logs_share_error,
+        )
+
     Box(
         modifier =
             modifier.fillMaxSize(),
@@ -863,6 +880,40 @@ fun SettingsRoute(
                 showMusicDirectoriesDialog =
                     true
             },
+            onShareLogsClick =
+                if (platform.canShareLogs) {
+                    {
+                        if (!isSharingLogs) {
+                            coroutineScope.launch {
+                                isSharingLogs = true
+                                try {
+                                    platform.shareLogs(
+                                        logsChooserTitle,
+                                    )
+                                } catch (
+                                    error: CancellationException,
+                                ) {
+                                    throw error
+                                } catch (error: Exception) {
+                                    logger.error(
+                                        TAG,
+                                        "[shareLogs] Не удалось подготовить или отправить журналы",
+                                        error,
+                                    )
+                                    showMessage(
+                                        logsShareErrorMessage,
+                                    )
+                                } finally {
+                                    isSharingLogs = false
+                                }
+                            }
+                        }
+                    }
+                } else {
+                    null
+                },
+            isSharingLogs =
+                isSharingLogs,
             modifier =
                 Modifier.fillMaxSize(),
         )

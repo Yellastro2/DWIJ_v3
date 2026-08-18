@@ -18,6 +18,10 @@ interface SettingsPlatform {
 
     val oauthClientSecret: String
 
+    /** Показывает действие отправки журналов только на поддерживаемых платформах. */
+    val canShareLogs: Boolean
+        get() = false
+
     /** Desktop-only список каталогов; null скрывает управление на платформе. */
     val musicDirectories: List<String>?
         get() = null
@@ -32,6 +36,11 @@ interface SettingsPlatform {
     fun openUrl(
         url: String,
     ): Boolean
+
+    /** Создаёт диагностический архив и открывает системное меню отправки. */
+    suspend fun shareLogs(
+        chooserTitle: String,
+    ) = Unit
 
     /** Платформа может немедленно возобновить ожидающую сетевую работу после входа. */
     fun onYandexAuthorizationSaved() = Unit

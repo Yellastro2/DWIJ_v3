@@ -4,6 +4,10 @@ import android.app.Application
 
 import com.yellastrodev.dwij.di.DwijComponent
 import com.yellastrodev.dwij.playback.AndroidPlayerServiceRegistry
+import com.yellastrodev.dwij.util.AppSessionLogStore
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.SupervisorJob
 
 /**
  * Тонкая Android-точка сборки приложения.
@@ -12,6 +16,12 @@ import com.yellastrodev.dwij.playback.AndroidPlayerServiceRegistry
  * находятся в shared. Здесь остаётся только создание Android-адаптеров.
  */
 class yApplication : Application() {
+
+    private val applicationScope =
+        CoroutineScope(
+            SupervisorJob() +
+                Dispatchers.IO,
+        )
 
     val playerServiceRegistry =
         AndroidPlayerServiceRegistry()
@@ -24,8 +34,13 @@ class yApplication : Application() {
         ).create()
     }
 
+    /** Запускает журнал процесса до инициализации общего графа приложения. */
     override fun onCreate() {
         super.onCreate()
+        AppSessionLogStore.start(
+            this,
+            applicationScope,
+        )
         component.start()
     }
 }

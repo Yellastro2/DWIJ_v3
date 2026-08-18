@@ -3,4 +3,7 @@
     <exclude
         domain="sharedpref"
         path="dwij_yandex_session.xml" />
+    <exclude
+        domain="file"
+        path="app-session-logs/" />
 </full-backup-content>
