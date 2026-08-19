@@ -145,6 +145,37 @@ class SongRepository(
         }
     }
 
+    /**
+     * Сохраняет найденное ЯМ-зеркало и объединяет его с конкретным локальным инстансом.
+     * Этот путь вызывается только для точного результата локального track-resolver-а.
+     */
+    suspend fun linkResolvedLocalTrackToYandex(
+        localInstanceId: String,
+        yandexTrack: dYaTrack,
+    ): String {
+        val localInstance = requireNotNull(songDao.getInstance(localInstanceId)) {
+            "Локальный инстанс $localInstanceId не зарегистрирован"
+        }
+        require(localInstance.source == MusicSource.LOCAL.name) {
+            "Инстанс $localInstanceId не является локальным"
+        }
+
+        yandexTrackDao.insertAll(listOf(yandexTrack))
+        registerYandexTracks(listOf(yandexTrack))
+
+        val resolvedYandexInstanceId = yandexInstanceId(yandexTrack.id)
+        val yandexInstance = requireNotNull(songDao.getInstance(resolvedYandexInstanceId)) {
+            "ЯМ-инстанс $resolvedYandexInstanceId не зарегистрирован"
+        }
+        val mergedSongId = songDao.mergeInstances(
+            listOf(localInstance.instanceId, yandexInstance.instanceId),
+        )
+        songDao.refreshLocalOnlyInLibraryForYandexTracks(
+            sourceTrackIds = listOf(yandexTrack.id),
+        )
+        return mergedSongId
+    }
+
     suspend fun removeLocalTracks(trackIds: List<String>) {
         if (trackIds.isNotEmpty()) {
             songDao.deleteInstances(MusicSource.LOCAL.name, trackIds)
@@ -204,6 +235,9 @@ class SongRepository(
         source: MusicSource,
         sourceIds: List<String>,
     ): List<Song> {
+        if (source == MusicSource.YANDEX) {
+            songDao.refreshLocalOnlyInLibraryForYandexTracks(sourceIds.distinct())
+        }
         val links = songDao.getInstances(source.name, sourceIds)
             .associateBy(TrackInstanceEntity::sourceTrackId)
         val relations = songDao.getSongs(links.values.map(TrackInstanceEntity::songId).distinct())
@@ -351,6 +385,7 @@ class SongRepository(
         instances = instances,
         preferredInstanceId = preferredInstanceId,
         hasPendingMatchCandidate = hasPendingMatchCandidate,
+        isLocalOnlyInLibrary = isLocalOnlyInLibrary,
         isLiked = isLiked,
     )
 

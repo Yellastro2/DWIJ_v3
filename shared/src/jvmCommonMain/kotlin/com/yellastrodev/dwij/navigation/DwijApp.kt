@@ -219,6 +219,24 @@ fun DwijApp(
                             DwijDestination.PLAYLISTS,
                         )
                     },
+                    onOpenYandexPlaylist = { playlistId ->
+                        navController.navigate(
+                            DwijDestination.objectRoute(
+                                type = DwijDestination.OBJECT_TYPE_PLAYLIST,
+                                value = playlistId,
+                            ),
+                        )
+                    },
+                    onOpenArtists = {
+                        navController.navigate(
+                            DwijDestination.CATALOG_ARTISTS,
+                        )
+                    },
+                    onOpenAlbums = {
+                        navController.navigate(
+                            DwijDestination.CATALOG_ALBUMS,
+                        )
+                    },
                     onOpenLocalTracks = {
                         navController.navigate(
                             DwijDestination.localLibraryRoute(
@@ -275,6 +293,42 @@ fun DwijApp(
                     },
                     onBackClick = {
                         navController.navigateUp()
+                    },
+                )
+            }
+
+            composable(DwijDestination.CATALOG_ARTISTS) {
+                CatalogEntityListRoute(
+                    component = component,
+                    kind = CatalogEntityListKind.Artists,
+                    onBackClick = {
+                        navController.navigateUp()
+                    },
+                    onOpenCatalogObject = { type, externalId ->
+                        navController.navigate(
+                            DwijDestination.objectRoute(
+                                type = type,
+                                value = externalId.toString(),
+                            ),
+                        )
+                    },
+                )
+            }
+
+            composable(DwijDestination.CATALOG_ALBUMS) {
+                CatalogEntityListRoute(
+                    component = component,
+                    kind = CatalogEntityListKind.Albums,
+                    onBackClick = {
+                        navController.navigateUp()
+                    },
+                    onOpenCatalogObject = { type, externalId ->
+                        navController.navigate(
+                            DwijDestination.objectRoute(
+                                type = type,
+                                value = externalId.toString(),
+                            ),
+                        )
                     },
                 )
             }
@@ -346,6 +400,8 @@ fun DwijApp(
                     },
                     onRequestLocalTrackDownload =
                         localTrackDownloadRequester::request,
+                    onRequestLocalTrackDownloads =
+                        localTrackDownloadRequester::requestAll,
                     onShareYandexUrl = shareRequester::share,
                 )
             }

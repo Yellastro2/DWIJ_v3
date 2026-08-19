@@ -140,6 +140,35 @@ abstract class SongDao {
     @Query("UPDATE songs SET matchResolverVersion = :resolverVersion WHERE songId = :songId")
     abstract suspend fun markResolverVersion(songId: String, resolverVersion: Int)
 
+    /**
+     * Актуализирует local-only по фактическому составу фонотеки для заданных ЯМ-треков.
+     * Наличие ЯМ-инстанса само по себе не означает присутствие трека в ЯМ-фонотеке:
+     * это подтверждает только строка в одном из сохранённых playlist_tracks.
+     */
+    @Query(
+        "UPDATE songs SET isLocalOnlyInLibrary = CASE WHEN " +
+            "EXISTS (" +
+                "SELECT 1 FROM track_instances local_instance " +
+                "INNER JOIN local_tracks local_track " +
+                "ON local_track.instanceId = local_instance.sourceTrackId " +
+                "WHERE local_instance.songId = songs.songId " +
+                "AND local_instance.source = 'LOCAL' AND local_track.isHidden = 0" +
+            ") AND NOT EXISTS (" +
+                "SELECT 1 FROM track_instances yandex_instance " +
+                "INNER JOIN playlist_tracks playlist_track " +
+                "ON playlist_track.trackId = yandex_instance.sourceTrackId " +
+                "WHERE yandex_instance.songId = songs.songId " +
+                "AND yandex_instance.source = 'YANDEX'" +
+            ") THEN 1 ELSE 0 END " +
+            "WHERE songId IN (" +
+                "SELECT songId FROM track_instances " +
+                "WHERE source = 'YANDEX' AND sourceTrackId IN (:sourceTrackIds)" +
+            ")"
+    )
+    abstract suspend fun refreshLocalOnlyInLibraryForYandexTracks(
+        sourceTrackIds: List<String>,
+    )
+
     @Query(
         "UPDATE songs SET matchResolverVersion = :resolverVersion " +
             "WHERE songId = :songId AND matchKey = :expectedMatchKey"

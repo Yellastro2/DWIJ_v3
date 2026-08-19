@@ -14,6 +14,7 @@ import com.yellastrodev.dwij.data.entities.CatalogArtistMetadataEntity
 import com.yellastrodev.dwij.data.entities.LocalTrackEntity
 import com.yellastrodev.dwij.data.entities.dYaAlbum
 import com.yellastrodev.dwij.data.entities.dYaArtist
+import com.yellastrodev.dwij.data.entities.toEntity
 import com.yellastrodev.yamusicsdk.entities.YaAlbum
 import com.yellastrodev.yamusicsdk.entities.YaArtist
 import kotlinx.coroutines.CancellationException
@@ -33,6 +34,7 @@ class LocalCatalogSynchronizer(
     private val database: RoomDatabase,
     private val localDao: LocalLibraryDao,
     private val catalogDao: CatalogDao,
+    private val songRepository: SongRepository,
 ) {
     /** Возвращает только строки с новым локальным хешем или старой версией резолвера. */
     suspend fun pendingTracks(): List<LocalTrackEntity> =
@@ -78,6 +80,10 @@ class LocalCatalogSynchronizer(
 
                 when (resolution) {
                     is LocalCatalogResolution.Track -> {
+                        songRepository.linkResolvedLocalTrackToYandex(
+                            localInstanceId = instanceId,
+                            yandexTrack = resolution.track.toEntity(),
+                        )
                         replaceArtists(instanceId, resolution.track.artists)
                         replaceAlbums(instanceId, resolution.track.albums)
                     }
@@ -190,6 +196,6 @@ class LocalCatalogSynchronizer(
     }
 
     companion object {
-        const val CURRENT_RESOLVER_VERSION = 1
+        const val CURRENT_RESOLVER_VERSION = 2
     }
 }

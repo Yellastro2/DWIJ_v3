@@ -96,7 +96,9 @@ fun HomeScreen(
     onTracksClick: () -> Unit,
     onWaveClick: () -> Unit,
     onAllTracksClick: () -> Unit,
-    onCatalogClick: () -> Unit,
+    onArtistsClick: () -> Unit,
+    onAlbumsClick: () -> Unit,
+    onLikedClick: () -> Boolean,
     onPlayerOpenClick: () -> Unit,
     onPlayerPlayPauseClick: () -> Unit,
     onPlayerPreviousClick: () -> Unit,
@@ -126,6 +128,12 @@ fun HomeScreen(
             item.title,
         )
     }.toMap()
+    val likedPlaylistEmptyMessage = stringResource(
+        Res.string.catalog_liked_empty,
+    )
+    val catalogInDevelopmentMessage = stringResource(
+        Res.string.catalog_in_development,
+    )
     fun showActionSnackbar(message: String) {
         coroutineScope.launch {
             snackbarHostState.currentSnackbarData?.dismiss()
@@ -133,7 +141,7 @@ fun HomeScreen(
         }
     }
 
-    platform.BackHandler(enabled = selectedTab == HomeNavigationTab.Search) {
+    platform.BackHandler(enabled = selectedTab != HomeNavigationTab.Main) {
         navigationTimingTracker.onClick(
             targetLabel = "Главная",
             targetTab = HomeNavigationTab.Main,
@@ -175,10 +183,13 @@ fun HomeScreen(
                     onCatalogClick = {
                         navigationTimingTracker.onClick(
                             targetLabel = "Каталог",
-                            targetTab = null,
+                            targetTab = HomeNavigationTab.Catalog,
                             currentTab = selectedTab,
                         )
-                        onCatalogClick()
+                        isRadialMenuVisible = false
+                        isPlayerPressed = false
+                        selectedTab = HomeNavigationTab.Catalog
+                        navigationTimingTracker.onStateAssigned(HomeNavigationTab.Catalog)
                     },
                     onMainClick = {
                         navigationTimingTracker.onClick(
@@ -328,6 +339,24 @@ fun HomeScreen(
                         )
                     }
                 }
+                HomeNavigationTab.Catalog -> {
+                    CatalogScreen(
+                        selectedSource = selectedSource,
+                        onSourceSelected = onSourceSelected,
+                        onPlaylistsClick = onPlaylistsClick,
+                        onArtistsClick = onArtistsClick,
+                        onAlbumsClick = onAlbumsClick,
+                        onLikedClick = {
+                            if (!onLikedClick()) {
+                                showActionSnackbar(likedPlaylistEmptyMessage)
+                            }
+                        },
+                        onRecentClick = {
+                            showActionSnackbar(catalogInDevelopmentMessage)
+                        },
+                        modifier = Modifier.fillMaxSize(),
+                    )
+                }
                 HomeNavigationTab.Search -> searchContent(Modifier.fillMaxSize())
             }
         }
@@ -376,6 +405,7 @@ data class HomeCompactPlayerUiState(
 private const val HOME_RADIAL_MENU_OUTER_RADIUS_FRACTION = 0.49f
 
 private enum class HomeNavigationTab {
+    Catalog,
     Main,
     Search,
 }
@@ -927,7 +957,7 @@ private fun HomeBottomNavigation(
             HomeBottomNavigationItem(
                 iconRes = Res.drawable.ic_home_nav_catalog,
                 title = stringResource(Res.string.home_navigation_catalog),
-                selected = false,
+                selected = selectedTab == HomeNavigationTab.Catalog,
                 onPress = {
                     navigationTimingTracker.onPress("Каталог")
                 },
@@ -1363,7 +1393,9 @@ private fun HomeScreenPreview() {
         onTracksClick = {},
         onWaveClick = {},
         onAllTracksClick = {},
-        onCatalogClick = {},
+        onArtistsClick = {},
+        onAlbumsClick = {},
+        onLikedClick = { false },
         onPlayerOpenClick = {},
         onPlayerPlayPauseClick = {},
         onPlayerPreviousClick = {},

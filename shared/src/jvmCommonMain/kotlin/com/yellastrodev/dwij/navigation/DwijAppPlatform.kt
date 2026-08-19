@@ -49,9 +49,21 @@ interface DwijAppPlatform {
     fun rememberShareRequester(): ShareRequester
 }
 
-/** Платформенно ставит один ЯМ-трек в очередь постоянного сохранения. */
+/** Один элемент платформенной очереди постоянного сохранения. */
+data class LocalTrackDownloadRequest(
+    val trackId: String,
+    val title: String,
+)
+
+/** Платформенно ставит один или несколько ЯМ-треков в очередь сохранения. */
 fun interface LocalTrackDownloadRequester {
     fun request(trackId: String, title: String)
+
+    fun requestAll(requests: List<LocalTrackDownloadRequest>) {
+        requests.forEach { item ->
+            request(item.trackId, item.title)
+        }
+    }
 }
 
 /** Передаёт ссылку системному share-механизму платформы. */

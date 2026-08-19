@@ -23,6 +23,7 @@ import com.yellastrodev.dwij.di.DwijComponent
 import com.yellastrodev.dwij.navigation.DwijAppPlatform
 import com.yellastrodev.dwij.navigation.HomeRoutePlatform
 import com.yellastrodev.dwij.navigation.LocalLibraryPlatform
+import com.yellastrodev.dwij.navigation.LocalTrackDownloadRequest
 import com.yellastrodev.dwij.navigation.LocalTrackDownloadRequester
 import com.yellastrodev.dwij.navigation.ShareRequester
 import com.yellastrodev.dwij.navigation.SettingsPlatform
@@ -164,9 +165,19 @@ class DesktopDwijAppPlatform(
     @Composable
     override fun rememberLocalTrackDownloadRequester(): LocalTrackDownloadRequester =
         remember(component, applicationScope) {
-            LocalTrackDownloadRequester { trackId, _ ->
-                applicationScope.launch {
-                    component.trackCacheRepo.saveLocally(trackId)
+            object : LocalTrackDownloadRequester {
+                override fun request(trackId: String, title: String) {
+                    applicationScope.launch {
+                        component.trackCacheRepo.saveLocally(trackId)
+                    }
+                }
+
+                override fun requestAll(requests: List<LocalTrackDownloadRequest>) {
+                    applicationScope.launch {
+                        requests.forEach { request ->
+                            component.trackCacheRepo.saveLocally(request.trackId)
+                        }
+                    }
                 }
             }
         }

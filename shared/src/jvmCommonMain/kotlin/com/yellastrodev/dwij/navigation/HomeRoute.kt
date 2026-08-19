@@ -21,6 +21,7 @@ import com.yellastrodev.dwij.models.PlayerModel
 import com.yellastrodev.dwij.models.SearchModel
 import com.yellastrodev.dwij.models.SearchResultItemUiModel
 import com.yellastrodev.dwij.models.SearchTrackSource
+import com.yellastrodev.dwij.data.entities.dYaLikeTracklist.Companion.KIND_LIKED
 import com.yellastrodev.dwij.resources.Res
 import com.yellastrodev.dwij.resources.home_player_unknown_artist
 import com.yellastrodev.dwij.ui.HomeCompactPlayerUiState
@@ -56,6 +57,9 @@ fun HomeRoute(
     onOpenSettings: () -> Unit,
     onOpenSongMatches: () -> Unit,
     onOpenPlaylists: () -> Unit,
+    onOpenYandexPlaylist: (playlistId: String) -> Unit,
+    onOpenArtists: () -> Unit,
+    onOpenAlbums: () -> Unit,
     onOpenLocalTracks: () -> Unit,
     onOpenYandexTracks: () -> Unit,
     onOpenCatalogObject: (type: String, externalId: Int) -> Unit,
@@ -70,6 +74,11 @@ fun HomeRoute(
 
     val selectedSource by
         musicSourceSelectionStore.selectedSource.collectAsState()
+    val yandexPlaylists by
+        component.playlistRepository.playlists.collectAsState()
+    val likedYandexPlaylistId = yandexPlaylists
+        .firstOrNull { playlist -> playlist.kind == KIND_LIKED }
+        ?.getdId()
 
     val searchModelFactory = remember(component) {
         SearchModel.Factory(
@@ -233,7 +242,18 @@ fun HomeRoute(
             onOpenPlayer()
         },
         onAllTracksClick = {},
-        onCatalogClick = onOpenPlaylists,
+        onArtistsClick = onOpenArtists,
+        onAlbumsClick = onOpenAlbums,
+        onLikedClick = {
+            when {
+                selectedSource != HomeMusicSource.Yandex -> false
+                likedYandexPlaylistId == null -> false
+                else -> {
+                    onOpenYandexPlaylist(likedYandexPlaylistId)
+                    true
+                }
+            }
+        },
         onPlayerOpenClick = onOpenPlayer,
         onPlayerPlayPauseClick = playerModel::playAudio,
         onPlayerPreviousClick = {

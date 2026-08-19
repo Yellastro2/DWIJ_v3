@@ -44,47 +44,52 @@ object AndroidDwijAppPlatform : DwijAppPlatform {
     @Composable
     override fun rememberLocalTrackDownloadRequester(): LocalTrackDownloadRequester {
         val context = LocalContext.current
-        var pendingRequest by remember {
-            mutableStateOf<Pair<String, String>?>(null)
+        var pendingRequests by remember {
+            mutableStateOf<List<LocalTrackDownloadRequest>>(emptyList())
+        }
+        val enqueueRequests: (List<LocalTrackDownloadRequest>) -> Unit = { requests ->
+            runCatching {
+                LocalTrackDownloadService.enqueueAll(
+                    context = context,
+                    tracks = requests.map { request -> request.trackId to request.title },
+                )
+            }.onFailure { error ->
+                Log.e(
+                    LOCAL_TRACK_DOWNLOAD_TAG,
+                    "[requestAll] Не удалось запустить foreground service",
+                    error,
+                )
+            }
         }
         val permissionLauncher = rememberLauncherForActivityResult(
             ActivityResultContracts.RequestPermission(),
         ) {
-            pendingRequest?.let { (trackId, title) ->
-                runCatching {
-                    LocalTrackDownloadService.enqueue(context, trackId, title)
-                }.onFailure { error ->
-                    Log.e(
-                        LOCAL_TRACK_DOWNLOAD_TAG,
-                        "[request] Не удалось запустить foreground service",
-                        error,
-                    )
-                }
+            if (pendingRequests.isNotEmpty()) {
+                enqueueRequests(pendingRequests)
             }
-            pendingRequest = null
+            pendingRequests = emptyList()
         }
 
-        return LocalTrackDownloadRequester { trackId, title ->
-            val hasNotificationPermission =
-                Build.VERSION.SDK_INT < Build.VERSION_CODES.TIRAMISU ||
-                    ContextCompat.checkSelfPermission(
-                        context,
-                        Manifest.permission.POST_NOTIFICATIONS,
-                    ) == PackageManager.PERMISSION_GRANTED
+        return object : LocalTrackDownloadRequester {
+            override fun request(trackId: String, title: String) {
+                requestAll(listOf(LocalTrackDownloadRequest(trackId, title)))
+            }
 
-            if (hasNotificationPermission) {
-                runCatching {
-                    LocalTrackDownloadService.enqueue(context, trackId, title)
-                }.onFailure { error ->
-                    Log.e(
-                        LOCAL_TRACK_DOWNLOAD_TAG,
-                        "[request] Не удалось запустить foreground service",
-                        error,
-                    )
+            override fun requestAll(requests: List<LocalTrackDownloadRequest>) {
+                if (requests.isEmpty()) return
+                val hasNotificationPermission =
+                    Build.VERSION.SDK_INT < Build.VERSION_CODES.TIRAMISU ||
+                        ContextCompat.checkSelfPermission(
+                            context,
+                            Manifest.permission.POST_NOTIFICATIONS,
+                        ) == PackageManager.PERMISSION_GRANTED
+
+                if (hasNotificationPermission) {
+                    enqueueRequests(requests)
+                } else {
+                    pendingRequests = requests
+                    permissionLauncher.launch(Manifest.permission.POST_NOTIFICATIONS)
                 }
-            } else {
-                pendingRequest = trackId to title
-                permissionLauncher.launch(Manifest.permission.POST_NOTIFICATIONS)
             }
         }
     }

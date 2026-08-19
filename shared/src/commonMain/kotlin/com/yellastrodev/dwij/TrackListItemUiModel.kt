@@ -5,8 +5,9 @@ import androidx.compose.runtime.Immutable
 /**
  * Независимые от источника данные одной строки трека.
  *
- * [isYandexUnavailable], [hasMultipleSources] и [hasUnresolvedMatchCandidate] включают
- * правые индикаторы, [isSavedLocally] отмечает постоянный ЯМ-файл,
+ * [isYandexUnavailable], [hasMultipleSources], [hasUnresolvedMatchCandidate] и
+ * [isLocalOnlyInLibrary] включают правые индикаторы, [isSavedLocally] отмечает
+ * постоянный ЯМ-файл,
  * а [isPlaybackBlocked] приглушает недоступные метаданные.
  */
 @Immutable
@@ -21,6 +22,7 @@ data class TrackListItemUiModel(
     val isPlaybackBlocked: Boolean = false,
     val hasMultipleSources: Boolean = false,
     val hasUnresolvedMatchCandidate: Boolean = false,
+    val isLocalOnlyInLibrary: Boolean = false,
     val isSavedLocally: Boolean = false,
     val isSavingLocally: Boolean = false,
 )

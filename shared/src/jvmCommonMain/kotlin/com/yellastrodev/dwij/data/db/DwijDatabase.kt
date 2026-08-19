@@ -22,6 +22,7 @@ import com.yellastrodev.dwij.data.db.DatabaseMigrations.Companion.MIGRATION_9_10
 import com.yellastrodev.dwij.data.db.DatabaseMigrations.Companion.MIGRATION_10_11
 import com.yellastrodev.dwij.data.db.DatabaseMigrations.Companion.MIGRATION_11_12
 import com.yellastrodev.dwij.data.db.DatabaseMigrations.Companion.MIGRATION_12_13
+import com.yellastrodev.dwij.data.db.DatabaseMigrations.Companion.MIGRATION_13_14
 import com.yellastrodev.dwij.data.entities.CatalogAlbumEntity
 import com.yellastrodev.dwij.data.entities.CatalogAlbumMetadataEntity
 import com.yellastrodev.dwij.data.entities.CatalogAlbumTrackEntity
@@ -69,7 +70,7 @@ import kotlinx.coroutines.Dispatchers
         CatalogAlbumMetadataEntity::class,
         CatalogAlbumTrackEntity::class,
     ],
-    version = 13,
+    version = 14,
 )
 abstract class DwijDatabase : RoomDatabase() {
     abstract fun catalogDao(): CatalogDao
@@ -97,6 +98,7 @@ fun buildDwijDatabase(
             MIGRATION_10_11,
             MIGRATION_11_12,
             MIGRATION_12_13,
+            MIGRATION_13_14,
         )
         .build()
 }

@@ -29,6 +29,8 @@ data class SongEntity(
     val coverUri: String?,
     val preferredInstanceId: String?,
     val matchResolverVersion: Int = 0,
+    /** Трек представлен в пользовательской фонотеке только локальным файлом. */
+    val isLocalOnlyInLibrary: Boolean = false,
 )
 
 /** Связывает [SongEntity] с подробной записью конкретного музыкального источника. */
@@ -65,6 +67,8 @@ data class Song(
     val instances: List<TrackInstance>,
     val preferredInstanceId: String?,
     val hasPendingMatchCandidate: Boolean,
+    /** ЯМ-инстанс известен как зеркало, но сам трек хранится в фонотеке локально. */
+    val isLocalOnlyInLibrary: Boolean,
     /** Производный статус из локального Room-списка лайков. */
     val isLiked: Boolean,
 ) {

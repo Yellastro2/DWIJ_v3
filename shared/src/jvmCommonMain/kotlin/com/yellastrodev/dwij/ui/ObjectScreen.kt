@@ -23,12 +23,15 @@ import androidx.compose.foundation.lazy.LazyListState
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Text
+import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.pulltorefresh.PullToRefreshBox
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -44,6 +47,9 @@ import org.jetbrains.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
 import com.yellastrodev.dwij.TrackListItemUiModel
 import com.yellastrodev.dwij.resources.*
 import com.yellastrodev.dwij.ui.theme.DwijColors
@@ -55,6 +61,7 @@ import org.jetbrains.compose.resources.stringResource
  *
  * Подходит плейлисту, альбому, исполнителю или абстрактной подборке: route передаёт только
  * заголовок, описание, обложку, доступные действия и подготовленные элементы списка.
+ * [objectMenuContent] добавляет меню в правую часть закреплённой верхней панели.
  */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -67,6 +74,7 @@ fun ObjectScreen(
     onBackClick: () -> Unit,
     onPlayClick: () -> Unit,
     onTrackClick: (index: Int, item: TrackListItemUiModel) -> Unit,
+    objectMenuContent: (@Composable (onDismiss: () -> Unit) -> Unit)? = null,
     trackContextMenuContent: (@Composable (
         index: Int,
         item: TrackListItemUiModel,
@@ -94,6 +102,7 @@ fun ObjectScreen(
             title = title,
             listState = listState,
             onBackClick = onBackClick,
+            menuContent = objectMenuContent,
         )
         PullToRefreshBox(
             isRefreshing = isRefreshing,
@@ -133,6 +142,7 @@ private fun ObjectTopBar(
     title: String,
     listState: LazyListState,
     onBackClick: () -> Unit,
+    menuContent: (@Composable (onDismiss: () -> Unit) -> Unit)?,
 ) {
     val collapseDistancePx = with(LocalDensity.current) { 320.dp.toPx() }
     val collapseFraction by remember(listState, collapseDistancePx) {
@@ -144,6 +154,8 @@ private fun ObjectTopBar(
             }
         }
     }
+    var isMenuExpanded by remember { mutableStateOf(false) }
+    val moreDescription = stringResource(Res.string.player_more_content_description)
     Box(
         modifier = Modifier
             .fillMaxWidth()
@@ -207,6 +219,36 @@ private fun ObjectTopBar(
                     alpha = ((collapseFraction - 0.78f) / 0.22f).coerceIn(0f, 1f)
                 },
         )
+        if (menuContent != null) {
+            Box(
+                modifier = Modifier.align(Alignment.CenterEnd),
+            ) {
+                Box(
+                    contentAlignment = Alignment.Center,
+                    modifier = Modifier
+                        .size(46.dp)
+                        .clickable(role = Role.Button) {
+                            isMenuExpanded = true
+                        }
+                        .semantics {
+                            contentDescription = moreDescription
+                        },
+                ) {
+                    Image(
+                        painter = painterResource(Res.drawable.ic_more_vertical),
+                        contentDescription = null,
+                        modifier = Modifier.size(24.dp),
+                    )
+                }
+                DropdownMenu(
+                    expanded = isMenuExpanded,
+                    onDismissRequest = { isMenuExpanded = false },
+                    modifier = Modifier.background(DwijColors.PlayerSnackbarBackground),
+                ) {
+                    menuContent { isMenuExpanded = false }
+                }
+            }
+        }
     }
 }
 

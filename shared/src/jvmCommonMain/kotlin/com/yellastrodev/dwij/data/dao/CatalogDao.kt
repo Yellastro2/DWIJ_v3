@@ -23,6 +23,28 @@ data class CatalogArtistSourceRef(
     val name: String,
 )
 
+/** Артист с Яндекс-метаданными, который реально встречается в объединённой фонотеке. */
+data class CatalogLibraryArtistRow(
+    val artistId: String,
+    val name: String,
+    val externalId: String,
+    val coverUri: String?,
+    val genres: String,
+    val likesCount: Long?,
+    val libraryTrackCount: Int,
+)
+
+/** Альбом с Яндекс-метаданными, который реально встречается в объединённой фонотеке. */
+data class CatalogLibraryAlbumRow(
+    val albumId: String,
+    val title: String,
+    val externalId: String,
+    val coverUri: String?,
+    val artistNames: String,
+    val likesCount: Long?,
+    val libraryTrackCount: Int,
+)
+
 /** Room-доступ к canonical-объектам каталога и их source-метаданным. */
 @Dao
 abstract class CatalogDao {
@@ -82,6 +104,39 @@ abstract class CatalogDao {
         songId: String,
         source: String,
     ): Flow<List<CatalogArtistSourceRef>>
+
+    /**
+     * Наблюдает только артистов фонотеки: связанных с видимым локальным файлом
+     * или с треком одного из сохранённых пользовательских Яндекс-плейлистов.
+     */
+    @Query(
+        "SELECT artists.artistId AS artistId, artists.name AS name, " +
+            "metadata.externalId AS externalId, metadata.coverUri AS coverUri, " +
+            "metadata.genres AS genres, metadata.likesCount AS likesCount, " +
+            "COUNT(DISTINCT instances.songId) AS libraryTrackCount " +
+            "FROM catalog_artists artists " +
+            "INNER JOIN catalog_artist_metadata metadata " +
+            "ON metadata.artistId = artists.artistId AND metadata.source = :metadataSource " +
+            "INNER JOIN track_instance_artists links " +
+            "ON links.artistId = artists.artistId " +
+            "INNER JOIN track_instances instances " +
+            "ON instances.instanceId = links.instanceId " +
+            "LEFT JOIN local_tracks localTracks " +
+            "ON instances.source = 'LOCAL' " +
+            "AND localTracks.instanceId = instances.sourceTrackId " +
+            "AND localTracks.isHidden = 0 " +
+            "LEFT JOIN playlist_tracks playlistTracks " +
+            "ON instances.source = 'YANDEX' " +
+            "AND playlistTracks.trackId = instances.sourceTrackId " +
+            "WHERE localTracks.instanceId IS NOT NULL " +
+            "OR playlistTracks.trackId IS NOT NULL " +
+            "GROUP BY artists.artistId, artists.name, metadata.externalId, " +
+            "metadata.coverUri, metadata.genres, metadata.likesCount " +
+            "ORDER BY artists.name COLLATE NOCASE",
+    )
+    abstract fun observeLibraryArtists(
+        metadataSource: String,
+    ): Flow<List<CatalogLibraryArtistRow>>
 
     @Query("DELETE FROM track_instance_artists WHERE instanceId = :instanceId")
     abstract suspend fun deleteTrackInstanceArtists(instanceId: String)
@@ -189,6 +244,39 @@ abstract class CatalogDao {
             "ORDER BY MIN(links.position)",
     )
     abstract suspend fun getAlbumsForSong(songId: String): List<CatalogAlbumEntity>
+
+    /**
+     * Наблюдает только альбомы фонотеки: связанных с видимым локальным файлом
+     * или с треком одного из сохранённых пользовательских Яндекс-плейлистов.
+     */
+    @Query(
+        "SELECT albums.albumId AS albumId, albums.title AS title, " +
+            "metadata.externalId AS externalId, metadata.coverUri AS coverUri, " +
+            "metadata.artistNames AS artistNames, metadata.likesCount AS likesCount, " +
+            "COUNT(DISTINCT instances.songId) AS libraryTrackCount " +
+            "FROM catalog_albums albums " +
+            "INNER JOIN catalog_album_metadata metadata " +
+            "ON metadata.albumId = albums.albumId AND metadata.source = :metadataSource " +
+            "INNER JOIN track_instance_albums links " +
+            "ON links.albumId = albums.albumId " +
+            "INNER JOIN track_instances instances " +
+            "ON instances.instanceId = links.instanceId " +
+            "LEFT JOIN local_tracks localTracks " +
+            "ON instances.source = 'LOCAL' " +
+            "AND localTracks.instanceId = instances.sourceTrackId " +
+            "AND localTracks.isHidden = 0 " +
+            "LEFT JOIN playlist_tracks playlistTracks " +
+            "ON instances.source = 'YANDEX' " +
+            "AND playlistTracks.trackId = instances.sourceTrackId " +
+            "WHERE localTracks.instanceId IS NOT NULL " +
+            "OR playlistTracks.trackId IS NOT NULL " +
+            "GROUP BY albums.albumId, albums.title, metadata.externalId, " +
+            "metadata.coverUri, metadata.artistNames, metadata.likesCount " +
+            "ORDER BY albums.title COLLATE NOCASE",
+    )
+    abstract fun observeLibraryAlbums(
+        metadataSource: String,
+    ): Flow<List<CatalogLibraryAlbumRow>>
 
     @Query("DELETE FROM track_instance_albums WHERE instanceId = :instanceId")
     abstract suspend fun deleteTrackInstanceAlbums(instanceId: String)

@@ -32,8 +32,8 @@ import java.util.ArrayDeque
 /**
  * Foreground-очередь постоянного сохранения ЯМ-треков.
  *
- * Сейчас UI добавляет по одному треку, но очередь и счётчики уже допускают
- * последовательную постановку нескольких элементов для будущей загрузки плейлиста.
+ * Одиночные треки и плейлисты приходят одной командой, после чего элементы
+ * последовательно сохраняются с общим счётчиком и прогрессом текущего файла.
  */
 class LocalTrackDownloadService : Service() {
 
@@ -47,6 +47,7 @@ class LocalTrackDownloadService : Service() {
     private var workerJob: Job? = null
     private var activeTrackId: String? = null
     private var completedCount = 0
+    private var failedCount = 0
     private var totalCount = 0
     private var latestStartId = 0
     private var lastNotificationAt = 0L
@@ -73,21 +74,24 @@ class LocalTrackDownloadService : Service() {
         latestStartId = maxOf(latestStartId, startId)
         startInForeground(waitingNotification())
 
-        val request = intent?.toDownloadRequest()
-        if (request == null) {
-            Log.w(TAG, "[onStartCommand] Получена команда без корректного trackId")
+        val newRequests = intent?.toDownloadRequests().orEmpty()
+        if (newRequests.isEmpty()) {
+            Log.w(TAG, "[onStartCommand] Получена команда без корректных trackId")
             stopAfterQueue()
             return START_NOT_STICKY
         }
 
         synchronized(queueLock) {
-            if (activeTrackId != request.trackId && queuedTrackIds.add(request.trackId)) {
-                if (activeTrackId == null && requests.isEmpty()) {
-                    completedCount = 0
-                    totalCount = 0
+            if (activeTrackId == null && requests.isEmpty()) {
+                completedCount = 0
+                failedCount = 0
+                totalCount = 0
+            }
+            newRequests.forEach { request ->
+                if (activeTrackId != request.trackId && queuedTrackIds.add(request.trackId)) {
+                    requests.addLast(request)
+                    totalCount++
                 }
-                requests.addLast(request)
-                totalCount++
             }
         }
         startWorkerIfNeeded()
@@ -162,7 +166,11 @@ class LocalTrackDownloadService : Service() {
 
             synchronized(queueLock) {
                 activeTrackId = null
-                if (lastSucceeded) completedCount++
+                if (lastSucceeded) {
+                    completedCount++
+                } else {
+                    failedCount++
+                }
             }
         }
 
@@ -170,7 +178,7 @@ class LocalTrackDownloadService : Service() {
         if (finishedRequest != null) {
             val finalNotification = completionNotification(
                 request = finishedRequest,
-                succeeded = lastSucceeded,
+                succeeded = synchronized(queueLock) { failedCount == 0 },
             )
             stopForeground(STOP_FOREGROUND_DETACH)
             notificationManager.notify(NOTIFICATION_ID, finalNotification)
@@ -345,15 +353,35 @@ class LocalTrackDownloadService : Service() {
         super.onDestroy()
     }
 
-    private fun Intent.toDownloadRequest(): DownloadRequest? {
-        if (action != ACTION_ENQUEUE_TRACK) return null
-        val trackId = getStringExtra(EXTRA_TRACK_ID)
-            ?.takeIf(String::isNotBlank)
-            ?: return null
-        val title = getStringExtra(EXTRA_TRACK_TITLE)
-            ?.takeIf(String::isNotBlank)
-            ?: trackId
-        return DownloadRequest(trackId = trackId, title = title)
+    private fun Intent.toDownloadRequests(): List<DownloadRequest> {
+        return when (action) {
+            ACTION_ENQUEUE_TRACK -> {
+                val trackId = getStringExtra(EXTRA_TRACK_ID)
+                    ?.takeIf(String::isNotBlank)
+                    ?: return emptyList()
+                val title = getStringExtra(EXTRA_TRACK_TITLE)
+                    ?.takeIf(String::isNotBlank)
+                    ?: trackId
+                listOf(DownloadRequest(trackId = trackId, title = title))
+            }
+
+            ACTION_ENQUEUE_TRACKS -> {
+                val trackIds = getStringArrayListExtra(EXTRA_TRACK_IDS).orEmpty()
+                val titles = getStringArrayListExtra(EXTRA_TRACK_TITLES).orEmpty()
+                trackIds.mapIndexedNotNull { index, trackId ->
+                    trackId.takeIf(String::isNotBlank)?.let { validTrackId ->
+                        DownloadRequest(
+                            trackId = validTrackId,
+                            title = titles.getOrNull(index)
+                                ?.takeIf(String::isNotBlank)
+                                ?: validTrackId,
+                        )
+                    }
+                }
+            }
+
+            else -> emptyList()
+        }
     }
 
     private data class DownloadRequest(
@@ -369,8 +397,12 @@ class LocalTrackDownloadService : Service() {
         private const val QUEUE_IDLE_GRACE_MS = 350L
         private const val ACTION_ENQUEUE_TRACK =
             "com.yellastrodev.dwij.action.ENQUEUE_LOCAL_TRACK"
+        private const val ACTION_ENQUEUE_TRACKS =
+            "com.yellastrodev.dwij.action.ENQUEUE_LOCAL_TRACKS"
         private const val EXTRA_TRACK_ID = "track_id"
         private const val EXTRA_TRACK_TITLE = "track_title"
+        private const val EXTRA_TRACK_IDS = "track_ids"
+        private const val EXTRA_TRACK_TITLES = "track_titles"
 
         /** Запускается непосредственно из пользовательского клика в видимом UI. */
         fun enqueue(
@@ -378,10 +410,28 @@ class LocalTrackDownloadService : Service() {
             trackId: String,
             title: String,
         ) {
+            enqueueAll(context, listOf(trackId to title))
+        }
+
+        /** Одной foreground-командой ставит подготовленный плейлист в очередь. */
+        fun enqueueAll(
+            context: Context,
+            tracks: List<Pair<String, String>>,
+        ) {
+            val uniqueTracks = tracks
+                .filter { (trackId, _) -> trackId.isNotBlank() }
+                .distinctBy { (trackId, _) -> trackId }
+            if (uniqueTracks.isEmpty()) return
             val intent = Intent(context, LocalTrackDownloadService::class.java).apply {
-                action = ACTION_ENQUEUE_TRACK
-                putExtra(EXTRA_TRACK_ID, trackId)
-                putExtra(EXTRA_TRACK_TITLE, title)
+                action = ACTION_ENQUEUE_TRACKS
+                putStringArrayListExtra(
+                    EXTRA_TRACK_IDS,
+                    ArrayList(uniqueTracks.map { (trackId, _) -> trackId }),
+                )
+                putStringArrayListExtra(
+                    EXTRA_TRACK_TITLES,
+                    ArrayList(uniqueTracks.map { (_, title) -> title }),
+                )
             }
             ContextCompat.startForegroundService(context, intent)
         }

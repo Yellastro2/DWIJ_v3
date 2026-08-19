@@ -731,5 +731,15 @@ class DatabaseMigrations {
                 connection.execSQL("DROP TABLE migration_catalog_album_ids")
             }
         }
+
+        /** Сохраняет явный статус трека, присутствующего в фонотеке только локально. */
+        val MIGRATION_13_14 = object : Migration(13, 14) {
+            override fun migrate(connection: SQLiteConnection) {
+                connection.execSQL(
+                    "ALTER TABLE songs ADD COLUMN isLocalOnlyInLibrary " +
+                        "INTEGER NOT NULL DEFAULT 0",
+                )
+            }
+        }
     }
 }

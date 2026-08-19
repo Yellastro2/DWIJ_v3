@@ -30,6 +30,7 @@ import com.yellastrodev.dwij.data.entities.Song
 import com.yellastrodev.dwij.data.entities.SongMatchCandidateEntity
 import com.yellastrodev.dwij.data.entities.TrackInstance
 import com.yellastrodev.dwij.data.entities.dYaPlaylist
+import com.yellastrodev.dwij.data.repo.TrackCacheRepository
 import com.yellastrodev.dwij.di.DwijComponent
 import com.yellastrodev.dwij.models.PlayerModel
 import com.yellastrodev.dwij.models.CatalogObjectKind
@@ -57,11 +58,15 @@ import com.yellastrodev.dwij.resources.track_save_locally
 import com.yellastrodev.dwij.resources.track_saved_locally
 import com.yellastrodev.dwij.resources.track_saving_locally
 import com.yellastrodev.dwij.resources.track_save_locally_started
+import com.yellastrodev.dwij.resources.playlist_save_locally_nothing
+import com.yellastrodev.dwij.resources.playlist_save_locally_queued
+import com.yellastrodev.dwij.resources.playlist_save_locally_failed
 import com.yellastrodev.dwij.ui.LocalYamLogger
 import com.yellastrodev.dwij.ui.MultiSourceDialog
 import com.yellastrodev.dwij.ui.ObjectScreen
 import com.yellastrodev.dwij.ui.TrackSourceIndicator
 import com.yellastrodev.dwij.ui.TrackSourceOptionUiModel
+import com.yellastrodev.dwij.ui.theme.DwijColors
 import com.yellastrodev.dwij.ui.toImageBitmapOrNull
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
@@ -84,6 +89,7 @@ fun ObjectRoute(
     onBackClick: () -> Unit,
     onOpenPlayer: () -> Unit,
     onRequestLocalTrackDownload: (trackId: String, title: String) -> Unit,
+    onRequestLocalTrackDownloads: (List<LocalTrackDownloadRequest>) -> Unit,
     onShareYandexUrl: (String) -> Unit,
     modifier: Modifier = Modifier,
 ) {
@@ -138,6 +144,9 @@ fun ObjectRoute(
 
     var savedYandexTrackIds by remember {
         mutableStateOf(emptySet<String>())
+    }
+    var isPreparingPlaylistDownload by remember {
+        mutableStateOf(false)
     }
 
     LaunchedEffect(tracks, localStorageRevision) {
@@ -501,6 +510,79 @@ fun ObjectRoute(
                         )
                     }
                 }
+            },
+            objectMenuContent = if (yandexPlaylist != null) {
+                { onDismiss ->
+                    DropdownMenuItem(
+                        text = {
+                            Text(
+                                stringResource(
+                                    if (isPreparingPlaylistDownload) {
+                                        Res.string.track_saving_locally
+                                    } else {
+                                        Res.string.track_save_locally
+                                    },
+                                ),
+                                color = if (
+                                    !isPreparingPlaylistDownload && tracks.isNotEmpty()
+                                ) {
+                                    DwijColors.White
+                                } else {
+                                    DwijColors.White.copy(alpha = 0.38f)
+                                },
+                            )
+                        },
+                        enabled = !isPreparingPlaylistDownload && tracks.isNotEmpty(),
+                        onClick = {
+                            onDismiss()
+                            if (!isPreparingPlaylistDownload) {
+                                coroutineScope.launch {
+                                    isPreparingPlaylistDownload = true
+                                    try {
+                                        val requests = preparePlaylistLocalDownloads(
+                                            songs = tracks,
+                                            trackCacheRepository = component.trackCacheRepo,
+                                            downloadingTrackIds = localDownloads.keys,
+                                        )
+
+                                        if (requests.isEmpty()) {
+                                            showSnackbar(
+                                                getString(
+                                                    Res.string.playlist_save_locally_nothing,
+                                                ),
+                                            )
+                                        } else {
+                                            onRequestLocalTrackDownloads(requests)
+                                            showSnackbar(
+                                                getString(
+                                                    Res.string.playlist_save_locally_queued,
+                                                    requests.size,
+                                                ),
+                                            )
+                                        }
+                                    } catch (error: CancellationException) {
+                                        throw error
+                                    } catch (error: Exception) {
+                                        logger.error(
+                                            TAG,
+                                            "[savePlaylistLocally] Не удалось подготовить плейлист",
+                                            error,
+                                        )
+                                        showSnackbar(
+                                            getString(
+                                                Res.string.playlist_save_locally_failed,
+                                            ),
+                                        )
+                                    } finally {
+                                        isPreparingPlaylistDownload = false
+                                    }
+                                }
+                            }
+                        },
+                    )
+                }
+            } else {
+                null
             },
             trackContextMenuContent = { _, item, onDismiss ->
                 item.yandexTrackId?.let { yandexTrackId ->
@@ -939,6 +1021,7 @@ private fun List<Song>.toObjectTrackListItems(
                 song.localInstances.isEmpty() && !yandexPlayable,
             hasMultipleSources = song.instances.size > 1,
             hasUnresolvedMatchCandidate = song.hasPendingMatchCandidate,
+            isLocalOnlyInLibrary = song.isLocalOnlyInLibrary,
             isSavedLocally = localSaveYandexTrackId != null &&
                 localSaveYandexTrackId in savedYandexTrackIds,
             isSavingLocally = localSaveYandexTrackId != null &&
@@ -955,6 +1038,35 @@ private fun Song.localSaveYandexTrackId(): String? =
         ?.track
         ?.id
         ?: yandexInstances.firstOrNull()?.track?.id
+
+/**
+ * Готовит уникальную очередь плейлиста и пропускает уже сохранённые,
+ * скачивающиеся и мультисорс-песни.
+ */
+private suspend fun preparePlaylistLocalDownloads(
+    songs: List<Song>,
+    trackCacheRepository: TrackCacheRepository,
+    downloadingTrackIds: Set<String>,
+): List<LocalTrackDownloadRequest> =
+    withContext(Dispatchers.IO) {
+        songs
+            .asSequence()
+            .filter { song -> song.instances.size <= 1 }
+            .mapNotNull { song ->
+                song.localSaveYandexTrackId()?.let { trackId ->
+                    LocalTrackDownloadRequest(
+                        trackId = trackId,
+                        title = song.title,
+                    )
+                }
+            }
+            .distinctBy(LocalTrackDownloadRequest::trackId)
+            .filterNot { request -> request.trackId in downloadingTrackIds }
+            .filterNot { request ->
+                trackCacheRepository.isSavedLocally(request.trackId)
+            }
+            .toList()
+    }
 
 /** Связывает вариант диалога с Song, к которой он относился до merge. */
 private data class ObjectSourceDialogEntry(

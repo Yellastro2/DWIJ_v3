@@ -3,6 +3,8 @@ package com.yellastrodev.dwij.data.repo
 import com.yellastrodev.dwij.data.DataError
 import com.yellastrodev.dwij.data.DataResult
 import com.yellastrodev.dwij.data.dao.CatalogDao
+import com.yellastrodev.dwij.data.dao.CatalogLibraryAlbumRow
+import com.yellastrodev.dwij.data.dao.CatalogLibraryArtistRow
 import com.yellastrodev.dwij.data.entities.CATALOG_SOURCE_YANDEX
 import com.yellastrodev.dwij.data.entities.CATALOG_VALUE_SEPARATOR
 import com.yellastrodev.dwij.data.entities.CatalogAlbumMetadataEntity
@@ -45,6 +47,28 @@ data class CatalogAlbumPage(
     val tracks: List<Song>,
 )
 
+/** Артист, присутствующий хотя бы в одном source-инстансе объединённой фонотеки. */
+data class CatalogLibraryArtist(
+    val artistId: String,
+    val yandexId: Int,
+    val name: String,
+    val coverUri: String?,
+    val genres: List<String>,
+    val likesCount: Long?,
+    val libraryTrackCount: Int,
+)
+
+/** Альбом, присутствующий хотя бы в одном source-инстансе объединённой фонотеки. */
+data class CatalogLibraryAlbum(
+    val albumId: String,
+    val yandexId: Int,
+    val title: String,
+    val coverUri: String?,
+    val artistNames: List<String>,
+    val likesCount: Long?,
+    val libraryTrackCount: Int,
+)
+
 /** Собирает canonical-объекты каталога и хранит метадату отдельно по source. */
 class CatalogRepository(
     private val local: CatalogDao,
@@ -53,6 +77,18 @@ class CatalogRepository(
     private val songRepository: SongRepository,
     private val logger: YamLogger,
 ) {
+
+    /** Реактивный multisource-список артистов, ограниченный текущей фонотекой. */
+    val libraryArtists: Flow<List<CatalogLibraryArtist>> =
+        local.observeLibraryArtists(CATALOG_SOURCE_YANDEX).map { rows ->
+            rows.mapNotNull(CatalogLibraryArtistRow::toLibraryArtistOrNull)
+        }
+
+    /** Реактивный multisource-список альбомов, ограниченный текущей фонотекой. */
+    val libraryAlbums: Flow<List<CatalogLibraryAlbum>> =
+        local.observeLibraryAlbums(CATALOG_SOURCE_YANDEX).map { rows ->
+            rows.mapNotNull(CatalogLibraryAlbumRow::toLibraryAlbumOrNull)
+        }
     /**
      * Наблюдает ЯМ-артистов, подтверждённых любым source-инстансом песни.
      * Поэтому локальный трек получает навигацию к артисту без создания фальшивого ЯМ-инстанса.
@@ -262,4 +298,32 @@ class CatalogRepository(
     private companion object {
         const val TAG = "CatalogRepository"
     }
+}
+
+private fun CatalogLibraryArtistRow.toLibraryArtistOrNull(): CatalogLibraryArtist? {
+    val yandexId = externalId.toIntOrNull() ?: return null
+    return CatalogLibraryArtist(
+        artistId = artistId,
+        yandexId = yandexId,
+        name = name,
+        coverUri = coverUri,
+        genres = genres.split(CATALOG_VALUE_SEPARATOR).filter(String::isNotBlank),
+        likesCount = likesCount,
+        libraryTrackCount = libraryTrackCount,
+    )
+}
+
+private fun CatalogLibraryAlbumRow.toLibraryAlbumOrNull(): CatalogLibraryAlbum? {
+    val yandexId = externalId.toIntOrNull() ?: return null
+    return CatalogLibraryAlbum(
+        albumId = albumId,
+        yandexId = yandexId,
+        title = title,
+        coverUri = coverUri,
+        artistNames = artistNames
+            .split(CATALOG_VALUE_SEPARATOR)
+            .filter(String::isNotBlank),
+        likesCount = likesCount,
+        libraryTrackCount = libraryTrackCount,
+    )
 }

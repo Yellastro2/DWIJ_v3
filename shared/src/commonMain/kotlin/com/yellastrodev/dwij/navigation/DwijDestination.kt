@@ -10,6 +10,8 @@ object DwijDestination {
 
     const val HOME = "home"
     const val PLAYLISTS = "playlists"
+    const val CATALOG_ARTISTS = "catalog/artists"
+    const val CATALOG_ALBUMS = "catalog/albums"
     const val PLAYER = "player"
     const val SONG_MATCHES = "song-matches"
     const val SETTINGS = "settings"

@@ -267,6 +267,7 @@ class DwijComponent private constructor(
             database = db,
             localDao = db.localLibraryDao(),
             catalogDao = db.catalogDao(),
+            songRepository = songRepository,
         )
     }
 

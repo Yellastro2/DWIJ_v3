@@ -64,14 +64,17 @@ fun TrackListItem(
     priorityNumber: Int? = null,
 ) {
     val showMultiplicityIndicator = sourceIndicator == null &&
+        !item.isLocalOnlyInLibrary &&
         (item.hasMultipleSources || item.hasUnresolvedMatchCandidate)
     val showYandexIndicator = sourceIndicator == TrackSourceIndicator.YANDEX ||
         (sourceIndicator == null && item.isYandexUnavailable)
+    val showLocalOnlyIndicator = sourceIndicator == null && item.isLocalOnlyInLibrary
     val showSavedIndicator = sourceIndicator == null && item.isSavedLocally
     val topIndicatorCount = listOf(
         showMultiplicityIndicator,
         showYandexIndicator,
         sourceIndicator == TrackSourceIndicator.LOCAL,
+        showLocalOnlyIndicator,
         showSavedIndicator,
     ).count { it }
     val hasRightDecoration = topIndicatorCount > 0 || isSelected || priorityNumber != null
@@ -154,6 +157,9 @@ fun TrackListItem(
                         isUnavailable = item.isYandexUnavailable,
                     )
                     sourceIndicator == TrackSourceIndicator.LOCAL -> LocalSourceIndicator()
+                }
+                if (showLocalOnlyIndicator) {
+                    LocalSourceIndicator()
                 }
                 if (showSavedIndicator) {
                     SavedLocalTrackIndicator()
