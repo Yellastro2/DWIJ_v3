@@ -55,6 +55,42 @@ class DesktopShuffleOrderTest {
     }
 
     @Test
+    fun peekNextDoesNotMoveCurrentPosition() {
+        val order =
+            shuffleOrder(
+                queueSize =
+                    6,
+                currentIndex =
+                    0,
+            )
+
+        val upcoming =
+            order.peekNext(
+                count =
+                    2,
+            )
+
+        assertEquals(
+            2,
+            upcoming.size,
+        )
+        assertEquals(
+            upcoming.first(),
+            order.next(
+                repeatAll =
+                    false,
+            ),
+        )
+        assertEquals(
+            upcoming.drop(1),
+            order.peekNext(
+                count =
+                    1,
+            ),
+        )
+    }
+
+    @Test
     fun previousThenNextRestoresHistory() {
         val order =
             shuffleOrder()

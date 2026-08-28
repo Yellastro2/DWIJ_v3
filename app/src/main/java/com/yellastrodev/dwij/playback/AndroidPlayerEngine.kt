@@ -3,6 +3,7 @@ package com.yellastrodev.dwij.playback
 import android.content.Context
 import android.content.Intent
 import android.util.Log
+import androidx.media3.common.C
 import androidx.media3.common.MediaItem
 import androidx.media3.common.Player
 
@@ -263,6 +264,53 @@ class AndroidPlayerEngine(
 
         withContext(Dispatchers.Main) {
             requireNotNull(service).addTracks(mediaItems)
+        }
+    }
+
+    override suspend fun getUpcomingIndices(
+        limit: Int,
+    ): List<Int> {
+        if (limit <= 0) {
+            return emptyList()
+        }
+
+        prepare()
+
+        return withContext(Dispatchers.Main) {
+            val currentPlayer = requireNotNull(service).player
+            val timeline = currentPlayer.currentTimeline
+            val currentIndex = currentPlayer.currentMediaItemIndex
+
+            if (
+                timeline.isEmpty ||
+                currentIndex == C.INDEX_UNSET
+            ) {
+                return@withContext emptyList()
+            }
+
+            val result = mutableListOf<Int>()
+            val visited = mutableSetOf(currentIndex)
+            var index = currentIndex
+
+            while (result.size < limit) {
+                val nextIndex = timeline.getNextWindowIndex(
+                    index,
+                    currentPlayer.repeatMode,
+                    currentPlayer.shuffleModeEnabled,
+                )
+
+                if (
+                    nextIndex == C.INDEX_UNSET ||
+                    !visited.add(nextIndex)
+                ) {
+                    break
+                }
+
+                result += nextIndex
+                index = nextIndex
+            }
+
+            result
         }
     }
 

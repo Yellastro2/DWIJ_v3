@@ -57,6 +57,7 @@ fun HomeRoute(
     onOpenSettings: () -> Unit,
     onOpenSongMatches: () -> Unit,
     onOpenPlaylists: () -> Unit,
+    onOpenWaves: () -> Unit,
     onOpenYandexPlaylist: (playlistId: String) -> Unit,
     onOpenArtists: () -> Unit,
     onOpenAlbums: () -> Unit,
@@ -240,6 +241,9 @@ fun HomeRoute(
         onWaveClick = {
             component.waveRepository.requestWave()
             onOpenPlayer()
+        },
+        onWavesClick = {
+            onOpenWaves()
         },
         onAllTracksClick = {},
         onArtistsClick = onOpenArtists,

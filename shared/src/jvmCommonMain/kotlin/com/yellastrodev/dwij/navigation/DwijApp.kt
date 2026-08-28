@@ -219,6 +219,11 @@ fun DwijApp(
                             DwijDestination.PLAYLISTS,
                         )
                     },
+                    onOpenWaves = {
+                        navController.navigate(
+                            DwijDestination.WAVES,
+                        )
+                    },
                     onOpenYandexPlaylist = { playlistId ->
                         navController.navigate(
                             DwijDestination.objectRoute(
@@ -293,6 +298,20 @@ fun DwijApp(
                     },
                     onBackClick = {
                         navController.navigateUp()
+                    },
+                )
+            }
+
+            composable(DwijDestination.WAVES) {
+                WaveGridRoute(
+                    component = component,
+                    onBackClick = {
+                        navController.navigateUp()
+                    },
+                    onOpenPlayer = {
+                        navController.navigate(
+                            DwijDestination.PLAYER,
+                        )
                     },
                 )
             }

@@ -9,6 +9,7 @@ import com.yellastrodev.dwij.data.source.WaveRemoteSource
 import com.yellastrodev.yamusicsdk.YamLogger
 import com.yellastrodev.yamusicsdk.entities.TrackShort
 import com.yellastrodev.yamusicsdk.network.YamResult
+import com.yellastrodev.yamusicsdk.rotor.RotorStation
 import com.yellastrodev.yamusicsdk.network.YamError
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -40,9 +41,22 @@ class WaveRepository(
     private var curentWave: dYaWave? = null
     private val loadingGate = AtomicBoolean(false)
     private val mutableIsLoading = MutableStateFlow(false)
+    private var nextBatchJob: Job? = null
 
     /** Общий признак загрузки первой пачки волны для UI и защиты от повторных запросов. */
     val isLoading: StateFlow<Boolean> = mutableIsLoading.asStateFlow()
+
+    /** Возвращает полный каталог Волн и поднимает общий запрос авторизации при 401. */
+    suspend fun getStations(): YamResult<List<RotorStation>> {
+        val result = remote.getStations()
+        if (
+            result is YamResult.Failure &&
+            result.error == YamError.Unauthorized
+        ) {
+            onAuthorizationRequired()
+        }
+        return result
+    }
 
     suspend fun getWave(dTracklist: dTracklist?): List<Song> {
         return when (
@@ -145,6 +159,27 @@ class WaveRepository(
         )
     }
 
+    /** Запускает выбранную станцию из каталога Rotor. */
+    fun requestStationWave(
+        stationId: String,
+        stationTitle: String,
+    ): Boolean {
+        if (stationId.isBlank()) {
+            logger.warning(
+                TAG,
+                "[requestStationWave] Не указан идентификатор станции",
+            )
+            return false
+        }
+
+        return requestWave(
+            StationWaveSeed(
+                stationId = stationId,
+                stationTitle = stationTitle,
+            ),
+        )
+    }
+
     /**
      * Загружает и запускает первую пачку в coroutine вызывающего слоя.
      *
@@ -161,6 +196,8 @@ class WaveRepository(
 
     /** Выполняет сетевую загрузку и публикует подготовленную очередь в общем репозитории плеера. */
     private suspend fun loadAndPlayWave(dtrackList: dTracklist?) {
+        nextBatchJob?.cancel()
+        nextBatchJob = null
         logger.debug(TAG, "[loadAndPlayWave] Запрашиваем ${dtrackList?.getWaveId() ?: "свою"} волну")
         val waveList = getWave(dtrackList)
         if (waveList.isEmpty()) {
@@ -265,9 +302,29 @@ class WaveRepository(
                         "trackId=$trackId",
                 )
             }
-            // Следующую пачку запрашиваем при старте последнего трека очереди.
-            if (it.tracks.lastOrNull()?.id == trackId) {
-                updateWave(it, trackId)
+            val currentIndex = it.tracks.indexOfFirst { track ->
+                track.id == trackId
+            }
+            val remainingTracks = it.tracks.lastIndex - currentIndex
+
+            if (
+                currentIndex >= 0 &&
+                remainingTracks <= WAVE_REFILL_THRESHOLD &&
+                nextBatchJob?.isActive != true
+            ) {
+                nextBatchJob = scope.launch {
+                    try {
+                        updateWave(it, trackId)
+                    } catch (error: CancellationException) {
+                        throw error
+                    } catch (error: Exception) {
+                        logger.error(
+                            TAG,
+                            "[onTrackStarted] Не удалось пополнить очередь волны",
+                            error,
+                        )
+                    }
+                }
             }
         }
     }
@@ -290,6 +347,10 @@ class WaveRepository(
         val result = remote.getNextTracks(wave, lastTrackId)
         when(result){
             is YamResult.Success -> {
+                if (curentWave !== wave) {
+                    return
+                }
+
                 wave.batchId = result.value.batchId
 
                 val knownTrackIds = wave.tracks
@@ -334,6 +395,12 @@ class WaveRepository(
     fun stopObserving() {
         observeJob?.cancel()
         observeJob = null
+        nextBatchJob?.cancel()
+        nextBatchJob = null
+    }
+
+    private companion object {
+        const val WAVE_REFILL_THRESHOLD = 2
     }
 
 }
@@ -375,5 +442,24 @@ private data class ArtistWaveSeed(
 
     private companion object {
         const val TYPE = "ya_artist_wave_seed"
+    }
+}
+
+/** Адаптирует каталожную станцию к существующему контракту seed-объекта rotor. */
+private data class StationWaveSeed(
+    val stationId: String,
+    val stationTitle: String,
+) : dTracklist {
+
+    override fun getdId(): String = stationId
+
+    override fun getDTitle(): String = stationTitle.ifBlank { "Волна" }
+
+    override fun getType(): String = TYPE
+
+    override fun getWaveId(): String = stationId
+
+    private companion object {
+        const val TYPE = "ya_station_wave_seed"
     }
 }

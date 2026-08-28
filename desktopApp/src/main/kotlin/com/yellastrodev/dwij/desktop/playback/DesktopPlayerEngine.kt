@@ -243,6 +243,24 @@ class DesktopPlayerEngine(
         }
     }
 
+    override suspend fun getUpcomingIndices(
+        limit: Int,
+    ): List<Int> = commandMutex.withLock {
+        if (
+            limit <= 0 ||
+            currentIndex !in queue.indices
+        ) {
+            return@withLock emptyList()
+        }
+
+        if (shuffleEnabled) {
+            return@withLock shuffleOrder.peekNext(limit)
+        }
+
+        ((currentIndex + 1)..queue.lastIndex)
+            .take(limit)
+    }
+
     override suspend fun playTrack(
         index: Int,
     ) {

@@ -101,6 +101,19 @@ internal class DesktopShuffleOrder(
         return order[position]
     }
 
+    /** Смотрит вперёд по уже определённому shuffle-порядку, не двигая позицию. */
+    fun peekNext(
+        count: Int,
+    ): List<Int> {
+        if (count <= 0 || position !in order.indices) {
+            return emptyList()
+        }
+
+        return order
+            .drop(position + 1)
+            .take(count)
+    }
+
     fun previous(): Int? {
         if (position !in order.indices) {
             return null

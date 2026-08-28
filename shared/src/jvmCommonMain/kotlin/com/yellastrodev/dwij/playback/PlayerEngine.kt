@@ -26,6 +26,9 @@ interface PlayerEngine {
         tracklist: dTracklist?,
     )
 
+    /** Возвращает индексы ближайших треков в фактическом порядке плеера. */
+    suspend fun getUpcomingIndices(limit: Int): List<Int>
+
     suspend fun playTrack(index: Int)
 
     suspend fun togglePlayPause()

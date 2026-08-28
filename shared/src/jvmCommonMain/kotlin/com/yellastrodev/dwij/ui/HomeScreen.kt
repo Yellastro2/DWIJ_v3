@@ -95,6 +95,7 @@ fun HomeScreen(
     onPlaylistsClick: () -> Unit,
     onTracksClick: () -> Unit,
     onWaveClick: () -> Unit,
+    onWavesClick: () -> Unit,
     onAllTracksClick: () -> Unit,
     onArtistsClick: () -> Unit,
     onAlbumsClick: () -> Unit,
@@ -333,7 +334,7 @@ fun HomeScreen(
                         HomeMenuGrid(
                             onPlaylistsClick = onPlaylistsClick,
                             onTracksClick = onTracksClick,
-                            onWaveClick = onWaveClick,
+                            onWaveClick = onWavesClick,
                             onAllTracksClick = onAllTracksClick,
                             waveEnabled = selectedSource == HomeMusicSource.Yandex,
                         )
@@ -1392,6 +1393,7 @@ private fun HomeScreenPreview() {
         onPlaylistsClick = {},
         onTracksClick = {},
         onWaveClick = {},
+        onWavesClick = {},
         onAllTracksClick = {},
         onArtistsClick = {},
         onAlbumsClick = {},

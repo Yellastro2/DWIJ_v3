@@ -5,6 +5,7 @@ import com.yellastrodev.yamusicsdk.YamApiClient
 import com.yellastrodev.yamusicsdk.YamLogger
 import com.yellastrodev.yamusicsdk.network.YamResult
 import com.yellastrodev.yamusicsdk.rotor.RotorBatch
+import com.yellastrodev.yamusicsdk.rotor.RotorStation
 
 class WaveRemoteSource(private val client: YamApiClient, val logger: YamLogger) {
 
@@ -14,6 +15,11 @@ class WaveRemoteSource(private val client: YamApiClient, val logger: YamLogger) 
         logger.debug(TAG, "getWave: $tag")
         return client.startWave(tag)
     }
+
+    /** Загружает полный серверный каталог Волн. */
+    suspend fun getStations(
+        language: String = "ru",
+    ): YamResult<List<RotorStation>> = client.waveStations(language)
 
     internal suspend fun sendTrackStarted(
         wave: dYaWave,

@@ -204,6 +204,7 @@
     <string name="local_track_download_count">Скачано %1$d из %2$d</string>
     <string name="local_track_download_complete">Трек сохранён локально</string>
     <string name="local_track_download_failed">Не удалось сохранить трек</string>
+    <string name="local_track_download_auth_required">Загрузка остановлена — требуется вход в Яндекс Музыку</string>
     <string name="local_catalog_resolve_channel_name">Уточнение медиатеки</string>
     <string name="local_catalog_resolve_channel_description">Прогресс поиска артистов и альбомов для локальных треков</string>
     <string name="local_catalog_resolve_title">Уточняем локальную медиатеку</string>

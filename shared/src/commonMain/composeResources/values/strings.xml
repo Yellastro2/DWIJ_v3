@@ -94,6 +94,15 @@
         <item quantity="other">%1$d трека</item>
     </plurals>
     <string name="home_wave">Волна</string>
+    <string name="waves_title">Волны</string>
+    <string name="waves_empty">Доступных Волн пока нет</string>
+    <string name="waves_load_failed">Не удалось загрузить Волны</string>
+    <string name="waves_category_personal">Персональная</string>
+    <string name="waves_category_genre">Жанр</string>
+    <string name="waves_category_mood">Настроение</string>
+    <string name="waves_category_activity">Занятие</string>
+    <string name="waves_category_artist">Артист</string>
+    <string name="waves_category_track">Трек</string>
     <string name="home_all_tracks">Ваще всё</string>
     <string name="home_source_local">Локальная</string>
     <string name="home_source_yandex_music">Яндекс Музыка</string>

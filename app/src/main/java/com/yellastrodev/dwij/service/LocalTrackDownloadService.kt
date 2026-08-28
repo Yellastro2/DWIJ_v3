@@ -16,6 +16,7 @@ import androidx.core.app.NotificationCompat
 import androidx.core.content.ContextCompat
 import com.yellastrodev.dwij.R
 import com.yellastrodev.dwij.activities.MainActivity
+import com.yellastrodev.dwij.data.DataError
 import com.yellastrodev.dwij.data.DataResult
 import com.yellastrodev.dwij.data.repo.LocalTrackDownloadProgress
 import com.yellastrodev.dwij.yApplication
@@ -110,6 +111,7 @@ class LocalTrackDownloadService : Service() {
     private suspend fun processQueue() {
         var lastRequest: DownloadRequest? = null
         var lastSucceeded = false
+        var authorizationRequired = false
 
         while (true) {
             var request = synchronized(queueLock) {
@@ -145,6 +147,7 @@ class LocalTrackDownloadService : Service() {
                 ) {
                     is DataResult.Success -> true
                     is DataResult.Failure -> {
+                        authorizationRequired = result.error == DataError.Unauthorized
                         Log.e(
                             TAG,
                             "[processQueue] Не удалось сохранить trackId=${request.trackId}: " +
@@ -172,6 +175,18 @@ class LocalTrackDownloadService : Service() {
                     failedCount++
                 }
             }
+
+            if (authorizationRequired) {
+                synchronized(queueLock) {
+                    requests.clear()
+                    queuedTrackIds.clear()
+                }
+                Log.w(
+                    TAG,
+                    "[processQueue] Очередь остановлена: требуется авторизация Яндекс Музыки",
+                )
+                break
+            }
         }
 
         val finishedRequest = lastRequest
@@ -179,6 +194,7 @@ class LocalTrackDownloadService : Service() {
             val finalNotification = completionNotification(
                 request = finishedRequest,
                 succeeded = synchronized(queueLock) { failedCount == 0 },
+                authorizationRequired = authorizationRequired,
             )
             stopForeground(STOP_FOREGROUND_DETACH)
             notificationManager.notify(NOTIFICATION_ID, finalNotification)
@@ -262,6 +278,7 @@ class LocalTrackDownloadService : Service() {
     private fun completionNotification(
         request: DownloadRequest,
         succeeded: Boolean,
+        authorizationRequired: Boolean,
     ): Notification {
         val (completed, total) = synchronized(queueLock) {
             completedCount to totalCount.coerceAtLeast(1)
@@ -269,10 +286,10 @@ class LocalTrackDownloadService : Service() {
         return baseNotificationBuilder()
             .setContentTitle(
                 getString(
-                    if (succeeded) {
-                        R.string.local_track_download_complete
-                    } else {
-                        R.string.local_track_download_failed
+                    when {
+                        authorizationRequired -> R.string.local_track_download_auth_required
+                        succeeded -> R.string.local_track_download_complete
+                        else -> R.string.local_track_download_failed
                     },
                 ),
             )

@@ -2,9 +2,11 @@ package com.yellastrodev.dwij.data.repo
 
 
 import com.yellastrodev.dwij.data.entities.LocalTracklist
+import com.yellastrodev.dwij.data.entities.MusicSource
 import com.yellastrodev.dwij.data.entities.PlaybackTrack
 import com.yellastrodev.dwij.data.entities.Song
 import com.yellastrodev.dwij.data.entities.dTracklist
+import com.yellastrodev.dwij.data.entities.dYaPlaylist
 import com.yellastrodev.dwij.data.entities.dYaWave
 import com.yellastrodev.dwij.data.entities.toPlaybackTrack
 import com.yellastrodev.dwij.playback.PlaybackSettings
@@ -13,8 +15,10 @@ import com.yellastrodev.dwij.playback.RepeatMode
 import com.yellastrodev.dwij.utils.PlayerEvent
 import com.yellastrodev.dwij.utils.PlayerState
 import com.yellastrodev.yamusicsdk.YamLogger
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharedFlow
@@ -31,6 +35,7 @@ class PlayerRepository(
     private val settings: PlaybackSettings,
     private val scope: CoroutineScope,
     private val isTrackCached: (trackId: String) -> Boolean,
+    private val prefetchTrack: suspend (trackId: String) -> Unit,
     private val continueWave: suspend (dTracklist) -> Unit,
     private val logger: YamLogger
 ) : PlaybackQueue {
@@ -46,6 +51,10 @@ class PlayerRepository(
 
     private var currentSongQueue: List<Song> = emptyList()
     private var currentPlaybackQueue: List<PlaybackTrack> = emptyList()
+    private var queueRevision = 0L
+
+    private var prefetchJob: Job? = null
+    private var lastPrefetchKey: String? = null
 
     private val mutableCurrentTrack = MutableStateFlow<String?>(null)
     val currentTrack: StateFlow<String?> = mutableCurrentTrack.asStateFlow()
@@ -77,6 +86,7 @@ class PlayerRepository(
                 }
 
                 mutableState.value = playerState
+                schedulePrefetch(playerState)
             }
             .launchIn(scope)
 
@@ -246,6 +256,8 @@ class PlayerRepository(
         currentTrackList = songs.map(Song::id)
         currentSongQueue = songs
         currentPlaybackQueue = tracks
+        queueRevision += 1L
+        cancelPrefetch()
 
         mutableCurrentTrack.value = songs[startIndex].id
         mutableCurrentSong.value = songs[startIndex]
@@ -330,10 +342,14 @@ class PlayerRepository(
         currentPlaybackQueue =
             currentPlaybackQueue + playbackTracks
 
+        queueRevision += 1L
+
         engine.appendTracks(
             tracks = playbackTracks,
             tracklist = dtracklist.value,
         )
+
+        schedulePrefetch(state.value)
     }
 
     fun pause() {
@@ -418,6 +434,84 @@ class PlayerRepository(
     }
 
     /**
+     * Поддерживает в LRU-кэше два следующих ЯМ-трека плейлиста или волны.
+     * Задание запускается только после подготовки текущего трека, чтобы фоновая
+     * загрузка не заняла файловый mutex раньше воспроизведения.
+     */
+    private fun schedulePrefetch(
+        playerState: PlayerState,
+    ) {
+        val tracklist = dtracklist.value
+        val isEligibleTracklist = when (tracklist?.getType()) {
+            dYaPlaylist.YA_PLAYLIST,
+            dYaWave.YA_WAVE -> true
+            else -> false
+        }
+
+        if (
+            !isEligibleTracklist ||
+            playerState.pendingTrackChange != null
+        ) {
+            cancelPrefetch()
+            return
+        }
+
+        val currentTrack =
+            currentPlaybackQueue.getOrNull(playerState.currentIndex)
+                ?: run {
+                    cancelPrefetch()
+                    return
+                }
+
+        val requestKey =
+            "$queueRevision|${playerState.isShuffle}|${currentTrack.instanceId}"
+
+        if (requestKey == lastPrefetchKey) {
+            return
+        }
+
+        lastPrefetchKey = requestKey
+        prefetchJob?.cancel()
+
+        val queueSnapshot = currentPlaybackQueue
+
+        prefetchJob = scope.launch(Dispatchers.IO) {
+            val upcomingIndices = engine.getUpcomingIndices(
+                PREFETCH_AHEAD_COUNT,
+            )
+
+            val trackIds = upcomingIndices
+                .mapNotNull(queueSnapshot::getOrNull)
+                .filter { track ->
+                    track.source == MusicSource.YANDEX
+                }
+                .map(PlaybackTrack::id)
+                .distinct()
+                .filterNot(isTrackCached)
+
+            trackIds.forEach { trackId ->
+                try {
+                    prefetchTrack(trackId)
+                } catch (error: CancellationException) {
+                    throw error
+                } catch (error: Exception) {
+                    logger.error(
+                        TAG,
+                        "[schedulePrefetch] Не удалось предзагрузить трек $trackId",
+                        error,
+                    )
+                }
+            }
+        }
+    }
+
+    private fun cancelPrefetch() {
+        prefetchJob?.cancel()
+        prefetchJob = null
+        lastPrefetchKey = null
+    }
+
+    /**
      * Заменяет объединённые Song в уже играющей очереди,
      * не перезапуская платформенный плеер.
      */
@@ -465,5 +559,6 @@ class PlayerRepository(
 
     private companion object {
         const val TAG = "PlayerRepository"
+        const val PREFETCH_AHEAD_COUNT = 2
     }
 }

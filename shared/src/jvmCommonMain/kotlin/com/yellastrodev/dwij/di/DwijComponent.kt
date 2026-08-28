@@ -164,7 +164,7 @@ class DwijComponent private constructor(
             cacheManager = cacheManager,
             logger = logger,
             onAuthorizationRequired =
-                ::requireYandexAuthorization,
+                yandexAuthorizationRequiredNotifier::notifyRequired,
         )
     }
 
@@ -215,6 +215,8 @@ class DwijComponent private constructor(
             scope = applicationScope,
             isTrackCached =
                 trackCacheRepo::isCached,
+            prefetchTrack =
+                trackCacheRepo::prefetch,
             continueWave = { tracklist ->
                 waveRepository.playWave(
                     tracklist,
