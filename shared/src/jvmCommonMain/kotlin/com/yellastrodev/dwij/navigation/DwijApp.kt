@@ -43,6 +43,8 @@ import com.yellastrodev.dwij.ui.HomeCompactPlayerUiState
 import com.yellastrodev.dwij.ui.theme.DwijColors
 import com.yellastrodev.dwij.utils.TrackChangeDirection
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.emptyFlow
 import kotlinx.coroutines.flow.flowOn
 import kotlinx.coroutines.launch
 import org.jetbrains.compose.resources.stringResource
@@ -59,6 +61,7 @@ fun DwijApp(
     component: DwijComponent,
     platform: DwijAppPlatform,
     modifier: Modifier = Modifier,
+    playerOpenRequests: Flow<Unit> = emptyFlow(),
 ) {
     val navController = rememberNavController()
     val backStackEntry by navController.currentBackStackEntryAsState()
@@ -72,6 +75,14 @@ fun DwijApp(
     val localTrackDownloadRequester =
         platform.rememberLocalTrackDownloadRequester()
     val shareRequester = platform.rememberShareRequester()
+
+    LaunchedEffect(navController, playerOpenRequests) {
+        playerOpenRequests.collect {
+            navController.navigate(DwijDestination.PLAYER) {
+                launchSingleTop = true
+            }
+        }
+    }
 
     var showAuthorizationRequiredDialog by remember(component) {
         mutableStateOf(false)

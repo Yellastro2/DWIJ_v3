@@ -18,7 +18,7 @@ interface SettingsPlatform {
 
     val oauthClientSecret: String
 
-    /** Показывает действие отправки журналов только на поддерживаемых платформах. */
+    /** Показывает действие экспорта журналов только на поддерживаемых платформах. */
     val canShareLogs: Boolean
         get() = false
 
@@ -37,7 +37,7 @@ interface SettingsPlatform {
         url: String,
     ): Boolean
 
-    /** Создаёт диагностический архив и открывает системное меню отправки. */
+    /** Создаёт диагностический архив и передаёт его в платформенный экспорт. */
     suspend fun shareLogs(
         chooserTitle: String,
     ) = Unit

@@ -14,6 +14,8 @@ import com.yellastrodev.yamusicsdk.network.YamError
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
+import kotlinx.coroutines.async
+import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.withContext
 import kotlinx.coroutines.flow.launchIn
@@ -46,16 +48,29 @@ class WaveRepository(
     /** Общий признак загрузки первой пачки волны для UI и защиты от повторных запросов. */
     val isLoading: StateFlow<Boolean> = mutableIsLoading.asStateFlow()
 
-    /** Возвращает полный каталог Волн и поднимает общий запрос авторизации при 401. */
-    suspend fun getStations(): YamResult<List<RotorStation>> {
-        val result = remote.getStations()
-        if (
-            result is YamResult.Failure &&
-            result.error == YamError.Unauthorized
-        ) {
+    /** Рекомендации идут перед каталогом; сбой одного запроса сохраняет другой список. */
+    suspend fun getStations(): YamResult<List<RotorStation>> = coroutineScope {
+        val recommendationsRequest = async { remote.getRecommendedStations() }
+        val catalogRequest = async { remote.getStations() }
+        val recommendations = recommendationsRequest.await()
+        val catalog = catalogRequest.await()
+        val failures = listOfNotNull(
+            recommendations as? YamResult.Failure,
+            catalog as? YamResult.Failure,
+        )
+        if (failures.any { it.error == YamError.Unauthorized }) {
             onAuthorizationRequired()
         }
-        return result
+        failures.forEach {
+            logger.warning(TAG, "[getStations] Часть списка Волн не загружена: ${it.error}")
+        }
+        if (recommendations is YamResult.Success || catalog is YamResult.Success) {
+            val preferred = (recommendations as? YamResult.Success)?.value.orEmpty()
+            val remaining = (catalog as? YamResult.Success)?.value.orEmpty()
+            YamResult.Success((preferred + remaining).distinctBy { it.id })
+        } else {
+            failures.first()
+        }
     }
 
     suspend fun getWave(dTracklist: dTracklist?): List<Song> {

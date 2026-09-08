@@ -59,9 +59,9 @@
     <string name="settings_music_directory_picker_title">Выберите папку с музыкой</string>
     <string name="settings_logs_title">Диагностика</string>
     <string name="settings_logs_description">Две последние сессии приложения в ZIP-архиве</string>
-    <string name="settings_logs_share">Отправить</string>
-    <string name="settings_logs_chooser_title">Отправить журналы приложения</string>
-    <string name="settings_logs_share_error">Не удалось подготовить или отправить журналы</string>
+    <string name="settings_logs_share">Экспортировать</string>
+    <string name="settings_logs_chooser_title">Экспортировать журналы приложения</string>
+    <string name="settings_logs_share_error">Не удалось подготовить или экспортировать журналы</string>
     <string name="home_playlists">Плейлисты</string>
     <string name="home_tracks">Треки</string>
     <string name="track_list_all_title">Все треки</string>
@@ -95,6 +95,7 @@
     </plurals>
     <string name="home_wave">Волна</string>
     <string name="waves_title">Волны</string>
+    <string name="waves_default_title">Моя волна</string>
     <string name="waves_empty">Доступных Волн пока нет</string>
     <string name="waves_load_failed">Не удалось загрузить Волны</string>
     <string name="waves_category_personal">Персональная</string>

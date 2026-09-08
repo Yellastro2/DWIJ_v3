@@ -1,5 +1,6 @@
 package com.yellastrodev.dwij.activities
 
+import android.content.Intent
 import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
@@ -15,6 +16,8 @@ import com.yellastrodev.dwij.navigation.AndroidDwijAppPlatform
 import com.yellastrodev.dwij.navigation.DwijApp
 import com.yellastrodev.dwij.ui.LocalYamLogger
 import com.yellastrodev.dwij.yApplication
+import kotlinx.coroutines.channels.Channel
+import kotlinx.coroutines.flow.receiveAsFlow
 
 /**
  * Android-точка входа приложения.
@@ -22,6 +25,9 @@ import com.yellastrodev.dwij.yApplication
  * Создаёт Android-зависимости и запускает полностью shared Compose-корень.
  */
 class MainActivity : ComponentActivity() {
+
+    private val playerOpenRequests = Channel<Unit>(Channel.CONFLATED)
+    private val playerOpenRequestFlow = playerOpenRequests.receiveAsFlow()
 
     val playerModel: PlayerModel by viewModels {
         viewModelFactory {
@@ -57,6 +63,8 @@ class MainActivity : ComponentActivity() {
             savedInstanceState,
         )
 
+        consumePlayerOpenIntent(intent)
+
         enableEdgeToEdge()
 
         WindowCompat
@@ -90,8 +98,29 @@ class MainActivity : ComponentActivity() {
                         dwijApplication.component,
                     platform =
                         AndroidDwijAppPlatform,
+                    playerOpenRequests =
+                        playerOpenRequestFlow,
                 )
             }
         }
+    }
+
+    override fun onNewIntent(intent: Intent) {
+        super.onNewIntent(intent)
+        setIntent(intent)
+        consumePlayerOpenIntent(intent)
+    }
+
+    /** Передаёт одноразовую команду системного медиаплеера в Compose-навигацию. */
+    private fun consumePlayerOpenIntent(intent: Intent?) {
+        if (intent?.action != ACTION_OPEN_PLAYER) return
+
+        playerOpenRequests.trySend(Unit)
+        intent.action = Intent.ACTION_MAIN
+    }
+
+    companion object {
+        const val ACTION_OPEN_PLAYER =
+            "com.yellastrodev.dwij.action.OPEN_PLAYER"
     }
 }

@@ -81,6 +81,8 @@ fun main() {
                 runtime.paths,
             musicDirectoryStore =
                 runtime.musicDirectoryStore,
+            sessionLogStore =
+                runtime.sessionLogStore,
         )
 
     val taskbarControls =
@@ -169,7 +171,7 @@ fun main() {
                 }
 
                 /*
-                 * Сохраняет volume и закрывает playback/SMTC.
+                 * Сохраняет volume и закрывает playback/SMTC и журнал сессии.
                  */
                 runtime.close()
 

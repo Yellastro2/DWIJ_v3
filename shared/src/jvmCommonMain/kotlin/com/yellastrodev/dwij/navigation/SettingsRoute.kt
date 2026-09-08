@@ -897,7 +897,7 @@ fun SettingsRoute(
                                 } catch (error: Exception) {
                                     logger.error(
                                         TAG,
-                                        "[shareLogs] Не удалось подготовить или отправить журналы",
+                                        "[shareLogs] Не удалось подготовить или экспортировать журналы",
                                         error,
                                     )
                                     showMessage(

@@ -27,6 +27,7 @@ class DesktopRuntime private constructor(
     val paths: DesktopPaths,
     val settingsStore: DesktopLocalKeyValueStore,
     val musicDirectoryStore: DesktopMusicDirectoryStore,
+    val sessionLogStore: DesktopSessionLogStore,
     val audioMetadataReader: DesktopAudioMetadataReader,
     private val playerEngine: DesktopPlayerEngine,
 ) {
@@ -40,7 +41,7 @@ class DesktopRuntime private constructor(
             playerEngine
 
     /**
-     * Сохраняет desktop-only состояние и освобождает playback backend.
+     * Сохраняет desktop-only состояние и закрывает playback backend и журнал сессии.
      */
     fun close() {
         settingsStore.edit {
@@ -53,7 +54,11 @@ class DesktopRuntime private constructor(
             )
         }
 
-        playerEngine.close()
+        try {
+            playerEngine.close()
+        } finally {
+            sessionLogStore.close()
+        }
     }
 
     companion object {
@@ -68,7 +73,7 @@ class DesktopRuntime private constructor(
             1f
 
         /**
-         * Собирает desktop-аналоги AndroidDwijComponentFactory/yApplication.
+         * Собирает desktop-аналоги AndroidDwijComponentFactory/yApplication и запускает файловый журнал.
          */
         fun create():
                 DesktopRuntime {
@@ -82,8 +87,23 @@ class DesktopRuntime private constructor(
                             Dispatchers.IO,
                 )
 
+            val localKeyValueStore =
+                DesktopLocalKeyValueStore(
+                    paths.settingsFile,
+                )
+
+            val sessionLogStore =
+                DesktopSessionLogStore.start(
+                    paths =
+                        paths,
+                    settingsStore =
+                        localKeyValueStore,
+                )
+
             val logger =
-                YamLoggerDesktop()
+                YamLoggerDesktop(
+                    sessionLogStore,
+                )
 
             val audioMetadataReader =
                 DesktopAudioMetadataReader(
@@ -97,11 +117,6 @@ class DesktopRuntime private constructor(
                             paths.databaseFile
                                 .absolutePath,
                     ),
-                )
-
-            val localKeyValueStore =
-                DesktopLocalKeyValueStore(
-                    paths.settingsFile,
                 )
 
             val musicDirectoryStore =
@@ -266,6 +281,8 @@ class DesktopRuntime private constructor(
                     localKeyValueStore,
                 musicDirectoryStore =
                     musicDirectoryStore,
+                sessionLogStore =
+                    sessionLogStore,
                 audioMetadataReader =
                     audioMetadataReader,
                 playerEngine =

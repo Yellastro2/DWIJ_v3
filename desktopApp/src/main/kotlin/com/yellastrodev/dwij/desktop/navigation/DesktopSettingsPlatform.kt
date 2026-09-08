@@ -6,6 +6,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberUpdatedState
 import com.yellastrodev.dwij.desktop.DesktopPaths
 import com.yellastrodev.dwij.desktop.DesktopMusicDirectoryStore
+import com.yellastrodev.dwij.desktop.DesktopSessionLogStore
 import com.yellastrodev.dwij.navigation.SettingsPlatform
 import java.awt.Desktop
 import java.awt.EventQueue
@@ -18,6 +19,7 @@ import java.net.URI
 import java.util.Properties
 import javax.swing.JFileChooser
 import javax.swing.UIManager
+import javax.swing.filechooser.FileNameExtensionFilter
 
 /**
  * Windows/JVM-внешние действия экрана настроек.
@@ -26,22 +28,27 @@ import javax.swing.UIManager
 fun rememberDesktopSettingsPlatform(
     paths: DesktopPaths,
     musicDirectoryStore: DesktopMusicDirectoryStore,
+    sessionLogStore: DesktopSessionLogStore,
 ): SettingsPlatform =
     remember(
         paths,
         musicDirectoryStore,
+        sessionLogStore,
     ) {
         DesktopSettingsPlatform(
             paths =
                 paths,
             musicDirectoryStore =
                 musicDirectoryStore,
+            sessionLogStore =
+                sessionLogStore,
         )
     }
 
 private class DesktopSettingsPlatform(
     private val paths: DesktopPaths,
     private val musicDirectoryStore: DesktopMusicDirectoryStore,
+    private val sessionLogStore: DesktopSessionLogStore,
 ) : SettingsPlatform {
 
     override val appVersion: String
@@ -50,6 +57,9 @@ private class DesktopSettingsPlatform(
                 "dwij.app.version",
                 "unknown",
             )
+
+    override val canShareLogs: Boolean
+        get() = true
 
     private val localProperties:
         Properties by lazy {
@@ -104,6 +114,21 @@ private class DesktopSettingsPlatform(
         Long =
         paths.cacheDirectory
             .usableSpace
+
+    /** Предлагает место для ZIP и атомарно выгружает две последние сессии. */
+    override suspend fun shareLogs(
+        chooserTitle: String,
+    ) {
+        val targetFile =
+            chooseLogArchiveTarget(
+                chooserTitle,
+            )
+                ?: return
+
+        sessionLogStore.exportArchive(
+            targetFile,
+        )
+    }
 
     override fun copyText(
         label: String,
@@ -214,6 +239,102 @@ private class DesktopSettingsPlatform(
             )
             .map(File::getAbsolutePath)
 
+    /** Открывает Windows-диалог сохранения и не перезаписывает существующий файл. */
+    private fun chooseLogArchiveTarget(
+        dialogTitle: String,
+    ): File? {
+        var selectedFile: File? =
+            null
+
+        val showDialog = {
+            runCatching {
+                UIManager.setLookAndFeel(
+                    UIManager.getSystemLookAndFeelClassName(),
+                )
+            }
+
+            val userHome =
+                File(
+                    System.getProperty(
+                        "user.home",
+                        ".",
+                    ),
+                ).absoluteFile
+
+            val exportDirectory =
+                File(
+                    userHome,
+                    "Downloads",
+                ).takeIf(
+                    File::isDirectory,
+                )
+                    ?: userHome.takeIf(
+                        File::isDirectory,
+                    )
+                    ?: File(".")
+                        .absoluteFile
+
+            val chooser =
+                JFileChooser(
+                    exportDirectory,
+                ).apply {
+                    this.dialogTitle =
+                        dialogTitle
+                    dialogType =
+                        JFileChooser.SAVE_DIALOG
+                    fileSelectionMode =
+                        JFileChooser.FILES_ONLY
+                    isAcceptAllFileFilterUsed =
+                        false
+                    isMultiSelectionEnabled =
+                        false
+                    fileFilter =
+                        FileNameExtensionFilter(
+                            "ZIP (*.zip)",
+                            "zip",
+                        )
+                    this.selectedFile =
+                        availableLogArchiveTarget(
+                            File(
+                                exportDirectory,
+                                LOG_ARCHIVE_FILE_NAME,
+                            ),
+                        )
+                }
+
+            val result =
+                chooser.showSaveDialog(
+                    KeyboardFocusManager
+                        .getCurrentKeyboardFocusManager()
+                        .activeWindow,
+                )
+
+            if (
+                result ==
+                JFileChooser.APPROVE_OPTION
+            ) {
+                selectedFile =
+                    chooser.selectedFile
+                        ?.let(
+                            ::withZipExtension,
+                        )
+                        ?.let(
+                            ::availableLogArchiveTarget,
+                        )
+            }
+        }
+
+        if (EventQueue.isDispatchThread()) {
+            showDialog()
+        } else {
+            EventQueue.invokeAndWait {
+                showDialog()
+            }
+        }
+
+        return selectedFile
+    }
+
     @Composable
     override fun ResumeEffect(
         onResume: () -> Unit,
@@ -273,4 +394,74 @@ private class DesktopSettingsPlatform(
                     localProperty,
                     "",
                 )
+
+    private companion object {
+        const val LOG_ARCHIVE_FILE_NAME =
+            "dwij-app-session-logs.zip"
+
+        /** Добавляет расширение ZIP, если пользователь его не указал. */
+        fun withZipExtension(
+            file: File,
+        ): File {
+            val absoluteFile =
+                file.absoluteFile
+
+            return if (
+                absoluteFile.name.endsWith(
+                    ".zip",
+                    ignoreCase =
+                        true,
+                )
+            ) {
+                absoluteFile
+            } else {
+                File(
+                    absoluteFile.parentFile,
+                    "${absoluteFile.name}.zip",
+                )
+            }
+        }
+
+        /** Выбирает свободное имя с числовым суффиксом вместо перезаписи. */
+        fun availableLogArchiveTarget(
+            preferredFile: File,
+        ): File {
+            if (!preferredFile.exists()) {
+                return preferredFile
+            }
+
+            val parentDirectory =
+                preferredFile.absoluteFile
+                    .parentFile
+
+            val baseName =
+                if (
+                    preferredFile.name.endsWith(
+                        ".zip",
+                        ignoreCase =
+                            true,
+                    )
+                ) {
+                    preferredFile.name.dropLast(
+                        4,
+                    )
+                } else {
+                    preferredFile.name
+                }
+
+            var suffix = 1
+            var candidate: File
+
+            do {
+                candidate =
+                    File(
+                        parentDirectory,
+                        "$baseName-$suffix.zip",
+                    )
+                suffix += 1
+            } while (candidate.exists())
+
+            return candidate
+        }
+    }
 }

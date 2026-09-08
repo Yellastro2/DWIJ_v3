@@ -21,6 +21,10 @@ class WaveRemoteSource(private val client: YamApiClient, val logger: YamLogger) 
         language: String = "ru",
     ): YamResult<List<RotorStation>> = client.waveStations(language)
 
+    /** Загружает персональные рекомендации Волн из dashboard Яндекса. */
+    suspend fun getRecommendedStations(): YamResult<List<RotorStation>> =
+        client.recommendedWaveStations()
+
     internal suspend fun sendTrackStarted(
         wave: dYaWave,
         trackId: String,

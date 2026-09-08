@@ -1,19 +1,19 @@
 package com.yellastrodev.dwij.desktop
 
 import com.yellastrodev.yamusicsdk.YamLogger
-import java.time.LocalDateTime
-import java.time.format.DateTimeFormatter
 
 /**
- * Простой stdout/stderr logger для desktop-прототипа.
+ * Пишет desktop-логи в консоль и файл текущей сессии.
  */
-class YamLoggerDesktop : YamLogger {
+class YamLoggerDesktop(
+    private val sessionLogStore: DesktopSessionLogStore,
+) : YamLogger {
 
     override fun info(
         tag: String,
         message: String,
     ) {
-        printLine(
+        sessionLogStore.write(
             level = "I",
             tag = tag,
             message = message,
@@ -24,7 +24,7 @@ class YamLoggerDesktop : YamLogger {
         tag: String,
         message: String,
     ) {
-        printLine(
+        sessionLogStore.write(
             level = "D",
             tag = tag,
             message = message,
@@ -35,7 +35,7 @@ class YamLoggerDesktop : YamLogger {
         tag: String,
         message: String,
     ) {
-        printLine(
+        sessionLogStore.write(
             level = "W",
             tag = tag,
             message = message,
@@ -47,44 +47,11 @@ class YamLoggerDesktop : YamLogger {
         message: String,
         cause: Throwable?,
     ) {
-        System.err.println(
-            format(
-                level = "E",
-                tag = tag,
-                message = message,
-            ),
+        sessionLogStore.write(
+            level = "E",
+            tag = tag,
+            message = message,
+            cause = cause,
         )
-
-        cause?.printStackTrace(
-            System.err,
-        )
-    }
-
-    private fun printLine(
-        level: String,
-        tag: String,
-        message: String,
-    ) {
-        println(
-            format(
-                level = level,
-                tag = tag,
-                message = message,
-            ),
-        )
-    }
-
-    private fun format(
-        level: String,
-        tag: String,
-        message: String,
-    ): String =
-        "${LocalDateTime.now().format(TIME_FORMAT)} $level/$tag: $message"
-
-    private companion object {
-        val TIME_FORMAT: DateTimeFormatter =
-            DateTimeFormatter.ofPattern(
-                "HH:mm:ss.SSS",
-            )
     }
 }

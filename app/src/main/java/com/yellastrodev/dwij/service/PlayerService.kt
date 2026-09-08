@@ -1,5 +1,7 @@
 package com.yellastrodev.dwij.service
 
+import android.app.PendingIntent
+import android.content.Intent
 import android.util.Log
 import androidx.media3.common.AudioAttributes
 import androidx.media3.common.C
@@ -9,6 +11,7 @@ import androidx.media3.exoplayer.ExoPlayer
 import androidx.media3.exoplayer.source.DefaultMediaSourceFactory
 import androidx.media3.session.MediaSession
 import androidx.media3.session.MediaSessionService
+import com.yellastrodev.dwij.activities.MainActivity
 import com.yellastrodev.dwij.data.repo.TrackCacheRepository
 import com.yellastrodev.dwij.data.source.YaLazyDataSourceFactory
 import com.yellastrodev.dwij.playback.AndroidPlaybackFeedbackAdapter
@@ -73,7 +76,19 @@ class PlayerService : MediaSessionService() {
             true,
         )
 
-        mediaSession = MediaSession.Builder(this, player).build()
+        val sessionActivity = PendingIntent.getActivity(
+            this,
+            PLAYER_ACTIVITY_REQUEST_CODE,
+            Intent(this, MainActivity::class.java).apply {
+                action = MainActivity.ACTION_OPEN_PLAYER
+                flags = Intent.FLAG_ACTIVITY_SINGLE_TOP or Intent.FLAG_ACTIVITY_CLEAR_TOP
+            },
+            PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE,
+        )
+
+        mediaSession = MediaSession.Builder(this, player)
+            .setSessionActivity(sessionActivity)
+            .build()
         addSession(mediaSession)
 
         playerListener = AndroidPlayerListener(
@@ -245,5 +260,6 @@ class PlayerService : MediaSessionService() {
 
     private companion object {
         const val TAG = "PlayerService"
+        const val PLAYER_ACTIVITY_REQUEST_CODE = 1
     }
 }

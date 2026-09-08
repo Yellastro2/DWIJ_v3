@@ -27,6 +27,7 @@ import com.yellastrodev.dwij.resources.waves_category_genre
 import com.yellastrodev.dwij.resources.waves_category_mood
 import com.yellastrodev.dwij.resources.waves_category_personal
 import com.yellastrodev.dwij.resources.waves_category_track
+import com.yellastrodev.dwij.resources.waves_default_title
 import com.yellastrodev.dwij.resources.waves_empty
 import com.yellastrodev.dwij.resources.waves_load_failed
 import com.yellastrodev.dwij.resources.waves_title
@@ -47,7 +48,7 @@ import kotlinx.coroutines.withContext
 import org.jetbrains.compose.resources.painterResource
 import org.jetbrains.compose.resources.stringResource
 
-/** Экран полного каталога Волн Яндекс Музыки. */
+/** Моя волна, персональные рекомендации и оставшийся каталог в одной сетке. */
 @Composable
 fun WaveGridRoute(
     component: DwijComponent,
@@ -97,7 +98,20 @@ fun WaveGridRoute(
     val categoryActivity = stringResource(Res.string.waves_category_activity)
     val categoryArtist = stringResource(Res.string.waves_category_artist)
     val categoryTrack = stringResource(Res.string.waves_category_track)
-    val items = stations.map { station ->
+    val defaultWaveTitle = stringResource(Res.string.waves_default_title)
+    val defaultWave = stations
+        .firstOrNull { station -> station.id == DEFAULT_WAVE_ID }
+        ?.copy(name = defaultWaveTitle)
+        ?: RotorStation(
+            id = DEFAULT_WAVE_ID,
+            name = defaultWaveTitle,
+            category = "user",
+            feedbackSource = "",
+        )
+    val displayedStations = listOf(defaultWave) + stations.filterNot { station ->
+        station.id == DEFAULT_WAVE_ID
+    }
+    val items = displayedStations.map { station ->
         WaveGridItem(
             station = station,
             title = station.name.ifBlank {
@@ -228,3 +242,4 @@ private fun WaveGridItemContent(
 
 private const val WAVE_GRID_TAG = "WaveGridRoute"
 private const val WAVE_COVER_TYPE = "wave"
+private const val DEFAULT_WAVE_ID = "user:onyourwave"
