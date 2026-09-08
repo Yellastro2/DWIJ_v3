@@ -3,6 +3,8 @@ package com.yellastrodev.dwij.data.repo
 import com.yellastrodev.dwij.CacheManager
 import com.yellastrodev.dwij.data.DataError
 import com.yellastrodev.dwij.data.DataResult
+import com.yellastrodev.dwij.playback.stream.StreamingTrackCache
+import com.yellastrodev.dwij.playback.stream.StreamingTrackSession
 import com.yellastrodev.yamusicsdk.YamLogger
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
@@ -52,6 +54,9 @@ class TrackCacheRepository(
 ) {
 
     private val fileMutex = Mutex()
+    private val streamingDirectory = File(cacheDir, "inflight")
+    @Volatile
+    private var streamingCache: StreamingTrackCache? = null
 
     private val mutableLocalDownloads =
         MutableStateFlow<Map<String, LocalTrackDownloadProgress>>(emptyMap())
@@ -66,6 +71,9 @@ class TrackCacheRepository(
     init {
         cacheDir.mkdirs()
         persistentDir.mkdirs()
+        streamingDirectory.mkdirs()
+        streamingDirectory.listFiles { file -> file.isFile && file.extension == PART_FILE_EXTENSION }
+            ?.forEach(File::delete)
         persistentDir
             .listFiles { file -> file.isFile && file.extension == PART_FILE_EXTENSION }
             ?.forEach(File::delete)
@@ -73,6 +81,42 @@ class TrackCacheRepository(
 
     private fun cacheFile(trackId: String): File =
         File(cacheDir, "$trackId.mp3")
+
+    /** Возвращает только готовый непустой файл; временные диапазоны сюда не попадают. */
+    fun readyFile(trackId: String): File? =
+        persistentFile(trackId).takeIf { it.isFile && it.length() > 0L }
+            ?: cacheFile(trackId).takeIf { it.isFile && it.length() > 0L }?.also {
+                it.setLastModified(System.currentTimeMillis())
+            }
+
+    /** Создаёт принадлежащий плееру потоковый кэш с общим JVM-механизмом диапазонов. */
+    @Synchronized
+    fun createStreamingCache(): StreamingTrackCache {
+        check(streamingCache == null) { "Потоковый кэш уже подключён" }
+        return StreamingTrackCache(
+            createSession = { trackId, scope ->
+                require(trackId.matches(Regex("[A-Za-z0-9:_-]+"))) { "Некорректный ID трека" }
+                streamingDirectory.mkdirs()
+                logger.debug(TAG, "[createStreamingCache] Начата потоковая загрузка трека $trackId")
+                StreamingTrackSession(
+                    trackId = trackId,
+                    temporary = File.createTempFile("audio-", ".part", streamingDirectory),
+                    source = trackRepo.streamingSource,
+                    scope = scope,
+                    publish = { temporary ->
+                        cacheFile(trackId).also { target ->
+                            publishTemporary(temporary, target)
+                            logger.debug(TAG, "[streaming] Трек $trackId полностью сохранён в кэш")
+                        }
+                    },
+                    trimCache = { cacheManager.ensureWithinLimit() },
+                    onFailure = { error -> handleDownloadFailure(trackId, error) },
+                    log = { message -> logger.debug("TrackStream", message) },
+                )
+            },
+            onClose = { streamingCache = null },
+        ).also { streamingCache = it }
+    }
 
     /** Возвращает неочевидное пользователю имя постоянного файла по SHA-256 trackId. */
     fun persistentFile(trackId: String): File =
@@ -147,6 +191,8 @@ class TrackCacheRepository(
 
     /** Фоново прогревает обычный LRU-кэш, не создавая постоянную копию трека. */
     suspend fun prefetch(trackId: String) {
+        // Android-плеер сам наполняет потоковый кэш; полная предзагрузка создаст второй запрос.
+        if (streamingCache != null) return
         getOrDownload(trackId)
     }
 
@@ -177,6 +223,7 @@ class TrackCacheRepository(
 
                 try {
                     val cached = cacheFile(trackId)
+                    val activeStreamingCache = streamingCache
                     val result = if (cached.isFile && cached.length() > 0L) {
                         copyCachedTrack(
                             trackId = trackId,
@@ -184,6 +231,13 @@ class TrackCacheRepository(
                             target = temporary,
                             onProgress = onProgress,
                         )
+                    } else if (activeStreamingCache != null) {
+                        val copied = temporary.outputStream().buffered().use { output ->
+                            activeStreamingCache.copyTo(trackId, output) { downloaded, total ->
+                                publishProgress(trackId, downloaded, total, onProgress)
+                            }
+                        }
+                        DataResult.Success(copied)
                     } else {
                         temporary.outputStream().buffered().use { output ->
                             trackRepo.downloadTrackTo(
@@ -272,6 +326,7 @@ class TrackCacheRepository(
 
     /** Очищает только LRU-кэш; постоянное локальное хранение остаётся. */
     fun clear() {
+        streamingCache?.clear()
         cacheDir.deleteRecursively()
         cacheDir.mkdirs()
     }

@@ -14,6 +14,8 @@ import androidx.media3.session.MediaSessionService
 import com.yellastrodev.dwij.activities.MainActivity
 import com.yellastrodev.dwij.data.repo.TrackCacheRepository
 import com.yellastrodev.dwij.data.source.YaLazyDataSourceFactory
+import com.yellastrodev.dwij.data.source.yandexStreamingTrackId
+import com.yellastrodev.dwij.playback.stream.StreamingTrackCache
 import com.yellastrodev.dwij.playback.AndroidPlaybackFeedbackAdapter
 import com.yellastrodev.dwij.playback.AndroidPlayerListener
 import com.yellastrodev.dwij.playback.PlaybackStateStore
@@ -35,6 +37,21 @@ class PlayerService : MediaSessionService() {
 
     private lateinit var mediaSession: MediaSession
     private lateinit var playerListener: AndroidPlayerListener
+    private lateinit var streamingCache: StreamingTrackCache
+
+    private val streamingListener = object : Player.Listener {
+        override fun onMediaItemTransition(mediaItem: MediaItem?, reason: Int) {
+            streamingCache.selectTrack(
+                yandexStreamingTrackId(mediaItem?.localConfiguration?.uri?.toString()),
+            )
+        }
+
+        override fun onPlaybackStateChanged(playbackState: Int) {
+            if (playbackState == Player.STATE_IDLE || playbackState == Player.STATE_ENDED) {
+                streamingCache.stopPlayback()
+            }
+        }
+    }
 
     private val serviceScope =
         CoroutineScope(SupervisorJob() + Dispatchers.Main.immediate)
@@ -61,13 +78,15 @@ class PlayerService : MediaSessionService() {
     override fun onCreate() {
         super.onCreate()
 
-        val dataSourceFactory = YaLazyDataSourceFactory(this, trackCacheRepo)
+        streamingCache = trackCacheRepo.createStreamingCache()
+        val dataSourceFactory = YaLazyDataSourceFactory(this, trackCacheRepo, streamingCache)
 
         player = ExoPlayer.Builder(this)
             .setMediaSourceFactory(DefaultMediaSourceFactory(dataSourceFactory))
             .setHandleAudioBecomingNoisy(true)
             .build()
 
+        player.addListener(streamingListener)
         player.setAudioAttributes(
             AudioAttributes.Builder()
                 .setUsage(C.USAGE_MEDIA)
@@ -252,7 +271,12 @@ class PlayerService : MediaSessionService() {
             mediaSession.release()
         }
         if (::player.isInitialized) {
+            player.removeListener(streamingListener)
             player.release()
+        }
+
+        if (::streamingCache.isInitialized) {
+            streamingCache.close()
         }
 
         super.onDestroy()

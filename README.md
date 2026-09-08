@@ -18,6 +18,8 @@ Windows-версия пока развивается как desktop-порт и 
 - Общий Compose-интерфейс, репозитории и настройки для Android и Windows.
 - Фоновое воспроизведение и системное управление через Media3/MediaSession на
   Android; JavaFX-аудиобэкенд и Windows taskbar controls на desktop.
+- Потоковое воспроизведение ЯМ на Android и Windows с собственным кэшем диапазонов;
+  [устройство и сценарии проверки](docs/yandex-streaming.md).
 
 ## Устройство проекта
 

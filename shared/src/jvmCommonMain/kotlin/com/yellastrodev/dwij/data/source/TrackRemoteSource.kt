@@ -5,10 +5,28 @@ import com.yellastrodev.dwij.data.entities.dYaTrack
 import com.yellastrodev.dwij.data.entities.toEntity
 import com.yellastrodev.dwij.data.toDataError
 import com.yellastrodev.yamusicsdk.YamApiClient
+import com.yellastrodev.yamusicsdk.download.AudioRange
+import com.yellastrodev.dwij.playback.stream.StreamingAudioSource
 import com.yellastrodev.yamusicsdk.network.YamResult
 import java.io.OutputStream
 
-class TrackRemoteSource(private val client: YamApiClient) {
+class TrackRemoteSource(private val client: YamApiClient) : StreamingAudioSource {
+    /** Получает ссылку один раз на сессию потокового воспроизведения. */
+    override suspend fun resolveUrl(trackId: String): DataResult<String> =
+        when (val result = client.trackDownloadUrl(trackId)) {
+            is YamResult.Success -> DataResult.Success(result.value)
+            is YamResult.Failure -> DataResult.Failure(result.error.toDataError())
+        }
+
+    override suspend fun readRange(
+        url: String, start: Long, length: Long,
+        onHeaders: (AudioRange) -> Unit,
+        onBytes: (Long, ByteArray, Int) -> Unit,
+    ): DataResult<Unit> = when (val result = client.audioRange(url, start, length, onHeaders, onBytes)) {
+        is YamResult.Success -> DataResult.Success(Unit)
+        is YamResult.Failure -> DataResult.Failure(result.error.toDataError())
+    }
+
     suspend fun fetch(track: dYaTrack): DataResult<ByteArray> =
         when (val result = client.trackDownloadBytes(track.id)) {
             is YamResult.Success -> DataResult.Success(result.value)

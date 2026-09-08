@@ -47,6 +47,8 @@ class DesktopPlayerEngine(
     suspend (PlaybackTrack) -> File? = {
         null
     },
+    private val closeSource: () -> Unit = {},
+    private val resetSource: () -> Unit = {},
 ) : PlayerEngine,
     PlayerVolumeControl {
 
@@ -350,6 +352,7 @@ class DesktopPlayerEngine(
     override suspend fun seekTo(
         positionMs: Long,
     ) {
+        logger.debug(TAG, "[seekTo] instanceId=$currentTrackInstanceId, fromMs=${state.value.currentPosition}, toMs=$positionMs")
         val safePosition =
             positionMs.coerceAtLeast(
                 0L,
@@ -474,13 +477,15 @@ class DesktopPlayerEngine(
         currentTrackInstanceId =
             null
 
-        runBlocking {
-            JavaFxRuntime.call {
-                disposeCurrentPlayer()
+        try {
+            runBlocking {
+                JavaFxRuntime.call {
+                    disposeCurrentPlayer()
+                }
             }
+        } finally {
+            try { closeSource() } finally { windowsMediaSession.close() }
         }
-
-        windowsMediaSession.close()
     }
 
     private suspend fun startTrackLocked(
@@ -502,17 +507,26 @@ class DesktopPlayerEngine(
             )
         }
 
+        // Старый JavaFX-плеер больше не должен читать отзываемый loopback-адрес.
+        JavaFxRuntime.call { disposeCurrentPlayer() }
+        val prepareStarted = System.nanoTime()
+        logger.debug(TAG, "[startTrack] Подготовка instanceId=${track.instanceId}")
         val resolvedUri =
             try {
                 resolveUri(
                     track.playbackUri,
                 )
+            } catch (error: CancellationException) {
+                resetSource()
+                throw error
             } catch (error: Exception) {
+                resetSource()
+                stateStore.setPlaying(false)
+                windowsMediaSession.setPlaying(false)
                 logger.error(
                     TAG,
                     "[startTrack] Не удалось получить playback URI " +
-                            "instanceId=${track.instanceId}",
-                    error,
+                            "instanceId=${track.instanceId}, type=${error.javaClass.simpleName}",
                 )
 
                 stateStore.emit(
@@ -529,10 +543,8 @@ class DesktopPlayerEngine(
         currentTrackInstanceId =
             track.instanceId
 
-        val newPlayer =
+        val newPlayer = try {
             JavaFxRuntime.call {
-                disposeCurrentPlayer()
-
                 currentIndex =
                     index
 
@@ -577,6 +589,21 @@ class DesktopPlayerEngine(
 
                 player
             }
+        } catch (error: CancellationException) {
+            resetSource()
+            throw error
+        } catch (error: Exception) {
+            JavaFxRuntime.call { disposeCurrentPlayer() }
+            resetSource()
+            logger.error(TAG, "[startTrack] JavaFX не открыл аудио: instanceId=${track.instanceId}, type=${error.javaClass.simpleName}")
+            stateStore.setPlaying(false)
+            windowsMediaSession.setPlaying(false)
+            stateStore.completeTrackChange()
+            stateStore.emit(PlayerEvent.ShowError("Не удалось открыть аудио"))
+            return
+        }
+        val prepareMs = (System.nanoTime() - prepareStarted) / 1_000_000
+        logger.debug(TAG, "[startTrack] JavaFX создан: instanceId=${track.instanceId}, ${prepareMs}мс; ожидаем READY")
 
         currentFeedbackMetadata =
             track.toFeedbackMetadata()
@@ -674,6 +701,7 @@ class DesktopPlayerEngine(
             ) {
                 return@setOnReady
             }
+            logger.debug(TAG, "[ready] index=$index, durationMs=${player.totalDuration.toMillisSafe()}")
 
             val positionMs =
                 player.currentTime
@@ -714,6 +742,7 @@ class DesktopPlayerEngine(
             if (
                 currentPlayer === player
             ) {
+                logger.debug(TAG, "[playing] index=$index, positionMs=${player.currentTime.toMillisSafe()}")
                 stateStore.setPlaying(
                     true,
                 )
@@ -728,6 +757,12 @@ class DesktopPlayerEngine(
                     isPlaying =
                         true,
                 )
+            }
+        }
+
+        player.setOnStalled {
+            if (currentPlayer === player) {
+                logger.warning(TAG, "[stalled] index=$index, positionMs=${player.currentTime.toMillisSafe()}: JavaFX ожидает данные")
             }
         }
 
@@ -850,8 +885,7 @@ class DesktopPlayerEngine(
             logger.error(
                 TAG,
                 "[MediaPlayer] Ошибка воспроизведения " +
-                        "index=$index",
-                error,
+                        "index=$index, type=${error?.type}",
             )
 
             windowsMediaSession.setPlaying(

@@ -4,6 +4,7 @@ import com.yellastrodev.dwij.data.DataError
 import com.yellastrodev.dwij.data.DataResult
 import com.yellastrodev.dwij.data.dao.dTrackDao
 import com.yellastrodev.dwij.data.source.TrackRemoteSource
+import com.yellastrodev.dwij.playback.stream.StreamingAudioSource
 import com.yellastrodev.dwij.data.entities.dPlaylistTrack
 import com.yellastrodev.dwij.data.entities.dYaTrack
 import com.yellastrodev.yamusicsdk.YamLogger
@@ -34,6 +35,9 @@ class TrackRepository(
 ) {
 
     val TAG = "TrackRepository"
+    /** Общий сетевой источник для потокового кэша; транспорт остаётся внутри SDK. */
+    internal val streamingSource: StreamingAudioSource
+        get() = remote
     private val _tracks = MutableStateFlow<Map<String, dYaTrack>>(emptyMap())
     val tracks: StateFlow<Map<String, dYaTrack>> = _tracks
     private val loadMutex = Mutex()

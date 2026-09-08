@@ -137,6 +137,8 @@ compose.desktop {
         )
 
         nativeDistributions {
+            // Встроенный loopback-сервер потокового аудио должен попасть в jlink runtime.
+            modules("jdk.httpserver")
             targetFormats(
                 TargetFormat.Exe,
                 TargetFormat.Msi,

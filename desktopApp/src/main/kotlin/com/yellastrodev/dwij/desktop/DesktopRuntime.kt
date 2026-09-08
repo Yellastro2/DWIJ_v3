@@ -7,8 +7,8 @@ import com.yellastrodev.dwij.desktop.data.source.DesktopAudioMetadataReader
 import com.yellastrodev.dwij.desktop.data.source.DesktopLocalMediaSource
 import com.yellastrodev.dwij.desktop.playback.DesktopMediaArtworkProvider
 import com.yellastrodev.dwij.desktop.playback.DesktopPlayerEngine
+import com.yellastrodev.dwij.desktop.playback.DesktopAudioRelay
 import com.yellastrodev.dwij.di.DwijComponent
-import com.yellastrodev.dwij.playback.PlaybackUriResolver
 import com.yellastrodev.dwij.playback.PlayerVolumeControl
 import com.yellastrodev.dwij.storage.MigratingYandexSessionStore
 import com.yellastrodev.dwij.storage.ProtectedYandexSessionStore
@@ -201,6 +201,8 @@ class DesktopRuntime private constructor(
                 )
             }
 
+            val audioRelay = lazy { DesktopAudioRelay.create(component.trackCacheRepo, logger) }
+
             val playerEngine =
                 DesktopPlayerEngine(
                     scope =
@@ -210,12 +212,13 @@ class DesktopRuntime private constructor(
                     initialVolume =
                         initialVolume,
                     resolveUri = { uri ->
-                        PlaybackUriResolver(
-                            component
-                                .trackCacheRepo,
-                        ).resolve(
-                            uri,
-                        )
+                        audioRelay.value.resolve(uri)
+                    },
+                    closeSource = {
+                        if (audioRelay.isInitialized()) audioRelay.value.close()
+                    },
+                    resetSource = {
+                        if (audioRelay.isInitialized()) audioRelay.value.reset()
                     },
                     resolveArtworkFile = { track ->
                         artworkProvider.resolve(

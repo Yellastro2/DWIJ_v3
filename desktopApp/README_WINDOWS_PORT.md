@@ -14,8 +14,7 @@ Windows/JVM-модуль поверх общего `:shared`. Первонача
 - кэши в `%LOCALAPPDATA%\DWIJ\cache`;
 - `DesktopPlayerEngine` на JavaFX Media;
 - Swing `Dispatchers.Main` для shared ViewModel/Lifecycle;
-- Yandex `ya://trackId` проходит через существующий `PlaybackUriResolver`,
-  поэтому скачивание/кэш остаются shared;
+- ЯМ-аудио использует общий потоковый кэш и DesktopAudioRelay на 127.0.0.1; свободный порт выделяет ОС, готовые файлы открываются напрямую;
 - базовое чтение локальной музыки из `%USERPROFILE%\Music`;
 - ID3/MP4/WAV/AIFF metadata, duration и embedded artwork через
   `jaudiotagger`, с fallback на имя файла, каталог и sidecar-картинки;
@@ -97,3 +96,5 @@ D:\Music;E:\Audio
 2. Импорт чужих M3U пока не реализован. Экспорт DWIJ M3U уже есть.
 3. Нет FileSystem watcher — синхронизация выполняется на старте и
    по существующим кнопкам refresh/sync.
+
+Описание Windows relay и его логов: [потоковое воспроизведение](../docs/yandex-streaming.md#windows-loopback-relay). Требуется проверка в приложении и packaged EXE/MSI.
