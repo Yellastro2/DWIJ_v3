@@ -97,12 +97,17 @@ class StreamingTrackSession internal constructor(
         checkReadable()
     }
 
+    /** Загружает диапазоны и связывает ID трека с безопасным хостом аудио в сетевых логах. */
     private suspend fun download() {
         try {
+            val resolveStarted = System.nanoTime()
+            log("[resolveUrl] Трек=$trackId: получение ссылки на аудио")
             val url = when (val result = source.resolveUrl(trackId)) {
                 is DataResult.Success -> result.value
                 is DataResult.Failure -> throw StreamFailure(result.error)
             }
+            val audioHost = runCatching { java.net.URI(url).host }.getOrNull() ?: "неизвестен"
+            log("[resolveUrl] Трек=$trackId, хост=$audioHost: ссылка получена за ${(System.nanoTime() - resolveStarted) / 1_000_000}мс")
             while (true) {
                 val request = synchronized(lock) {
                     checkReadable()
@@ -128,9 +133,11 @@ class StreamingTrackSession internal constructor(
                 log("[range] track=$trackId, offset=${request.first}, length=${request.second}")
                 var attempts = 0
                 while (true) {
+                    val attemptStarted = System.nanoTime()
                     when (val result = source.readRange(url, request.first, request.second, ::headers, ::write)) {
                         is DataResult.Success -> break
                         is DataResult.Failure -> {
+                            log("[rangeFailed] Трек=$trackId, хост=$audioHost, смещение=${request.first}, попытка=${attempts + 1}/2, длительность=${(System.nanoTime() - attemptStarted) / 1_000_000}мс, ошибка=${result.error.javaClass.simpleName}")
                             // Повторяем тот же диапазон: неполный HTTP-ответ не подтверждает завершение.
                             if (attempts++ >= 1 || !result.error.isTransient()) throw StreamFailure(result.error)
                             log("[retry] track=$trackId, offset=${request.first}: повтор диапазона после сетевой ошибки")

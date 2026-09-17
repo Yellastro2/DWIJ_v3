@@ -18,6 +18,8 @@ import com.yellastrodev.dwij.data.source.yandexStreamingTrackId
 import com.yellastrodev.dwij.playback.stream.StreamingTrackCache
 import com.yellastrodev.dwij.playback.AndroidPlaybackFeedbackAdapter
 import com.yellastrodev.dwij.playback.AndroidPlayerListener
+import com.yellastrodev.dwij.playback.AndroidPlaybackRecovery
+import com.yellastrodev.dwij.playback.AndroidPlaybackLoadErrorPolicy
 import com.yellastrodev.dwij.playback.PlaybackStateStore
 import com.yellastrodev.dwij.utils.PlayerEvent
 import com.yellastrodev.dwij.utils.PlayerState
@@ -30,6 +32,7 @@ import kotlinx.coroutines.cancel
 import kotlinx.coroutines.flow.SharedFlow
 import kotlinx.coroutines.flow.StateFlow
 
+/** Владеет Media3, потоковым кэшем и ограниченным восстановлением воспроизведения. */
 class PlayerService : MediaSessionService() {
 
     lateinit var player: ExoPlayer
@@ -38,6 +41,7 @@ class PlayerService : MediaSessionService() {
     private lateinit var mediaSession: MediaSession
     private lateinit var playerListener: AndroidPlayerListener
     private lateinit var streamingCache: StreamingTrackCache
+    private lateinit var playbackRecovery: AndroidPlaybackRecovery
 
     private val streamingListener = object : Player.Listener {
         override fun onMediaItemTransition(mediaItem: MediaItem?, reason: Int) {
@@ -75,6 +79,7 @@ class PlayerService : MediaSessionService() {
     val state: StateFlow<PlayerState> = stateStore.state
     val events: SharedFlow<PlayerEvent> = stateStore.events
 
+    /** Подключает общую политику повторов до listener состояния и системной MediaSession. */
     override fun onCreate() {
         super.onCreate()
 
@@ -82,11 +87,24 @@ class PlayerService : MediaSessionService() {
         val dataSourceFactory = YaLazyDataSourceFactory(this, trackCacheRepo, streamingCache)
 
         player = ExoPlayer.Builder(this)
-            .setMediaSourceFactory(DefaultMediaSourceFactory(dataSourceFactory))
+            .setMediaSourceFactory(
+                DefaultMediaSourceFactory(dataSourceFactory)
+                    .setLoadErrorHandlingPolicy(AndroidPlaybackLoadErrorPolicy()),
+            )
             .setHandleAudioBecomingNoisy(true)
             .build()
 
         player.addListener(streamingListener)
+        playbackRecovery = AndroidPlaybackRecovery(
+            player = player,
+            scope = serviceScope,
+            stateStore = stateStore,
+            resetSource = streamingCache::stopPlayback,
+            finishFeedback = {
+                playbackFeedback.onPlaybackEnded(player.currentPosition, player.duration, false)
+            },
+        )
+        player.addListener(playbackRecovery)
         player.setAudioAttributes(
             AudioAttributes.Builder()
                 .setUsage(C.USAGE_MEDIA)
@@ -130,10 +148,12 @@ class PlayerService : MediaSessionService() {
         controllerInfo: MediaSession.ControllerInfo,
     ): MediaSession = mediaSession
 
+    /** Новая очередь отменяет все отложенные повторы прежнего трека. */
     fun playQueue(
         tracks: List<MediaItem>,
         startIndex: Int = 0,
     ) {
+        playbackRecovery.onUserCommand()
         stateStore.beginTrackChange(
             direction = TrackChangeDirection.DIRECT,
             wantsToPlay = true,
@@ -162,6 +182,7 @@ class PlayerService : MediaSessionService() {
         val safeIndex = startIndex.coerceIn(tracks.indices)
         val safePositionMs = startPositionMs.coerceAtLeast(0L)
 
+        playbackRecovery.onUserCommand()
         player.playWhenReady = false
         player.shuffleModeEnabled = shuffleEnabled
         player.repeatMode = repeatMode
@@ -196,12 +217,14 @@ class PlayerService : MediaSessionService() {
         player.addMediaItems(items)
     }
 
+    /** Ручной выбор начинает новую цепочку попыток, включая повторный выбор того же трека. */
     fun playTrack(trackNumber: Int) {
         if (trackNumber !in 0 until player.mediaItemCount) {
             Log.w(TAG, "[playTrack] invalid index=$trackNumber")
             return
         }
 
+        playbackRecovery.onUserCommand()
         stateStore.beginTrackChange(
             direction = TrackChangeDirection.DIRECT,
             wantsToPlay = true,
@@ -221,32 +244,47 @@ class PlayerService : MediaSessionService() {
         if (wantsToPlay) player.play() else player.pause()
     }
 
+    /** Отменяет восстановление старого трека перед ручным переходом вперёд. */
     fun skipNext() {
+        playbackRecovery.onUserCommand()
         val previousIndex = player.currentMediaItemIndex
         stateStore.beginTrackChange(TrackChangeDirection.NEXT)
         player.seekToNext()
+        if (player.playbackState == Player.STATE_IDLE) player.prepare()
 
         if (player.currentMediaItemIndex == previousIndex) {
             stateStore.completeTrackChange()
         }
     }
 
+    /** Отменяет восстановление старого трека перед ручным переходом назад. */
     fun skipPrev() {
+        playbackRecovery.onUserCommand()
         val previousIndex = player.currentMediaItemIndex
         stateStore.beginTrackChange(TrackChangeDirection.PREVIOUS)
         player.seekToPrevious()
+        if (player.playbackState == Player.STATE_IDLE) player.prepare()
 
         if (player.currentMediaItemIndex == previousIndex) {
             stateStore.completeTrackChange()
         }
     }
 
+    /** Перемотка пользователя отменяет отложенный запуск с нулевой позиции. */
     fun seekTo(positionMs: Long) {
+        playbackRecovery.onUserCommand()
         player.seekTo(positionMs)
+        if (player.playbackState == Player.STATE_IDLE) player.prepare()
     }
 
+    /** Отменяет таймеры восстановления до освобождения плеера и кэша. */
     override fun onDestroy() {
         Log.d(TAG, "[onDestroy] Сервис уничтожается")
+
+        if (::playbackRecovery.isInitialized) {
+            player.removeListener(playbackRecovery)
+            playbackRecovery.release()
+        }
 
         if (::player.isInitialized) {
             playbackFeedback.onPlaybackEnded(

@@ -302,6 +302,15 @@ class PlaylistRepository(
     fun getLikeList(): dYaPlaylist? =
         _playlistMap.value.values.find { it.kind == KIND_LIKED }
 
+    /** Дизлайк снимает лайк на сервере; синхронизируем это изменение с Room. */
+    suspend fun dislikeTrack(trackId: String): DataResult<Unit> =
+        likeMutationMutex.withLock {
+            when (val result = remote.dislikeTrack(trackId)) {
+                is DataResult.Success -> refreshLikedPlaylistUntil(trackId, liked = false)
+                is DataResult.Failure -> result
+            }
+        }
+
     suspend fun setTrackLiked(trackId: String, liked: Boolean): DataResult<Unit> =
         likeMutationMutex.withLock {
             logger.debug(TAG, "[setTrackLiked] Начато: trackId=$trackId, liked=$liked")

@@ -19,6 +19,8 @@ import javafx.scene.media.MediaPlayer
 import javafx.util.Duration
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharedFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -36,6 +38,7 @@ import java.util.UUID
  * WindowsMediaSession публикует состояние в Windows SMTC
  * и принимает системные media commands. JavaFX callback'и также передают
  * фактические события прослушивания в общий [PlaybackFeedbackTracker].
+ * Подготовка ограничена 12с; после трёх полных повторов отказавший трек пропускается.
  */
 class DesktopPlayerEngine(
     private val scope: CoroutineScope,
@@ -95,6 +98,11 @@ class DesktopPlayerEngine(
     private var currentPlayer:
             MediaPlayer? =
         null
+
+    @Volatile private var currentAttempt: DesktopPlaybackAttempt? = null
+    private var preparationJob: Job? = null
+    private var stalledJob: Job? = null
+    @Volatile private var closed = false
 
     private var shuffleEnabled =
         false
@@ -464,7 +472,12 @@ class DesktopPlayerEngine(
         )
     }
 
+    /** Отменяет попытку и её таймеры до освобождения JavaFX и источника. */
     fun close() {
+        closed = true
+        currentAttempt = null
+        preparationJob?.cancel()
+        stalledJob?.cancel()
         finishCurrentFeedback(
             positionMs =
                 state.value.currentPosition,
@@ -488,12 +501,15 @@ class DesktopPlayerEngine(
         }
     }
 
+    /** Запускает одну попытку с общим сроком, не зависящим от повторных GET/HEAD JavaFX. */
     private suspend fun startTrackLocked(
         index: Int,
         autoPlay: Boolean,
         direction: TrackChangeDirection? = null,
         feedbackReason: PlaybackTransitionReason,
+        retry: Int = 0,
     ) {
+        if (closed) return
         val track =
             queue.getOrNull(
                 index,
@@ -508,7 +524,16 @@ class DesktopPlayerEngine(
         }
 
         // Старый JavaFX-плеер больше не должен читать отзываемый loopback-адрес.
+        preparationJob?.cancel()
+        stalledJob?.cancel()
+        val attempt = DesktopPlaybackAttempt(index, retry)
+        currentAttempt = attempt
         JavaFxRuntime.call { disposeCurrentPlayer() }
+        currentIndex = index
+        preparationJob = scope.launch {
+            delay(DesktopPlaybackAttempt.PREPARE_TIMEOUT_MS)
+            recoverAttempt(attempt, "подготовка превысила 12с")
+        }
         val prepareStarted = System.nanoTime()
         logger.debug(TAG, "[startTrack] Подготовка instanceId=${track.instanceId}")
         val resolvedUri =
@@ -517,6 +542,8 @@ class DesktopPlayerEngine(
                     track.playbackUri,
                 )
             } catch (error: CancellationException) {
+                preparationJob?.cancel()
+                currentAttempt = null
                 resetSource()
                 throw error
             } catch (error: Exception) {
@@ -529,16 +556,12 @@ class DesktopPlayerEngine(
                             "instanceId=${track.instanceId}, type=${error.javaClass.simpleName}",
                 )
 
-                stateStore.emit(
-                    PlayerEvent.ShowError(
-                        "Не удалось подготовить трек",
-                    ),
-                )
-
-                stateStore.completeTrackChange()
+                recoverAttempt(attempt, "не удалось получить адрес аудио")
 
                 return
             }
+
+        if (closed || currentAttempt !== attempt || attempt.isFailed) return
 
         currentTrackInstanceId =
             track.instanceId
@@ -585,11 +608,14 @@ class DesktopPlayerEngine(
                         player,
                     index =
                         index,
+                    attempt = attempt,
                 )
 
                 player
             }
         } catch (error: CancellationException) {
+            preparationJob?.cancel()
+            currentAttempt = null
             resetSource()
             throw error
         } catch (error: Exception) {
@@ -598,8 +624,7 @@ class DesktopPlayerEngine(
             logger.error(TAG, "[startTrack] JavaFX не открыл аудио: instanceId=${track.instanceId}, type=${error.javaClass.simpleName}")
             stateStore.setPlaying(false)
             windowsMediaSession.setPlaying(false)
-            stateStore.completeTrackChange()
-            stateStore.emit(PlayerEvent.ShowError("Не удалось открыть аудио"))
+            recoverAttempt(attempt, "JavaFX не открыл аудио")
             return
         }
         val prepareMs = (System.nanoTime() - prepareStarted) / 1_000_000
@@ -690,18 +715,21 @@ class DesktopPlayerEngine(
         }
     }
 
+    /** Привязывает события к конкретной попытке и исключает устаревшие ошибки при переключении. */
     private fun installCallbacks(
         player: MediaPlayer,
         index: Int,
+        attempt: DesktopPlaybackAttempt,
     ) {
         player.setOnReady {
             if (
                 currentPlayer !== player ||
-                currentIndex != index
+                currentIndex != index || currentAttempt !== attempt || attempt.isFailed
             ) {
                 return@setOnReady
             }
             logger.debug(TAG, "[ready] index=$index, durationMs=${player.totalDuration.toMillisSafe()}")
+            preparationJob?.cancel()
 
             val positionMs =
                 player.currentTime
@@ -740,8 +768,9 @@ class DesktopPlayerEngine(
 
         player.setOnPlaying {
             if (
-                currentPlayer === player
+                currentPlayer === player && currentAttempt === attempt && !attempt.isFailed
             ) {
+                stalledJob?.cancel()
                 logger.debug(TAG, "[playing] index=$index, positionMs=${player.currentTime.toMillisSafe()}")
                 stateStore.setPlaying(
                     true,
@@ -763,6 +792,12 @@ class DesktopPlayerEngine(
         player.setOnStalled {
             if (currentPlayer === player) {
                 logger.warning(TAG, "[stalled] index=$index, positionMs=${player.currentTime.toMillisSafe()}: JavaFX ожидает данные")
+                if (stalledJob?.isActive != true && state.value.wantsToPlay) {
+                    stalledJob = scope.launch {
+                        delay(DesktopPlaybackAttempt.STALL_TIMEOUT_MS)
+                        if (state.value.wantsToPlay) recoverAttempt(attempt, "JavaFX ожидает данные более 5с")
+                    }
+                }
             }
         }
 
@@ -770,6 +805,7 @@ class DesktopPlayerEngine(
             if (
                 currentPlayer === player
             ) {
+                stalledJob?.cancel()
                 stateStore.setPlaying(
                     false,
                 )
@@ -848,7 +884,7 @@ class DesktopPlayerEngine(
 
         player.setOnEndOfMedia {
             if (
-                currentPlayer !== player
+                currentPlayer !== player || currentAttempt !== attempt || attempt.isFailed
             ) {
                 return@setOnEndOfMedia
             }
@@ -868,13 +904,14 @@ class DesktopPlayerEngine(
                 handleTrackEnded(
                     finishedIndex =
                         index,
+                    attempt = attempt,
                 )
             }
         }
 
         player.setOnError {
             if (
-                currentPlayer !== player
+                currentPlayer !== player || currentAttempt !== attempt || attempt.isFailed
             ) {
                 return@setOnError
             }
@@ -903,16 +940,53 @@ class DesktopPlayerEngine(
                     false,
             )
 
-            stateStore.completeTrackChange()
+            recoverAttempt(attempt, "ошибка JavaFX ${error?.type}")
+        }
+    }
 
-            scope.launch {
-                stateStore.emit(
-                    PlayerEvent.ShowError(
-                        "Ошибка воспроизведения",
-                    ),
-                )
-
-                skipNext()
+    /** Повторяет всю цепочку три раза; устаревшие и дублирующиеся сигналы игнорируются. */
+    private fun recoverAttempt(attempt: DesktopPlaybackAttempt, reason: String) {
+        if (closed || currentAttempt !== attempt || !attempt.fail()) return
+        logger.warning(TAG, "[retryTrack] index=${attempt.index}, попытка=${attempt.retry + 1}/4: $reason")
+        scope.launch {
+            commandMutex.withLock {
+                if (closed || currentAttempt !== attempt) return@withLock
+                preparationJob?.cancel()
+                stalledJob?.cancel()
+                JavaFxRuntime.call { disposeCurrentPlayer() }
+                resetSource()
+                stateStore.setPlaying(false)
+                windowsMediaSession.setPlaying(false)
+            }
+            delay(DesktopPlaybackAttempt.RETRY_DELAY_MS)
+            commandMutex.withLock {
+                if (closed || currentAttempt !== attempt) return@withLock
+                val autoPlay = state.value.wantsToPlay
+                if (attempt.canRetry) {
+                    startTrackLocked(
+                        index = attempt.index,
+                        autoPlay = autoPlay,
+                        feedbackReason = PlaybackTransitionReason.OTHER,
+                        retry = attempt.retry + 1,
+                    )
+                } else {
+                    finishCurrentFeedback(state.value.currentPosition, state.value.duration, false)
+                    val next = nextIndex()?.takeIf { it != attempt.index }
+                    logger.warning(TAG, "[skipFailedTrack] index=${attempt.index}: четыре попытки исчерпаны, следующий=$next")
+                    if (next != null) {
+                        startTrackLocked(
+                            index = next,
+                            autoPlay = autoPlay,
+                            direction = TrackChangeDirection.NEXT,
+                            feedbackReason = PlaybackTransitionReason.AUTO,
+                        )
+                    } else {
+                        currentAttempt = null
+                        stateStore.setWantsToPlay(false)
+                        stateStore.completeTrackChange()
+                        stateStore.emit(PlayerEvent.TrackListEnd("Playlist finished"))
+                    }
+                }
             }
         }
     }
@@ -942,13 +1016,15 @@ class DesktopPlayerEngine(
         )
     }
 
+    /** Продолжает очередь только для всё ещё актуальной, успешно завершённой попытки. */
     private suspend fun handleTrackEnded(
         finishedIndex: Int,
+        attempt: DesktopPlaybackAttempt,
     ) {
         commandMutex.withLock {
             if (
                 currentIndex !=
-                finishedIndex
+                finishedIndex || currentAttempt !== attempt || attempt.isFailed || closed
             ) {
                 return
             }

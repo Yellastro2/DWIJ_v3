@@ -133,6 +133,12 @@ class PlaylistRemoteSource(private val client: YamApiClient,
         }
     }
 
+    suspend fun dislikeTrack(trackId: String): DataResult<Unit> =
+        when (val result = client.dislikeTrack(trackId)) {
+            is YamResult.Success -> DataResult.Success(Unit)
+            is YamResult.Failure -> DataResult.Failure(result.error.toDataError())
+        }
+
     private companion object {
         const val TAG = "PlaylistRemoteSource"
     }

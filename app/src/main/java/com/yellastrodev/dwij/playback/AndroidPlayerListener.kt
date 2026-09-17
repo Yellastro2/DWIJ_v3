@@ -16,6 +16,7 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 
+/** Публикует состояние, artwork и feedback; восстановлением ошибок владеет AndroidPlaybackRecovery. */
 class AndroidPlayerListener(
     private val player: ExoPlayer,
     private val scope: CoroutineScope,
@@ -115,21 +116,9 @@ class AndroidPlayerListener(
         stateStore.setWantsToPlay(playWhenReady)
     }
 
+    /** Сохраняет диагностику; повтор/пропуск выполняет recovery без диалогов об ошибке. */
     override fun onPlayerError(error: PlaybackException) {
-        stateStore.completeTrackChange()
-        feedback.onPlaybackEnded(
-            currentPositionMs = player.currentPosition,
-            durationMs = player.duration,
-            completed = false,
-        )
-
-        Log.e(TAG, "[onPlayerError] code=${error.errorCode}", error)
-
-        scope.launch {
-            stateStore.emit(PlayerEvent.ShowError("Ошибка воспроизведения"))
-        }
-
-        player.seekToNext()
+        Log.e(TAG, "[onPlayerError] Ошибка Media3, код=${error.errorCode}; восстановление выполняет AndroidPlaybackRecovery")
     }
 
     override fun onShuffleModeEnabledChanged(shuffleModeEnabled: Boolean) {

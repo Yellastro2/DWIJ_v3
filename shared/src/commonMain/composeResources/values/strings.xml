@@ -176,6 +176,9 @@
     <string name="player_track_wave">Волна по треку</string>
     <string name="player_like_content_description">Поставить лайк</string>
     <string name="player_unlike_content_description">Убрать лайк</string>
+    <string name="player_dislike">Не рекомендовать</string>
+    <string name="player_dislike_success">Отметка «Не рекомендовать» поставлена</string>
+    <string name="player_dislike_failed">Не удалось поставить отметку «Не рекомендовать» или обновить список лайков</string>
     <string name="local_playlists_title">Локальные плейлисты</string>
     <string name="local_all_tracks_title">Все локальные треки</string>
     <string name="local_playlist_title">Локальный плейлист</string>

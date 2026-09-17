@@ -34,6 +34,8 @@ import com.yellastrodev.dwij.resources.multi_source_priority_error
 import com.yellastrodev.dwij.resources.player_current_queue
 import com.yellastrodev.dwij.resources.player_choose_artist_cancel
 import com.yellastrodev.dwij.resources.player_choose_artist_title
+import com.yellastrodev.dwij.resources.player_dislike_failed
+import com.yellastrodev.dwij.resources.player_dislike_success
 import com.yellastrodev.dwij.resources.player_like_failed
 import com.yellastrodev.dwij.resources.player_no_track
 import com.yellastrodev.dwij.resources.player_source_local
@@ -160,13 +162,8 @@ fun PlayerRoute(
         ?: false
 
     var pendingLike by remember { mutableStateOf<PendingLikeMutation?>(null) }
-    val isLikePending = pendingLike?.songId == currentTrackId
-
-    LaunchedEffect(currentTrackId) {
-        if (pendingLike?.songId != currentTrackId) {
-            pendingLike = null
-        }
-    }
+    // Не допускаем конкурирующих лайка и дизлайка даже при переключении трека.
+    val isLikePending = pendingLike != null
 
     var showMultiSourceDialog by remember(currentTrackId) {
         mutableStateOf(false)
@@ -294,6 +291,8 @@ fun PlayerRoute(
     val waveLoadingArtist = stringResource(Res.string.player_wave_loading_artist)
     val noTrackTitle = stringResource(Res.string.player_no_track)
     val likeFailedMessage = stringResource(Res.string.player_like_failed)
+    val dislikeFailedMessage = stringResource(Res.string.player_dislike_failed)
+    val dislikeSuccessMessage = stringResource(Res.string.player_dislike_success)
 
     val showWaveLoadingPlaceholder =
         isWaveLoading && currentTrackId == null
@@ -411,6 +410,84 @@ fun PlayerRoute(
     val saveLocallyStartedMessage =
         stringResource(Res.string.track_save_locally_started)
 
+    fun mutateTrackReaction(dislike: Boolean) {
+        val failedMessage = if (dislike) dislikeFailedMessage else likeFailedMessage
+        val requestSongId = currentTrackId
+        val requestTrackId = yandexTrackId
+        if (requestSongId != null && requestTrackId != null && pendingLike == null) {
+            val request = PendingLikeMutation(
+                songId = requestSongId,
+                trackId = requestTrackId,
+                liked = !dislike && !isLiked,
+            )
+            pendingLike = request
+            coroutineScope.launch {
+                try {
+                    val mutationResult = if (dislike) {
+                        playerModel.dislikeTrack(request.trackId)
+                    } else playerModel.likeTrack(
+                        trackId = request.trackId,
+                        liked = request.liked,
+                    )
+                    when (val result = mutationResult) {
+                        is DataResult.Success -> {
+                            val confirmedSong = withTimeoutOrNull(
+                                ROOM_LIKE_OBSERVATION_TIMEOUT_MS,
+                            ) {
+                                songRepository
+                                    .song(request.songId)
+                                    .filterNotNull()
+                                    .first { song -> song.isLiked == request.liked }
+                            }
+                            if (confirmedSong != null) {
+                                playerModel.applyUpdatedSong(confirmedSong)
+                                if (dislike) uiMessages.emit(dislikeSuccessMessage)
+                                logger.debug(
+                                    TAG,
+                                    "[mutateTrackReaction] Room и route подтвердили: " +
+                                        "trackId=${request.trackId}, liked=${request.liked}",
+                                )
+                            } else {
+                                logger.error(
+                                    TAG,
+                                    "[mutateTrackReaction] Room обновлён, но route не получил статус: " +
+                                        "trackId=${request.trackId}, liked=${request.liked}",
+                                )
+                                uiMessages.emit(failedMessage)
+                            }
+                        }
+
+                        is DataResult.Failure -> {
+                            if (result.error == DataError.Unauthorized) {
+                                component.requireYandexAuthorization()
+                            }
+                            logger.error(
+                                TAG,
+                                "[mutateTrackReaction] Не удалось завершить изменение реакции: ${result.error}",
+                            )
+                            if (result.error != DataError.Unauthorized) {
+                                uiMessages.emit(failedMessage)
+                            }
+                        }
+                    }
+                } catch (error: CancellationException) {
+                    throw error
+                } catch (error: Exception) {
+                    logger.error(
+                        TAG,
+                        "[mutateTrackReaction] Не удалось изменить реакцию",
+                        error,
+                    )
+                    uiMessages.emit(failedMessage)
+                } finally {
+                    if (pendingLike == request) {
+                        pendingLike = null
+                    }
+                }
+            }
+        }
+    }
+
     FullPlayerScreen(
         state = FullPlayerUiState(
             trackId = currentTrackId,
@@ -492,78 +569,8 @@ fun PlayerRoute(
                 )
             }
         },
-        onLikeClick = {
-            val requestSongId = currentTrackId
-            val requestTrackId = yandexTrackId
-            if (requestSongId != null && requestTrackId != null && pendingLike == null) {
-                val request = PendingLikeMutation(
-                    songId = requestSongId,
-                    trackId = requestTrackId,
-                    liked = !isLiked,
-                )
-                pendingLike = request
-                coroutineScope.launch {
-                    try {
-                        when (val result = playerModel.likeTrack(
-                            trackId = request.trackId,
-                            liked = request.liked,
-                        )) {
-                            is DataResult.Success -> {
-                                val confirmedSong = withTimeoutOrNull(
-                                    ROOM_LIKE_OBSERVATION_TIMEOUT_MS,
-                                ) {
-                                    songRepository
-                                        .song(request.songId)
-                                        .filterNotNull()
-                                        .first { song -> song.isLiked == request.liked }
-                                }
-                                if (confirmedSong != null) {
-                                    playerModel.applyUpdatedSong(confirmedSong)
-                                    logger.debug(
-                                        TAG,
-                                        "[likeTrack] Room и route подтвердили: " +
-                                            "trackId=${request.trackId}, liked=${request.liked}",
-                                    )
-                                } else {
-                                    logger.error(
-                                        TAG,
-                                        "[likeTrack] Room обновлён, но route не получил статус: " +
-                                            "trackId=${request.trackId}, liked=${request.liked}",
-                                    )
-                                    uiMessages.emit(likeFailedMessage)
-                                }
-                            }
-
-                            is DataResult.Failure -> {
-                                if (result.error == DataError.Unauthorized) {
-                                    component.requireYandexAuthorization()
-                                }
-                                logger.error(
-                                    TAG,
-                                    "[likeTrack] Лайк не изменён: ${result.error}",
-                                )
-                                if (result.error != DataError.Unauthorized) {
-                                    uiMessages.emit(likeFailedMessage)
-                                }
-                            }
-                        }
-                    } catch (error: CancellationException) {
-                        throw error
-                    } catch (error: Exception) {
-                        logger.error(
-                            TAG,
-                            "[likeTrack] Не удалось изменить лайк",
-                            error,
-                        )
-                        uiMessages.emit(likeFailedMessage)
-                    } finally {
-                        if (pendingLike == request) {
-                            pendingLike = null
-                        }
-                    }
-                }
-            }
-        },
+        onLikeClick = { mutateTrackReaction(dislike = false) },
+        onDislikeClick = { mutateTrackReaction(dislike = true) },
         onArtistClick = {
             when (yandexArtists.size) {
                 0 -> Unit

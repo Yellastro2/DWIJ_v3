@@ -159,6 +159,7 @@ fun FullPlayerScreen(
     onRepeatClick: () -> Unit,
     onTrackWaveClick: () -> Unit,
     onLikeClick: () -> Unit,
+    onDislikeClick: () -> Unit,
     onArtistClick: () -> Unit,
     onAddToPlaylistClick: () -> Unit,
     onSourcesClick: () -> Unit,
@@ -210,12 +211,15 @@ fun FullPlayerScreen(
                 showSourcesIndicator = state.hasMultipleSources ||
                     state.hasUnresolvedMatchCandidate,
                 canStartTrackWave = state.canStartTrackWave,
+                canDislike = state.canLike,
+                isReactionPending = state.isLikePending,
                 canSaveLocally = state.canSaveLocally,
                 canShare = state.canShare,
                 isSavedLocally = state.isSavedLocally,
                 isSavingLocally = state.isSavingLocally,
                 onSourcesClick = onSourcesClick,
                 onTrackWaveClick = onTrackWaveClick,
+                onDislikeClick = onDislikeClick,
                 onSaveLocallyClick = onSaveLocallyClick,
                 onShareClick = onShareClick,
                 onBackClick = onBackClick,
@@ -360,12 +364,15 @@ private fun FullPlayerTopBar(
     queuePosition: Int,
     showSourcesIndicator: Boolean,
     canStartTrackWave: Boolean,
+    canDislike: Boolean,
+    isReactionPending: Boolean,
     canSaveLocally: Boolean,
     canShare: Boolean,
     isSavedLocally: Boolean,
     isSavingLocally: Boolean,
     onSourcesClick: () -> Unit,
     onTrackWaveClick: () -> Unit,
+    onDislikeClick: () -> Unit,
     onSaveLocallyClick: () -> Unit,
     onShareClick: () -> Unit,
     onBackClick: () -> Unit,
@@ -507,6 +514,23 @@ private fun FullPlayerTopBar(
                         onTrackWaveClick()
                     },
                 )
+                if (canDislike) {
+                    DropdownMenuItem(
+                        text = {
+                            Text(
+                                text = stringResource(Res.string.player_dislike),
+                                color = DwijColors.White.copy(
+                                    alpha = if (isReactionPending) 0.38f else 1f,
+                                ),
+                            )
+                        },
+                        enabled = !isReactionPending,
+                        onClick = {
+                            isMoreMenuExpanded = false
+                            onDislikeClick()
+                        },
+                    )
+                }
                 if (canShare) {
                     DropdownMenuItem(
                         text = {
@@ -1824,6 +1848,7 @@ private fun FullPlayerPreviewContent() {
         onRepeatClick = {},
         onTrackWaveClick = {},
         onLikeClick = {},
+        onDislikeClick = {},
         onArtistClick = {},
         onAddToPlaylistClick = {},
         onSourcesClick = {},

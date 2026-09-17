@@ -36,6 +36,11 @@ Windows-версия пока развивается как desktop-порт и 
 [MarshalX/yandex-music-api](https://github.com/MarshalX/yandex-music-api), но
 не является построчным переносом Python-библиотеки на Kotlin.
 
+Локальная копия Python-библиотеки на компьютере разработчика:
+`C:\Users\yella\ExernalProjects\yandex-music-api`.
+Используйте её как справочник при исследовании API и реализации методов в
+`:yaMusicSdk`; для сборки приложения эта папка не требуется.
+
 ## Требования
 
 - Git с поддержкой submodules;

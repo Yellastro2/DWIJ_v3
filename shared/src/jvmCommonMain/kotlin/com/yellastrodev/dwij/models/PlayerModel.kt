@@ -160,6 +160,9 @@ class PlayerModel(
         )
     }
 
+    suspend fun dislikeTrack(trackId: String): DataResult<Unit> =
+        playlistRepo.dislikeTrack(trackId)
+
     val playerState =
         playerRepo.state
 

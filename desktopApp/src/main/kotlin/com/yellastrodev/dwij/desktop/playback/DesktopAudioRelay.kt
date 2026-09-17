@@ -52,12 +52,13 @@ internal class DesktopAudioRelay(
         watchdog.scheduleWithFixedDelay({
             val now = System.nanoTime()
             requests.values.forEach { request ->
-                if (!request.cancelled && now - request.lastProgressNs > TimeUnit.SECONDS.toNanos(30)) {
-                    logger.warning(TAG, "[timeout] request=${request.id}, track=${request.route.trackId}: нет прогресса 30с")
+                if (!request.cancelled && !request.stage.startsWith("отправка") &&
+                    now - request.lastProgressNs > TimeUnit.SECONDS.toNanos(12)) {
+                    logger.warning(TAG, "[timeout] request=${request.id}, track=${request.route.trackId}: нет прогресса 12с, этап=${request.stage}, отправлено=${request.sent} байт")
                     request.cancel("таймаут")
                 }
             }
-        }, 5, 5, TimeUnit.SECONDS)
+        }, 1, 1, TimeUnit.SECONDS)
     }
 
     /** Вызывается после остановки прежнего JavaFX-плеера; сеть здесь не ожидается. */
@@ -105,6 +106,7 @@ internal class DesktopAudioRelay(
         }
     }
 
+    /** Обслуживает запрос JavaFX и публикует текущий этап для диагностики watchdog. */
     private fun handle(exchange: HttpExchange) {
         val id = requestIds.incrementAndGet()
         val selected = route
@@ -133,6 +135,8 @@ internal class DesktopAudioRelay(
             if (route !== selected) throw IOException("Трек сменился")
             logger.debug(TAG, "[request] request=$id, track=${selected.trackId}, method=$method, range=${exchange.requestHeaders.containsKey("Range")}")
             reader = openAudio(selected.trackId)
+            stage = "ожидание длины аудио/заголовков ЯМ"
+            request.stage = stage
             val total = reader.length()
             require(total > 0) { "Пустой аудиофайл" }
             // У нас нет валидатора для If-Range: безопасно отдаём полное представление.
@@ -156,6 +160,8 @@ internal class DesktopAudioRelay(
                 if (status == 206) set("Content-Range", "bytes ${range.first}-${range.last}/$total")
             }
             if (route !== selected || request.cancelled) throw IOException("Запрос отменён")
+            stage = "отправка заголовков JavaFX"
+            request.stage = stage
             exchange.sendResponseHeaders(status, if (method == "HEAD") -1 else length)
             sentHeaders = true
             request.progress()
@@ -165,16 +171,19 @@ internal class DesktopAudioRelay(
             while (sent < length) {
                 if (request.cancelled || route !== selected) throw IOException("Запрос отменён")
                 stage = "чтение кэша/ожидание ЯМ"
+                request.stage = stage
                 val readStarted = System.nanoTime()
                 val count = reader.read(range.first + sent, buffer, minOf(buffer.size.toLong(), length - sent).toInt())
                 if (count <= 0) throw IOException("Преждевременный конец аудио")
                 val waited = elapsedMs(readStarted)
                 if (waited >= 200) logger.debug(TAG, "[wait] request=$id, track=${selected.trackId}, offset=${range.first + sent}: данные получены за ${waited}мс")
                 stage = "отправка JavaFX"
+                request.stage = stage
                 exchange.responseBody.write(buffer, 0, count)
                 exchange.responseBody.flush()
                 if (sent == 0L) logger.debug(TAG, "[firstBytes] request=$id, track=${selected.trackId}, offset=${range.first}: ${elapsedMs(started)}мс")
                 sent += count
+                request.sent = sent
                 request.progress()
             }
             logger.debug(TAG, "[complete] request=$id, track=${selected.trackId}: отправлено=$sent байт, ${elapsedMs(started)}мс")
@@ -223,7 +232,10 @@ internal class DesktopAudioRelay(
 
     private data class Route(val trackId: String, val path: String)
 
+    /** Состояние запроса, доступное watchdog без ожидания заблокированного IO. */
     private class ActiveRequest(val id: Long, val route: Route, val exchange: HttpExchange, val thread: Thread) {
+        @Volatile var stage = "открытие источника"
+        @Volatile var sent = 0L
         @Volatile var lastProgressNs = System.nanoTime()
         @Volatile var cancelled = false
         @Volatile var cancelReason = "смена трека"
