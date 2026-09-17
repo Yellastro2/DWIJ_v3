@@ -31,6 +31,7 @@ import com.yellastrodev.dwij.data.source.SearchRemoteSource
 import com.yellastrodev.dwij.data.source.TrackRemoteSource
 import com.yellastrodev.dwij.data.source.WaveRemoteSource
 import com.yellastrodev.dwij.playback.PlaybackSettings
+import com.yellastrodev.dwij.playback.DailyPlaylistPlayback
 import com.yellastrodev.dwij.playback.PlayerEngine
 import com.yellastrodev.dwij.playback.TrackCoverLoader
 import com.yellastrodev.dwij.playback.feedback.PlaybackFeedbackTracker
@@ -54,7 +55,7 @@ import java.util.concurrent.atomic.AtomicBoolean
  * Общий JVM-граф приложения.
  *
  * Создаёт YamApiClient, восстанавливает сессию и собирает все общие
- * репозитории и постоянные настройки.
+ * репозитории, временное воспроизведение рекомендаций и постоянные настройки.
  *
  * Платформа передаёт системные реализации, низкоуровневое key-value хранилище
  * обычных настроек и защищённое хранилище авторизации.
@@ -247,6 +248,20 @@ class DwijComponent private constructor(
             logger = logger,
             onAuthorizationRequired =
                 ::requireYandexAuthorization,
+        )
+    }
+
+    /** Временный плейлист дня: прямой API и очередь, без репозиториев фонотеки. */
+    val dailyPlaylistPlayback: DailyPlaylistPlayback by lazy {
+        DailyPlaylistPlayback(
+            client = yamClient,
+            player = playerRepo,
+            scope = applicationScope,
+            isWaveLoading = { waveRepository.isLoading.value },
+            stopWave = waveRepository::stopObserving,
+            isTrackCached = trackCacheRepo::isCached,
+            onAuthorizationRequired = ::requireYandexAuthorization,
+            logger = logger,
         )
     }
 

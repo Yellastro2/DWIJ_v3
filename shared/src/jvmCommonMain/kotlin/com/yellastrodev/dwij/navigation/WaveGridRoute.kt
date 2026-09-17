@@ -19,6 +19,10 @@ import androidx.compose.ui.unit.dp
 import com.yellastrodev.dwij.HomeMusicSource
 import com.yellastrodev.dwij.di.DwijComponent
 import com.yellastrodev.dwij.resources.Res
+import com.yellastrodev.dwij.resources.daily_playlist_title
+import com.yellastrodev.dwij.resources.daily_playlist_unavailable
+import com.yellastrodev.dwij.resources.daily_playlist_failed
+import com.yellastrodev.dwij.resources.daily_playlist_ready
 import com.yellastrodev.dwij.resources.ic_player_play_v2
 import com.yellastrodev.dwij.resources.list_loading_placeholder
 import com.yellastrodev.dwij.resources.waves_category_activity
@@ -43,12 +47,15 @@ import com.yellastrodev.yamusicsdk.entities.CoverSize
 import com.yellastrodev.yamusicsdk.network.YamResult
 import com.yellastrodev.yamusicsdk.rotor.RotorStation
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.async
+import kotlinx.coroutines.coroutineScope
+import com.yellastrodev.yamusicsdk.playlists.PlaylistDetails
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import org.jetbrains.compose.resources.painterResource
 import org.jetbrains.compose.resources.stringResource
 
-/** Моя волна, персональные рекомендации и оставшийся каталог в одной сетке. */
+/** Моя волна, временный плейлист дня и каталог; рекомендации загружаются при каждом входе. */
 @Composable
 fun WaveGridRoute(
     component: DwijComponent,
@@ -57,13 +64,15 @@ fun WaveGridRoute(
     modifier: Modifier = Modifier,
 ) {
     val logger = LocalYamLogger.current
-    val coroutineScope = rememberCoroutineScope()
+    val screenScope = rememberCoroutineScope()
     var stations by remember(component) {
         mutableStateOf<List<RotorStation>>(emptyList())
     }
     var isLoading by remember(component) { mutableStateOf(true) }
     var isRefreshing by remember(component) { mutableStateOf(false) }
     var loadFailed by remember(component) { mutableStateOf(false) }
+    var dailyPlaylist by remember(component) { mutableStateOf<PlaylistDetails?>(null) }
+    var dailyFailed by remember(component) { mutableStateOf(false) }
 
     val loadStations: suspend (Boolean) -> Unit = { refreshing ->
         if (refreshing) {
@@ -72,20 +81,35 @@ fun WaveGridRoute(
             isLoading = true
         }
         loadFailed = false
+        dailyFailed = false
+        dailyPlaylist = null
 
-        when (val result = component.waveRepository.getStations()) {
-            is YamResult.Success -> stations = result.value
-            is YamResult.Failure -> {
-                loadFailed = true
-                logger.error(
-                    WAVE_GRID_TAG,
-                    "[loadStations] Не удалось загрузить каталог Волн: ${result.error}",
-                )
+        try {
+            coroutineScope {
+                val stationsRequest = async { component.waveRepository.getStations() }
+                val dailyRequest = async { component.dailyPlaylistPlayback.load() }
+                when (val result = stationsRequest.await()) {
+                    is YamResult.Success -> stations = result.value
+                    is YamResult.Failure -> {
+                        loadFailed = true
+                        logger.error(
+                            WAVE_GRID_TAG,
+                            "[loadStations] Не удалось загрузить каталог Волн: ${result.error}",
+                        )
+                    }
+                }
+                when (val result = dailyRequest.await()) {
+                    is YamResult.Success -> dailyPlaylist = result.value
+                    is YamResult.Failure -> {
+                        dailyFailed = true
+                        logger.error(WAVE_GRID_TAG, "[loadStations] Не удалось загрузить плейлист дня: ${result.error}")
+                    }
+                }
             }
+        } finally {
+            isLoading = false
+            isRefreshing = false
         }
-
-        isLoading = false
-        isRefreshing = false
     }
 
     LaunchedEffect(component) {
@@ -111,7 +135,7 @@ fun WaveGridRoute(
     val displayedStations = listOf(defaultWave) + stations.filterNot { station ->
         station.id == DEFAULT_WAVE_ID
     }
-    val items = displayedStations.map { station ->
+    val stationItems = displayedStations.map { station ->
         WaveGridItem(
             station = station,
             title = station.name.ifBlank {
@@ -128,6 +152,18 @@ fun WaveGridRoute(
             },
         )
     }
+    val dailyItem = WaveGridItem(
+        station = null,
+        title = stringResource(Res.string.daily_playlist_title),
+        category = when {
+            isLoading || isRefreshing -> stringResource(Res.string.list_loading_placeholder)
+            dailyFailed -> stringResource(Res.string.daily_playlist_failed)
+            dailyPlaylist?.tracks.isNullOrEmpty() -> stringResource(Res.string.daily_playlist_unavailable)
+            else -> stringResource(Res.string.daily_playlist_ready, dailyPlaylist!!.tracks.size)
+        },
+        coverUri = dailyPlaylist?.playlist?.ogImageUri,
+    )
+    val items = stationItems.take(1) + dailyItem + stationItems.drop(1)
 
     PlaylistGridScreen(
         title = stringResource(Res.string.waves_title),
@@ -136,7 +172,11 @@ fun WaveGridRoute(
         onSourceSelected = {},
         onBackClick = onBackClick,
         onItemClick = { item ->
-            if (
+            if (item.station == null) {
+                dailyPlaylist?.let { details ->
+                    if (component.dailyPlaylistPlayback.play(details)) onOpenPlayer()
+                }
+            } else if (!component.dailyPlaylistPlayback.isStarting &&
                 component.waveRepository.requestStationWave(
                     stationId = item.station.id,
                     stationTitle = item.title,
@@ -170,8 +210,7 @@ fun WaveGridRoute(
             )
         },
         loadCover = { stationId ->
-            val station = stations.firstOrNull { it.id == stationId }
-            val coverUri = station?.coverUri
+            val coverUri = items.firstOrNull { it.id == stationId }?.coverUri
             if (coverUri == null) {
                 null
             } else {
@@ -190,23 +229,28 @@ fun WaveGridRoute(
         isLoading = isLoading,
         isRefreshing = isRefreshing,
         onRefresh = {
-            coroutineScope.launch {
-                loadStations(true)
+            if (!isLoading && !isRefreshing) {
+                screenScope.launch {
+                    loadStations(true)
+                }
             }
         },
     )
 }
 
+/** Карточка станции или плейлиста дня; отсутствие station обозначает конечную рекомендацию. */
 private data class WaveGridItem(
-    val station: RotorStation,
+    val station: RotorStation?,
     val title: String,
     val category: String,
+    val coverUri: String? = station?.coverUri,
 ) : PlaylistGridEntry {
-    override val id: String = station.id
+    override val id: String = station?.id ?: "recommendation:daily"
     override val isCreateAction: Boolean = false
-    override val shouldLoadCover: Boolean = !station.coverUri.isNullOrBlank()
+    override val shouldLoadCover: Boolean = !coverUri.isNullOrBlank()
 }
 
+/** Рисует общую плитку рекомендации с названием, состоянием и обложкой. */
 @Composable
 private fun WaveGridItemContent(
     item: WaveGridItem,

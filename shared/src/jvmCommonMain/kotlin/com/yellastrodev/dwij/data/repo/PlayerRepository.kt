@@ -10,6 +10,7 @@ import com.yellastrodev.dwij.data.entities.dYaPlaylist
 import com.yellastrodev.dwij.data.entities.dYaWave
 import com.yellastrodev.dwij.data.entities.toPlaybackTrack
 import com.yellastrodev.dwij.playback.PlaybackSettings
+import com.yellastrodev.dwij.playback.DailyPlaylistTracklist
 import com.yellastrodev.dwij.playback.PlayerEngine
 import com.yellastrodev.dwij.playback.RepeatMode
 import com.yellastrodev.dwij.utils.PlayerEvent
@@ -30,6 +31,7 @@ import kotlinx.coroutines.flow.onEach
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 
+/** Управляет очередью; временная рекомендация дня заканчивается без автоматического запуска Rotor. */
 class PlayerRepository(
     private val engine: PlayerEngine,
     private val settings: PlaybackSettings,
@@ -95,12 +97,14 @@ class PlayerRepository(
             .launchIn(scope)
     }
 
+    /** Продолжает подходящие списки волной, сохраняя конечность плейлиста дня. */
     private suspend fun handleEngineEvent(event: PlayerEvent) {
         if (event is PlayerEvent.TrackListEnd) {
             val tracklist = dtracklist.value
 
             if (
                 tracklist != null &&
+                tracklist !is DailyPlaylistTracklist &&
                 tracklist.getType() != LocalTracklist.Companion.TYPE
             ) {
                 continueWave(tracklist)

@@ -96,6 +96,10 @@
     <string name="home_wave">Волна</string>
     <string name="waves_title">Волны</string>
     <string name="waves_default_title">Моя волна</string>
+    <string name="daily_playlist_title">Плейлист дня</string>
+    <string name="daily_playlist_unavailable">Подборка пока недоступна</string>
+    <string name="daily_playlist_failed">Не удалось загрузить · потяните для повтора</string>
+    <string name="daily_playlist_ready">Персональная подборка · %1$d треков</string>
     <string name="waves_empty">Доступных Волн пока нет</string>
     <string name="waves_load_failed">Не удалось загрузить Волны</string>
     <string name="waves_category_personal">Персональная</string>
