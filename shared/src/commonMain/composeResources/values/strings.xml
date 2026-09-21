@@ -5,6 +5,10 @@
     <string name="auth_btn">Войти</string>
     <string name="auth_btn_exit">Удалить</string>
     <string name="auth_btn_waiting">Ожидание…</string>
+    <string name="auth_show_progress">Ход входа</string>
+    <string name="auth_hide_dialog">Скрыть</string>
+    <string name="auth_requesting_code">Получаем код входа…</string>
+    <string name="auth_saving_account">Вход подтверждён. Проверяем аккаунт и сохраняем авторизацию…</string>
     <string name="auth_device_title">Вход в Яндекс Музыку</string>
     <string name="auth_device_message">Откройте страницу:\n%1$s\n\nи введите код: %2$s</string>
     <string name="auth_open_browser">Открыть страницу</string>

@@ -464,7 +464,7 @@ private fun SettingsHeader(onBackClick: () -> Unit) {
     }
 }
 
-/** Показывает состояние аккаунта и запускает вход либо выход из Яндекс Музыки. */
+/** Показывает аккаунт; во время входа позволяет снова открыть окно текущей авторизации. */
 @Composable
 private fun SettingsYandexCard(
     login: String?,
@@ -513,13 +513,13 @@ private fun SettingsYandexCard(
             SettingsActionButton(
                 text = stringResource(
                     when {
-                        isAuthInProgress -> Res.string.auth_btn_waiting
+                        isAuthInProgress -> Res.string.auth_show_progress
                         login != null -> Res.string.auth_btn_exit
                         else -> Res.string.auth_btn
                     },
                 ),
-                enabled = !isAuthInProgress,
-                isLoading = isAuthInProgress,
+                enabled = true,
+                isLoading = false,
                 accent = DwijColors.Pink,
                 onClick = onAuthClick,
             )

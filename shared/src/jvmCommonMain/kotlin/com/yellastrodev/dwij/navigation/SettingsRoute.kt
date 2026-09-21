@@ -48,7 +48,6 @@ import com.yellastrodev.yamusicsdk.network.YamProxyType
 import com.yellastrodev.yamusicsdk.network.YamResult
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.Job
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import org.jetbrains.compose.resources.getString
@@ -59,6 +58,7 @@ import org.jetbrains.compose.resources.stringResource
  *
  * Постоянные настройки и авторизация принадлежат shared-компоненту.
  * Платформа используется только для StatFs, Intent, clipboard и lifecycle.
+ * Закрытие окна OAuth скрывает только интерфейс, не отменяя текущий вход.
  */
 @Composable
 fun SettingsRoute(
@@ -91,13 +91,12 @@ fun SettingsRoute(
         mutableStateOf(false)
     }
 
-    var authJob by remember {
-        mutableStateOf<Job?>(null)
-    }
-
     var deviceCode by remember {
         mutableStateOf<DeviceCode?>(null)
     }
+
+    var showAuthDialog by remember { mutableStateOf(false) }
+    var isSavingAccount by remember { mutableStateOf(false) }
 
     var cacheLimitMb by remember(component) {
         mutableStateOf(
@@ -487,6 +486,7 @@ fun SettingsRoute(
             )
     }
 
+    /** Проверяет аккаунт отдельным клиентом и сохраняет сессию до обновления фонотеки. */
     suspend fun saveToken(
         token: OAuthToken,
     ): SettingsAccountSaveResult {
@@ -502,7 +502,7 @@ fun SettingsRoute(
                             component
                                 .yandexProxySettings
                                 .activeConfigOrNull(),
-                    ).accountStatus()
+                    ).use { client -> client.accountStatus() }
             ) {
                 is YamResult.Success ->
                     result.value
@@ -563,51 +563,12 @@ fun SettingsRoute(
                             userId,
                     ),
                 )
-            platform.onYandexAuthorizationSaved()
-
             logger.info(
                 TAG,
                 "[saveToken] Авторизация сохранена",
             )
 
-            try {
-                when (
-                    val refreshResult =
-                        component
-                            .playlistRepository
-                            .refreshPlaylists()
-                ) {
-                    is DataResult.Success -> {
-                        logger.info(
-                            TAG,
-                            "[saveToken] Данные Яндекс Музыки обновлены после авторизации",
-                        )
-                    }
-
-                    is DataResult.Failure -> {
-                        logger.warning(
-                            TAG,
-                            "[saveToken] Авторизация сохранена, но данные не обновлены: " +
-                                    refreshResult.error,
-                        )
-                    }
-                }
-            } catch (
-                error: CancellationException,
-            ) {
-                throw error
-            } catch (error: Exception) {
-                logger.error(
-                    TAG,
-                    "[saveToken] Авторизация сохранена, но обновление данных завершилось с ошибкой",
-                    error,
-                )
-            }
-
-            SettingsAccountSaveResult
-                .Success(
-                    login,
-                )
+            SettingsAccountSaveResult.Success(login)
         } catch (
             error: CancellationException,
         ) {
@@ -615,7 +576,7 @@ fun SettingsRoute(
         } catch (error: Exception) {
             logger.error(
                 TAG,
-                "[saveToken] Некорректный ответ account/status",
+                "[saveToken] Не удалось проверить или сохранить аккаунт",
                 error,
             )
 
@@ -623,122 +584,161 @@ fun SettingsRoute(
         }
     }
 
-    /** Запускает OAuth Device Flow и закрывает его транспорт после получения результата. */
-    fun startYandexAuth() {
-        if (
-            authJob?.isActive ==
-            true
+    /** Обновляет данные после входа; сбои фоновых действий не меняют результат сохранения сессии. */
+    suspend fun refreshAfterAuthorization() {
+        try {
+            platform.onYandexAuthorizationSaved()
+        } catch (error: CancellationException) {
+            throw error
+        } catch (error: Exception) {
+            logger.error(
+                TAG,
+                "[refreshAfterAuthorization] Не удалось запустить платформенное обновление",
+                error,
+            )
+        }
+
+        try {
+            when (
+                val refreshResult =
+                    component
+                        .playlistRepository
+                        .refreshPlaylists()
+            ) {
+                is DataResult.Success -> {
+                    logger.info(
+                        TAG,
+                        "[refreshAfterAuthorization] Данные Яндекс Музыки обновлены после авторизации",
+                    )
+                }
+
+                is DataResult.Failure -> {
+                    logger.warning(
+                        TAG,
+                        "[refreshAfterAuthorization] Авторизация сохранена, но данные не обновлены: " +
+                                refreshResult.error,
+                    )
+                }
+            }
+        } catch (
+            error: CancellationException,
         ) {
+            throw error
+        } catch (error: Exception) {
+            logger.error(
+                TAG,
+                "[refreshAfterAuthorization] Авторизация сохранена, но обновление данных завершилось с ошибкой",
+                error,
+            )
+        }
+    }
+
+    /** Запускает вход или показывает уже выполняющийся; окно не управляет отменой операции. */
+    fun startYandexAuth() {
+        showAuthDialog = true
+        if (isAuthInProgress) {
             return
         }
 
         isAuthInProgress = true
+        isSavingAccount = false
 
-        authJob =
-            coroutineScope.launch {
-                try {
-                    when (
-                        val result =
-                            YandexDeviceAuth(
-                                clientId =
-                                    platform
-                                        .oauthClientId,
-                                clientSecret =
-                                    platform
-                                        .oauthClientSecret,
-                                logger =
-                                    logger,
-                                proxyConfig =
-                                    component
-                                        .yandexProxySettings
-                                        .activeConfigOrNull(),
-                            ).use { auth ->
-                                auth.authorize(
-                                    onCode = { code ->
-                                        deviceCode = code
-                                    },
+        coroutineScope.launch {
+            try {
+                when (
+                    val result =
+                        YandexDeviceAuth(
+                            clientId =
+                                platform
+                                    .oauthClientId,
+                            clientSecret =
+                                platform
+                                    .oauthClientSecret,
+                            logger =
+                                logger,
+                            proxyConfig =
+                                component
+                                    .yandexProxySettings
+                                    .activeConfigOrNull(),
+                        ).use { auth ->
+                            auth.authorize(
+                                onCode = { code ->
+                                    deviceCode = code
+                                },
+                            )
+                        }
+                ) {
+                    is DeviceAuthResult.Success -> {
+                        isSavingAccount = true
+                        when (
+                            val saved =
+                                saveToken(
+                                    result.value,
+                                )
+                        ) {
+                            is SettingsAccountSaveResult.Success -> {
+                                yandexLogin =
+                                    saved.login
+                                showAuthDialog = false
+                                deviceCode = null
+                                coroutineScope.launch { refreshAfterAuthorization() }
+                                showMessage(
+                                    getString(Res.string.auth_success),
                                 )
                             }
-                    ) {
-                        is DeviceAuthResult.Success -> {
-                            when (
-                                val saved =
-                                    saveToken(
-                                        result.value,
-                                    )
-                            ) {
-                                is SettingsAccountSaveResult.Success -> {
-                                    yandexLogin =
-                                        saved.login
 
-                                    snackbarHostState
-                                        .showSnackbar(
-                                            getString(
-                                                Res.string.auth_success,
-                                            ),
-                                        )
-                                }
-
-                                SettingsAccountSaveResult.Failure -> {
-                                    snackbarHostState
-                                        .showSnackbar(
-                                            getString(
-                                                Res.string.auth_error_account,
-                                            ),
-                                        )
-                                }
-                            }
-                        }
-
-                        is DeviceAuthResult.Failure -> {
-                            logSettingsAuthError(
-                                logger =
-                                    logger,
-                                error =
-                                    result.error,
-                            )
-
-                            if (
-                                result.error
-                                        !is DeviceAuthError.Cancelled
-                            ) {
-                                snackbarHostState
-                                    .showSnackbar(
-                                        settingsAuthErrorMessage(
-                                            result.error,
-                                        ),
-                                    )
+                            SettingsAccountSaveResult.Failure -> {
+                                showMessage(
+                                    getString(Res.string.auth_error_account),
+                                )
                             }
                         }
                     }
-                } catch (
-                    error: CancellationException,
-                ) {
-                    logger.info(
-                        TAG,
-                        "[startYandexAuth] Ожидание авторизации отменено",
-                    )
 
-                    throw error
-                } catch (error: Exception) {
-                    logger.error(
-                        TAG,
-                        "[startYandexAuth] Неожиданная ошибка авторизации",
-                        error,
-                    )
-
-                    snackbarHostState
-                        .showSnackbar(
-                            getString(
-                                Res.string.auth_error_response,
-                            ),
+                    is DeviceAuthResult.Failure -> {
+                        logSettingsAuthError(
+                            logger =
+                                logger,
+                            error =
+                                result.error,
                         )
-                } finally {
-                    deviceCode = null
-                    isAuthInProgress = false
-                    authJob = null
+
+                        if (
+                            result.error
+                                    !is DeviceAuthError.Cancelled
+                        ) {
+                            showMessage(
+                                settingsAuthErrorMessage(result.error),
+                            )
+                        }
+                    }
                 }
+            } catch (
+                error: CancellationException,
+            ) {
+                logger.info(
+                    TAG,
+                    "[startYandexAuth] Ожидание авторизации отменено",
+                )
+
+                throw error
+            } catch (error: Exception) {
+                logger.error(
+                    TAG,
+                    "[startYandexAuth] Неожиданная ошибка авторизации",
+                    error,
+                )
+
+                showMessage(
+                    getString(Res.string.auth_error_response),
+                )
+            } finally {
+                showAuthDialog = false
+                deviceCode = null
+                isSavingAccount = false
+                isAuthInProgress = false
             }
+        }
     }
 
     LaunchedEffect(startAuthorization) {
@@ -819,8 +819,7 @@ fun SettingsRoute(
                 onBackClick,
             onAuthClick = {
                 if (
-                    yandexLogin ==
-                    null
+                    isAuthInProgress || yandexLogin == null
                 ) {
                     startYandexAuth()
                 } else {
@@ -1306,11 +1305,11 @@ fun SettingsRoute(
         )
     }
 
-    deviceCode?.let { code ->
+    if (showAuthDialog && isAuthInProgress) {
+        val code = deviceCode
         AlertDialog(
             onDismissRequest = {
-                authJob?.cancel()
-                deviceCode = null
+                showAuthDialog = false
             },
             title = {
                 Text(
@@ -1321,68 +1320,73 @@ fun SettingsRoute(
             },
             text = {
                 Text(
-                    stringResource(
-                        Res.string.auth_device_message,
-                        code.verificationUrl,
-                        code.userCode,
-                    ),
+                    when {
+                        isSavingAccount -> stringResource(Res.string.auth_saving_account)
+                        code == null -> stringResource(Res.string.auth_requesting_code)
+                        else -> stringResource(
+                            Res.string.auth_device_message,
+                            code.verificationUrl,
+                            code.userCode,
+                        )
+                    },
                 )
             },
             confirmButton = {
-                TextButton(
-                    onClick = {
-                        try {
-                            platform.copyText(
-                                label =
-                                    clipboardLabel,
-                                text =
-                                    code.userCode,
-                            )
-
-                            val opened =
-                                platform.openUrl(
-                                    code.verificationUrl,
+                if (code != null && !isSavingAccount) {
+                    TextButton(
+                        onClick = {
+                            try {
+                                platform.copyText(
+                                    label =
+                                        clipboardLabel,
+                                    text =
+                                        code.userCode,
                                 )
 
-                            showMessage(
-                                if (opened) {
-                                    codeCopiedMessage
-                                } else {
-                                    browserErrorMessage
-                                },
-                            )
-                        } catch (
-                            error: Exception,
-                        ) {
-                            logger.error(
-                                TAG,
-                                "[openAuthorizationPage] Не удалось открыть страницу авторизации",
-                                error,
-                            )
+                                val opened =
+                                    platform.openUrl(
+                                        code.verificationUrl,
+                                    )
 
-                            showMessage(
-                                browserErrorMessage,
-                            )
-                        }
-                    },
-                ) {
-                    Text(
-                        stringResource(
-                            Res.string.auth_open_browser,
-                        ),
-                    )
+                                showMessage(
+                                    if (opened) {
+                                        codeCopiedMessage
+                                    } else {
+                                        browserErrorMessage
+                                    },
+                                )
+                            } catch (
+                                error: Exception,
+                            ) {
+                                logger.error(
+                                    TAG,
+                                    "[openAuthorizationPage] Не удалось открыть страницу авторизации",
+                                    error,
+                                )
+
+                                showMessage(
+                                    browserErrorMessage,
+                                )
+                            }
+                        },
+                    ) {
+                        Text(
+                            stringResource(
+                                Res.string.auth_open_browser,
+                            ),
+                        )
+                    }
                 }
             },
             dismissButton = {
                 TextButton(
                     onClick = {
-                        authJob?.cancel()
-                        deviceCode = null
+                        showAuthDialog = false
                     },
                 ) {
                     Text(
                         stringResource(
-                            Res.string.multi_source_dialog_cancel,
+                            Res.string.auth_hide_dialog,
                         ),
                     )
                 }
