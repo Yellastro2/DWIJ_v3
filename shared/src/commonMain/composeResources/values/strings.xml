@@ -62,6 +62,10 @@
     <string name="settings_music_directories_save_failed">Не удалось сохранить список папок</string>
     <string name="settings_music_directory_picker_title">Выберите папку с музыкой</string>
     <string name="settings_logs_title">Диагностика</string>
+    <string name="settings_http_remote_title">HTTP медиа пульт</string>
+    <string name="settings_http_remote_port">Порт</string>
+    <string name="settings_http_remote_apply">Применить</string>
+    <string name="settings_http_remote_no_address">Локальный IP не найден</string>
     <string name="settings_logs_description">Две последние сессии приложения в ZIP-архиве</string>
     <string name="settings_logs_share">Экспортировать</string>
     <string name="settings_logs_chooser_title">Экспортировать журналы приложения</string>

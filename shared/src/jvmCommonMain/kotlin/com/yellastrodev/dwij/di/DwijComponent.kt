@@ -48,6 +48,8 @@ import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.runBlocking
+import kotlinx.coroutines.Job
+import com.yellastrodev.dwij.playback.HttpMediaRemote
 import java.io.File
 import java.util.concurrent.atomic.AtomicBoolean
 
@@ -66,6 +68,7 @@ class DwijComponent private constructor(
     val yandexSessionManager: YandexSessionManager,
     val cacheSettings: CacheSettings,
     val yandexProxySettings: YandexProxySettings,
+    private val localKeyValueStore: LocalKeyValueStore,
     private val db: DwijDatabase,
     private val trackCacheDirectory: File,
     private val localYandexTrackDirectory: File,
@@ -265,6 +268,11 @@ class DwijComponent private constructor(
         )
     }
 
+    /** Общий для Android и desktop HTTP-пульт текущего экземпляра плеера. */
+    val httpMediaRemote: HttpMediaRemote by lazy {
+        HttpMediaRemote(localKeyValueStore, playerRepo, applicationScope)
+    }
+
     val searchRepository:
             SearchRepository by lazy {
 
@@ -343,6 +351,11 @@ class DwijComponent private constructor(
             )
         ) {
             return
+        }
+
+        httpMediaRemote.startIfEnabled()
+        applicationScope.coroutineContext[Job]?.invokeOnCompletion {
+            httpMediaRemote.close()
         }
 
         try {
@@ -462,6 +475,8 @@ class DwijComponent private constructor(
                     cacheSettings,
                 yandexProxySettings =
                     yandexProxySettings,
+                localKeyValueStore =
+                    localKeyValueStore,
                 db =
                     db,
                 trackCacheDirectory =

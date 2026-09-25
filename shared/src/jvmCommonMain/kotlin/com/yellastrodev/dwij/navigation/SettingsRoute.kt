@@ -74,6 +74,12 @@ fun SettingsRoute(
     val coroutineScope =
         rememberCoroutineScope()
 
+    val httpRemote = remember(component) { component.httpMediaRemote }
+    var httpRemoteEnabled by remember(httpRemote) { mutableStateOf(httpRemote.enabled) }
+    var httpRemotePort by remember(httpRemote) { mutableStateOf(httpRemote.port) }
+    var httpRemoteError by remember(httpRemote) { mutableStateOf(httpRemote.error) }
+    var httpRemoteAddress by remember(httpRemote) { mutableStateOf(httpRemote.localAddress()) }
+
     val snackbarHostState =
         remember {
             SnackbarHostState()
@@ -913,6 +919,23 @@ fun SettingsRoute(
                 },
             isSharingLogs =
                 isSharingLogs,
+            httpRemoteEnabled = httpRemoteEnabled,
+            httpRemotePort = httpRemotePort,
+            httpRemoteAddress = httpRemoteAddress,
+            httpRemoteError = httpRemoteError,
+            onHttpRemoteEnabledChange = { value ->
+                httpRemote.changeEnabled(value)
+                httpRemoteEnabled = httpRemote.enabled
+                httpRemoteAddress = httpRemote.localAddress()
+                httpRemoteError = httpRemote.error
+            },
+            onHttpRemotePortChange = { value ->
+                httpRemote.changePort(value)
+                httpRemotePort = httpRemote.port
+                httpRemoteEnabled = httpRemote.enabled
+                httpRemoteAddress = httpRemote.localAddress()
+                httpRemoteError = httpRemote.error
+            },
             modifier =
                 Modifier.fillMaxSize(),
         )

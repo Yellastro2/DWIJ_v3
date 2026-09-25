@@ -23,6 +23,8 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Slider
 import androidx.compose.material3.SliderDefaults
+import androidx.compose.material3.Switch
+import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.Text
@@ -78,6 +80,12 @@ fun SettingsScreen(
     onMusicDirectoriesClick: () -> Unit,
     onShareLogsClick: (() -> Unit)?,
     isSharingLogs: Boolean,
+    httpRemoteEnabled: Boolean,
+    httpRemotePort: Int,
+    httpRemoteAddress: String?,
+    httpRemoteError: String?,
+    onHttpRemoteEnabledChange: (Boolean) -> Unit,
+    onHttpRemotePortChange: (Int) -> Unit,
     modifier: Modifier = Modifier,
 ) {
     val snackbarHostState = remember { SnackbarHostState() }
@@ -151,6 +159,14 @@ fun SettingsScreen(
                             onClick,
                     )
                 }
+                SettingsHttpRemoteCard(
+                    enabled = httpRemoteEnabled,
+                    port = httpRemotePort,
+                    address = httpRemoteAddress,
+                    error = httpRemoteError,
+                    onEnabledChange = onHttpRemoteEnabledChange,
+                    onPortChange = onHttpRemotePortChange,
+                )
             }
             Text(
                 text =
@@ -253,6 +269,64 @@ private fun SettingsLogsCard(
                 onClick =
                     onClick,
             )
+        }
+    }
+}
+
+/** Показывает переключатель HTTP-пульта, его порт и адрес в локальной сети. */
+@Composable
+private fun SettingsHttpRemoteCard(
+    enabled: Boolean,
+    port: Int,
+    address: String?,
+    error: String?,
+    onEnabledChange: (Boolean) -> Unit,
+    onPortChange: (Int) -> Unit,
+) {
+    var portText by remember(port) { mutableStateOf(port.toString()) }
+    SettingsTextureCard(
+        textureRes = Res.drawable.bg_focus_texture,
+        accent = DwijColors.CyanBright,
+    ) {
+        Column(modifier = Modifier.fillMaxWidth().padding(18.dp)) {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Text(
+                    text = stringResource(Res.string.settings_http_remote_title),
+                    color = DwijColors.White,
+                    fontSize = 18.sp,
+                    fontWeight = FontWeight.Bold,
+                    modifier = Modifier.weight(1f),
+                )
+                Switch(checked = enabled, onCheckedChange = onEnabledChange)
+            }
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                OutlinedTextField(
+                    value = portText,
+                    onValueChange = { value -> portText = value.filter(Char::isDigit).take(5) },
+                    label = { Text(stringResource(Res.string.settings_http_remote_port)) },
+                    singleLine = true,
+                    modifier = Modifier.weight(1f),
+                )
+                SettingsActionButton(
+                    text = stringResource(Res.string.settings_http_remote_apply),
+                    enabled = portText.toIntOrNull()?.let { it in 1..65535 } == true && portText != port.toString(),
+                    isLoading = false,
+                    accent = DwijColors.CyanBright,
+                    onClick = { portText.toIntOrNull()?.let(onPortChange) },
+                )
+            }
+            if (enabled) {
+                Text(
+                    text = address?.let { "http://$it:$port" }
+                        ?: stringResource(Res.string.settings_http_remote_no_address),
+                    color = DwijColors.SecondaryText,
+                    fontSize = 12.sp,
+                    modifier = Modifier.padding(top = 8.dp),
+                )
+            }
+            error?.let {
+                Text(text = it, color = DwijColors.CyanBright, fontSize = 12.sp)
+            }
         }
     }
 }
@@ -804,5 +878,11 @@ private fun SettingsScreenPreview() {
         onMusicDirectoriesClick = {},
         onShareLogsClick = {},
         isSharingLogs = false,
+        httpRemoteEnabled = false,
+        httpRemotePort = 8765,
+        httpRemoteAddress = null,
+        httpRemoteError = null,
+        onHttpRemoteEnabledChange = {},
+        onHttpRemotePortChange = {},
     )
 }
