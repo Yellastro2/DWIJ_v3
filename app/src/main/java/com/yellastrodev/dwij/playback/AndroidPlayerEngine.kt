@@ -28,6 +28,7 @@ import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
 
+/** Связывает общий PlayerEngine с сервисом и переживает его пересоздание. */
 class AndroidPlayerEngine(
     context: Context,
     private val scope: CoroutineScope,
@@ -128,11 +129,17 @@ class AndroidPlayerEngine(
         }
     }
 
+    /** Принимает новый сервис и восстанавливает очередь из памяти, если она ещё доступна. */
     private fun restoreSnapshotIfNeeded(
         playerService: PlayerService,
     ) {
-        val snapshot = playbackSnapshot ?: return
         val currentState = mutableState.value
+        if (service !== playerService) {
+            stopSubscriptions()
+            service = playerService
+            startSubscriptionsIfNeeded(playerService)
+        }
+        val snapshot = playbackSnapshot ?: return
 
         playerService.restoreQueue(
             tracks = snapshot.items,

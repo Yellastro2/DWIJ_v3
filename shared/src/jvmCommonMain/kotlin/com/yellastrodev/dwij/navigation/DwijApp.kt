@@ -31,6 +31,8 @@ import androidx.navigation.compose.rememberNavController
 import androidx.navigation.navArgument
 import androidx.savedstate.read
 import com.yellastrodev.dwij.di.DwijComponent
+import com.yellastrodev.dwij.data.DataResult
+import com.yellastrodev.dwij.data.entities.dSimpleTracklist
 import com.yellastrodev.dwij.models.PlayerModel
 import com.yellastrodev.dwij.resources.Res
 import com.yellastrodev.dwij.resources.home_player_unknown_artist
@@ -54,6 +56,7 @@ import org.jetbrains.compose.resources.stringResource
  *
  * Владеет NavController, back stack, графом маршрутов и общим компактным плеером.
  * Платформа предоставляет только системные возможности отдельных экранов.
+ * Входящие ссылки на треки превращает в очередь воспроизведения и открывает плеер.
  */
 @Composable
 fun DwijApp(
@@ -62,6 +65,7 @@ fun DwijApp(
     platform: DwijAppPlatform,
     modifier: Modifier = Modifier,
     playerOpenRequests: Flow<Unit> = emptyFlow(),
+    yandexTrackRequests: Flow<String> = emptyFlow(),
 ) {
     val navController = rememberNavController()
     val backStackEntry by navController.currentBackStackEntryAsState()
@@ -80,6 +84,28 @@ fun DwijApp(
         playerOpenRequests.collect {
             navController.navigate(DwijDestination.PLAYER) {
                 launchSingleTop = true
+            }
+        }
+    }
+
+    LaunchedEffect(navController, yandexTrackRequests, component) {
+        yandexTrackRequests.collect { trackId ->
+            when (val result = component.trackRepository.getTrack(trackId)) {
+                is DataResult.Success -> {
+                    component.trackRepository.putTracks(listOf(result.value))
+                    val songs = component.songRepository.songsForYandexTracks(listOf(result.value))
+                    if (songs.isNotEmpty()) {
+                        component.playerRepo.playQueue(
+                            songs = songs,
+                            startIndex = 0,
+                            tracklist = dSimpleTracklist(),
+                        )
+                        navController.navigate(DwijDestination.PLAYER) {
+                            launchSingleTop = true
+                        }
+                    }
+                }
+                is DataResult.Failure -> Unit
             }
         }
     }

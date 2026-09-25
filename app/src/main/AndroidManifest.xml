@@ -42,6 +42,14 @@
             </intent-filter>
         </service>
 
+        <receiver
+            android:name="androidx.media3.session.MediaButtonReceiver"
+            android:exported="true">
+            <intent-filter>
+                <action android:name="android.intent.action.MEDIA_BUTTON" />
+            </intent-filter>
+        </receiver>
+
         <service
             android:name=".service.LocalTrackDownloadService"
             android:exported="false"
@@ -80,6 +88,10 @@
             <data
                 android:host="music.yandex.ru"
                 android:pathPrefix="/album"
+                android:scheme="https" />
+            <data
+                android:host="music.yandex.ru"
+                android:pathPrefix="/track/"
                 android:scheme="https" />
             <data
                 android:host="music.yandex.ru"

@@ -210,4 +210,8 @@
     <string name="local_catalog_resolve_title">Уточняем локальную медиатеку</string>
     <string name="local_catalog_resolve_progress">Обработано %1$d из %2$d</string>
     <string name="local_catalog_resolve_cancel">Отменить</string>
+    <string name="yandex_links_dialog_title">Открывать ссылки Яндекс Музыки в DWIJ</string>
+    <string name="yandex_links_dialog_message">Чтобы альбомы и плейлисты из ссылок Яндекс Музыки открывались сразу здесь, разрешите DWIJ открывать поддерживаемые ссылки в настройках приложения и включите music.yandex.ru.</string>
+    <string name="yandex_links_dialog_settings">Открыть настройки</string>
+    <string name="yandex_links_dialog_later">Позже</string>
 </resources>
