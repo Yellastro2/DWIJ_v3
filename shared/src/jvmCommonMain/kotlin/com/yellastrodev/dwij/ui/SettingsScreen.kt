@@ -25,6 +25,7 @@ import androidx.compose.material3.Slider
 import androidx.compose.material3.SliderDefaults
 import androidx.compose.material3.Switch
 import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.OutlinedTextFieldDefaults
 import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.Text
@@ -83,6 +84,7 @@ fun SettingsScreen(
     httpRemoteEnabled: Boolean,
     httpRemotePort: Int,
     httpRemoteAddress: String?,
+    httpRemoteServiceName: String?,
     httpRemoteError: String?,
     onHttpRemoteEnabledChange: (Boolean) -> Unit,
     onHttpRemotePortChange: (Int) -> Unit,
@@ -163,6 +165,7 @@ fun SettingsScreen(
                     enabled = httpRemoteEnabled,
                     port = httpRemotePort,
                     address = httpRemoteAddress,
+                    serviceName = httpRemoteServiceName,
                     error = httpRemoteError,
                     onEnabledChange = onHttpRemoteEnabledChange,
                     onPortChange = onHttpRemotePortChange,
@@ -273,12 +276,13 @@ private fun SettingsLogsCard(
     }
 }
 
-/** Показывает переключатель HTTP-пульта, его порт и адрес в локальной сети. */
+/** Показывает HTTP-пульт, порт, локальный IP и фактическое DNS-SD имя со светлыми цветами ввода. */
 @Composable
 private fun SettingsHttpRemoteCard(
     enabled: Boolean,
     port: Int,
     address: String?,
+    serviceName: String?,
     error: String?,
     onEnabledChange: (Boolean) -> Unit,
     onPortChange: (Int) -> Unit,
@@ -305,6 +309,17 @@ private fun SettingsHttpRemoteCard(
                     onValueChange = { value -> portText = value.filter(Char::isDigit).take(5) },
                     label = { Text(stringResource(Res.string.settings_http_remote_port)) },
                     singleLine = true,
+                    colors = OutlinedTextFieldDefaults.colors(
+                        focusedTextColor = DwijColors.White,
+                        unfocusedTextColor = DwijColors.White,
+                        cursorColor = DwijColors.CyanBright,
+                        focusedLabelColor = DwijColors.CyanBright,
+                        unfocusedLabelColor = DwijColors.White.copy(alpha = 0.75f),
+                        focusedBorderColor = DwijColors.CyanBright,
+                        unfocusedBorderColor = DwijColors.White.copy(alpha = 0.45f),
+                        focusedContainerColor = DwijColors.SettingsCardBackground,
+                        unfocusedContainerColor = DwijColors.SettingsCardBackground,
+                    ),
                     modifier = Modifier.weight(1f),
                 )
                 SettingsActionButton(
@@ -319,10 +334,18 @@ private fun SettingsHttpRemoteCard(
                 Text(
                     text = address?.let { "http://$it:$port" }
                         ?: stringResource(Res.string.settings_http_remote_no_address),
-                    color = DwijColors.SecondaryText,
+                    color = DwijColors.White.copy(alpha = 0.85f),
                     fontSize = 12.sp,
                     modifier = Modifier.padding(top = 8.dp),
                 )
+                serviceName?.let {
+                    Text(
+                        text = stringResource(Res.string.settings_http_remote_service_name, it),
+                        color = DwijColors.White.copy(alpha = 0.85f),
+                        fontSize = 12.sp,
+                        modifier = Modifier.padding(top = 4.dp),
+                    )
+                }
             }
             error?.let {
                 Text(text = it, color = DwijColors.CyanBright, fontSize = 12.sp)
@@ -881,6 +904,7 @@ private fun SettingsScreenPreview() {
         httpRemoteEnabled = false,
         httpRemotePort = 8765,
         httpRemoteAddress = null,
+        httpRemoteServiceName = null,
         httpRemoteError = null,
         onHttpRemoteEnabledChange = {},
         onHttpRemotePortChange = {},

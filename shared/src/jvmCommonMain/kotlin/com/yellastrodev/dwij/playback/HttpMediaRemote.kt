@@ -13,12 +13,15 @@ import java.net.SocketException
 import java.net.SocketTimeoutException
 import java.util.concurrent.atomic.AtomicBoolean
 
-/** Минимальный HTTP-пульт для устройств в одной сети; обслуживает только три POST-команды. */
+/** Минимальный HTTP-пульт с платформенным DNS-SD объявлением и тремя POST-командами. */
 class HttpMediaRemote(
     private val storage: LocalKeyValueStore,
     private val player: PlayerRepository,
     private val scope: CoroutineScope,
+    private val advertiser: HttpMediaServiceAdvertiser,
 ) : AutoCloseable {
+    /** Наблюдаемое имя сервиса, включая суффикс при конфликте в сети. */
+    val serviceName = advertiser.serviceName
     @Volatile var error: String? = null
         private set
 
@@ -63,7 +66,7 @@ class HttpMediaRemote(
         if (value) start() else stop()
     }
 
-    /** Открывает TCP-порт и запускает короткий цикл приёма в фоновом потоке. */
+    /** Открывает TCP-порт, запускает приём и объявляет сервис в локальной сети. */
     @Synchronized private fun start() {
         if (running.get()) return
         try {
@@ -77,11 +80,13 @@ class HttpMediaRemote(
             error = failure.message ?: "Не удалось открыть порт $port"
             enabled = false
         }
+        if (running.get()) advertiser.start(port, localAddress())
     }
 
-    /** Останавливает приём и сохраняет выключенное состояние. */
+    /** Останавливает приём и объявление; при закрытии процесса сохраняет настройку включения. */
     @Synchronized private fun stop(persist: Boolean = true) {
         running.set(false)
+        advertiser.stop()
         socket?.close()
         socket = null
         if (persist) enabled = false

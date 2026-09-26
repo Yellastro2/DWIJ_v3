@@ -50,6 +50,7 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.Job
 import com.yellastrodev.dwij.playback.HttpMediaRemote
+import com.yellastrodev.dwij.playback.HttpMediaServiceAdvertiser
 import java.io.File
 import java.util.concurrent.atomic.AtomicBoolean
 
@@ -57,7 +58,7 @@ import java.util.concurrent.atomic.AtomicBoolean
  * Общий JVM-граф приложения.
  *
  * Создаёт YamApiClient, восстанавливает сессию и собирает все общие
- * репозитории, временное воспроизведение рекомендаций и постоянные настройки.
+ * репозитории, временное воспроизведение рекомендаций, HTTP-пульт с DNS-SD и постоянные настройки.
  *
  * Платформа передаёт системные реализации, низкоуровневое key-value хранилище
  * обычных настроек и защищённое хранилище авторизации.
@@ -69,6 +70,7 @@ class DwijComponent private constructor(
     val cacheSettings: CacheSettings,
     val yandexProxySettings: YandexProxySettings,
     private val localKeyValueStore: LocalKeyValueStore,
+    private val httpMediaServiceAdvertiser: HttpMediaServiceAdvertiser,
     private val db: DwijDatabase,
     private val trackCacheDirectory: File,
     private val localYandexTrackDirectory: File,
@@ -270,7 +272,7 @@ class DwijComponent private constructor(
 
     /** Общий для Android и desktop HTTP-пульт текущего экземпляра плеера. */
     val httpMediaRemote: HttpMediaRemote by lazy {
-        HttpMediaRemote(localKeyValueStore, playerRepo, applicationScope)
+        HttpMediaRemote(localKeyValueStore, playerRepo, applicationScope, httpMediaServiceAdvertiser)
     }
 
     val searchRepository:
@@ -411,12 +413,13 @@ class DwijComponent private constructor(
 
         /**
          * Восстанавливает постоянные настройки и сессию,
-         * затем создаёт общий граф приложения.
+         * затем создаёт общий граф приложения с платформенным объявлением HTTP-пульта.
          */
         fun create(
             applicationScope: CoroutineScope,
             logger: YamLogger,
             localKeyValueStore: LocalKeyValueStore,
+            httpMediaServiceAdvertiser: HttpMediaServiceAdvertiser,
             yandexSessionStore: YandexSessionStore,
             db: DwijDatabase,
             trackCacheDirectory: File,
@@ -477,6 +480,8 @@ class DwijComponent private constructor(
                     yandexProxySettings,
                 localKeyValueStore =
                     localKeyValueStore,
+                httpMediaServiceAdvertiser =
+                    httpMediaServiceAdvertiser,
                 db =
                     db,
                 trackCacheDirectory =

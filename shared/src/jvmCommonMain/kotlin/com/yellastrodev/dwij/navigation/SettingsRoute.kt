@@ -75,6 +75,7 @@ fun SettingsRoute(
         rememberCoroutineScope()
 
     val httpRemote = remember(component) { component.httpMediaRemote }
+    val httpRemoteServiceName by httpRemote.serviceName.collectAsState()
     var httpRemoteEnabled by remember(httpRemote) { mutableStateOf(httpRemote.enabled) }
     var httpRemotePort by remember(httpRemote) { mutableStateOf(httpRemote.port) }
     var httpRemoteError by remember(httpRemote) { mutableStateOf(httpRemote.error) }
@@ -922,6 +923,7 @@ fun SettingsRoute(
             httpRemoteEnabled = httpRemoteEnabled,
             httpRemotePort = httpRemotePort,
             httpRemoteAddress = httpRemoteAddress,
+            httpRemoteServiceName = httpRemoteServiceName,
             httpRemoteError = httpRemoteError,
             onHttpRemoteEnabledChange = { value ->
                 httpRemote.changeEnabled(value)

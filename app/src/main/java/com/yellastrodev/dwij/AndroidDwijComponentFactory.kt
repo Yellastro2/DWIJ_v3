@@ -11,6 +11,7 @@ import com.yellastrodev.dwij.di.DwijComponent
 import com.yellastrodev.dwij.playback.AndroidMediaItemMapper
 import com.yellastrodev.dwij.playback.AndroidPlayerEngine
 import com.yellastrodev.dwij.playback.AndroidPlayerServiceRegistry
+import com.yellastrodev.dwij.playback.AndroidHttpMediaServiceAdvertiser
 import com.yellastrodev.dwij.storage.AndroidKeystoreSessionPayloadStore
 import com.yellastrodev.dwij.storage.MigratingYandexSessionStore
 import com.yellastrodev.dwij.storage.ProtectedYandexSessionStore
@@ -30,6 +31,7 @@ class AndroidDwijComponentFactory(
     AndroidPlayerServiceRegistry,
 ) {
 
+    /** Собирает Android-граф, включая системное объявление HTTP-пульта через NSD. */
     fun create(): DwijComponent {
         val context =
             application.applicationContext
@@ -88,6 +90,8 @@ class AndroidDwijComponentFactory(
                 logger,
             localKeyValueStore =
                 localKeyValueStore,
+            httpMediaServiceAdvertiser =
+                AndroidHttpMediaServiceAdvertiser(context, logger),
             yandexSessionStore =
                 yandexSessionStore,
             db =

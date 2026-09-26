@@ -114,6 +114,7 @@ dependencies {
     )
 
     testImplementation(libs.junit)
+    implementation("org.jmdns:jmdns:3.6.3")
 }
 
 compose.desktop {

@@ -66,6 +66,7 @@
     <string name="settings_http_remote_port">Порт</string>
     <string name="settings_http_remote_apply">Применить</string>
     <string name="settings_http_remote_no_address">Локальный IP не найден</string>
+    <string name="settings_http_remote_service_name">Имя сервиса: %1$s</string>
     <string name="settings_logs_description">Две последние сессии приложения в ZIP-архиве</string>
     <string name="settings_logs_share">Экспортировать</string>
     <string name="settings_logs_chooser_title">Экспортировать журналы приложения</string>

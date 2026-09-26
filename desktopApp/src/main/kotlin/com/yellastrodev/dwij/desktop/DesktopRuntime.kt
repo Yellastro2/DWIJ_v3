@@ -8,6 +8,7 @@ import com.yellastrodev.dwij.desktop.data.source.DesktopLocalMediaSource
 import com.yellastrodev.dwij.desktop.playback.DesktopMediaArtworkProvider
 import com.yellastrodev.dwij.desktop.playback.DesktopPlayerEngine
 import com.yellastrodev.dwij.desktop.playback.DesktopAudioRelay
+import com.yellastrodev.dwij.desktop.playback.DesktopHttpMediaServiceAdvertiser
 import com.yellastrodev.dwij.di.DwijComponent
 import com.yellastrodev.dwij.playback.PlayerVolumeControl
 import com.yellastrodev.dwij.storage.MigratingYandexSessionStore
@@ -41,7 +42,7 @@ class DesktopRuntime private constructor(
             playerEngine
 
     /**
-     * Сохраняет desktop-only состояние и закрывает playback backend и журнал сессии.
+     * Сохраняет desktop-only состояние и закрывает HTTP-пульт, playback backend и журнал сессии.
      */
     fun close() {
         settingsStore.edit {
@@ -55,6 +56,7 @@ class DesktopRuntime private constructor(
         }
 
         try {
+            component.httpMediaRemote.close()
             playerEngine.close()
         } finally {
             sessionLogStore.close()
@@ -235,6 +237,8 @@ class DesktopRuntime private constructor(
                         logger,
                     localKeyValueStore =
                         localKeyValueStore,
+                    httpMediaServiceAdvertiser =
+                        DesktopHttpMediaServiceAdvertiser(logger),
                     yandexSessionStore =
                         yandexSessionStore,
                     db =
