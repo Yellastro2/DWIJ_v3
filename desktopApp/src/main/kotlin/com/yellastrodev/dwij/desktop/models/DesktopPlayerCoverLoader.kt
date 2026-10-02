@@ -14,7 +14,7 @@ import java.io.File
 /**
  * Desktop-реализация обложек для общего PlayerModel.
  *
- * Яндекс-обложки берутся из общего CoverRepository.
+ * Яндекс- и VK-обложки берутся из общего CoverRepository с разными транспортами.
  * Для локальных файлов сначала читается embedded artwork, затем sidecar.
  */
 class DesktopPlayerCoverLoader(
@@ -22,6 +22,7 @@ class DesktopPlayerCoverLoader(
     private val metadataReader: DesktopAudioMetadataReader,
 ) : PlayerCoverLoader {
 
+    /** Загружает обложку выбранного инстанса, включая независимый VK-загрузчик. */
     override suspend fun load(
         instance: TrackInstance?,
         maxEdgePx: Int,
@@ -33,6 +34,7 @@ class DesktopPlayerCoverLoader(
                 when (
                     instance
                 ) {
+                    is TrackInstance.Vk -> coverRepository.getVkTrackCover(instance.track)?.bytes
                     is TrackInstance.Yandex ->
                         coverRepository
                             .getPlayerTrackCover(

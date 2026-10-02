@@ -79,7 +79,7 @@ import org.jetbrains.compose.resources.pluralStringResource
 import org.jetbrains.compose.resources.painterResource
 import org.jetbrains.compose.resources.stringResource
 
-/** Shared-route абстрактного музыкального объекта и его списка треков. */
+/** Shared-route музыкального объекта и списка треков с явным типом каждого source-инстанса. */
 @Composable
 fun ObjectRoute(
     component: DwijComponent,
@@ -324,6 +324,7 @@ fun ObjectRoute(
         }
     }
 
+    /** Создаёт вариант источника с отдельной VK-меткой и проверкой playable URI. */
     fun ObjectSourceDialogEntry.toOption(): TrackSourceOptionUiModel =
         TrackSourceOptionUiModel(
             instanceId = instance.id,
@@ -340,6 +341,7 @@ fun ObjectRoute(
                         ?.available == false,
             ),
             sourceIndicator = when (instance) {
+                is TrackInstance.Vk -> TrackSourceIndicator.VK
                 is TrackInstance.Yandex -> TrackSourceIndicator.YANDEX
                 is TrackInstance.Local -> TrackSourceIndicator.LOCAL
             },
@@ -1077,9 +1079,10 @@ private data class ObjectSourceDialogEntry(
         get() = song.id
 }
 
-/** Проверяет playable-состояние конкретной версии, а не всей агрегированной Song. */
+/** Проверяет конкретную версию Song, включая подготовленный URI временного VK-инстанса. */
 private fun TrackInstance.isPlayable(cachedUnavailableYandexIds: Set<String>): Boolean =
     when (this) {
+        is TrackInstance.Vk -> playbackUri.isNotBlank()
         is TrackInstance.Local -> true
         is TrackInstance.Yandex -> track.available || track.id in cachedUnavailableYandexIds
     }

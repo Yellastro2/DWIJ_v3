@@ -43,6 +43,7 @@ import org.jetbrains.compose.resources.stringResource
  *
  * Не зависит от Android Context, Android resources и NavHostController.
  * Платформа передаёт только действие возврата и общий граф зависимостей.
+ * Каждый конкретный инстанс отображается с собственной меткой источника, включая VK.
  */
 @Composable
 fun SongMatchCandidatesRoute(
@@ -253,6 +254,7 @@ fun SongMatchCandidatesRoute(
                         ),
                     sourceIndicator =
                         when (entry.instance) {
+                            is TrackInstance.Vk -> TrackSourceIndicator.VK
                             is TrackInstance.Yandex ->
                                 TrackSourceIndicator.YANDEX
 

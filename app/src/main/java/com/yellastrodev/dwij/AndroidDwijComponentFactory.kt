@@ -23,7 +23,7 @@ import kotlinx.coroutines.SupervisorJob
 import java.io.File
 
 /**
- * Собирает Android-реализации и передаёт их shared-компоненту.
+ * Собирает Android-реализации и отдельные защищённые Яндекс/VK-хранилища для shared.
  */
 class AndroidDwijComponentFactory(
     private val application: Application,
@@ -31,7 +31,7 @@ class AndroidDwijComponentFactory(
     AndroidPlayerServiceRegistry,
 ) {
 
-    /** Собирает Android-граф, включая системное объявление HTTP-пульта через NSD. */
+    /** Собирает Android-граф с VK-сессией и системным объявлением HTTP-пульта через NSD. */
     fun create(): DwijComponent {
         val context =
             application.applicationContext
@@ -94,6 +94,9 @@ class AndroidDwijComponentFactory(
                 AndroidHttpMediaServiceAdvertiser(context, logger),
             yandexSessionStore =
                 yandexSessionStore,
+            vkSessionPayloadStore = AndroidKeystoreSessionPayloadStore(
+                context, logger, preferencesName = "vk_protected_session",
+            ),
             db =
                 database,
             trackCacheDirectory =

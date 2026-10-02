@@ -25,4 +25,5 @@ rootProject.name = "DWIJ_v3"
 include(":app")
 include(":shared")
 include(":yaMusicSdk")
+include(":vkMusicSdk")
 include(":desktopApp")

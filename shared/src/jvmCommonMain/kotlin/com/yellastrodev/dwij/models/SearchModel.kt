@@ -32,8 +32,10 @@ enum class SearchEntityKind {
     Artist,
 }
 
-/** Конкретный источник трека из поисковой строки. */
+/** Конкретный источник поискового трека: локальная песня, Яндекс либо независимое VK-аудио. */
 sealed interface SearchTrackSource {
+    /** VK-аудио с составным owner_id/audio_id, независимое от Room-фонотеки. */
+    data class Vk(val track: com.yellastrodev.vkmusicsdk.VkAudio) : SearchTrackSource
     data class Yandex(val track: dYaTrack) : SearchTrackSource
     data class Local(val song: Song) : SearchTrackSource
 }
@@ -64,7 +66,7 @@ sealed interface SearchResultItemUiModel {
     ) : SearchResultItemUiModel
 }
 
-/** Полный снимок состояния поиска, переживающий рекомпозиции экрана. */
+/** Снимок поиска и подготовки VK-аудио, переживающий рекомпозиции экрана. */
 @Immutable
 data class SearchUiState(
     val query: String = "",
@@ -72,10 +74,11 @@ data class SearchUiState(
     val hasSearched: Boolean = false,
     val results: List<SearchResultItemUiModel> = emptyList(),
     val error: DataError? = null,
+    val isPreparingPlayback: Boolean = false,
 )
 
 /**
- * Управляет debounce, отменой устаревшего запроса и преобразованием ответа ALL в один UI-список.
+ * Управляет debounce, отменой устаревшего запроса и общей выдачей Яндекс, локальных и VK-треков.
  */
 class SearchModel(
     private val repository: SearchRepository,
@@ -84,13 +87,15 @@ class SearchModel(
     private val songRepository: SongRepository,
     private val playerRepository: PlayerRepository,
     private val onAuthorizationRequired: () -> Unit,
+    private val vkRepository: com.yellastrodev.dwij.data.repo.VkMusicRepository,
 ) : ViewModel() {
 
     private val _state = MutableStateFlow(SearchUiState())
     val state: StateFlow<SearchUiState> = _state.asStateFlow()
 
     private var searchJob: Job? = null
-    private var yandexEnabled = true
+    private var selectedSource = com.yellastrodev.dwij.HomeMusicSource.Yandex
+    private var playJob: Job? = null
 
     /** Обновляет введённый текст и заменяет ожидающий сетевой запрос новым. */
     fun updateQuery(query: String) {
@@ -101,13 +106,14 @@ class SearchModel(
     }
 
     /** Смена источника отменяет прежний запрос и повторяет поиск в его хранилище. */
-    fun setYandexEnabled(enabled: Boolean) {
-        if (yandexEnabled == enabled) return
+    fun setSource(source: com.yellastrodev.dwij.HomeMusicSource) {
+        if (selectedSource == source) return
 
-        yandexEnabled = enabled
+        selectedSource = source
         scheduleSearch()
     }
 
+    /** Отменяет прежнюю выдачу и запускает поиск только в выбранном источнике. */
     private fun scheduleSearch() {
         searchJob?.cancel()
 
@@ -129,7 +135,26 @@ class SearchModel(
             delay(SEARCH_DEBOUNCE_MILLIS)
 
             try {
-                if (yandexEnabled) {
+                if (selectedSource == com.yellastrodev.dwij.HomeMusicSource.Vk) {
+                    when (val result = vkRepository.search(query)) {
+                        is DataResult.Success -> _state.value = _state.value.copy(
+                            isLoading = false, hasSearched = true, error = null,
+                            results = result.value.distinctBy { it.fullId }.map { audio ->
+                                SearchResultItemUiModel.Track(
+                                    key = "vk:${audio.fullId}", coverUri = audio.coverUrl,
+                                    row = TrackListItemUiModel(
+                                        key = "search:vk:${audio.fullId}", trackId = "vk:${audio.fullId}",
+                                        title = audio.title, artist = audio.artistNames.joinToString(", "),
+                                    ),
+                                    source = SearchTrackSource.Vk(audio),
+                                )
+                            },
+                        )
+                        is DataResult.Failure -> _state.value = _state.value.copy(
+                            isLoading = false, hasSearched = true, results = emptyList(), error = result.error,
+                        )
+                    }
+                } else if (selectedSource == com.yellastrodev.dwij.HomeMusicSource.Yandex) {
                     when (val result = repository.searchAll(query)) {
                         is DataResult.Success -> {
                             _state.value = _state.value.copy(
@@ -232,10 +257,28 @@ class SearchModel(
         )
     }
 
-    /** Запускает выбранный трек отдельной поисковой очередью. */
-    fun playTrack(item: SearchResultItemUiModel.Track) {
-        viewModelScope.launch {
+    /** Повторяет запрос после ошибки либо сохранения сессии без изменения текста поиска. */
+    fun retrySearch() { scheduleSearch() }
+
+    /** Запускает выбранный трек отдельной очередью; callback вызывается после передачи плееру. */
+    fun playTrack(item: SearchResultItemUiModel.Track, onStarted: () -> Unit = {}) {
+        if (playJob?.isActive == true) return
+        playJob = viewModelScope.launch {
+            val vkSource = item.source as? SearchTrackSource.Vk
+            if (vkSource != null) {
+                _state.value = _state.value.copy(isPreparingPlayback = true, error = null)
+                try {
+                    when (val result = vkRepository.play(vkSource.track, playerRepository)) {
+                        is DataResult.Success -> onStarted()
+                        is DataResult.Failure -> _state.value = _state.value.copy(error = result.error)
+                    }
+                } finally {
+                    _state.value = _state.value.copy(isPreparingPlayback = false)
+                }
+                return@launch
+            }
             val songs = when (val source = item.source) {
+                is SearchTrackSource.Vk -> return@launch
                 is SearchTrackSource.Yandex -> {
                     trackRepository.putTracks(listOf(source.track))
                     songRepository.songsForYandexTracks(listOf(source.track))
@@ -249,9 +292,11 @@ class SearchModel(
                 startIndex = 0,
                 tracklist = dSimpleTracklist(),
             )
+            onStarted()
         }
     }
 
+    /** Создаёт общий поиск с отдельным репозиторием VK. */
     class Factory(
         private val repository: SearchRepository,
         private val localMusicRepository: LocalMusicRepository,
@@ -259,8 +304,10 @@ class SearchModel(
         private val songRepository: SongRepository,
         private val playerRepository: PlayerRepository,
         private val onAuthorizationRequired: () -> Unit,
+        private val vkRepository: com.yellastrodev.dwij.data.repo.VkMusicRepository,
     ) : ViewModelProvider.Factory {
 
+        /** Возвращает модель поиска для Android и desktop. */
         @Suppress("UNCHECKED_CAST")
         override fun <T : ViewModel> create(
             modelClass: KClass<T>,
@@ -274,6 +321,7 @@ class SearchModel(
                     songRepository = songRepository,
                     playerRepository = playerRepository,
                     onAuthorizationRequired = onAuthorizationRequired,
+                    vkRepository = vkRepository,
                 ) as T
             }
 

@@ -2,10 +2,12 @@ package com.yellastrodev.dwij.playback.feedback
 
 import com.yellastrodev.dwij.data.entities.MusicSource
 
+/** Ключи межплатформенной метадаты с отдельными источниками Яндекс, local и VK. */
 object PlaybackMetadataKeys {
     const val MUSIC_SOURCE = "playback_music_source"
     const val SOURCE_YANDEX = "yandex"
     const val SOURCE_LOCAL = "local"
+    const val SOURCE_VK = "vk"
 
     const val PLAY_ITEM_ID = "play_audio_item_id"
     const val PLAY_ALBUM_ID = "play_audio_album_id"

@@ -54,7 +54,7 @@ import org.jetbrains.compose.resources.getString
 import org.jetbrains.compose.resources.stringResource
 
 /**
- * Shared-route настроек, OAuth Device Flow и общего файлового кэша.
+ * Shared-route настроек, Яндекс Device Flow, браузерного OAuth VK и общего файлового кэша.
  *
  * Постоянные настройки и авторизация принадлежат shared-компоненту.
  * Платформа используется только для StatFs, Intent, clipboard и lifecycle.
@@ -804,6 +804,9 @@ fun SettingsRoute(
             modifier.fillMaxSize(),
     ) {
         SettingsScreen(
+            vkAuthorizationContent = {
+                com.yellastrodev.dwij.ui.VkAuthorizationCard(component.vkMusicRepository, platform)
+            },
             appVersion =
                 platform.appVersion,
             yandexLogin =

@@ -28,6 +28,7 @@ import com.yellastrodev.dwij.di.DwijComponent
 import com.yellastrodev.dwij.models.PlayerModel
 import com.yellastrodev.dwij.resources.Res
 import com.yellastrodev.dwij.resources.home_player_unknown_artist
+import com.yellastrodev.dwij.resources.home_source_vk_music
 import com.yellastrodev.dwij.resources.multi_source_merge_error
 import com.yellastrodev.dwij.resources.multi_source_merge_success
 import com.yellastrodev.dwij.resources.multi_source_priority_error
@@ -63,7 +64,7 @@ import kotlinx.coroutines.withTimeoutOrNull
 import org.jetbrains.compose.resources.getString
 import org.jetbrains.compose.resources.stringResource
 
-/** Shared-route полноэкранного плеера и выбора источников текущей песни. */
+/** Shared-route полноэкранного плеера с отдельной меткой VK и выбором источников песни. */
 @Composable
 fun PlayerRoute(
     component: DwijComponent,
@@ -337,6 +338,7 @@ fun PlayerRoute(
         }
     }
 
+    /** Создаёт вариант диалога с достоверной меткой источника, включая VK. */
     fun PlayerSourceDialogEntry.toOption(): TrackSourceOptionUiModel =
         TrackSourceOptionUiModel(
             instanceId = instance.id,
@@ -353,6 +355,7 @@ fun PlayerRoute(
                         ?.available == false,
             ),
             sourceIndicator = when (instance) {
+                is TrackInstance.Vk -> TrackSourceIndicator.VK
                 is TrackInstance.Yandex -> TrackSourceIndicator.YANDEX
                 is TrackInstance.Local -> TrackSourceIndicator.LOCAL
             },
@@ -399,6 +402,7 @@ fun PlayerRoute(
     }
 
     val sourceLabel = when (playbackTrack?.source) {
+        MusicSource.VK -> stringResource(Res.string.home_source_vk_music)
         MusicSource.YANDEX ->
             stringResource(Res.string.player_source_yandex)
 
@@ -807,9 +811,10 @@ private data class PlayerSourceDialogEntry(
         get() = song.id
 }
 
-/** Локальный файл всегда playable; Яндекс-трек — только при доступности или наличии в кэше. */
+/** VK требует подготовленный URI; локальный файл playable, Яндекс требует доступность либо кэш. */
 private fun TrackInstance.isPlayable(cachedUnavailableYandexIds: Set<String>): Boolean =
     when (this) {
+        is TrackInstance.Vk -> playbackUri.isNotBlank()
         is TrackInstance.Local -> true
         is TrackInstance.Yandex -> track.available || track.id in cachedUnavailableYandexIds
     }

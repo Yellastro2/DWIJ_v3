@@ -16,11 +16,13 @@ import javax.crypto.spec.GCMParameterSpec
  * Защищает payload авторизации ключом AES-GCM из Android Keystore.
  *
  * В отдельном SharedPreferences-файле сохраняются только IV и ciphertext;
- * материал ключа остаётся неизвлекаемым из Android Keystore.
+ * материал ключа остаётся неизвлекаемым из Android Keystore. Имя файла задаётся
+ * отдельно для Яндекс- и VK-сессий, чтобы они не заменяли payload друг друга.
  */
 class AndroidKeystoreSessionPayloadStore(
     context: Context,
     private val logger: YamLogger,
+    private val preferencesName: String = PREFERENCES_NAME,
 ) : ProtectedSessionPayloadStore {
 
     private val lock = Any()
@@ -28,7 +30,7 @@ class AndroidKeystoreSessionPayloadStore(
     private val preferences =
         context.applicationContext
             .getSharedPreferences(
-                PREFERENCES_NAME,
+                preferencesName,
                 Context.MODE_PRIVATE,
             )
 

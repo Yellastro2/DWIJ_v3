@@ -20,7 +20,7 @@ import kotlinx.coroutines.SupervisorJob
 import kotlin.math.roundToLong
 
 /**
- * Собранный Windows runtime вокруг общего DwijComponent.
+ * Windows runtime вокруг общего DwijComponent с независимыми DPAPI-сессиями Яндекс/VK.
  */
 class DesktopRuntime private constructor(
     val component: DwijComponent,
@@ -75,7 +75,7 @@ class DesktopRuntime private constructor(
             1f
 
         /**
-         * Собирает desktop-аналоги AndroidDwijComponentFactory/yApplication и запускает файловый журнал.
+         * Собирает desktop-граф с отдельными DPAPI-сессиями Яндекс/VK и файловым журналом.
          */
         fun create():
                 DesktopRuntime {
@@ -241,6 +241,10 @@ class DesktopRuntime private constructor(
                         DesktopHttpMediaServiceAdvertiser(logger),
                     yandexSessionStore =
                         yandexSessionStore,
+                    vkSessionPayloadStore = WindowsDpapiSessionPayloadStore(
+                        file = java.io.File(paths.sessionFile.parentFile, "vk-session.bin"),
+                        logger = logger,
+                    ),
                     db =
                         database,
                     trackCacheDirectory =

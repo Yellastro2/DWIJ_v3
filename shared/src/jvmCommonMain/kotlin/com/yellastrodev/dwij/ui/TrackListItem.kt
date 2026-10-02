@@ -42,13 +42,14 @@ import org.jetbrains.compose.resources.painterResource
 
 /** Источник, который нужно обозначить справа в строке выбора трека. */
 enum class TrackSourceIndicator {
+    VK,
     YANDEX,
     LOCAL,
 }
 
 /**
  * Универсальная строка трека. В обычном списке показывает доступность и дубли,
- * а в диалоге источников — тип источника, галочку локального выбора либо номер приоритета.
+ * а в диалоге источников — тип (Яндекс/local/VK), галочку выбора либо номер приоритета.
  * [onLongClick] используется только родительским списком для открытия контекстного меню.
  */
 @Composable
@@ -153,6 +154,7 @@ fun TrackListItem(
                     MultipleSourcesIndicator(modifier = Modifier.size(22.dp))
                 }
                 when {
+                    sourceIndicator == TrackSourceIndicator.VK -> Text("VK", color = Color(0xFF5B9BFF), fontSize = 12.sp)
                     showYandexIndicator -> YandexSourceIndicator(
                         isUnavailable = item.isYandexUnavailable,
                     )

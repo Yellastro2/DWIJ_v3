@@ -44,6 +44,7 @@ import org.jetbrains.compose.resources.stringResource
 
 /**
  * Shared-route главного экрана.
+ * Поиск выбирает независимый VK-репозиторий либо существующий локальный/Яндекс-сценарий.
  *
  * Не зависит от Android Context, Activity Result API, WorkManager и Navigation.
  * Платформа передаёт разрешения, системный back-handler и действия переходов.
@@ -90,6 +91,7 @@ fun HomeRoute(
             playerRepository = component.playerRepo,
             onAuthorizationRequired =
                 component::requireYandexAuthorization,
+            vkRepository = component.vkMusicRepository,
         )
     }
 
@@ -98,6 +100,10 @@ fun HomeRoute(
     )
 
     val searchState by searchModel.state.collectAsState()
+    val vkAuthorized by component.vkMusicRepository.authorized.collectAsState()
+    LaunchedEffect(vkAuthorized) {
+        if (selectedSource == HomeMusicSource.Vk) searchModel.retrySearch()
+    }
     val localStorageRevision by
         component.trackCacheRepo.localStorageRevision.collectAsState()
     val localDownloads by component.trackCacheRepo.localDownloads.collectAsState()
@@ -153,9 +159,7 @@ fun HomeRoute(
     }
 
     LaunchedEffect(selectedSource) {
-        searchModel.setYandexEnabled(
-            selectedSource == HomeMusicSource.Yandex,
-        )
+        searchModel.setSource(selectedSource)
     }
 
     LaunchedEffect(
@@ -174,6 +178,7 @@ fun HomeRoute(
         }
     }
 
+    /** Переключает сетевой источник сразу, а локальный после проверки разрешения. */
     fun selectMusicSource(source: HomeMusicSource) {
         if (
             source == selectedSource ||
@@ -182,7 +187,7 @@ fun HomeRoute(
             return
         }
 
-        if (source == HomeMusicSource.Yandex) {
+        if (source != HomeMusicSource.Local) {
             musicSourceSelectionStore.select(source)
             return
         }
@@ -236,6 +241,7 @@ fun HomeRoute(
             when (selectedSource) {
                 HomeMusicSource.Local -> onOpenLocalTracks()
                 HomeMusicSource.Yandex -> onOpenYandexTracks()
+                HomeMusicSource.Vk -> Unit
             }
         },
         onWaveClick = {
@@ -303,6 +309,10 @@ fun HomeRoute(
         },
         searchContent = { searchModifier ->
             SearchScreen(
+                onErrorAction = {
+                    if (searchState.error == com.yellastrodev.dwij.data.DataError.Unauthorized) onOpenSettings()
+                    else searchModel.retrySearch()
+                },
                 selectedSource = selectedSource,
                 onSourceSelected = ::selectMusicSource,
                 state = searchState,
@@ -310,6 +320,8 @@ fun HomeRoute(
                 loadTrackCover = { item ->
                     withContext(Dispatchers.IO) {
                         when (val source = item.source) {
+                            is SearchTrackSource.Vk -> component.coverRepository
+                                .getVkTrackCover(source.track)?.toImageBitmapOrNull()
                             is SearchTrackSource.Yandex -> {
                                 component.coverRepository
                                     .getTrackCover(
@@ -349,8 +361,7 @@ fun HomeRoute(
                 onResultClick = { item ->
                     when (item) {
                         is SearchResultItemUiModel.Track -> {
-                            searchModel.playTrack(item)
-                            onOpenPlayer()
+                            searchModel.playTrack(item, onStarted = onOpenPlayer)
                         }
                         is SearchResultItemUiModel.Entity -> {
                             val type = when (item.kind) {

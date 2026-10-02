@@ -60,7 +60,8 @@ import kotlin.math.roundToInt
  * Полностью Compose-экран авторизации, кэша и платформенных настроек.
  *
  * Экран не читает платформенные сведения и не запускает OAuth самостоятельно: хост передаёт
- * версию сборки, готовое состояние и обработчики, поэтому интерфейс можно превьюить отдельно.
+ * версию сборки, готовое состояние и обработчики, а также слот авторизации VK рядом с Яндексом.
+ * Интерфейс можно превьюить отдельно.
  */
 @Composable
 fun SettingsScreen(
@@ -88,6 +89,7 @@ fun SettingsScreen(
     httpRemoteError: String?,
     onHttpRemoteEnabledChange: (Boolean) -> Unit,
     onHttpRemotePortChange: (Int) -> Unit,
+    vkAuthorizationContent: @Composable () -> Unit = {},
     modifier: Modifier = Modifier,
 ) {
     val snackbarHostState = remember { SnackbarHostState() }
@@ -121,6 +123,7 @@ fun SettingsScreen(
                     isAuthInProgress = isAuthInProgress,
                     onAuthClick = onAuthClick,
                 )
+                vkAuthorizationContent()
                 SettingsProxyCard(
                     onClick =
                         onProxyClick,

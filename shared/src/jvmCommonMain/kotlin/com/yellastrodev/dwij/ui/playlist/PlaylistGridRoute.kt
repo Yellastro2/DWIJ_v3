@@ -150,6 +150,7 @@ class PlaylistGridRouteActions internal constructor(
  *
  * Здесь находятся выбор источника, состояния диалогов, операции с плейлистами,
  * обновление данных и обработка пользовательских действий.
+ * Для VK первого сценария показывает доступность через поиск вместо Яндекс-плейлистов.
  *
  * Навигационные действия передаются отдельными callback-функциями, поэтому
  * платформенный адаптер больше не зависит от конкретной системы навигации.
@@ -275,6 +276,7 @@ fun PlaylistGridRoute(
         }
     }
 
+    /** Для сетевых источников не запрашивает разрешение на локальные файлы. */
     fun selectMusicSource(source: HomeMusicSource) {
         if (
             source == musicSource ||
@@ -283,7 +285,7 @@ fun PlaylistGridRoute(
             return
         }
 
-        if (source == HomeMusicSource.Yandex) {
+        if (source != HomeMusicSource.Local) {
             dependencies.musicSourceSelectionStore.select(source)
             return
         }
@@ -392,6 +394,7 @@ fun PlaylistGridRoute(
     }
 
     val screenItems = when (screenSource) {
+        HomeMusicSource.Vk -> emptyList()
         HomeMusicSource.Yandex -> yandexScreenItems
         HomeMusicSource.Local -> localScreenItems
     }
@@ -404,6 +407,7 @@ fun PlaylistGridRoute(
         coroutineScope.launch {
             try {
                 when (source) {
+                    HomeMusicSource.Vk -> { isCreatingPlaylist = false; createDialogSource = null }
                     HomeMusicSource.Yandex -> {
                         when (
                             val result =
@@ -511,13 +515,16 @@ fun PlaylistGridRoute(
         selectedSource = screenSource,
         showSourceSelector = !isAddTrackMode,
         emptyMessage =
-            if (screenSource == HomeMusicSource.Local) {
+            if (screenSource == HomeMusicSource.Vk) {
+                "ВК Музыка пока доступна через поиск треков на главном экране"
+            } else if (screenSource == HomeMusicSource.Local) {
                 texts.localEmpty
             } else {
                 texts.yandexEmpty
             },
         isLoading =
             when (screenSource) {
+                HomeMusicSource.Vk -> false
                 HomeMusicSource.Yandex -> {
                     !yandexInitialLoadComplete
                 }

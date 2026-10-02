@@ -10,7 +10,7 @@ import com.yellastrodev.dwij.playback.feedback.PlaybackFeedbackTracker
 import com.yellastrodev.dwij.playback.feedback.PlaybackMetadataKeys
 import com.yellastrodev.dwij.playback.feedback.PlaybackTransitionReason
 
-/** Переводит Media3-события в общие модели PlaybackFeedbackTracker. */
+/** Переводит Media3-события в общие модели, сохраняя VK отдельно от Яндекс-feedback. */
 class AndroidPlaybackFeedbackAdapter(
     private val tracker: PlaybackFeedbackTracker,
 ) {
@@ -68,6 +68,7 @@ class AndroidPlaybackFeedbackAdapter(
         )
     }
 
+    /** Читает исходный источник, чтобы VK и локальные файлы не отправляли отчёты Яндексу. */
     private fun MediaItem.toFeedbackMetadata(): PlaybackFeedbackMetadata {
         val extras = mediaMetadata.extras
 
@@ -75,6 +76,7 @@ class AndroidPlaybackFeedbackAdapter(
             extras?.getString(PlaybackMetadataKeys.MUSIC_SOURCE)
         ) {
             PlaybackMetadataKeys.SOURCE_LOCAL -> MusicSource.LOCAL
+            PlaybackMetadataKeys.SOURCE_VK -> MusicSource.VK
             else -> MusicSource.YANDEX
         }
 

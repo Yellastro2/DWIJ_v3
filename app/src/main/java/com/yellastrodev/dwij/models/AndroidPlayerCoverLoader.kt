@@ -17,7 +17,7 @@ import com.yellastrodev.dwij.data.repo.CoverRepository
  * Android-реализация загрузки обложек.
  *
  * Только этот класс знает про Context, MediaStore,
- * MediaMetadataRetriever и Android Bitmap.
+ * MediaMetadataRetriever и Android Bitmap. VK-обложки загружаются отдельным транспортом.
  */
 class AndroidPlayerCoverLoader(
     context: Context,
@@ -27,11 +27,15 @@ class AndroidPlayerCoverLoader(
     private val context =
         context.applicationContext
 
+    /** Загружает обложку выбранного локального, Яндекс- или VK-инстанса. */
     override suspend fun load(
         instance: TrackInstance?,
         maxEdgePx: Int,
     ): ImageBitmap? {
         val bitmap = when (instance) {
+            is TrackInstance.Vk -> coverRepository.getVkTrackCover(instance.track)?.bytes?.let { bytes ->
+                BitmapFactory.decodeByteArray(bytes, 0, bytes.size)
+            }
             is TrackInstance.Yandex -> {
                 loadYandexCover(instance.track)
             }

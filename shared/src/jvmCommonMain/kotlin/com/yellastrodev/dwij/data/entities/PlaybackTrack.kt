@@ -18,9 +18,11 @@ data class PlaybackTrack(
     val localTrack: LocalTrackEntity? = null,
 )
 
-/** Выбирает preferred, локальный либо доступный/закэшированный Яндекс-экземпляр. */
+/** Выбирает preferred, локальный, временный VK либо доступный/закэшированный Яндекс-экземпляр. */
 fun Song.toPlaybackTrack(isYandexCached: (String) -> Boolean): PlaybackTrack? {
+    /** Проверяет доступность конкретного источника для очереди. */
     fun TrackInstance.isPlayable(): Boolean = when (this) {
+        is TrackInstance.Vk -> playbackUri.isNotBlank()
         is TrackInstance.Local -> true
         is TrackInstance.Yandex -> track.available || isYandexCached(track.id)
     }
@@ -31,9 +33,15 @@ fun Song.toPlaybackTrack(isYandexCached: (String) -> Boolean): PlaybackTrack? {
         ?: yandexInstances.firstOrNull { instance ->
             instance.track.available || isYandexCached(instance.track.id)
         }
+        ?: instances.filterIsInstance<TrackInstance.Vk>().firstOrNull { it.isPlayable() }
         ?: return null
 
     return when (selected) {
+        is TrackInstance.Vk -> PlaybackTrack(
+            id = selected.track.fullId, songId = id, instanceId = selected.id,
+            source = MusicSource.VK, title = title, artistNames = artistNames,
+            durationMs = durationMs, playbackUri = selected.playbackUri, artworkUri = coverUri,
+        )
         is TrackInstance.Yandex -> PlaybackTrack(
             id = selected.track.id,
             songId = id,

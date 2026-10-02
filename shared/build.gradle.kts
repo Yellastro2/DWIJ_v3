@@ -189,6 +189,7 @@ kotlin {
                 implementation(libs.androidx.room.runtime)
                 implementation(libs.androidx.sqlite.bundled)
                 api(project(":yaMusicSdk"))
+                api(project(":vkMusicSdk"))
             }
         }
 

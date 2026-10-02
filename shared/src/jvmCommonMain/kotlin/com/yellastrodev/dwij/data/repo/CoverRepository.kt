@@ -19,6 +19,7 @@ enum class CoverSource {
     Network,
 }
 
+/** Общий memory/disk cache обложек; транспорт VK отделён от Яндекс API и proxy. */
 class CoverRepository(
     private val yamClient: YamApiClient,
     private val fileCache: FileCacheStore,
@@ -75,6 +76,7 @@ class CoverRepository(
         )
     }
 
+    /** Кэширует обложки; VK использует независимый загрузчик без преобразования URL ЯМ. */
     suspend fun getRemoteCover(
         entityType: String,
         entityId: String,
@@ -104,10 +106,12 @@ class CoverRepository(
             )
         }
 
-        val downloadedBytes = downloadCover(
+        val downloadedBytes = (if (entityType == "vk-track") {
+            com.yellastrodev.vkmusicsdk.VkArtwork.load(url)
+        } else downloadCover(
             url = url,
             size = size,
-        ) ?: return null
+        )) ?: return null
 
         memoryCache.put(key, downloadedBytes)
         fileCache.write(key, downloadedBytes)
@@ -116,6 +120,12 @@ class CoverRepository(
             bytes = downloadedBytes,
             source = CoverSource.Network,
         )
+    }
+
+    /** Загружает VK-обложку через общий memory/disk cache с отдельным namespace. */
+    suspend fun getVkTrackCover(track: com.yellastrodev.vkmusicsdk.VkAudio): CoverData? {
+        val url = track.coverUrl ?: return null
+        return getRemoteCover("vk-track", track.fullId, url, CoverSize.`400x400`)
     }
 
     private suspend fun downloadCover(

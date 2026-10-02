@@ -9,6 +9,7 @@ import androidx.room.PrimaryKey
 enum class MusicSource {
     YANDEX,
     LOCAL,
+    VK,
 }
 
 /** Компактная каноническая метадата логической песни в Room. */
@@ -102,6 +103,13 @@ data class Album(
 /** Подробная source-сущность, привязанная к одной логической [Song]. */
 sealed interface TrackInstance {
     val id: String
+
+    /** Временный VK-экземпляр из поиска; playbackUri принадлежит текущему relay. */
+    data class Vk(
+        override val id: String,
+        val track: com.yellastrodev.vkmusicsdk.VkAudio,
+        val playbackUri: String,
+    ) : TrackInstance
 
     data class Yandex(
         override val id: String,

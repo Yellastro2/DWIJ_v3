@@ -12,8 +12,10 @@ import com.yellastrodev.dwij.data.entities.dYaPlaylist
 import com.yellastrodev.dwij.playback.feedback.PlaybackMetadataKeys
 import java.util.UUID
 
+/** Передаёт источник и URI в Media3, сохраняя Яндекс-feedback только для Яндекс-треков. */
 class AndroidMediaItemMapper {
 
+    /** Преобразует общий трек в MediaItem, включая HLS и независимую VK-метадату. */
     fun map(
         track: PlaybackTrack,
         tracklist: dTracklist?,
@@ -23,10 +25,10 @@ class AndroidMediaItemMapper {
 
             putString(
                 PlaybackMetadataKeys.MUSIC_SOURCE,
-                if (track.source == MusicSource.LOCAL) {
-                    PlaybackMetadataKeys.SOURCE_LOCAL
-                } else {
-                    PlaybackMetadataKeys.SOURCE_YANDEX
+                when (track.source) {
+                    MusicSource.LOCAL -> PlaybackMetadataKeys.SOURCE_LOCAL
+                    MusicSource.VK -> PlaybackMetadataKeys.SOURCE_VK
+                    MusicSource.YANDEX -> PlaybackMetadataKeys.SOURCE_YANDEX
                 },
             )
 
@@ -82,7 +84,7 @@ class AndroidMediaItemMapper {
             .setTitle(track.title)
             .setArtist(track.artistNames.joinToString(", "))
             .apply {
-                if (track.source == MusicSource.LOCAL) {
+                if (track.source != MusicSource.YANDEX) {
                     track.artworkUri?.let { artworkUri ->
                         setArtworkUri(Uri.parse(artworkUri))
                     }

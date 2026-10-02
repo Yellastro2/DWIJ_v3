@@ -15,6 +15,7 @@ import kotlin.math.min
  *
  * Класс не знает о Media3 и Android. Платформенный адаптер передаёт сюда
  * нормализованные метаданные, причину перехода и позиции воспроизведения.
+ * Локальные и VK-инстансы не создают Яндекс-сессию отчётов.
  */
 class PlaybackFeedbackTracker(
     private val remote: PlaybackRemoteSource,
@@ -193,8 +194,9 @@ class PlaybackFeedbackTracker(
         report?.let(::enqueue)
     }
 
+    /** Принимает только доступные Яндекс-инстансы; VK и локальные файлы не отправляют feedback. */
     private fun PlaybackFeedbackMetadata.acceptedOrNull(): PlaybackFeedbackMetadata? {
-        if (musicSource == MusicSource.LOCAL) {
+        if (musicSource != MusicSource.YANDEX) {
             return null
         }
 

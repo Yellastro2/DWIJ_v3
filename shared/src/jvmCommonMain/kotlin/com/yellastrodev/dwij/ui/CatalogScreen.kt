@@ -24,6 +24,7 @@ import androidx.compose.ui.semantics.selected
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -55,6 +56,7 @@ import com.yellastrodev.dwij.resources.dvizh_focus_glitch_frame_contour
 import com.yellastrodev.dwij.resources.dvizh_orange_glitch_frame_contour
 import com.yellastrodev.dwij.resources.home_source_local
 import com.yellastrodev.dwij.resources.home_source_yandex_music
+import com.yellastrodev.dwij.resources.home_source_vk_music
 import com.yellastrodev.dwij.resources.img_albums
 import com.yellastrodev.dwij.resources.img_artists
 import com.yellastrodev.dwij.resources.img_gengers
@@ -179,7 +181,7 @@ fun CatalogScreen(
     }
 }
 
-/** Два полностью видимых переключателя источника, как в макете каталога. */
+/** Три переключателя источника; VK в первом сценарии доступен через поиск. */
 @Composable
 private fun CatalogSourceSelector(
     selectedSource: HomeMusicSource,
@@ -192,6 +194,13 @@ private fun CatalogSourceSelector(
             .height(52.dp)
             .padding(horizontal = 12.dp),
     ) {
+        CatalogSourceOption(
+            title = stringResource(Res.string.home_source_vk_music),
+            source = HomeMusicSource.Vk,
+            selectedSource = selectedSource,
+            onSourceSelected = onSourceSelected,
+            modifier = Modifier.weight(1f),
+        )
         CatalogSourceOption(
             title = stringResource(Res.string.home_source_local),
             source = HomeMusicSource.Local,
@@ -209,6 +218,7 @@ private fun CatalogSourceSelector(
     }
 }
 
+/** Показывает компактную вкладку источника, разрешая перенос названия на две строки. */
 @Composable
 private fun CatalogSourceOption(
     title: String,
@@ -244,7 +254,8 @@ private fun CatalogSourceOption(
             color = if (isSelected) DwijColors.White else DwijColors.MutedText,
             fontSize = 14.sp,
             fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Normal,
-            maxLines = 1,
+            maxLines = 2,
+            textAlign = TextAlign.Center,
             overflow = TextOverflow.Ellipsis,
             modifier = Modifier.padding(horizontal = 10.dp),
         )

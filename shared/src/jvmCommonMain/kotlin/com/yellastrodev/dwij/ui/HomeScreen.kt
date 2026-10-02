@@ -86,7 +86,7 @@ import java.util.Locale
 /**
  * Полный Compose-интерфейс домашнего экрана: орбитальный и радиальный плеер,
  * переключатель источников, сетка разделов, компактный плеер других вкладок
- * и нижняя навигация.
+ * и нижняя навигация. VK-разделы первого сценария направляют к поиску.
  */
 @Composable
 fun HomeScreen(
@@ -135,6 +135,10 @@ fun HomeScreen(
     val catalogInDevelopmentMessage = stringResource(
         Res.string.catalog_in_development,
     )
+    /** Направляет действия VK в первый доступный сценарий — поиск треков. */
+    fun openSourceAction(action: () -> Unit) {
+        if (selectedSource == HomeMusicSource.Vk) selectedTab = HomeNavigationTab.Search else action()
+    }
     fun showActionSnackbar(message: String) {
         coroutineScope.launch {
             snackbarHostState.currentSnackbarData?.dismiss()
@@ -268,7 +272,7 @@ fun HomeScreen(
                                     outerRadiusFraction = HOME_RADIAL_MENU_OUTER_RADIUS_FRACTION,
                                     onPrimaryClick = {
                                         if (player == null) {
-                                            onWaveClick()
+                                            openSourceAction(onWaveClick)
                                         } else {
                                             onPlayerPlayPauseClick()
                                         }
@@ -332,8 +336,8 @@ fun HomeScreen(
                             onSourceSelected = onSourceSelected,
                         )
                         HomeMenuGrid(
-                            onPlaylistsClick = onPlaylistsClick,
-                            onTracksClick = onTracksClick,
+                            onPlaylistsClick = { openSourceAction(onPlaylistsClick) },
+                            onTracksClick = { openSourceAction(onTracksClick) },
                             onWaveClick = onWavesClick,
                             onAllTracksClick = onAllTracksClick,
                             waveEnabled = selectedSource == HomeMusicSource.Yandex,
@@ -344,9 +348,9 @@ fun HomeScreen(
                     CatalogScreen(
                         selectedSource = selectedSource,
                         onSourceSelected = onSourceSelected,
-                        onPlaylistsClick = onPlaylistsClick,
-                        onArtistsClick = onArtistsClick,
-                        onAlbumsClick = onAlbumsClick,
+                        onPlaylistsClick = { openSourceAction(onPlaylistsClick) },
+                        onArtistsClick = { openSourceAction(onArtistsClick) },
+                        onAlbumsClick = { openSourceAction(onAlbumsClick) },
                         onLikedClick = {
                             if (!onLikedClick()) {
                                 showActionSnackbar(likedPlaylistEmptyMessage)
@@ -1089,15 +1093,17 @@ private data class HomeSourceOption(
 )
 
 
-/** Собирает локализованные заглушки источников музыки. */
+/** Собирает локализованные источники локальной, Яндекс- и ВК Музыки. */
 @Composable
 private fun homeSourceOptions(): List<HomeSourceOption> {
     val local = stringResource(Res.string.home_source_local)
     val yandexMusic = stringResource(Res.string.home_source_yandex_music)
-    return remember(local, yandexMusic) {
+    val vkMusic = stringResource(Res.string.home_source_vk_music)
+    return remember(local, yandexMusic, vkMusic) {
         listOf(
             HomeSourceOption("local", local, HomeMusicSource.Local),
             HomeSourceOption("yandex", yandexMusic, HomeMusicSource.Yandex),
+            HomeSourceOption("vk", vkMusic, HomeMusicSource.Vk),
         )
     }
 }

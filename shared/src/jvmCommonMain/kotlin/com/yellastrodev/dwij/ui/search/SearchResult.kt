@@ -1,6 +1,8 @@
 package com.yellastrodev.dwij.ui.search
 
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.size
@@ -8,6 +10,7 @@ import androidx.compose.foundation.Image
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.runtime.Composable
@@ -38,7 +41,8 @@ import org.jetbrains.compose.ui.tooling.preview.Preview
 
 /**
  * Единый ленивый поток результатов поиска: треки используют общий item списков,
- * альбомы и артисты — компактную строку с круглой обложкой.
+ * альбомы и артисты — компактную строку с круглой обложкой. VK помечен отдельно;
+ * ошибка предлагает повтор поиска или вход, подготовка аудио показывает ожидание.
  */
 @Composable
 fun SearchResult(
@@ -50,6 +54,7 @@ fun SearchResult(
     savingYandexTrackIds: Set<String>,
     onRequestLocalTrackDownload: (trackId: String, title: String) -> Unit,
     onShareYandexTrack: (trackId: String) -> Unit,
+    onErrorAction: () -> Unit = {},
     modifier: Modifier = Modifier,
 ) {
     when {
@@ -59,6 +64,10 @@ fun SearchResult(
             fontWeight = FontWeight.Normal,
             modifier = modifier,
         )
+        state.isPreparingPlayback -> SearchResultMessage(
+            text = "Подготавливаем трек ВК Музыки…",
+            color = Color(0xFF5B9BFF), fontWeight = FontWeight.Normal, modifier = modifier,
+        )
         state.isLoading -> SearchResultMessage(
             text = stringResource(Res.string.search_results_loading),
             color = Color(0xFF737C91),
@@ -66,7 +75,14 @@ fun SearchResult(
             modifier = modifier,
         )
         state.error != null -> SearchResultMessage(
-            text = stringResource(Res.string.search_results_error),
+            actionLabel = if (state.error == com.yellastrodev.dwij.data.DataError.Unauthorized) "Открыть настройки" else "Повторить поиск",
+            onAction = onErrorAction,
+            text = when (val error = state.error) {
+                com.yellastrodev.dwij.data.DataError.Unauthorized -> "Войдите в выбранный сервис в настройках"
+                is com.yellastrodev.dwij.data.DataError.Remote -> "Сервис вернул ошибку ${error.code ?: error.statusCode}. Повторите поиск"
+                is com.yellastrodev.dwij.data.DataError.InvalidData -> error.message
+                else -> stringResource(Res.string.search_results_error)
+            },
             color = Color(0xFFFF8DBE),
             fontWeight = FontWeight.Medium,
             modifier = modifier,
@@ -113,6 +129,7 @@ fun SearchResult(
                         )
                         Box {
                             TrackListItem(
+                                sourceIndicator = if (item.source is SearchTrackSource.Vk) com.yellastrodev.dwij.ui.TrackSourceIndicator.VK else null,
                                 item = row,
                                 coverState = coverState,
                                 onClick = { onItemClick(item) },
@@ -174,24 +191,30 @@ fun SearchResult(
     }
 }
 
+/** Сообщение выдачи с необязательным действием для повторного поиска или входа. */
 @Composable
 private fun SearchResultMessage(
     text: String,
     color: Color,
     fontWeight: FontWeight,
     modifier: Modifier = Modifier,
+    actionLabel: String? = null,
+    onAction: () -> Unit = {},
 ) {
     Box(
         contentAlignment = Alignment.Center,
         modifier = modifier.fillMaxSize(),
     ) {
-        Text(
-            text = text,
-            color = color,
-            fontSize = 16.sp,
-            fontWeight = fontWeight,
-            textAlign = TextAlign.Center,
-        )
+        Column(horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(8.dp)) {
+            Text(
+                text = text,
+                color = color,
+                fontSize = 16.sp,
+                fontWeight = fontWeight,
+                textAlign = TextAlign.Center,
+            )
+            actionLabel?.let { label -> TextButton(onClick = onAction) { Text(label) } }
+        }
     }
 }
 

@@ -24,6 +24,7 @@
         android:fullBackupContent="@xml/backup_rules"
         android:icon="@mipmap/ic_logo_glich"
         android:label="@string/app_name"
+        android:networkSecurityConfig="@xml/network_security_config"
         android:roundIcon="@mipmap/ic_logo_glich_round"
         android:supportsRtl="true"
         android:theme="@style/AppTheme"

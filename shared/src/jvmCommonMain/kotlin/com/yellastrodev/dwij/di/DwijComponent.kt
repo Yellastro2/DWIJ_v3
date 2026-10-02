@@ -49,6 +49,7 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.Job
+import kotlinx.coroutines.flow.collect
 import com.yellastrodev.dwij.playback.HttpMediaRemote
 import com.yellastrodev.dwij.playback.HttpMediaServiceAdvertiser
 import java.io.File
@@ -57,7 +58,7 @@ import java.util.concurrent.atomic.AtomicBoolean
 /**
  * Общий JVM-граф приложения.
  *
- * Создаёт YamApiClient, восстанавливает сессию и собирает все общие
+ * Создаёт YamApiClient, восстанавливает отдельные сессии Яндекс/VK и собирает общие
  * репозитории, временное воспроизведение рекомендаций, HTTP-пульт с DNS-SD и постоянные настройки.
  *
  * Платформа передаёт системные реализации, низкоуровневое key-value хранилище
@@ -67,6 +68,7 @@ class DwijComponent private constructor(
     private val applicationScope: CoroutineScope,
     val logger: YamLogger,
     val yandexSessionManager: YandexSessionManager,
+    val vkMusicRepository: com.yellastrodev.dwij.data.repo.VkMusicRepository,
     val cacheSettings: CacheSettings,
     val yandexProxySettings: YandexProxySettings,
     private val localKeyValueStore: LocalKeyValueStore,
@@ -343,7 +345,7 @@ class DwijComponent private constructor(
     }
 
     /**
-     * Запускает общую и платформенную инициализацию ровно один раз.
+     * Запускает общую/платформенную инициализацию и освобождение неактивного VK relay ровно один раз.
      */
     fun start() {
         if (
@@ -358,6 +360,12 @@ class DwijComponent private constructor(
         httpMediaRemote.startIfEnabled()
         applicationScope.coroutineContext[Job]?.invokeOnCompletion {
             httpMediaRemote.close()
+            vkMusicRepository.close()
+        }
+        applicationScope.launch {
+            playerRepo.currentPlaybackTrack.collect {
+                vkMusicRepository.releaseInactivePlayback(playerRepo)
+            }
         }
 
         try {
@@ -412,7 +420,7 @@ class DwijComponent private constructor(
             50
 
         /**
-         * Восстанавливает постоянные настройки и сессию,
+         * Восстанавливает постоянные настройки и независимые защищённые Яндекс/VK-сессии,
          * затем создаёт общий граф приложения с платформенным объявлением HTTP-пульта.
          */
         fun create(
@@ -421,6 +429,7 @@ class DwijComponent private constructor(
             localKeyValueStore: LocalKeyValueStore,
             httpMediaServiceAdvertiser: HttpMediaServiceAdvertiser,
             yandexSessionStore: YandexSessionStore,
+            vkSessionPayloadStore: com.yellastrodev.dwij.storage.ProtectedSessionPayloadStore,
             db: DwijDatabase,
             trackCacheDirectory: File,
             localYandexTrackDirectory: File,
@@ -474,6 +483,10 @@ class DwijComponent private constructor(
                     logger,
                 yandexSessionManager =
                     sessionManager,
+                vkMusicRepository = runBlocking(Dispatchers.IO) {
+                    com.yellastrodev.dwij.data.repo.VkMusicRepository(vkSessionPayloadStore, logger)
+                        .also { it.restore() }
+                },
                 cacheSettings =
                     cacheSettings,
                 yandexProxySettings =
