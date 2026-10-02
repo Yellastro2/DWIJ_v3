@@ -1,3 +1,6 @@
 [submodule "yaMusicSdk"]
 	path = yaMusicSdk
 	url = https://github.com/Yellastro2/YaMusicSDK.git
+[submodule "vkMusicSdk"]
+	path = vkMusicSdk
+	url = https://github.com/Yellastro2/vkMusicSdk.git
