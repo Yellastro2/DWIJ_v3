@@ -20,6 +20,7 @@ object DwijDestination {
 
     const val OBJECT_TYPE_TRACK = "track"
     const val OBJECT_TYPE_PLAYLIST = "playlist"
+    const val OBJECT_TYPE_VK_PLAYLIST = "vk-playlist"
     const val OBJECT_TYPE_TRACKLIST = "tracklist"
     const val OBJECT_TYPE_ARTIST = "artist"
     const val OBJECT_TYPE_ALBUM = "album"
@@ -79,7 +80,7 @@ object DwijDestination {
 
     /**
      * Открывает выбор плейлиста
-     * для добавления конкретного Яндекс-трека.
+     * для добавления Яндекс-трека либо VK source-id с префиксом vk:.
      */
     fun playlistsAddRoute(
         trackId: String,

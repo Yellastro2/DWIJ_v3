@@ -75,7 +75,7 @@ class DesktopRuntime private constructor(
             1f
 
         /**
-         * Собирает desktop-граф с отдельными DPAPI-сессиями Яндекс/VK и файловым журналом.
+         * Собирает desktop-граф, DPAPI-сессии и журнал; сброс плеера отменяет чтения обоих сетевых источников.
          */
         fun create():
                 DesktopRuntime {
@@ -221,6 +221,7 @@ class DesktopRuntime private constructor(
                     },
                     resetSource = {
                         if (audioRelay.isInitialized()) audioRelay.value.reset()
+                        component.vkMusicRepository.cancelPendingPlaybackRequests()
                     },
                     resolveArtworkFile = { track ->
                         artworkProvider.resolve(

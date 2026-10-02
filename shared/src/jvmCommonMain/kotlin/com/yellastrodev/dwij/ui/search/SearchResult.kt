@@ -43,6 +43,7 @@ import org.jetbrains.compose.ui.tooling.preview.Preview
  * Единый ленивый поток результатов поиска: треки используют общий item списков,
  * альбомы и артисты — компактную строку с круглой обложкой. VK помечен отдельно;
  * ошибка предлагает повтор поиска или вход, подготовка аудио показывает ожидание.
+ * Контекстное меню сохраняет Яндекс/VK; множества статусов используют source-id очереди загрузки.
  */
 @Composable
 fun SearchResult(
@@ -112,12 +113,14 @@ fun SearchResult(
                         val coverState = remember(item.key) { TrackCoverState() }
                         val yandexTrackId =
                             (item.source as? SearchTrackSource.Yandex)?.track?.id
+                        val downloadTrackId = yandexTrackId ?: (item.source as? SearchTrackSource.Vk)
+                            ?.track?.fullId?.let { "vk:$it" }
                         val row = item.row.copy(
                             yandexTrackId = yandexTrackId,
-                            isSavedLocally = yandexTrackId != null &&
-                                yandexTrackId in savedYandexTrackIds,
-                            isSavingLocally = yandexTrackId != null &&
-                                yandexTrackId in savingYandexTrackIds,
+                            isSavedLocally = downloadTrackId != null &&
+                                downloadTrackId in savedYandexTrackIds,
+                            isSavingLocally = downloadTrackId != null &&
+                                downloadTrackId in savingYandexTrackIds,
                         )
                         var isContextMenuExpanded by remember(item.key) {
                             mutableStateOf(false)
@@ -133,7 +136,7 @@ fun SearchResult(
                                 item = row,
                                 coverState = coverState,
                                 onClick = { onItemClick(item) },
-                                onLongClick = yandexTrackId?.let {
+                                onLongClick = downloadTrackId?.let {
                                     { isContextMenuExpanded = true }
                                 },
                             )
@@ -158,6 +161,8 @@ fun SearchResult(
                                             onShareYandexTrack(trackId)
                                         },
                                     )
+                                }
+                                downloadTrackId?.let { trackId ->
                                     DropdownMenuItem(
                                         text = {
                                             Text(

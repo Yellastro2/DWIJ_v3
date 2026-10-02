@@ -59,6 +59,8 @@ import org.jetbrains.compose.resources.stringResource
  * Постоянные настройки и авторизация принадлежат shared-компоненту.
  * Платформа используется только для StatFs, Intent, clipboard и lifecycle.
  * Закрытие окна OAuth скрывает только интерфейс, не отменяя текущий вход.
+ * Размер и очистка постоянного хранения включают Яндекс и VK, независимо от LRU-кеша.
+ * Ошибки VK OAuth выводятся в общий snackbar поверх прокручиваемых настроек.
  */
 @Composable
 fun SettingsRoute(
@@ -139,6 +141,7 @@ fun SettingsRoute(
 
     val localStorageRevision by
         component.trackCacheRepo.localStorageRevision.collectAsState()
+    val vkLocalStorageRevision by component.vkMusicRepository.localStorageRevision.collectAsState()
 
     var showLocalStorageDialog by remember {
         mutableStateOf(false)
@@ -286,12 +289,13 @@ fun SettingsRoute(
         }
     }
 
+    /** Обновляет суммарный размер постоянных Яндекс/VK-файлов. */
     fun refreshLocalStorageState() {
         coroutineScope.launch {
             occupiedLocalStorageSize = try {
                 withContext(Dispatchers.IO) {
                     formatSettingsSize(
-                        component.trackCacheRepo.localStorageSizeBytes(),
+                        component.trackCacheRepo.localStorageSizeBytes() + component.vkMusicRepository.localStorageSizeBytes(),
                     )
                 }
             } catch (error: CancellationException) {
@@ -762,7 +766,7 @@ fun SettingsRoute(
         refreshLocalStorageState()
     }
 
-    LaunchedEffect(localStorageRevision) {
+    LaunchedEffect(localStorageRevision, vkLocalStorageRevision) {
         refreshLocalStorageState()
     }
 
@@ -805,7 +809,14 @@ fun SettingsRoute(
     ) {
         SettingsScreen(
             vkAuthorizationContent = {
-                com.yellastrodev.dwij.ui.VkAuthorizationCard(component.vkMusicRepository, platform)
+                com.yellastrodev.dwij.ui.VkAuthorizationCard(component.vkMusicRepository, platform,
+                    onMessage = { message ->
+                        snackbarHostState.currentSnackbarData?.dismiss()
+                        coroutineScope.launch {
+                            snackbarHostState.showSnackbar(message, actionLabel = "Понятно",
+                                duration = androidx.compose.material3.SnackbarDuration.Long)
+                        }
+                    })
             },
             appVersion =
                 platform.appVersion,
@@ -1026,7 +1037,9 @@ fun SettingsRoute(
                             coroutineScope.launch {
                                 isClearingLocalStorage = true
                                 val cleared = try {
-                                    component.trackCacheRepo.clearLocalStorage()
+                                    val yandexCleared = component.trackCacheRepo.clearLocalStorage()
+                                    val vkCleared = component.vkMusicRepository.clearLocalStorage()
+                                    yandexCleared && vkCleared
                                 } catch (error: CancellationException) {
                                     throw error
                                 } catch (error: Exception) {

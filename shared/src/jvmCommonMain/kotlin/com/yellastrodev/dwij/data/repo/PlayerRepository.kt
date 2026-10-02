@@ -97,7 +97,7 @@ class PlayerRepository(
             .launchIn(scope)
     }
 
-    /** Продолжает подходящие списки волной, сохраняя конечность плейлиста дня и VK-поиска. */
+    /** Продолжает подходящие списки волной, сохраняя конечность плейлиста дня и всех VK-очередей. */
     private suspend fun handleEngineEvent(event: PlayerEvent) {
         if (event is PlayerEvent.TrackListEnd) {
             val tracklist = dtracklist.value
@@ -106,6 +106,7 @@ class PlayerRepository(
                 tracklist != null &&
                 tracklist !is DailyPlaylistTracklist &&
                 tracklist !is com.yellastrodev.dwij.data.entities.VkSearchTracklist &&
+                tracklist !is com.yellastrodev.dwij.data.entities.VkPlaylistTracklist &&
                 tracklist.getType() != LocalTracklist.Companion.TYPE
             ) {
                 continueWave(tracklist)

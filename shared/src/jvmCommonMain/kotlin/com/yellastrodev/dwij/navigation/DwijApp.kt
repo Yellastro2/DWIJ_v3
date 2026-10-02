@@ -57,6 +57,8 @@ import org.jetbrains.compose.resources.stringResource
  * Владеет NavController, back stack, графом маршрутов и общим компактным плеером.
  * Платформа предоставляет только системные возможности отдельных экранов.
  * Входящие ссылки на треки превращает в очередь воспроизведения и открывает плеер.
+ * Меню VK-треков/плейлистов передают загрузки общей платформенной очереди.
+ * Общая фонотека VK использует маршрут виртуального плейлиста и тот же экран очереди.
  */
 @Composable
 fun DwijApp(
@@ -293,6 +295,12 @@ fun DwijApp(
                             ),
                         )
                     },
+                    onOpenVkTracks = {
+                        navController.navigate(DwijDestination.objectRoute(
+                            type = DwijDestination.OBJECT_TYPE_VK_PLAYLIST,
+                            value = com.yellastrodev.dwij.data.repo.VK_ALL_TRACKS,
+                        ))
+                    },
                     onOpenCatalogObject = { type, externalId ->
                         navController.navigate(
                             DwijDestination.objectRoute(
@@ -315,6 +323,7 @@ fun DwijApp(
             composable(DwijDestination.PLAYLISTS) {
                 PlaylistGridRoute(
                     component = component,
+                    onRequestLocalTrackDownloads = localTrackDownloadRequester::requestAll,
                     platform =
                         platform.rememberPlaylistGridPlatform(),
                     onOpenYandexPlaylist = { playlistId ->
@@ -332,6 +341,9 @@ fun DwijApp(
                                 playlistId = playlistId,
                             ),
                         )
+                    },
+                    onOpenVkPlaylist = { playlistId ->
+                        navController.navigate(DwijDestination.objectRoute(DwijDestination.OBJECT_TYPE_VK_PLAYLIST, playlistId))
                     },
                     onBackClick = {
                         navController.navigateUp()
@@ -399,6 +411,7 @@ fun DwijApp(
             ) { entry ->
                 PlaylistGridRoute(
                     component = component,
+                    onRequestLocalTrackDownloads = localTrackDownloadRequester::requestAll,
                     platform =
                         platform.rememberPlaylistGridPlatform(),
                     trackToAdd = entry.stringArgument(
@@ -419,6 +432,9 @@ fun DwijApp(
                                 playlistId = playlistId,
                             ),
                         )
+                    },
+                    onOpenVkPlaylist = { playlistId ->
+                        navController.navigate(DwijDestination.objectRoute(DwijDestination.OBJECT_TYPE_VK_PLAYLIST, playlistId))
                     },
                     onBackClick = {
                         navController.navigateUp()
@@ -459,6 +475,9 @@ fun DwijApp(
                     onRequestLocalTrackDownloads =
                         localTrackDownloadRequester::requestAll,
                     onShareYandexUrl = shareRequester::share,
+                    onAddToPlaylist = { trackId ->
+                        navController.navigate(DwijDestination.playlistsAddRoute(trackId))
+                    },
                 )
             }
 

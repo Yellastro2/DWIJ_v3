@@ -1,6 +1,7 @@
 package com.yellastrodev.dwij.desktop.playback
 
 import com.yellastrodev.dwij.data.entities.PlaybackTrack
+import com.yellastrodev.dwij.data.entities.MusicSource
 import com.yellastrodev.dwij.data.entities.dYaPlaylist
 import com.yellastrodev.dwij.data.entities.dTracklist
 import com.yellastrodev.dwij.playback.PlaybackStateStore
@@ -38,7 +39,7 @@ import java.util.UUID
  * WindowsMediaSession публикует состояние в Windows SMTC
  * и принимает системные media commands. JavaFX callback'и также передают
  * фактические события прослушивания в общий [PlaybackFeedbackTracker].
- * Подготовка ограничена 12с; после трёх полных повторов отказавший трек пропускается.
+ * Подготовка ограничена 12с (VK: 45с для API/master/media/key); после трёх повторов трек пропускается.
  */
 class DesktopPlayerEngine(
     private val scope: CoroutineScope,
@@ -501,7 +502,7 @@ class DesktopPlayerEngine(
         }
     }
 
-    /** Запускает одну попытку с общим сроком, не зависящим от повторных GET/HEAD JavaFX. */
+    /** Запускает попытку с конечным бюджетом источника; повторные GET/HEAD не продлевают watchdog. */
     private suspend fun startTrackLocked(
         index: Int,
         autoPlay: Boolean,
@@ -529,10 +530,13 @@ class DesktopPlayerEngine(
         val attempt = DesktopPlaybackAttempt(index, retry)
         currentAttempt = attempt
         JavaFxRuntime.call { disposeCurrentPlayer() }
+        resetSource()
         currentIndex = index
+        val prepareTimeout = if (track.source == MusicSource.VK) DesktopPlaybackAttempt.VK_PREPARE_TIMEOUT_MS
+            else DesktopPlaybackAttempt.PREPARE_TIMEOUT_MS
         preparationJob = scope.launch {
-            delay(DesktopPlaybackAttempt.PREPARE_TIMEOUT_MS)
-            recoverAttempt(attempt, "подготовка превысила 12с")
+            delay(prepareTimeout)
+            recoverAttempt(attempt, "подготовка превысила ${prepareTimeout / 1000}с")
         }
         val prepareStarted = System.nanoTime()
         logger.debug(TAG, "[startTrack] Подготовка instanceId=${track.instanceId}")
@@ -715,12 +719,14 @@ class DesktopPlayerEngine(
         }
     }
 
-    /** Привязывает события к конкретной попытке и исключает устаревшие ошибки при переключении. */
+    /** Привязывает события к попытке; VK допускает ограниченную цепочку загрузки сегмента и AES-ключа. */
     private fun installCallbacks(
         player: MediaPlayer,
         index: Int,
         attempt: DesktopPlaybackAttempt,
     ) {
+        val stallTimeout = if (queue.getOrNull(index)?.source == MusicSource.VK) DesktopPlaybackAttempt.VK_STALL_TIMEOUT_MS
+            else DesktopPlaybackAttempt.STALL_TIMEOUT_MS
         player.setOnReady {
             if (
                 currentPlayer !== player ||
@@ -794,8 +800,8 @@ class DesktopPlayerEngine(
                 logger.warning(TAG, "[stalled] index=$index, positionMs=${player.currentTime.toMillisSafe()}: JavaFX ожидает данные")
                 if (stalledJob?.isActive != true && state.value.wantsToPlay) {
                     stalledJob = scope.launch {
-                        delay(DesktopPlaybackAttempt.STALL_TIMEOUT_MS)
-                        if (state.value.wantsToPlay) recoverAttempt(attempt, "JavaFX ожидает данные более 5с")
+                        delay(stallTimeout)
+                        if (state.value.wantsToPlay) recoverAttempt(attempt, "JavaFX ожидает данные более ${stallTimeout / 1000}с")
                     }
                 }
             }

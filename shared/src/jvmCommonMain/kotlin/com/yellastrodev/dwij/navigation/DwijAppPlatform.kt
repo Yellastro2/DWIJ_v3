@@ -55,7 +55,7 @@ data class LocalTrackDownloadRequest(
     val title: String,
 )
 
-/** Платформенно ставит один или несколько ЯМ-треков в очередь сохранения. */
+/** Платформенно ставит Яндекс либо VK (vk:owner_id_audio_id) в постоянную очередь сохранения. */
 fun interface LocalTrackDownloadRequester {
     fun request(trackId: String, title: String)
 

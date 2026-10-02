@@ -79,7 +79,7 @@ import org.jetbrains.compose.resources.pluralStringResource
 import org.jetbrains.compose.resources.painterResource
 import org.jetbrains.compose.resources.stringResource
 
-/** Shared-route музыкального объекта и списка треков с явным типом каждого source-инстанса. */
+/** Shared-route объекта; VK использует общий ObjectScreen, отдельный data-сценарий и платформенную очередь сохранения. */
 @Composable
 fun ObjectRoute(
     component: DwijComponent,
@@ -91,8 +91,14 @@ fun ObjectRoute(
     onRequestLocalTrackDownload: (trackId: String, title: String) -> Unit,
     onRequestLocalTrackDownloads: (List<LocalTrackDownloadRequest>) -> Unit,
     onShareYandexUrl: (String) -> Unit,
+    onAddToPlaylist: (String) -> Unit,
     modifier: Modifier = Modifier,
 ) {
+    if (objectType == DwijDestination.OBJECT_TYPE_VK_PLAYLIST) {
+        VkPlaylistRoute(component, objectValue, onBackClick, onOpenPlayer, onAddToPlaylist,
+            onRequestLocalTrackDownload, onRequestLocalTrackDownloads, modifier)
+        return
+    }
     val catalogKind = when (objectType) {
         DwijDestination.OBJECT_TYPE_ARTIST -> CatalogObjectKind.Artist
         DwijDestination.OBJECT_TYPE_ALBUM -> CatalogObjectKind.Album

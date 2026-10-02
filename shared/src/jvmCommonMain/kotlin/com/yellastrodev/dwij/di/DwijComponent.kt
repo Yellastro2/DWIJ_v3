@@ -7,6 +7,10 @@ import com.yellastrodev.dwij.auth.YandexSessionManager
 import com.yellastrodev.dwij.auth.YandexSessionStore
 import com.yellastrodev.dwij.auth.YandexAuthorizationRequiredNotifier
 import com.yellastrodev.dwij.data.cache.FileCacheStore
+import com.yellastrodev.dwij.data.cache.VkAudioFileCache
+import com.yellastrodev.dwij.data.cache.VkLocalStorage
+import com.yellastrodev.dwij.data.repo.LocalTrackDownloadProgress
+import com.yellastrodev.dwij.data.DataResult
 import com.yellastrodev.dwij.data.db.DwijDatabase
 import com.yellastrodev.dwij.data.entities.dYaPlaylist
 import com.yellastrodev.dwij.data.repo.CoverRepository
@@ -60,6 +64,8 @@ import java.util.concurrent.atomic.AtomicBoolean
  *
  * Создаёт YamApiClient, восстанавливает отдельные сессии Яндекс/VK и собирает общие
  * репозитории, временное воспроизведение рекомендаций, HTTP-пульт с DNS-SD и постоянные настройки.
+ * Подключает аудиокеш VK к общему лимиту хранения при старте.
+ * Постоянные VK-bundle используют отдельный каталог и общую платформенную очередь загрузки.
  *
  * Платформа передаёт системные реализации, низкоуровневое key-value хранилище
  * обычных настроек и защищённое хранилище авторизации.
@@ -345,7 +351,7 @@ class DwijComponent private constructor(
     }
 
     /**
-     * Запускает общую/платформенную инициализацию и освобождение неактивного VK relay ровно один раз.
+     * Подключает общий лимит кеша VK, запускает инициализацию и освобождение неактивного relay один раз.
      */
     fun start() {
         if (
@@ -357,6 +363,10 @@ class DwijComponent private constructor(
             return
         }
 
+        vkMusicRepository.useAudioCache(VkAudioFileCache(FileCacheStore(
+            File(trackCacheDirectory, "vk-audio"), cacheManager,
+        ), logger))
+        vkMusicRepository.useLocalStorage(VkLocalStorage(File(localYandexTrackDirectory.parentFile, "vk-local-tracks")))
         httpMediaRemote.startIfEnabled()
         applicationScope.coroutineContext[Job]?.invokeOnCompletion {
             httpMediaRemote.close()
@@ -410,6 +420,17 @@ class DwijComponent private constructor(
             )
         }
     }
+
+    /** Диспетчеризует платформенную загрузку по source-id, сохраняя прежний путь Яндекса. */
+    suspend fun saveTrackLocally(trackId: String,
+        onProgress: (LocalTrackDownloadProgress) -> Unit = {}): DataResult<File> =
+        if (trackId.startsWith("vk:")) vkMusicRepository.saveLocally(trackId, onProgress)
+        else trackCacheRepo.saveLocally(trackId, onProgress)
+
+    /** Проверяет постоянное хранение по source-id общей очереди загрузок. */
+    fun isTrackSavedLocally(trackId: String): Boolean =
+        if (trackId.startsWith("vk:")) vkMusicRepository.isSavedLocally(trackId)
+        else trackCacheRepo.isSavedLocally(trackId)
 
     companion object {
 

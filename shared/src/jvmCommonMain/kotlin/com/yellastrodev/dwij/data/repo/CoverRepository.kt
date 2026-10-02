@@ -106,7 +106,7 @@ class CoverRepository(
             )
         }
 
-        val downloadedBytes = (if (entityType == "vk-track") {
+        val downloadedBytes = (if (entityType == "vk-track" || entityType == "vk-playlist") {
             com.yellastrodev.vkmusicsdk.VkArtwork.load(url)
         } else downloadCover(
             url = url,
@@ -126,6 +126,12 @@ class CoverRepository(
     suspend fun getVkTrackCover(track: com.yellastrodev.vkmusicsdk.VkAudio): CoverData? {
         val url = track.coverUrl ?: return null
         return getRemoteCover("vk-track", track.fullId, url, CoverSize.`400x400`)
+    }
+
+    /** Загружает обложку плейлиста независимым транспортом VK в отдельный namespace кэша. */
+    suspend fun getVkPlaylistCover(playlist: com.yellastrodev.vkmusicsdk.VkPlaylist): CoverData? {
+        val url = playlist.coverUrl ?: return null
+        return getRemoteCover("vk-playlist", playlist.fullId, url, CoverSize.`400x400`)
     }
 
     private suspend fun downloadCover(

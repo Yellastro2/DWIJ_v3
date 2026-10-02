@@ -64,7 +64,7 @@ import kotlinx.coroutines.withTimeoutOrNull
 import org.jetbrains.compose.resources.getString
 import org.jetbrains.compose.resources.stringResource
 
-/** Shared-route полноэкранного плеера с отдельной меткой VK и выбором источников песни. */
+/** Shared-плеер с реакциями Яндекс, «Моими треками» VK, плейлистами и постоянным сохранением. */
 @Composable
 fun PlayerRoute(
     component: DwijComponent,
@@ -85,6 +85,13 @@ fun PlayerRoute(
     val playedTracklist by playerModel.playdTracklist.collectAsState()
     val shuffleBlocked by playerModel.shuffleBlock.collectAsState()
     val allPlaylists by playerModel.playlistRepo.playlists.collectAsState()
+    val vkPlaylists by component.vkMusicRepository.playlists.collectAsState()
+    val vkPlaylistTracks by component.vkMusicRepository.playlistTracks.collectAsState()
+    val vkMembershipRevision by component.vkMusicRepository.membershipRevision.collectAsState()
+    val vkSessionRevision by component.vkMusicRepository.sessionRevision.collectAsState()
+    val vkMyTracks by component.vkMusicRepository.myTracks.collectAsState()
+    val vkMyTracksLoaded by component.vkMusicRepository.myTracksLoaded.collectAsState()
+    val vkAuthorized by component.vkMusicRepository.authorized.collectAsState()
     val isWaveLoading by component.waveRepository.isLoading.collectAsState()
 
     val coroutineScope = rememberCoroutineScope()
@@ -133,18 +140,23 @@ fun PlayerRoute(
     val localStorageRevision by
         component.trackCacheRepo.localStorageRevision.collectAsState()
     val localDownloads by component.trackCacheRepo.localDownloads.collectAsState()
+    val vkLocalDownloads by component.vkMusicRepository.localDownloads.collectAsState()
+    val vkLocalStorageRevision by component.vkMusicRepository.localStorageRevision.collectAsState()
     val currentYandexDownloadTrackId = playbackTrack
-        ?.takeIf { current -> current.source == MusicSource.YANDEX }
-        ?.id
+        ?.let { current -> when (current.source) {
+            MusicSource.YANDEX -> current.id
+            MusicSource.VK -> "vk:${current.id}"
+            else -> null
+        } }
     var isCurrentTrackSavedLocally by remember(currentYandexDownloadTrackId) {
         mutableStateOf(false)
     }
 
-    LaunchedEffect(currentYandexDownloadTrackId, localStorageRevision) {
+    LaunchedEffect(currentYandexDownloadTrackId, localStorageRevision, vkLocalStorageRevision) {
         isCurrentTrackSavedLocally = currentYandexDownloadTrackId
             ?.let { trackId ->
                 withContext(Dispatchers.IO) {
-                    component.trackCacheRepo.isSavedLocally(trackId)
+                    component.isTrackSavedLocally(trackId)
                 }
             }
             ?: false
@@ -156,15 +168,16 @@ fun PlayerRoute(
             ?: flowOf(null)
     }.collectAsState(initial = track)
 
-    val isLiked = databaseTrack
+    val isYandexLiked = databaseTrack
         ?.takeIf { song -> song.id == currentTrackId }
         ?.isLiked
         ?: track?.isLiked
         ?: false
 
     var pendingLike by remember { mutableStateOf<PendingLikeMutation?>(null) }
+    var vkLikePending by remember { mutableStateOf(false) }
     // Не допускаем конкурирующих лайка и дизлайка даже при переключении трека.
-    val isLikePending = pendingLike != null
+    val isLikePending = pendingLike != null || vkLikePending
 
     var showMultiSourceDialog by remember(currentTrackId) {
         mutableStateOf(false)
@@ -246,6 +259,20 @@ fun PlayerRoute(
             ?.track
 
     val yandexTrackId = yandexTrack?.id
+    val vkAudio = if (playbackTrack?.source == MusicSource.VK) {
+        track?.instances?.filterIsInstance<TrackInstance.Vk>()
+            ?.firstOrNull { it.track.fullId == playbackTrack?.id }?.track
+    } else null
+    val isLiked = if (vkAudio != null) {
+        // Чтение flow запускает recomposition после подтверждённой сервером мутации.
+        remember(vkAudio, vkMyTracks, vkMembershipRevision) { component.vkMusicRepository.isInMyTracks(vkAudio) }
+    } else isYandexLiked
+    LaunchedEffect(vkAudio?.fullId, vkMembershipRevision, vkSessionRevision) {
+        if (vkAudio != null) {
+            component.vkMusicRepository.refreshMyTracks()
+            component.vkMusicRepository.refreshPlaylistMemberships()
+        }
+    }
     val catalogYandexArtists by remember(currentTrackId, component.catalogRepository) {
         currentTrackId
             ?.let(component.catalogRepository::observeYandexArtistsForSong)
@@ -282,8 +309,10 @@ fun PlayerRoute(
         }
     }
 
-    val containingPlaylistTitles = remember(containingPlaylists) {
-        containingPlaylists.map { playlist -> playlist.title }
+    val containingPlaylistTitles = remember(containingPlaylists, vkAudio?.fullId, vkPlaylists, vkPlaylistTracks) {
+        if (vkAudio != null) {
+            vkPlaylists.filter { vkAudio.fullId in vkPlaylistTracks[it.fullId].orEmpty() }.map { it.title }
+        } else containingPlaylists.map { playlist -> playlist.title }
     }
 
     val fallbackQueueTitle = stringResource(Res.string.player_current_queue)
@@ -414,7 +443,23 @@ fun PlayerRoute(
     val saveLocallyStartedMessage =
         stringResource(Res.string.track_save_locally_started)
 
+    /** Для VK лайк управляет «Моими треками»; реакции Яндекс подтверждаются существующим Room-потоком. */
     fun mutateTrackReaction(dislike: Boolean) {
+        val audio = vkAudio
+        if (audio != null) {
+            if (dislike || isLikePending || !vkMyTracksLoaded || !vkAuthorized) return
+            val added = !isLiked
+            vkLikePending = true
+            coroutineScope.launch {
+                try {
+                    when (val result = component.vkMusicRepository.setInMyTracks(audio, added)) {
+                        is DataResult.Success -> Unit
+                        is DataResult.Failure -> uiMessages.emit(result.error.vkPlaylistMessage())
+                    }
+                } finally { vkLikePending = false }
+            }
+            return
+        }
         val failedMessage = if (dislike) dislikeFailedMessage else likeFailedMessage
         val requestSongId = currentTrackId
         val requestTrackId = yandexTrackId
@@ -532,7 +577,7 @@ fun PlayerRoute(
             canShare = yandexTrackId != null,
             isSavedLocally = isCurrentTrackSavedLocally,
             isSavingLocally = currentYandexDownloadTrackId != null &&
-                currentYandexDownloadTrackId in localDownloads,
+                (currentYandexDownloadTrackId in localDownloads || currentYandexDownloadTrackId in vkLocalDownloads),
             cover = cover,
             isPlaying = playerState.wantsToPlay,
             currentPositionMillis = playerState.currentPosition,
@@ -541,7 +586,9 @@ fun PlayerRoute(
             isRepeatAll = playerState.isRepeatAll,
             showPlaybackModes = !shuffleBlocked,
             canStartTrackWave = yandexTrack != null,
-            canLike = yandexTrack != null,
+            canLike = if (vkAudio != null) vkAuthorized && vkMyTracksLoaded else yandexTrack != null,
+            canDislike = vkAudio == null && yandexTrack != null,
+            canAddToPlaylist = yandexTrack != null || vkAudio != null,
             isLiked = isLiked,
             isLikePending = isLikePending,
             playlistTitles = containingPlaylistTitles,
@@ -583,7 +630,9 @@ fun PlayerRoute(
             }
         },
         onAddToPlaylistClick = {
-            yandexTrackId?.let(onAddToPlaylist)
+            if (playbackTrack?.source == MusicSource.VK) {
+                vkAudio?.let { onAddToPlaylist("vk:${it.requestId}") }
+            } else yandexTrackId?.let(onAddToPlaylist)
         },
         onSourcesClick = {
             mergeSourcesError = null
@@ -592,6 +641,7 @@ fun PlayerRoute(
         onSaveLocallyClick = {
             val trackId = currentYandexDownloadTrackId
             if (trackId != null && !isCurrentTrackSavedLocally) {
+                vkAudio?.let(component.vkMusicRepository::rememberDownloadAudio)
                 onRequestLocalTrackDownload(
                     trackId,
                     track?.title ?: playbackTrack?.title ?: trackId,

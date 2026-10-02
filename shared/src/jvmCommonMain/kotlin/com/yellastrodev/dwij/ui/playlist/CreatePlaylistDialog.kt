@@ -52,7 +52,7 @@ import org.jetbrains.compose.resources.stringResource
 /**
  * Неоновый диалог создания плейлиста для выбранного музыкального источника.
  *
- * Локальному плейлисту достаточно названия, а для Яндекса дополнительно доступна настройка
+ * Локальному и VK-плейлисту достаточно названия, а для Яндекса дополнительно доступна настройка
  * публичности. Во время сохранения диалог нельзя закрыть или отправить повторно.
  */
 @Composable
@@ -111,10 +111,10 @@ fun CreatePlaylistDialog(
                 )
                 Text(
                     text = stringResource(
-                        if (source == HomeMusicSource.Yandex) {
-                            Res.string.home_source_yandex_music
-                        } else {
-                            Res.string.home_source_local
+                        when (source) {
+                            HomeMusicSource.Yandex -> Res.string.home_source_yandex_music
+                            HomeMusicSource.Vk -> Res.string.home_source_vk_music
+                            HomeMusicSource.Local -> Res.string.home_source_local
                         },
                     ),
                     color = DwijColors.CyanBright,

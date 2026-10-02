@@ -38,6 +38,7 @@ import java.awt.datatransfer.StringSelection
 
 /**
  * Windows-набор платформенных адаптеров для shared DwijApp.
+ * Очередь постоянного сохранения поддерживает Яндекс и VK.
  */
 class DesktopDwijAppPlatform(
     private val component: DwijComponent,
@@ -167,19 +168,22 @@ class DesktopDwijAppPlatform(
         )
 
     @Composable
+    /** Сохраняет Яндекс/VK в application scope независимо от закрытия исходного экрана. */
     override fun rememberLocalTrackDownloadRequester(): LocalTrackDownloadRequester =
         remember(component, applicationScope) {
             object : LocalTrackDownloadRequester {
+                /** Ставит одну загрузку в постоянное хранилище соответствующего источника. */
                 override fun request(trackId: String, title: String) {
                     applicationScope.launch {
-                        component.trackCacheRepo.saveLocally(trackId)
+                        component.saveTrackLocally(trackId)
                     }
                 }
 
+                /** Последовательно обрабатывает список, сохраняя успешные загрузки при отдельных отказах. */
                 override fun requestAll(requests: List<LocalTrackDownloadRequest>) {
                     applicationScope.launch {
                         requests.forEach { request ->
-                            component.trackCacheRepo.saveLocally(request.trackId)
+                            component.saveTrackLocally(request.trackId)
                         }
                     }
                 }

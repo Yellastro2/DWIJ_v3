@@ -2,6 +2,9 @@ package com.yellastrodev.dwij.navigation
 
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.collectAsState
+import androidx.compose.runtime.getValue
+import com.yellastrodev.dwij.HomeMusicSource
 import androidx.compose.ui.Modifier
 import com.yellastrodev.dwij.di.DwijComponent
 import com.yellastrodev.dwij.resources.Res
@@ -25,7 +28,8 @@ import org.jetbrains.compose.resources.stringResource
  * Shared-entry экрана плейлистов.
  *
  * Платформа отвечает только за разрешения и синхронизацию. Все переходы выполняет
- * владелец общего NavHost через переданные callbacks.
+ * владелец общего NavHost через переданные callbacks. VK использует те же presentation-компоненты.
+ * Постоянное сохранение VK-плейлистов передаётся в общую платформенную очередь.
  */
 @Composable
 fun PlaylistGridRoute(
@@ -33,10 +37,17 @@ fun PlaylistGridRoute(
     platform: PlaylistGridPlatform,
     onOpenYandexPlaylist: (playlistId: String) -> Unit,
     onOpenLocalPlaylist: (playlistId: String) -> Unit,
+    onOpenVkPlaylist: (playlistId: String) -> Unit,
     onBackClick: () -> Unit,
+    onRequestLocalTrackDownloads: (List<LocalTrackDownloadRequest>) -> Unit,
     trackToAdd: String? = null,
     modifier: Modifier = Modifier,
 ) {
+    val selectedSource by component.musicSourceSelectionStore.selectedSource.collectAsState()
+    if (trackToAdd?.startsWith("vk:") == true || (trackToAdd == null && selectedSource == HomeMusicSource.Vk)) {
+        VkPlaylistGridRoute(component, platform, onOpenVkPlaylist, onBackClick, trackToAdd, onRequestLocalTrackDownloads, modifier)
+        return
+    }
     val dependencies =
         remember(component) {
             PlaylistGridDependencies(

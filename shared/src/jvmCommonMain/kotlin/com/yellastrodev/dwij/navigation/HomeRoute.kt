@@ -45,9 +45,11 @@ import org.jetbrains.compose.resources.stringResource
 /**
  * Shared-route главного экрана.
  * Поиск выбирает независимый VK-репозиторий либо существующий локальный/Яндекс-сценарий.
+ * «Треки» открывает полную фонотеку выбранного источника, включая объединённую коллекцию VK.
  *
  * Не зависит от Android Context, Activity Result API, WorkManager и Navigation.
  * Платформа передаёт разрешения, системный back-handler и действия переходов.
+ * Поиск показывает статусы постоянного хранения Яндекс/VK и ставит выбранный source-id в общую очередь.
  */
 @Composable
 fun HomeRoute(
@@ -64,6 +66,7 @@ fun HomeRoute(
     onOpenAlbums: () -> Unit,
     onOpenLocalTracks: () -> Unit,
     onOpenYandexTracks: () -> Unit,
+    onOpenVkTracks: () -> Unit,
     onOpenCatalogObject: (type: String, externalId: Int) -> Unit,
     onOpenPlayer: () -> Unit,
     onRequestLocalTrackDownload: (trackId: String, title: String) -> Unit,
@@ -107,19 +110,23 @@ fun HomeRoute(
     val localStorageRevision by
         component.trackCacheRepo.localStorageRevision.collectAsState()
     val localDownloads by component.trackCacheRepo.localDownloads.collectAsState()
+    val vkLocalDownloads by component.vkMusicRepository.localDownloads.collectAsState()
+    val vkLocalStorageRevision by component.vkMusicRepository.localStorageRevision.collectAsState()
     var savedSearchYandexTrackIds by remember {
         mutableStateOf(emptySet<String>())
     }
 
-    LaunchedEffect(searchState.results, localStorageRevision) {
+    LaunchedEffect(searchState.results, localStorageRevision, vkLocalStorageRevision) {
         val yandexTrackIds = searchState.results.mapNotNull { item ->
-            ((item as? SearchResultItemUiModel.Track)?.source as? SearchTrackSource.Yandex)
-                ?.track
-                ?.id
+            when (val source = (item as? SearchResultItemUiModel.Track)?.source) {
+                is SearchTrackSource.Yandex -> source.track.id
+                is SearchTrackSource.Vk -> "vk:${source.track.fullId}"
+                else -> null
+            }
         }
         savedSearchYandexTrackIds = withContext(Dispatchers.IO) {
             yandexTrackIds
-                .filter(component.trackCacheRepo::isSavedLocally)
+                .filter(component::isTrackSavedLocally)
                 .toSet()
         }
     }
@@ -241,7 +248,7 @@ fun HomeRoute(
             when (selectedSource) {
                 HomeMusicSource.Local -> onOpenLocalTracks()
                 HomeMusicSource.Yandex -> onOpenYandexTracks()
-                HomeMusicSource.Vk -> Unit
+                HomeMusicSource.Vk -> onOpenVkTracks()
             }
         },
         onWaveClick = {
@@ -375,8 +382,13 @@ fun HomeRoute(
                     }
                 },
                 savedYandexTrackIds = savedSearchYandexTrackIds,
-                savingYandexTrackIds = localDownloads.keys,
-                onRequestLocalTrackDownload = onRequestLocalTrackDownload,
+                savingYandexTrackIds = localDownloads.keys + vkLocalDownloads.keys,
+                onRequestLocalTrackDownload = { id, title ->
+                    searchState.results.filterIsInstance<SearchResultItemUiModel.Track>()
+                        .mapNotNull { (it.source as? SearchTrackSource.Vk)?.track }
+                        .firstOrNull { "vk:${it.fullId}" == id }?.let(component.vkMusicRepository::rememberDownloadAudio)
+                    onRequestLocalTrackDownload(id, title)
+                },
                 onShareYandexTrack = { trackId ->
                     onShareYandexUrl(YandexMusicShareLinks.track(trackId))
                 },

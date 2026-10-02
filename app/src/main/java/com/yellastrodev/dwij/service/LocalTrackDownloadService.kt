@@ -31,7 +31,7 @@ import kotlinx.coroutines.launch
 import java.util.ArrayDeque
 
 /**
- * Foreground-очередь постоянного сохранения ЯМ-треков.
+ * Foreground-очередь постоянного сохранения Яндекс/VK-треков.
  *
  * Одиночные треки и плейлисты приходят одной командой, после чего элементы
  * последовательно сохраняются с общим счётчиком и прогрессом текущего файла.
@@ -59,7 +59,7 @@ class LocalTrackDownloadService : Service() {
     }
 
     private val trackStorage by lazy {
-        (application as yApplication).component.trackCacheRepo
+        (application as yApplication).component
     }
 
     override fun onCreate() {
@@ -108,6 +108,7 @@ class LocalTrackDownloadService : Service() {
         }
     }
 
+    /** Сохраняет Яндекс/VK через общий диспетчер и обновляет foreground-прогресс очереди. */
     private suspend fun processQueue() {
         var lastRequest: DownloadRequest? = null
         var lastSucceeded = false
@@ -138,7 +139,7 @@ class LocalTrackDownloadService : Service() {
 
             lastSucceeded = try {
                 when (
-                    val result = trackStorage.saveLocally(
+                    val result = trackStorage.saveTrackLocally(
                         trackId = request.trackId,
                         onProgress = { progress ->
                             showProgressNotification(request, progress)
@@ -183,7 +184,7 @@ class LocalTrackDownloadService : Service() {
                 }
                 Log.w(
                     TAG,
-                    "[processQueue] Очередь остановлена: требуется авторизация Яндекс Музыки",
+                    "[processQueue] Очередь остановлена: требуется авторизация источника музыки",
                 )
                 break
             }

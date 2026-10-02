@@ -22,7 +22,7 @@ import com.yellastrodev.dwij.util.AppSessionLogStore
 import com.yellastrodev.dwij.work.LocalCatalogResolveWorker
 
 /**
- * Android-внешние действия экрана настроек.
+ * Android-действия настроек и собственный WebView для автоматического OAuth VK.
  */
 @Composable
 fun rememberAndroidSettingsPlatform(): SettingsPlatform {
@@ -37,6 +37,7 @@ fun rememberAndroidSettingsPlatform(): SettingsPlatform {
     }
 }
 
+/** Платформенные действия; WebView существует только пока открыт диалог VK-входа. */
 private class AndroidSettingsPlatform(
     private val context: Context,
 ) : SettingsPlatform {
@@ -55,6 +56,15 @@ private class AndroidSettingsPlatform(
 
     override val canShareLogs: Boolean
         get() = true
+
+    override val hasEmbeddedVkLogin: Boolean get() = true
+
+    /** Открывает Android-WebView с desktop UA, автоматическим callback и внешним запасным входом. */
+    @Composable
+    override fun VkLoginBrowser(url: String, onRedirect: (String) -> Unit, onDismiss: () -> Unit,
+        onOpenExternalBrowser: () -> Unit) {
+        AndroidVkLoginBrowser(url, onRedirect, onDismiss, onOpenExternalBrowser)
+    }
 
     override fun availableCacheBytes(): Long =
         StatFs(

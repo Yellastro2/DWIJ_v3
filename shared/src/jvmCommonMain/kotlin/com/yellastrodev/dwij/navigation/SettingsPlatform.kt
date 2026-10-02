@@ -7,7 +7,7 @@ import androidx.compose.runtime.Composable
  *
  * OAuth, постоянные настройки и состояние авторизации принадлежат shared.
  * Платформа предоставляет только конфигурацию, сведения о диске
- * и внешние системные действия.
+ * внешние системные действия и Android-окно браузерной авторизации.
  */
 interface SettingsPlatform {
 
@@ -36,6 +36,14 @@ interface SettingsPlatform {
     fun openUrl(
         url: String,
     ): Boolean
+
+    /** Android предлагает собственный браузер входа; остальные платформы используют ручной callback. */
+    val hasEmbeddedVkLogin: Boolean get() = false
+
+    /** Показывает платформенный браузер; callback возвращает URL только в памяти, fallback открывает внешний браузер. */
+    @Composable
+    fun VkLoginBrowser(url: String, onRedirect: (String) -> Unit, onDismiss: () -> Unit,
+        onOpenExternalBrowser: () -> Unit) = Unit
 
     /** Создаёт диагностический архив и передаёт его в платформенный экспорт. */
     suspend fun shareLogs(

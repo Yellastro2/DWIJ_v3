@@ -86,7 +86,7 @@ import java.util.Locale
 /**
  * Полный Compose-интерфейс домашнего экрана: орбитальный и радиальный плеер,
  * переключатель источников, сетка разделов, компактный плеер других вкладок
- * и нижняя навигация. VK-разделы первого сценария направляют к поиску.
+ * и нижняя навигация. VK-плейлисты и общая фонотека открываются своими маршрутами.
  */
 @Composable
 fun HomeScreen(
@@ -336,8 +336,8 @@ fun HomeScreen(
                             onSourceSelected = onSourceSelected,
                         )
                         HomeMenuGrid(
-                            onPlaylistsClick = { openSourceAction(onPlaylistsClick) },
-                            onTracksClick = { openSourceAction(onTracksClick) },
+                            onPlaylistsClick = onPlaylistsClick,
+                            onTracksClick = onTracksClick,
                             onWaveClick = onWavesClick,
                             onAllTracksClick = onAllTracksClick,
                             waveEnabled = selectedSource == HomeMusicSource.Yandex,
@@ -348,7 +348,7 @@ fun HomeScreen(
                     CatalogScreen(
                         selectedSource = selectedSource,
                         onSourceSelected = onSourceSelected,
-                        onPlaylistsClick = { openSourceAction(onPlaylistsClick) },
+                        onPlaylistsClick = onPlaylistsClick,
                         onArtistsClick = { openSourceAction(onArtistsClick) },
                         onAlbumsClick = { openSourceAction(onAlbumsClick) },
                         onLikedClick = {

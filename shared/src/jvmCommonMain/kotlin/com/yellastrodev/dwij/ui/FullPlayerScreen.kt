@@ -107,7 +107,7 @@ import androidx.compose.ui.window.PopupProperties
 import com.yellastrodev.dwij.playback.PlayerVolumeControl
 import kotlinx.coroutines.flow.MutableStateFlow
 
-/** Неизменяемый снимок данных, необходимых полноэкранному плееру. */
+/** Снимок плеера: доступ к плейлистам и дизлайку задаётся отдельно от лайка личной коллекции. */
 @Immutable
 data class FullPlayerUiState(
     val trackId: String?,
@@ -138,12 +138,15 @@ data class FullPlayerUiState(
     val playlistTitles: List<String>,
     val isWaveLoading: Boolean = false,
     val pendingTrackChange: TrackChangeDirection? = null,
+    val canAddToPlaylist: Boolean = canLike,
+    val canDislike: Boolean = canLike,
 )
 
 /**
  * Полноэкранный плеер в визуальном стиле Движа.
  * Позиция ползунка меняется локально во время жеста, а seek отправляется плееру только при отпускании.
  * Горизонтальный свайп центральной секции переключает трек; область прогресса сохраняет собственные жесты.
+ * Метки плейлистов и кнопка добавления доступны всем подключённым сервисам независимо от лайков.
  */
 @Composable
 fun FullPlayerScreen(
@@ -211,7 +214,7 @@ fun FullPlayerScreen(
                 showSourcesIndicator = state.hasMultipleSources ||
                     state.hasUnresolvedMatchCandidate,
                 canStartTrackWave = state.canStartTrackWave,
-                canDislike = state.canLike,
+                canDislike = state.canDislike,
                 isReactionPending = state.isLikePending,
                 canSaveLocally = state.canSaveLocally,
                 canShare = state.canShare,
@@ -316,7 +319,7 @@ fun FullPlayerScreen(
                         progressBounds = coordinates.boundsInParent()
                     },
                 )
-                if (state.canLike) {
+                if (state.canAddToPlaylist) {
                     PlayerPlaylistMemberships(
                         playlistTitles = state.playlistTitles,
                         onAddToPlaylistClick = onAddToPlaylistClick,

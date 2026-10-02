@@ -24,7 +24,7 @@ import java.nio.file.Files
 import java.nio.file.StandardCopyOption
 import java.security.MessageDigest
 
-/** Текущий фактический прогресс сохранения одного ЯМ-трека. */
+/** Прогресс сохранения Яндекс/VK; VK использует vk:owner_id_audio_id, неизвестный размер остаётся null. */
 data class LocalTrackDownloadProgress(
     val trackId: String,
     val downloadedBytes: Long,
