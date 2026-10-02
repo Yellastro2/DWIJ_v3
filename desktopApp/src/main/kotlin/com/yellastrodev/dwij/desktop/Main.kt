@@ -1,20 +1,24 @@
 package com.yellastrodev.dwij.desktop
 
 import androidx.compose.runtime.CompositionLocalProvider
+import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
+import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.window.Window
 import androidx.compose.ui.window.WindowPosition
+import androidx.compose.ui.window.WindowScope
 import androidx.compose.ui.window.application
 import androidx.compose.ui.window.rememberWindowState
 import com.yellastrodev.dwij.desktop.models.DesktopPlayerCoverLoader
 import com.yellastrodev.dwij.desktop.navigation.DesktopDwijAppPlatform
 import com.yellastrodev.dwij.desktop.windows.WindowsTaskbarControls
+import com.yellastrodev.dwij.desktop.windows.DesktopWindowFrame
 import com.yellastrodev.dwij.models.PlayerModel
 import com.yellastrodev.dwij.navigation.DwijApp
 import com.yellastrodev.dwij.ui.LocalPlayerVolumeControl
@@ -22,10 +26,13 @@ import com.yellastrodev.dwij.ui.LocalYamLogger
 import dwij_v3.desktopapp.generated.resources.Res
 import dwij_v3.desktopapp.generated.resources.dwij
 import org.jetbrains.compose.resources.painterResource
+import java.awt.EventQueue
+import java.awt.event.WindowAdapter
+import java.awt.event.WindowEvent
 import kotlin.math.roundToLong
 
 /**
- * Desktop/Windows entry point.
+ * Запускает desktop-приложение с фирменной панелью Windows и сбросом фокуса при возврате.
  */
 fun main() {
     val runtime =
@@ -185,6 +192,8 @@ fun main() {
                 windowVisible,
             title =
                 "DWIJ",
+            undecorated =
+                System.getProperty("os.name", "").startsWith("Windows", ignoreCase = true),
             resizable =
                 true,
             icon =
@@ -192,6 +201,8 @@ fun main() {
                     Res.drawable.dwij,
                 ),
         ) {
+            ClearComposeFocusOnWindowReturn()
+
             DisposableEffect(
                 window,
             ) {
@@ -222,15 +233,45 @@ fun main() {
                 LocalPlayerVolumeControl provides
                         runtime.playerVolumeControl,
             ) {
-                DwijApp(
-                    playerModel =
-                        playerModel,
-                    component =
-                        component,
-                    platform =
-                        platform,
-                )
+                val appContent: @androidx.compose.runtime.Composable () -> Unit = {
+                    DwijApp(
+                        playerModel = playerModel,
+                        component = component,
+                        platform = platform,
+                    )
+                }
+                if (System.getProperty("os.name", "").startsWith("Windows", ignoreCase = true)) {
+                    DesktopWindowFrame(windowState, appContent)
+                } else {
+                    appContent()
+                }
             }
+        }
+    }
+}
+
+/** Сбрасывает прежний Compose-фокус после восстановления нативного фокуса окна. */
+@Composable
+private fun WindowScope.ClearComposeFocusOnWindowReturn() {
+    val focusManager = LocalFocusManager.current
+
+    DisposableEffect(window, focusManager) {
+        var disposed = false
+        val listener = object : WindowAdapter() {
+            /** Откладывает сброс до завершения восстановления фокуса со стороны AWT. */
+            override fun windowGainedFocus(event: WindowEvent) {
+                EventQueue.invokeLater {
+                    if (!disposed && window.isDisplayable && window.isFocused) {
+                        focusManager.clearFocus(force = true)
+                    }
+                }
+            }
+        }
+
+        window.addWindowFocusListener(listener)
+        onDispose {
+            disposed = true
+            window.removeWindowFocusListener(listener)
         }
     }
 }
