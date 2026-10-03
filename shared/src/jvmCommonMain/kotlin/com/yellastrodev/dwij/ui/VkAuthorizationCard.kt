@@ -19,8 +19,9 @@ import com.yellastrodev.dwij.navigation.SettingsPlatform
 import com.yellastrodev.vkmusicsdk.VkOAuth
 import com.yellastrodev.vkmusicsdk.VkRedirectException
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.CancellationException
 
-/** VK-вход: Android-WebView с автоматическим callback либо ручной браузер; токен не сохраняется в saved state. */
+/** VK-вход с автоматическим callback, ручным браузером и временным debug-сбросом браузерной сессии. */
 @Composable
 fun VkAuthorizationCard(repository: VkMusicRepository, platform: SettingsPlatform, onMessage: (String) -> Unit = {}) {
     val authorized by repository.authorized.collectAsState()
@@ -149,6 +150,24 @@ fun VkAuthorizationCard(repository: VkMusicRepository, platform: SettingsPlatfor
                 TextButton(enabled = !busy, onClick = { beginLogin(embedded = false) }) {
                     Text("Войти через внешний браузер", color = DwijColors.CyanBright)
                 }
+            }
+            if (platform.canResetVkBrowserSession) {
+                TextButton(enabled = !busy && !browserOpen, onClick = {
+                    busy = true
+                    state = null
+                    callback = ""
+                    scope.launch {
+                        try {
+                            platform.resetVkBrowserSession()
+                            reportMessage("Сессия браузера сброшена. Откройте вход VK заново", isError = false)
+                        } catch (error: CancellationException) {
+                            throw error
+                        } catch (error: Exception) {
+                            logger.warning("VkAuthorizationCard", "[resetVkBrowserSession] Ошибка очистки: тип=${error.javaClass.simpleName}")
+                            reportMessage("Не удалось сбросить сессию браузера")
+                        } finally { busy = false }
+                    }
+                }) { Text("Сбросить сессию браузера VK", color = DwijColors.CyanBright) }
             }
             if (authorized) {
                 TextButton(enabled = !busy, colors = ButtonDefaults.textButtonColors(

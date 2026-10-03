@@ -70,7 +70,7 @@ data class Song(
     val hasPendingMatchCandidate: Boolean,
     /** ЯМ-инстанс известен как зеркало, но сам трек хранится в фонотеке локально. */
     val isLocalOnlyInLibrary: Boolean,
-    /** Производный статус из локального Room-списка лайков. */
+    /** Производный статус существующего Room-списка лайков; не заменяет «Мои треки» VK или offline-сохранение. */
     val isLiked: Boolean,
 ) {
     val artistNames: List<String>
@@ -84,6 +84,9 @@ data class Song(
 
     val localInstances: List<TrackInstance.Local>
         get() = instances.filterIsInstance<TrackInstance.Local>()
+
+    val vkInstances: List<TrackInstance.Vk>
+        get() = instances.filterIsInstance<TrackInstance.Vk>()
 }
 
 /** Канонический артист внутри агрегированной музыкальной библиотеки. */
@@ -104,11 +107,11 @@ data class Album(
 sealed interface TrackInstance {
     val id: String
 
-    /** Временный VK-экземпляр из поиска; playbackUri принадлежит текущему relay. */
+    /** VK-экземпляр с постоянной source-идентичностью; адрес воспроизведения разрешается отдельно. */
     data class Vk(
         override val id: String,
         val track: com.yellastrodev.vkmusicsdk.VkAudio,
-        val playbackUri: String,
+        val isHls: Boolean = true,
     ) : TrackInstance
 
     data class Yandex(

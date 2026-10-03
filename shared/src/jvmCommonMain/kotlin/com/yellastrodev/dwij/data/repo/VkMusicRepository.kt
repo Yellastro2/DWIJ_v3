@@ -26,6 +26,15 @@ import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.currentCoroutineContext
 import kotlinx.coroutines.ensureActive
 import kotlinx.coroutines.flow.update
+import com.yellastrodev.dwij.data.dao.VkLibraryDao
+import kotlinx.serialization.encodeToString
+import kotlinx.serialization.json.Json
+import kotlinx.serialization.json.buildJsonObject
+import kotlinx.serialization.json.put
+import kotlinx.serialization.json.jsonObject
+import kotlinx.serialization.json.jsonPrimitive
+import kotlinx.serialization.json.contentOrNull
+import kotlinx.serialization.json.longOrNull
 
 /** Зарезервированный маршрут личной коллекции VK. */
 const val VK_MY_TRACKS = "0_-1"
@@ -33,22 +42,32 @@ const val VK_MY_TRACKS = "0_-1"
 const val VK_ALL_TRACKS = "0_-2"
 
 /**
- * Сессия, поиск, личная коллекция, плейлисты и временные очереди VK. Токен сохраняется только в защищённом
- * платформенном payload; VK не записывается в таблицы локальной/Яндекс-фонотеки.
+ * Сессия и коллекции VK; Room-кеш аккаунта доступен до сети, Song собирается общим индексом.
+ * Токен сохраняется только в защищённом payload, временные URI создаются при подготовке очереди.
  * Аудио проходит через relay с необязательным постоянным кешем приложения.
  * Явное сохранение публикует независимый offline-bundle вне LRU.
  */
 class VkMusicRepository(
     private val store: ProtectedSessionPayloadStore,
     private val logger: YamLogger,
+    private val songs: SongRepository,
+    private val libraryDao: VkLibraryDao,
 ) : Closeable {
     private val mutex = Mutex()
-    private var client: VkApiClient? = null
+    @Volatile private var client: VkApiClient? = null
     @Volatile private var relay: VkHlsRelay? = null
     @Volatile private var audioCache: VkAudioCache? = null
     private var localStorage: VkLocalStorage? = null
     private val downloadMutex = Mutex()
     private val downloadMetadata = java.util.concurrent.ConcurrentHashMap<String, VkAudio>()
+    private val playbackLock = Any()
+    private val playbackUris = mutableMapOf<String, String>()
+    private val json = Json { ignoreUnknownKeys = true }
+    @Volatile private var cachedLibrary: VkLibraryEntity? = null
+    private var playlistsKnown = false
+    private var playlistsFresh = false
+    private val refreshedMemberships = mutableSetOf<String>()
+    private var playlistOrder = emptyMap<String, List<String>>()
     private val mutableLocalDownloads = MutableStateFlow<Map<String, LocalTrackDownloadProgress>>(emptyMap())
     val localDownloads = mutableLocalDownloads.asStateFlow()
     private val mutableLocalStorageRevision = MutableStateFlow(0L)
@@ -63,11 +82,183 @@ class VkMusicRepository(
         mutablePlaylists.value = mutableSavedPlaylists.value.filter { it.id >= 0 }
     }
 
+    /** Импортирует отсутствующие offline-метаданные, не перезаписывая более свежие записи Room. */
+    suspend fun indexSavedTracks() = withContext(Dispatchers.IO) {
+        val storage = localStorage ?: return@withContext
+        val tracks = (storage.audios() + storage.playlists().flatMap { it.tracks }).distinctBy(VkAudio::fullId)
+        val formats = tracks.mapNotNull { audio -> storage.readyFile(audio.fullId)?.let {
+            audio.fullId to (it.extension == "m3u8")
+        } }.toMap()
+        songs.registerVkTracks(tracks, onlyIfMissing = true, formatOverrides = formats)
+    }
+
+    /** Сохраняет долговечную метадату, а access_key оставляет в памяти для будущего getById. */
+    private suspend fun registerTracks(tracks: List<VkAudio>) {
+        tracks.forEach(::rememberDownloadAudio)
+        songs.registerVkTracks(tracks)
+    }
+
+    /** Сохраняет сетку и порядок с повторами; неизвестные коллекции не превращает в пустые. */
+    private suspend fun persistLibrary(owner: Long, tracks: List<VkAudio> = emptyList()) {
+        try {
+            registerTracks(tracks)
+            val previous = libraryDao.library(owner)
+            val snapshot = VkLibraryEntity(
+                accountId = owner,
+                myTracksJson = if (mutableMyTracksLoaded.value) json.encodeToString(mutableMyTracks.value.map { it.fullId })
+                    else previous?.myTracksJson,
+                aliasesJson = json.encodeToString(myTrackAliases.value),
+                playlistTracksJson = json.encodeToString(playlistOrder),
+                playlistsJson = if (playlistsKnown) json.encodeToString(mutablePlaylists.value.map {
+                    it.copy(accessKey = null, original = it.original?.copy(accessKey = null))
+                }) else previous?.playlistsJson,
+            )
+            libraryDao.upsertLibrary(snapshot)
+            cachedLibrary = snapshot
+        } catch (error: CancellationException) {
+            throw error
+        } catch (error: Exception) {
+            // Подтверждённая сервером мутация не превращается в ошибку VK при проблеме локального диска.
+            logger.warning(TAG, "[persistVkLibrary] Не удалось сохранить снимок коллекций: ${error.javaClass.simpleName}")
+        }
+    }
+
+    /** Восстанавливает кеш только аккаунта, привязанного к защищённой сессии, без запросов к VK. */
+    private suspend fun restoreLibrary(owner: Long) {
+        try {
+            val snapshot = libraryDao.library(owner) ?: return
+            val aliases = snapshot.aliases()
+            val order = snapshot.playlistTracks()
+            val playlists = snapshot.playlists()
+            val myTracks = snapshot.myTrackIds()?.let { ids ->
+                val records = libraryDao.tracks(ids.distinct()).associateBy { it.fullId }
+                ids.mapNotNull { records[it]?.audio() }
+            }
+            cachedLibrary = snapshot
+            myTrackAliases.value = aliases
+            playlistOrder = order
+            mutablePlaylistTracks.value = order.mapValues { it.value.toSet() }
+            playlists?.let {
+                mutablePlaylists.value = it
+                playlistsKnown = true
+            }
+            if (myTracks != null) mutableMyTracks.value = myTracks
+            // Снимок нужен для отображения; статус лайка перед мутацией подтверждаем сервером.
+            mutableMyTracksLoaded.value = false
+            logger.debug(TAG, "[restoreLibrary] Кеш VK восстановлен: плейлистов=${playlists?.size ?: 0}")
+        } catch (error: CancellationException) {
+            throw error
+        } catch (error: Exception) {
+            logger.warning(TAG, "[restoreLibrary] Не удалось прочитать кеш VK: ${error.javaClass.simpleName}")
+        }
+    }
+
+    /** Учитывает и подтверждённую пустую сетку, чтобы её обновление не блокировало экран. */
+    fun hasCachedPlaylists(): Boolean = cachedLibrary?.playlistsJson != null || mutablePlaylists.value.isNotEmpty()
+
+    /** Читает состав из памяти/Room без сетевого mutex; сохраняет порядок и повторяющиеся позиции. */
+    suspend fun cachedPlaylist(fullId: String): VkPlaylistContent? = withContext(Dispatchers.IO) {
+        try {
+            val snapshot = cachedLibrary
+            if (snapshot != null && snapshot.accountId == mutableUserId.value) {
+                val ids = when (fullId) {
+                    VK_MY_TRACKS -> snapshot.myTrackIds()
+                    VK_ALL_TRACKS -> {
+                        val playlists = snapshot.playlists()
+                        val myIds = snapshot.myTrackIds()
+                        val contents = snapshot.playlistTracks()
+                        if (playlists != null && myIds != null && playlists.all { it.fullId in contents })
+                            myIds + playlists.flatMap { contents.getValue(it.fullId) }
+                        else null // Частичный снимок нельзя выдавать за всю фонотеку.
+                    }
+                    else -> snapshot.playlistTracks()[fullId]
+                }
+                if (ids != null) {
+                    val records = libraryDao.tracks(ids.distinct()).associateBy { it.fullId }
+                    if (ids.all { it in records }) {
+                        val tracks = ids.map { records.getValue(it).audio() }
+                        val content = if (fullId == VK_ALL_TRACKS) distinctVkLibraryTracks(tracks,
+                            snapshot.myTrackIds().orEmpty().map { records.getValue(it).audio() }, snapshot.aliases()) else tracks
+                        val playlist = if (fullId == VK_MY_TRACKS || fullId == VK_ALL_TRACKS)
+                            VkPlaylist(if (fullId == VK_MY_TRACKS) -1 else -2, 0,
+                                title = if (fullId == VK_MY_TRACKS) "Мои треки" else "Все треки", count = content.size,
+                                permissions = VkPlaylistPermissions(edit = false, delete = false))
+                        else mutablePlaylists.value.firstOrNull { it.fullId == fullId }
+                        if (playlist != null) return@withContext VkPlaylistContent(playlist, content)
+                    }
+                }
+            }
+        } catch (error: CancellationException) {
+            throw error
+        } catch (error: Exception) {
+            logger.warning(TAG, "[cachedPlaylist] Кеш состава VK недоступен: ${error.javaClass.simpleName}")
+        }
+        localStorage?.playlists()?.firstOrNull { it.playlist.fullId == fullId }
+            ?.let { VkPlaylistContent(it.playlist, it.tracks) }
+    }
+
+    /** Запоминает успешный состав; кеш меток и экран используют один порядок source-ID. */
+    private fun rememberPlaylistTracks(fullId: String, tracks: List<VkAudio>) {
+        playlistOrder = playlistOrder + (fullId to tracks.map { it.fullId })
+        mutablePlaylistTracks.value = mutablePlaylistTracks.value + (fullId to tracks.map { it.fullId }.toSet())
+        refreshedMemberships.add(fullId)
+    }
+
+    /** Инвалидирует только изменённый список, чтобы следующий просмотр получил подтверждённый состав. */
+    private fun invalidatePlaylist(fullId: String) {
+        playlistOrder = playlistOrder - fullId
+        mutablePlaylistTracks.value = mutablePlaylistTracks.value - fullId
+        refreshedMemberships.remove(fullId)
+    }
+
+    /** Сбрасывает аккаунтный кеш при смене сессии; строки других аккаунтов в Room остаются. */
+    private fun clearLibraryCache() {
+        cachedLibrary = null
+        playlistsKnown = false
+        playlistsFresh = false
+        playlistOrder = emptyMap()
+        refreshedMemberships.clear()
+    }
+
+    /** Хранит токен и его владельца вместе в уже существующем защищённом payload. */
+    private fun saveSession(token: String, owner: Long) {
+        store.write(buildJsonObject { put("token", token); put("accountId", owner) }.toString().toByteArray(Charsets.UTF_8))
+    }
+
+    /** Создаёт lazy URI только для выбранного источника; сеть запускается при чтении relay, а не сборке Song. */
+    fun playbackUri(instance: TrackInstance.Vk): String? = synchronized(playbackLock) {
+        val audio = instance.track
+        val metadata = downloadMetadata[audio.fullId] ?: audio
+        val saved = localStorage?.readyFile(audio.fullId)
+        if (saved == null && client == null) return@synchronized null
+        // При появлении/удалении offline-файла выбирается новый корень, а не устаревший saved URI.
+        val isHls = if (saved != null) saved.extension == "m3u8" else
+            metadata.url.takeIf(String::isNotBlank)?.let {
+                java.net.URI(it).path.endsWith(".m3u8", ignoreCase = true)
+            } ?: instance.isHls
+        val key = "${audio.fullId}:$isHls:${saved?.absolutePath ?: "online"}"
+        playbackUris[key]?.let { return@synchronized it }
+        val activeRelay = relay ?: createRelay().also { relay = it }
+        val uri = if (saved != null) activeRelay.openSavedAudio(saved) else {
+            activeRelay.openDeferredAudio(isHls, null, audio.fullId,
+                savedAudio = { localStorage?.readyFile(audio.fullId) }) {
+                resolvePlaybackUrl(client, downloadMetadata[audio.fullId] ?: metadata)
+            }
+        }
+        playbackUris[key] = uri
+        uri
+    }
+
     /** Проверяет только постоянный bundle, не обычный кеш. */
     fun isSavedLocally(id: String): Boolean = localStorage?.readyFile(id.removePrefix("vk:")) != null
 
-    /** Сохраняет access_key выбранного аудио только в памяти, не включая его в Intent, ID или логи. */
-    fun rememberDownloadAudio(audio: VkAudio) { downloadMetadata[audio.fullId] = audio }
+    /** Обновляет метадату в памяти, сохраняя известный access_key при передаче очищенной Room-записи. */
+    fun rememberDownloadAudio(audio: VkAudio) {
+        downloadMetadata.compute(audio.fullId) { _, previous ->
+            audio.copy(accessKey = audio.accessKey ?: previous?.accessKey,
+                url = audio.url.ifBlank { previous?.url.orEmpty() })
+        }
+    }
 
     /** Размер постоянных файлов VK для общего раздела настроек. */
     fun localStorageSizeBytes(): Long = localStorage?.sizeBytes() ?: 0L
@@ -84,6 +275,7 @@ class VkMusicRepository(
 
     /** Сохраняет порядок плейлиста для offline-открытия до постановки отдельных треков в очередь. */
     suspend fun rememberLocalPlaylist(playlist: VkPlaylist, tracks: List<VkAudio>) = withContext(Dispatchers.IO) {
+        registerTracks(tracks)
         requireNotNull(localStorage).rememberPlaylist(playlist, tracks)
         tracks.forEach(::rememberDownloadAudio)
         mutableSavedPlaylists.value = requireNotNull(localStorage).playlists().map { it.playlist }
@@ -97,7 +289,10 @@ class VkMusicRepository(
                 val fullId = id.removePrefix("vk:")
                 require(fullId.matches(Regex("-?[0-9]+_[0-9]+")))
                 val storage = requireNotNull(localStorage)
-                storage.readyFile(fullId)?.let { return@withLock it }
+                storage.readyFile(fullId)?.let { file ->
+                    storage.audio(fullId)?.let { registerTracks(listOf(it)) }
+                    return@withLock file
+                }
                 val key = "vk:$fullId"
                 val context = currentCoroutineContext()
                 /** Контролирует отмену между сегментами и обновляет общий формат уведомлений. */
@@ -112,6 +307,7 @@ class VkMusicRepository(
                     val active = client ?: throw VkApiException(5)
                     val audio = active.getById(listOf(downloadMetadata[fullId]?.requestId ?: fullId)).firstOrNull { it.fullId == fullId }
                         ?: throw IllegalStateException("VK не вернул трек")
+                    registerTracks(listOf(audio))
                     createRelay().use { downloader -> storage.save(audio, downloader, ::progress) }.also {
                         mutableLocalStorageRevision.update { it + 1 }
                         logger.info(TAG, "[saveVkLocally] Трек VK сохранён для воспроизведения без сети")
@@ -168,9 +364,11 @@ class VkMusicRepository(
 
     /** Обновляет коллекцию атомарно; ошибочная загрузка не публикует пустую фонотеку. Вызывается под mutex. */
     private suspend fun loadMyTracks(active: VkApiClient, owner: Long) {
-        myTrackAliases.value = localStorage?.myTrackAliases(owner).orEmpty() + myTrackAliases.value
+        val saved = libraryDao.library(owner)
+        myTrackAliases.value = (saved?.aliases() ?: localStorage?.myTrackAliases(owner).orEmpty()) + myTrackAliases.value
         mutableMyTracks.value = active.getMyTracks(owner)
         mutableMyTracksLoaded.value = true
+        persistLibrary(owner, mutableMyTracks.value)
     }
 
     /** Загружает статус лайков один раз за ревизию, независимо от плейлистов. */
@@ -188,6 +386,7 @@ class VkMusicRepository(
         mutex.withLock {
             val active = client ?: throw VkApiException(5)
             val owner = currentUserId(active)
+            registerTracks(listOf(audio))
             if (!mutableMyTracksLoaded.value) loadMyTracks(active, owner)
             val existing = myTrackInstance(audio)
             if (added && existing == null) {
@@ -201,11 +400,10 @@ class VkMusicRepository(
                 active.removeFromMyTracks(existing)
                 mutableMyTracks.value = mutableMyTracks.value.filterNot { it.fullId == existing.fullId }
                 mutablePlaylistTracks.value = emptyMap()
+                playlistOrder = emptyMap()
+                refreshedMemberships.clear()
             }
-            try { localStorage?.rememberMyTrackAliases(owner, myTrackAliases.value) }
-            catch (error: Exception) {
-                logger.warning(TAG, "[setInMyTracks] Не удалось сохранить связь ID: ${error.javaClass.simpleName}")
-            }
+            persistLibrary(owner, mutableMyTracks.value)
             mutableMembershipRevision.value += 1
             logger.info(TAG, "[setInMyTracks] Коллекция VK обновлена: добавление=$added")
         }
@@ -221,26 +419,38 @@ class VkMusicRepository(
             if (fullId == VK_ALL_TRACKS) {
                 val lists = active.getPlaylists(owner)
                 mutablePlaylists.value = (lists + mutableSavedPlaylists.value.filter { it.id >= 0 }).distinctBy { it.fullId }
+                playlistsKnown = true
+                playlistsFresh = true
                 for (playlist in lists) {
                     val items = active.getPlaylistTracks(playlist)
+                    registerTracks(items)
                     tracks.addAll(items)
-                    mutablePlaylistTracks.value = mutablePlaylistTracks.value + (playlist.fullId to items.map { it.fullId }.toSet())
+                    rememberPlaylistTracks(playlist.fullId, items)
                 }
             }
             val unique = distinctVkLibraryTracks(tracks, mutableMyTracks.value, myTrackAliases.value)
+            persistLibrary(owner)
             VkPlaylistContent(VkPlaylist(id = if (fullId == VK_MY_TRACKS) -1 else -2, ownerId = 0,
                 title = if (fullId == VK_MY_TRACKS) "Мои треки" else "Все треки",
                 count = unique.size, permissions = VkPlaylistPermissions(edit = false, delete = false)), unique)
         }
     }
 
-    /** Восстанавливает зашифрованную сессию; недоступное хранилище оставляет VK без входа. */
+    /** Восстанавливает защищённую сессию и аккаунтный кеш без сети; поддерживает прежний payload с одним токеном. */
     suspend fun restore() = withContext(Dispatchers.IO) {
         mutex.withLock {
             try {
-                val token = store.read()?.toString(Charsets.UTF_8)?.takeIf(String::isNotBlank)
+                val payload = store.read()?.toString(Charsets.UTF_8)?.takeIf(String::isNotBlank)
+                val session = payload?.takeIf { it.startsWith("{") }?.let { json.parseToJsonElement(it).jsonObject }
+                val token = session?.get("token")?.jsonPrimitive?.contentOrNull ?: payload
                 client = token?.let { VkApiClient(it) }
+                session?.get("accountId")?.jsonPrimitive?.longOrNull?.let { owner ->
+                    mutableUserId.value = owner
+                    restoreLibrary(owner)
+                }
                 mutableAuthorized.value = client != null
+            } catch (error: CancellationException) {
+                throw error
             } catch (_: Exception) {
                 logger.warning(TAG, "[restore] Не удалось восстановить защищённую сессию VK")
             }
@@ -253,16 +463,21 @@ class VkMusicRepository(
             val candidate = VkApiClient(token)
             try {
                 candidate.validateMusicAccess()
-                store.write(token.toByteArray(Charsets.UTF_8))
+                val owner = candidate.getCurrentUserId()
+                saveSession(token, owner)
                 val old = client
                 client = candidate
                 mutablePlaylists.value = emptyList()
+                clearLibraryCache()
                 mutablePlaylistTracks.value = emptyMap()
                 mutableMembershipRevision.value += 1
-                mutableUserId.value = null
+                mutableUserId.value = owner
                 mutableMyTracks.value = emptyList()
                 mutableMyTracksLoaded.value = false
                 myTrackAliases.value = emptyMap()
+                restoreLibrary(owner)
+                downloadMetadata.clear()
+                resetPlayback()
                 mutableSessionRevision.value += 1
                 mutableAuthorized.value = true
                 old?.close()
@@ -281,12 +496,15 @@ class VkMusicRepository(
             client = null
             mutableAuthorized.value = false
             mutablePlaylists.value = emptyList()
+            clearLibraryCache()
             mutablePlaylistTracks.value = emptyMap()
             mutableMembershipRevision.value += 1
             mutableUserId.value = null
             mutableMyTracks.value = emptyList()
             mutableMyTracksLoaded.value = false
             myTrackAliases.value = emptyMap()
+            downloadMetadata.clear()
+            resetPlayback()
             mutableSessionRevision.value += 1
         }
     }
@@ -295,7 +513,7 @@ class VkMusicRepository(
     suspend fun search(query: String): DataResult<List<VkAudio>> {
         val result = operation("search") {
             val active = client ?: throw VkApiException(5)
-            active.search(query).items
+            active.search(query).items.also { it.forEach(::rememberDownloadAudio) }
         }
         if (result is DataResult.Failure) {
             val local = withContext(Dispatchers.IO) { localStorage?.audios().orEmpty().filter {
@@ -306,28 +524,35 @@ class VkMusicRepository(
         return result
     }
 
-    /** Загружает полную сетку текущего пользователя; прошлый успешный список сохраняется при ошибке сети. */
+    /** Обновляет только сетку; кеш составов и «Моих треков» сохраняется, сетевые ошибки не очищают экран. */
     suspend fun refreshPlaylists(): DataResult<Unit> = operation("refreshPlaylists") {
         mutex.withLock {
             val active = client ?: throw VkApiException(5)
             val owner = currentUserId(active)
             mutablePlaylists.value = (active.getPlaylists(owner) + mutableSavedPlaylists.value.filter { it.id >= 0 }).distinctBy { it.fullId }
-            mutableMyTracksLoaded.value = false
-            mutablePlaylistTracks.value = emptyMap()
-            mutableMembershipRevision.value += 1
+            playlistsKnown = true
+            playlistsFresh = true
+            persistLibrary(owner)
             logger.info(TAG, "[refreshPlaylists] Загружено плейлистов VK: ${mutablePlaylists.value.size}")
         }
     }
 
-    /** Получает идентификатор аккаунта один раз на сессию; вызывается под mutex. */
-    private suspend fun currentUserId(active: VkApiClient): Long = mutableUserId.value
-        ?: active.getCurrentUserId().also { mutableUserId.value = it }
+    /** Привязывает прежний token-only payload к проверенному аккаунту и восстанавливает его кеш. */
+    private suspend fun currentUserId(active: VkApiClient): Long {
+        mutableUserId.value?.let { return it }
+        val owner = active.getCurrentUserId()
+        mutableUserId.value = owner
+        restoreLibrary(owner)
+        if (cachedLibrary == null) myTrackAliases.value = localStorage?.myTrackAliases(owner).orEmpty()
+        val payload = store.read()?.toString(Charsets.UTF_8)?.takeIf(String::isNotBlank)
+        if (payload != null && !payload.startsWith("{")) saveSession(payload, owner)
+        return owner
+    }
 
-    /** Получает актуальный состав либо сохранённый снимок; preferLocal позволяет открыть его сразу без VK. */
+    /** Получает актуальный состав; preferLocal сначала возвращает аккаунтный Room-кеш или offline-снимок. */
     suspend fun getPlaylist(fullId: String, preferLocal: Boolean = false): DataResult<VkPlaylistContent> {
+        if (preferLocal) cachedPlaylist(fullId)?.let { return DataResult.Success(it) }
         val saved = withContext(Dispatchers.IO) { localStorage?.playlists()?.firstOrNull { it.playlist.fullId == fullId } }
-        if (preferLocal && saved != null && fullId != VK_MY_TRACKS && fullId != VK_ALL_TRACKS)
-            return DataResult.Success(VkPlaylistContent(saved.playlist, saved.tracks))
         if (fullId == VK_MY_TRACKS || fullId == VK_ALL_TRACKS) {
             val result = getCollection(fullId)
             return if (result is DataResult.Failure && saved != null)
@@ -337,13 +562,19 @@ class VkMusicRepository(
             mutex.withLock {
                 val active = client ?: throw VkApiException(5)
                 val owner = currentUserId(active)
-                if (saved != null) {
+                if (!playlistsFresh) {
                     // Постоянный снимок не содержит access_key; обновление получает его из сетки заново.
                     mutablePlaylists.value = (active.getPlaylists(owner) + mutableSavedPlaylists.value.filter { it.id >= 0 }).distinctBy { it.fullId }
+                    playlistsKnown = true
+                    playlistsFresh = true
                 }
                 // После восстановления маршрута сначала получаем ключи доступа из личной сетки.
                 val known = mutablePlaylists.value.firstOrNull { it.fullId == fullId }
-                    ?: active.getPlaylists(owner).also { mutablePlaylists.value = it }
+                    ?: active.getPlaylists(owner).also {
+                        mutablePlaylists.value = it
+                        playlistsKnown = true
+                        playlistsFresh = true
+                    }
                         .firstOrNull { it.fullId == fullId }
                     ?: throw IllegalArgumentException("Плейлист недоступен")
                 val playlist = active.getPlaylistById(known.ownerId, known.id, known.accessKey).let {
@@ -352,7 +583,10 @@ class VkMusicRepository(
                         photo = it.photo ?: known.photo, thumbs = it.thumbs.ifEmpty { known.thumbs })
                 }
                 val tracks = active.getPlaylistTracks(playlist)
-                mutablePlaylistTracks.value = mutablePlaylistTracks.value + (fullId to tracks.map { it.fullId }.toSet())
+                registerTracks(tracks)
+                mutablePlaylists.value = mutablePlaylists.value.map { if (it.fullId == fullId) playlist else it }
+                rememberPlaylistTracks(fullId, tracks)
+                persistLibrary(owner)
                 VkPlaylistContent(playlist, tracks)
             }
         }
@@ -370,7 +604,8 @@ class VkMusicRepository(
             val active = client ?: throw VkApiException(5)
             val playlist = active.createPlaylist(currentUserId(active), title)
             mutablePlaylists.value = listOf(playlist) + mutablePlaylists.value.filterNot { it.fullId == playlist.fullId }
-            mutablePlaylistTracks.value = mutablePlaylistTracks.value + (playlist.fullId to emptySet())
+            rememberPlaylistTracks(playlist.fullId, emptyList())
+            persistLibrary(requireNotNull(mutableUserId.value))
             mutableMembershipRevision.value += 1
             logger.info(TAG, "[createPlaylist] Плейлист VK создан")
             playlist
@@ -384,7 +619,8 @@ class VkMusicRepository(
             require(playlist.canDelete(currentUserId(active)))
             active.deletePlaylist(playlist)
             mutablePlaylists.value = mutablePlaylists.value.filterNot { it.fullId == playlist.fullId }
-            mutablePlaylistTracks.value = mutablePlaylistTracks.value - playlist.fullId
+            invalidatePlaylist(playlist.fullId)
+            persistLibrary(requireNotNull(mutableUserId.value))
             mutableMembershipRevision.value += 1
             logger.info(TAG, "[deletePlaylist] Плейлист VK удалён")
         }
@@ -394,8 +630,8 @@ class VkMusicRepository(
     suspend fun getAudio(requestId: String): DataResult<VkAudio> = operation("getAudio") {
         mutex.withLock {
             val active = client ?: throw VkApiException(5)
-            active.getById(listOf(requestId)).firstOrNull()
-                ?: throw IllegalArgumentException("Трек недоступен")
+            (active.getById(listOf(requestId)).firstOrNull()
+                ?: throw IllegalArgumentException("Трек недоступен")).also(::rememberDownloadAudio)
         }
     }
 
@@ -404,8 +640,10 @@ class VkMusicRepository(
         mutex.withLock {
             val active = client ?: throw VkApiException(5)
             require(playlist.canEdit(currentUserId(active)))
+            registerTracks(listOf(audio))
             active.addToPlaylist(playlist, audio)
-            mutablePlaylistTracks.value = mutablePlaylistTracks.value - playlist.fullId
+            invalidatePlaylist(playlist.fullId)
+            persistLibrary(requireNotNull(mutableUserId.value))
             mutableMembershipRevision.value += 1
             logger.info(TAG, "[addToPlaylist] Трек добавлен в плейлист VK")
         }
@@ -417,7 +655,8 @@ class VkMusicRepository(
             val active = client ?: throw VkApiException(5)
             require(playlist.canEdit(currentUserId(active)))
             active.removeFromPlaylist(playlist, audio)
-            mutablePlaylistTracks.value = mutablePlaylistTracks.value - playlist.fullId
+            invalidatePlaylist(playlist.fullId)
+            persistLibrary(requireNotNull(mutableUserId.value))
             mutableMembershipRevision.value += 1
             logger.info(TAG, "[removeFromPlaylist] Трек удалён из плейлиста VK")
         }
@@ -427,14 +666,17 @@ class VkMusicRepository(
     suspend fun refreshPlaylistMemberships(): DataResult<Unit> = operation("refreshPlaylistMemberships") {
         mutex.withLock {
             val active = client ?: throw VkApiException(5)
-            if (mutableUserId.value == null || mutablePlaylists.value.isEmpty()) {
+            if (!playlistsFresh) {
                 mutablePlaylists.value = active.getPlaylists(currentUserId(active))
+                playlistsKnown = true
+                playlistsFresh = true
             }
             for (playlist in mutablePlaylists.value) {
-                if (playlist.fullId in mutablePlaylistTracks.value) continue
+                if (playlist.fullId in refreshedMemberships) continue
                 try {
                     val tracks = active.getPlaylistTracks(playlist)
-                    mutablePlaylistTracks.value = mutablePlaylistTracks.value + (playlist.fullId to tracks.map { it.fullId }.toSet())
+                    registerTracks(tracks)
+                    rememberPlaylistTracks(playlist.fullId, tracks)
                 } catch (error: CancellationException) {
                     throw error
                 } catch (error: VkApiException) {
@@ -444,51 +686,23 @@ class VkMusicRepository(
                     logger.warning(TAG, "[refreshPlaylistMemberships] Не удалось прочитать состав VK: ${error.javaClass.simpleName}")
                 }
             }
+            persistLibrary(requireNotNull(mutableUserId.value))
         }
     }
 
-    /** Передаёт полный состав; сохранённые bundle открываются без VK, остальные URL разрешаются лениво. */
+    /** Индексирует состав и передаёт обычные Song; URI VK создаёт callback общей очереди. */
     suspend fun playPlaylist(
         playlist: VkPlaylist, tracks: List<VkAudio>, startIndex: Int, player: PlayerRepository,
     ): DataResult<Unit> = operation("playPlaylist") {
         mutex.withLock {
             require(tracks.isNotEmpty() && startIndex in tracks.indices)
-            val active = client
-            val selected = localStorage?.audio(tracks[startIndex].fullId)
-                ?: freshAudio(active ?: throw VkApiException(5), tracks[startIndex])
-            val savedFormats = localStorage?.playlists()?.firstOrNull { it.playlist.fullId == playlist.fullId }?.hls.orEmpty()
-            val nextRelay = createRelay()
-            try {
-                val songs = tracks.mapIndexed { index, audio ->
-                    val metadata = if (index == startIndex) selected else audio
-                    localStorage?.readyFile(audio.fullId)?.let { file ->
-                        return@mapIndexed vkSong(localStorage?.audio(audio.fullId) ?: metadata, nextRelay.openSavedAudio(file))
-                    }
-                    val isHls = if (metadata.url.isBlank()) savedFormats[audio.fullId] ?: true
-                        else java.net.URI(metadata.url).path.endsWith(".m3u8", ignoreCase = true)
-                    val uri = nextRelay.openDeferredAudio(isHls, selected.url.takeIf { index == startIndex }, audio.fullId,
-                        savedAudio = { localStorage?.readyFile(audio.fullId) }) {
-                        // Callback вызывается HTTP-worker relay; не берёт mutex репозитория.
-                        try { resolvePlaybackUrl(active, audio) }
-                        catch (error: VkApiException) {
-                            logger.warning(TAG, "[resolveQueueAudio] VK API вернул код ${error.code}")
-                            throw error
-                        }
-                    }
-                    vkSong(metadata, uri)
-                }
-                mutablePlaylistTracks.value = mutablePlaylistTracks.value + (playlist.fullId to tracks.map { it.fullId }.toSet())
-                player.playQueue(songs, startIndex, VkPlaylistTracklist(playlist))
-                relay?.close()
-                relay = nextRelay
-                logger.info(TAG, "[playPlaylist] Очередь VK передана плееру: треков=${songs.size}, позиция=$startIndex")
-            } catch (error: Exception) {
-                nextRelay.close()
-                throw error
-            }
+            registerTracks(tracks)
+            val queue = songs.songsForVkTracks(tracks)
+            require(queue.size == tracks.size) { "Не удалось собрать полный состав VK" }
+            player.playQueue(queue, startIndex, VkPlaylistTracklist(playlist))
+            logger.info(TAG, "[playPlaylist] Общая очередь VK передана плееру: треков=${queue.size}, позиция=$startIndex")
         }
     }
-
     /** Получает и проверяет свежую ссылку конкретного составного source-id. */
     private suspend fun freshAudio(active: VkApiClient, audio: VkAudio): VkAudio {
         val fresh = active.getById(listOf(audio.requestId)).firstOrNull { it.fullId == audio.fullId }
@@ -497,45 +711,15 @@ class VkMusicRepository(
         return fresh
     }
 
-    /** Собирает временную Song с готовым прямым либо ленивым loopback URI; в Room она не сохраняется. */
-    private fun vkSong(audio: VkAudio, uri: String): Song {
-        val id = "vk:${audio.fullId}"
-        return Song(
-            id = id, title = audio.title,
-            artists = audio.artistNames.mapIndexed { index, name -> Artist("$id:artist:$index", name) },
-            albums = audio.album?.let { listOf(Album("$id:album", it.title)) }.orEmpty(),
-            durationMs = audio.duration * 1000, coverUri = audio.coverUrl,
-            instances = listOf(TrackInstance.Vk(id, audio, uri)), preferredInstanceId = id,
-            hasPendingMatchCandidate = false, isLocalOnlyInLibrary = false, isLiked = false,
-        )
-    }
-
-    /** Предпочитает постоянный offline-bundle; иначе получает свежий URL для кеширующего relay. */
+    /** Индексирует выбранный трек, не меняя коллекции; URI разрешается отдельно от Song. */
     suspend fun play(audio: VkAudio, player: PlayerRepository): DataResult<Unit> = operation("play") {
         mutex.withLock {
-            val active = client
-            val saved = localStorage?.readyFile(audio.fullId)
-            val fresh = if (saved != null) localStorage?.audio(audio.fullId) ?: audio
-                else freshAudio(active ?: throw VkApiException(5), audio)
-            val nextRelay = createRelay()
-            try {
-                val isHls = java.net.URI(fresh.url).path.endsWith(".m3u8", ignoreCase = true)
-                val uri = if (saved != null) nextRelay.openSavedAudio(saved)
-                    else nextRelay.openDeferredAudio(isHls, fresh.url, fresh.fullId,
-                        savedAudio = { localStorage?.readyFile(audio.fullId) }) {
-                        resolvePlaybackUrl(active, audio)
-                    }
-                val song = vkSong(fresh, uri)
-                player.playQueue(listOf(song), 0, VkSearchTracklist())
-                relay?.close()
-                relay = nextRelay
-            } catch (error: Exception) {
-                nextRelay.close()
-                throw error
-            }
+            registerTracks(listOf(audio))
+            val queue = songs.songsForVkTracks(listOf(audio))
+            require(queue.size == 1) { "Не удалось собрать трек VK" }
+            player.playQueue(queue, 0, VkSearchTracklist())
         }
     }
-
     /** Преобразует ошибки VK в общий контракт, не логируя token, callback или signed URL. */
     private suspend fun <T> operation(name: String, block: suspend () -> T): DataResult<T> =
         withContext(Dispatchers.IO) {
@@ -554,21 +738,27 @@ class VkMusicRepository(
             }
         }
 
-    /** Освобождает relay после перехода к другому источнику; проверяет актуальное состояние под mutex. */
+    /** Закрывает relay и инвалидирует все временные адреса, не меняя метадату Room. */
+    private fun resetPlayback() = synchronized(playbackLock) {
+        relay?.close()
+        relay = null
+        playbackUris.clear()
+    }
+
+    /** Освобождает только активные чтения после смены источника; URI выбранной очереди сохраняются до следующего VK-запуска. */
     suspend fun releaseInactivePlayback(player: PlayerRepository) {
         mutex.withLock {
             if (player.currentPlaybackTrack.value?.source != MusicSource.VK) {
-                relay?.close()
-                relay = null
+                cancelPendingPlaybackRequests()
             }
         }
     }
 
     /** Освобождает сессию и текущий relay вместе с графом приложения. */
-    override fun close() { client?.close(); relay?.close() }
+    override fun close() { client?.close(); resetPlayback() }
 
     private companion object { const val TAG = "VkMusicRepository" }
 }
 
-/** Актуальные метаданные и состав VK-плейлиста без записи в Room. */
+/** Состав VK-плейлиста для source-интерфейса; его треки также индексируются общими Song. */
 data class VkPlaylistContent(val playlist: VkPlaylist, val tracks: List<VkAudio>)

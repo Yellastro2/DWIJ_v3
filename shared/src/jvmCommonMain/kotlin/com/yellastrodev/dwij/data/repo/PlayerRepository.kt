@@ -31,7 +31,7 @@ import kotlinx.coroutines.flow.onEach
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 
-/** Управляет очередью; временная рекомендация дня заканчивается без автоматического запуска Rotor. */
+/** Управляет очередью; VK URI получает через callback, платформенные движки и другие источники не меняются. */
 class PlayerRepository(
     private val engine: PlayerEngine,
     private val settings: PlaybackSettings,
@@ -39,7 +39,8 @@ class PlayerRepository(
     private val isTrackCached: (trackId: String) -> Boolean,
     private val prefetchTrack: suspend (trackId: String) -> Unit,
     private val continueWave: suspend (dTracklist) -> Unit,
-    private val logger: YamLogger
+    private val logger: YamLogger,
+    private val resolveVkUri: (com.yellastrodev.dwij.data.entities.TrackInstance.Vk) -> String? = { null },
 ) : PlaybackQueue {
 
     private val mutableState = MutableStateFlow(PlayerState())
@@ -120,6 +121,7 @@ class PlayerRepository(
     /**
      * Запускает очередь логических песен, выбирая для каждой
      * воспроизводимый экземпляр.
+     * VK callback разрешает лишь локальный адрес relay; сетевые запросы остаются ленивыми.
      *
      * [startIndex] переводится из индекса исходного списка
      * в индекс уже отфильтрованной воспроизводимой очереди.
@@ -140,7 +142,7 @@ class PlayerRepository(
 
         val playableSongs = withContext(Dispatchers.IO) {
             songs.mapIndexedNotNull { index, song ->
-                song.toPlaybackTrack(isTrackCached)?.let { playbackTrack ->
+                song.toPlaybackTrack(isTrackCached, resolveVkUri)?.let { playbackTrack ->
                     IndexedValue(
                         index = index,
                         value = song to playbackTrack,
@@ -307,13 +309,14 @@ class PlayerRepository(
     /**
      * Догружает в текущую очередь песни,
      * для которых удалось выбрать воспроизводимый экземпляр.
+     * Адреса VK создаются тем же callback, что и при запуске полной очереди.
      */
     override suspend fun addTracks(
         songs: List<Song>,
     ) {
         val resolved = withContext(Dispatchers.IO) {
             songs.mapNotNull { song ->
-                song.toPlaybackTrack(isTrackCached)?.let { playbackTrack ->
+                song.toPlaybackTrack(isTrackCached, resolveVkUri)?.let { playbackTrack ->
                     song to playbackTrack
                 }
             }

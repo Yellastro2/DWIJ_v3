@@ -30,7 +30,7 @@ import org.jetbrains.compose.resources.pluralStringResource
 import org.jetbrains.compose.resources.stringResource
 import org.jetbrains.compose.resources.getString
 
-/** Экран плейлиста либо виртуальной коллекции VK с полной очередью, «Моими треками» и сохранением. */
+/** Открывает сохранённый состав VK сразу, затем обновляет серверный снимок без блокировки очереди. */
 @Composable
 internal fun VkPlaylistRoute(
     component: DwijComponent,
@@ -59,6 +59,7 @@ internal fun VkPlaylistRoute(
     var tracks by remember(playlistId, sessionRevision) { mutableStateOf<List<VkAudio>>(emptyList()) }
     var cover by remember(playlistId, sessionRevision) { mutableStateOf<ImageBitmap?>(null) }
     var loading by remember(playlistId) { mutableStateOf(true) }
+    var refreshing by remember(playlistId, sessionRevision) { mutableStateOf(false) }
     var busy by remember { mutableStateOf(false) }
     var loadError by remember { mutableStateOf<String?>(null) }
     var removeTrack by remember { mutableStateOf<VkAudio?>(null) }
@@ -69,30 +70,41 @@ internal fun VkPlaylistRoute(
         scope.launch { snackbar.showSnackbar(error.vkPlaylistMessage()) }
     }
 
-    /** Перечитывает метадату и состав после открытия, возврата из добавления или изменения. */
+    /** Показывает кеш до сетевого запроса; при ошибке сохраняет показанный состав и доступность воспроизведения. */
     suspend fun reload(preferLocal: Boolean = true) {
-        loading = true
+        refreshing = true
         loadError = null
         try {
-            when (val result = repository.getPlaylist(playlistId, preferLocal)) {
+            if (preferLocal) repository.cachedPlaylist(playlistId)?.let {
+                playlist = it.playlist
+                tracks = it.tracks
+            }
+            loading = playlist == null
+            if (!authorized) return
+            when (val result = repository.getPlaylist(playlistId, preferLocal = false)) {
                 is DataResult.Success -> {
                     playlist = result.value.playlist
                     tracks = result.value.tracks
-                    cover = withContext(Dispatchers.IO) {
-                        component.coverRepository.getVkPlaylistCover(result.value.playlist)?.toImageBitmapOrNull()
-                    }
+                    loading = false
                 }
                 is DataResult.Failure -> {
                     loadError = result.error.vkPlaylistMessage()
                     showFailure(result.error)
                 }
             }
-        } finally { loading = false }
+        } finally { loading = false; refreshing = false }
+    }
+
+    LaunchedEffect(playlist?.coverUrl) {
+        cover = playlist?.let { current -> withContext(Dispatchers.IO) {
+            component.coverRepository.getVkPlaylistCover(current)?.toImageBitmapOrNull()
+        } }
     }
 
     LaunchedEffect(playlistId, authorized, sessionRevision, if (isCollection) membershipRevision else 0L) {
         removeTrack = null
         deletePlaylist = false
+        // Обычный кеш сначала доступен для нажатий; обновление лайков не задерживает его показ.
         reload()
         if (authorized && !isCollection) repository.refreshMyTracks()
     }
@@ -153,7 +165,7 @@ internal fun VkPlaylistRoute(
                         onClick = { dismiss(); deletePlaylist = true })
                 }
                 DropdownMenuItem(text = { Text("Обновить") }, enabled = !busy && !loading && authorized,
-                    onClick = { dismiss(); scope.launch { reload(false) } })
+                    onClick = { dismiss(); if (!refreshing) scope.launch { reload(false) } })
             },
             trackContextMenuContent = { index, item, dismiss ->
                 val audio = tracks.getOrNull(index)
@@ -199,9 +211,9 @@ internal fun VkPlaylistRoute(
                 tracks.firstOrNull { it.fullId == id }
                     ?.let { component.coverRepository.getVkTrackCover(it)?.toImageBitmapOrNull() }
             } },
-            showShare = false, showWave = false, isLoading = loading, isRefreshing = busy,
+            showShare = false, showWave = false, isLoading = loading, isRefreshing = busy || refreshing,
             emptyMessage = loadError ?: stringResource(Res.string.track_list_empty),
-            onRefresh = { if (!loading && !busy && authorized) scope.launch { reload(false) } },
+            onRefresh = { if (!refreshing && !busy && authorized) scope.launch { reload(false) } },
             modifier = Modifier.fillMaxSize(),
         )
         SnackbarHost(snackbar, Modifier.align(Alignment.BottomCenter).padding(12.dp))

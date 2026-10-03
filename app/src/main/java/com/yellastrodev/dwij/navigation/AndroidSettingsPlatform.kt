@@ -8,6 +8,9 @@ import android.content.Intent
 import android.net.Uri
 import android.os.StatFs
 import android.util.Log
+import android.webkit.CookieManager
+import android.webkit.WebStorage
+import android.webkit.WebView
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.remember
@@ -20,6 +23,10 @@ import androidx.lifecycle.compose.LocalLifecycleOwner
 import com.yellastrodev.dwij.BuildConfig
 import com.yellastrodev.dwij.util.AppSessionLogStore
 import com.yellastrodev.dwij.work.LocalCatalogResolveWorker
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.suspendCancellableCoroutine
+import kotlinx.coroutines.withContext
+import kotlin.coroutines.resume
 
 /**
  * Android-действия настроек и собственный WebView для автоматического OAuth VK.
@@ -58,6 +65,31 @@ private class AndroidSettingsPlatform(
         get() = true
 
     override val hasEmbeddedVkLogin: Boolean get() = true
+
+    override val canResetVkBrowserSession: Boolean get() = BuildConfig.DEBUG
+
+    /** Ждёт удаления общих cookies WebView на main-потоке; токены SDK не удаляет. */
+    override suspend fun resetVkBrowserSession() {
+        check(BuildConfig.DEBUG)
+        withContext(Dispatchers.Main.immediate) {
+            val cookies = CookieManager.getInstance()
+            suspendCancellableCoroutine<Unit> { continuation ->
+                cookies.removeAllCookies {
+                    if (continuation.isActive) continuation.resume(Unit)
+                }
+            }
+            cookies.flush()
+            WebStorage.getInstance().deleteAllData()
+            val temporaryBrowser = WebView(context)
+            try {
+                temporaryBrowser.clearCache(true)
+                temporaryBrowser.clearHistory()
+            } finally {
+                temporaryBrowser.destroy()
+            }
+            Log.i(TAG, "[resetVkBrowserSession] Cookies, веб-хранилище и кеш WebView очищены; авторизация SDK сохранена")
+        }
+    }
 
     /** Открывает Android-WebView с desktop UA, автоматическим callback и внешним запасным входом. */
     @Composable

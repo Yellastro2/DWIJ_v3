@@ -66,6 +66,7 @@ import java.util.concurrent.atomic.AtomicBoolean
  * репозитории, временное воспроизведение рекомендаций, HTTP-пульт с DNS-SD и постоянные настройки.
  * Подключает аудиокеш VK к общему лимиту хранения при старте.
  * Постоянные VK-bundle используют отдельный каталог и общую платформенную очередь загрузки.
+ * Общий SongRepository передаётся VK-репозиторию напрямую; обратной зависимости нет.
  *
  * Платформа передаёт системные реализации, низкоуровневое key-value хранилище
  * обычных настроек и защищённое хранилище авторизации.
@@ -75,6 +76,7 @@ class DwijComponent private constructor(
     val logger: YamLogger,
     val yandexSessionManager: YandexSessionManager,
     val vkMusicRepository: com.yellastrodev.dwij.data.repo.VkMusicRepository,
+    val songRepository: SongRepository,
     val cacheSettings: CacheSettings,
     val yandexProxySettings: YandexProxySettings,
     private val localKeyValueStore: LocalKeyValueStore,
@@ -104,16 +106,6 @@ class DwijComponent private constructor(
     fun requireYandexAuthorization() {
         yandexSessionManager.clear()
         yandexAuthorizationRequiredNotifier.notifyRequired()
-    }
-
-    val songRepository: SongRepository by lazy {
-        SongRepository(
-            songDao = db.songDao(),
-            matchDao = db.songMatchDao(),
-            yandexTrackDao = db.dTrackDao(),
-            localTrackDao = db.localLibraryDao(),
-            catalogDao = db.catalogDao(),
-        )
     }
 
     val trackRepository: TrackRepository by lazy {
@@ -225,6 +217,7 @@ class DwijComponent private constructor(
     val playerRepo: PlayerRepository by lazy {
         PlayerRepository(
             engine = playerEngine,
+            resolveVkUri = vkMusicRepository::playbackUri,
             settings = playbackSettings,
             scope = applicationScope,
             isTrackCached =
@@ -351,7 +344,7 @@ class DwijComponent private constructor(
     }
 
     /**
-     * Подключает общий лимит кеша VK, запускает инициализацию и освобождение неактивного relay один раз.
+     * Подключает VK-кеш/bundle, импортирует отсутствующую метадату и отменяет неактивные чтения relay.
      */
     fun start() {
         if (
@@ -398,6 +391,7 @@ class DwijComponent private constructor(
             try {
                 songRepository
                     .indexExistingTracks()
+                vkMusicRepository.indexSavedTracks()
 
                 logger.debug(
                     TAG,
@@ -442,7 +436,7 @@ class DwijComponent private constructor(
 
         /**
          * Восстанавливает постоянные настройки и независимые защищённые Яндекс/VK-сессии,
-         * затем создаёт общий граф приложения с платформенным объявлением HTTP-пульта.
+         * затем создаёт общий индекс Song и передаёт его source-репозиториям без циклических зависимостей.
          */
         fun create(
             applicationScope: CoroutineScope,
@@ -497,7 +491,13 @@ class DwijComponent private constructor(
                     )
                 }
 
+            val songRepository = SongRepository(
+                songDao = db.songDao(), matchDao = db.songMatchDao(),
+                yandexTrackDao = db.dTrackDao(), localTrackDao = db.localLibraryDao(),
+                catalogDao = db.catalogDao(), vkTrackDao = db.vkLibraryDao(),
+            )
             return DwijComponent(
+                songRepository = songRepository,
                 applicationScope =
                     applicationScope,
                 logger =
@@ -505,7 +505,8 @@ class DwijComponent private constructor(
                 yandexSessionManager =
                     sessionManager,
                 vkMusicRepository = runBlocking(Dispatchers.IO) {
-                    com.yellastrodev.dwij.data.repo.VkMusicRepository(vkSessionPayloadStore, logger)
+                    com.yellastrodev.dwij.data.repo.VkMusicRepository(vkSessionPayloadStore, logger,
+                        songRepository, db.vkLibraryDao())
                         .also { it.restore() }
                 },
                 cacheSettings =

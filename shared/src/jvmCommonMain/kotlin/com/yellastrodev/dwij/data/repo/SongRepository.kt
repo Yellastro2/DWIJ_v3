@@ -21,10 +21,16 @@ import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.map
 import java.util.UUID
+import com.yellastrodev.dwij.data.dao.VkLibraryDao
+import com.yellastrodev.dwij.data.entities.VkTrackEntity
+import com.yellastrodev.vkmusicsdk.VkAudio
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
 
 /**
  * Индексирует source-треки и собирает из компактных Room-связей полные [Song],
- * добавляя одним запросом признак ожидающего пользовательского решения о совпадении.
+ * добавляя признак ожидающего решения о совпадении. VK хранится в своей source-таблице;
+ * сборка Song не запрашивает сеть и не создаёт адресов воспроизведения.
  */
 class SongRepository(
     private val songDao: SongDao,
@@ -32,7 +38,9 @@ class SongRepository(
     private val yandexTrackDao: dTrackDao,
     private val localTrackDao: LocalLibraryDao,
     private val catalogDao: CatalogDao,
+    private val vkTrackDao: VkLibraryDao,
 ) {
+    private val vkIndexMutex = Mutex()
     private val pendingSongIds: Flow<Set<String>> = matchDao
         .observePendingSongIds()
         .map { ids -> ids.toSet() }
@@ -41,7 +49,8 @@ class SongRepository(
     val songs: Flow<List<Song>> = combine(
         songDao.observeSongs(),
         pendingSongIds,
-    ) { relations, pendingSongIds ->
+        vkTrackDao.observeTrackChanges(),
+    ) { relations, pendingSongIds, _ ->
         assemble(relations, pendingSongIds)
     }
 
@@ -49,7 +58,8 @@ class SongRepository(
     val localSongs: Flow<List<Song>> = combine(
         songDao.observeSongsForVisibleLocalTracks(MusicSource.LOCAL.name),
         pendingSongIds,
-    ) { relations, pendingSongIds ->
+        vkTrackDao.observeTrackChanges(),
+    ) { relations, pendingSongIds, _ ->
         assemble(relations, pendingSongIds)
     }
 
@@ -63,7 +73,8 @@ class SongRepository(
     fun song(songId: String): Flow<Song?> = combine(
         songDao.observeSong(songId),
         matchDao.observePendingCandidatesForSong(songId),
-    ) { relation, pendingCandidates ->
+        vkTrackDao.observeTrackChanges(),
+    ) { relation, pendingCandidates, _ ->
         relation?.let {
             assemble(
                 relations = listOf(it),
@@ -74,6 +85,7 @@ class SongRepository(
 
     /** Индексирует уже сохранённые записи после запуска или миграции приложения. */
     suspend fun indexExistingTracks() {
+        registerVkTracks(vkTrackDao.unindexedTracks().map { it.audio() })
         val yandexIds = songDao.getUnindexedYandexTrackIds(MusicSource.YANDEX.name)
         if (yandexIds.isNotEmpty()) {
             registerYandexTracks(yandexTrackDao.getTracks(yandexIds))
@@ -83,6 +95,46 @@ class SongRepository(
             registerLocalTracks(localTrackDao.getTracks(localIds))
         }
     }
+
+    /**
+     * Сохраняет VK-метадату и индекс, не меняя коллекции. Импорт старых bundle может добавлять
+     * только отсутствующие записи; formatOverrides хранит формат offline-корня без поддельного media URL.
+     */
+    suspend fun registerVkTracks(
+        tracks: List<VkAudio>, onlyIfMissing: Boolean = false, formatOverrides: Map<String, Boolean> = emptyMap(),
+    ): Unit = vkIndexMutex.withLock {
+        var distinct = tracks.distinctBy(VkAudio::fullId)
+        if (distinct.isEmpty()) return@withLock
+        val previous = vkTrackDao.tracks(distinct.map(VkAudio::fullId)).associateBy { it.fullId }
+        if (onlyIfMissing) distinct = distinct.filterNot { it.fullId in previous }
+        if (distinct.isEmpty()) return@withLock
+        val records = distinct.map { audio ->
+            val record = VkTrackEntity.from(audio)
+            if (audio.url.isBlank()) record.copy(isHls = formatOverrides[audio.fullId]
+                ?: previous[audio.fullId]?.isHls ?: record.isHls) else record
+        }
+        val changed = records.filter { it != previous[it.fullId] }
+        if (changed.isNotEmpty()) vkTrackDao.upsertTracks(changed)
+        val indexed = songDao.getInstances(MusicSource.VK.name, distinct.map(VkAudio::fullId))
+            .mapTo(mutableSetOf()) { it.sourceTrackId }
+        val changedIds = changed.mapTo(mutableSetOf()) { it.fullId }
+        distinct.filter { it.fullId !in indexed || it.fullId in changedIds }.forEach { audio ->
+            val instanceId = "vk:${audio.fullId}"
+            val song = newSongEntity(
+                title = audio.title,
+                artistNames = audio.artistNames.filter(String::isNotBlank),
+                albumTitle = audio.album?.title?.takeIf(String::isNotBlank),
+                durationMs = audio.duration.takeIf { it > 0 }?.times(1000),
+                coverUri = audio.coverUrl,
+            ).copy(songId = instanceId)
+            songDao.link(song, TrackInstanceEntity(instanceId, song.songId, MusicSource.VK.name, audio.fullId))
+        }
+    }
+
+    /** Возвращает общие Song с тем же порядком и повторами, что и VK-список. */
+    suspend fun songsForVkTracks(tracks: List<VkAudio>): List<Song> = songsForSourceIds(
+        MusicSource.VK, tracks.map(VkAudio::fullId),
+    )
 
     suspend fun registerYandexTracks(tracks: List<dYaTrack>) {
         tracks.distinctBy(dYaTrack::id).forEach { track ->
@@ -257,6 +309,7 @@ class SongRepository(
         }
     }
 
+    /** Пакетно собирает известные источники; метадата VK не зависит от времени жизни relay. */
     private suspend fun assemble(
         relations: List<SongWithInstances>,
         pendingSongIds: Set<String>,
@@ -269,6 +322,9 @@ class SongRepository(
         val localIds = links.filter { it.source == MusicSource.LOCAL.name }
             .map(TrackInstanceEntity::sourceTrackId)
             .distinct()
+        val vkIds = links.filter { it.source == MusicSource.VK.name }.map { it.sourceTrackId }.distinct()
+        val vkTracks = if (vkIds.isEmpty()) emptyMap() else
+            vkTrackDao.tracks(vkIds).associateBy { it.fullId }
         val yandexTracks = if (yandexIds.isEmpty()) {
             emptyMap()
         } else {
@@ -288,6 +344,9 @@ class SongRepository(
                     }
                     MusicSource.LOCAL.name -> localTracks[link.sourceTrackId]?.let { track ->
                         TrackInstance.Local(link.instanceId, track)
+                    }
+                    MusicSource.VK.name -> vkTracks[link.sourceTrackId]?.let { track ->
+                        TrackInstance.Vk(link.instanceId, track.audio(), track.isHls)
                     }
                     else -> null
                 }
@@ -333,6 +392,7 @@ class SongRepository(
         preferredInstanceId = null,
     )
 
+    /** Нормализует общие поля всех источников, оставляя их исходные модели внутри instances. */
     private fun SongEntity.toDomain(
         instances: List<TrackInstance>,
         hasPendingMatchCandidate: Boolean,
@@ -372,6 +432,12 @@ class SongRepository(
                             },
                         )
                     )
+                }
+            }
+            instances.filterIsInstance<TrackInstance.Vk>().forEach { instance ->
+                instance.track.album?.takeIf { it.title.isNotBlank() }?.let { album ->
+                    add(Album(id = logicalId("album", album.title), title = album.title,
+                        coverUri = instance.track.coverUrl))
                 }
             }
             if (isEmpty()) {

@@ -31,7 +31,7 @@ import kotlinx.coroutines.withContext
 import org.jetbrains.compose.resources.stringResource
 import org.jetbrains.compose.resources.getString
 
-/** Сетка VK: создание первым, затем личная коллекция; выбор для добавления показывает только плейлисты. */
+/** Сразу показывает аккаунтный кеш сетки и обновляет его в фоне, не ожидая загрузки «Моих треков». */
 @Composable
 internal fun VkPlaylistGridRoute(
     component: DwijComponent,
@@ -52,7 +52,8 @@ internal fun VkPlaylistGridRoute(
     val myTracksLoaded by repository.myTracksLoaded.collectAsState()
     val scope = rememberCoroutineScope()
     val snackbar = remember { SnackbarHostState() }
-    var loading by remember { mutableStateOf(true) }
+    var loading by remember(sessionRevision) { mutableStateOf(!repository.hasCachedPlaylists()) }
+    var refreshing by remember(sessionRevision) { mutableStateOf(false) }
     var loadError by remember { mutableStateOf<String?>(null) }
     var busy by remember { mutableStateOf(false) }
     var creating by remember { mutableStateOf(false) }
@@ -65,9 +66,10 @@ internal fun VkPlaylistGridRoute(
         scope.launch { snackbar.showSnackbar(error.vkPlaylistMessage()) }
     }
 
-    /** Обновляет сетку и получает исходный VK-трек для режима добавления. */
+    /** Фоновое обновление не блокирует готовые плитки; режим добавления отдельно ждёт исходный трек. */
     suspend fun reload() {
-        loading = true
+        loading = !repository.hasCachedPlaylists()
+        refreshing = true
         loadError = null
         try {
             when (val result = repository.refreshPlaylists()) {
@@ -77,19 +79,13 @@ internal fun VkPlaylistGridRoute(
                     showFailure(result.error)
                 }
             }
-            if (trackToAdd == null) {
-                when (val result = repository.refreshMyTracks()) {
-                    is DataResult.Success -> Unit
-                    is DataResult.Failure -> showFailure(result.error)
-                }
-            }
             if (trackToAdd != null) {
                 when (val result = repository.getAudio(trackToAdd.removePrefix("vk:"))) {
                     is DataResult.Success -> pickedTrack = result.value
                     is DataResult.Failure -> { pickedTrack = null; showFailure(result.error) }
                 }
             }
-        } finally { loading = false }
+        } finally { loading = false; refreshing = false }
     }
 
     LaunchedEffect(authorized, sessionRevision, trackToAdd) {
@@ -111,7 +107,7 @@ internal fun VkPlaylistGridRoute(
         }
         if (trackToAdd == null && (authorized || savedPlaylists.any { it.fullId == VK_MY_TRACKS })) {
             add(PlaylistGridScreenItem(id = VK_MY_TRACKS, title = "Мои треки",
-                details = if (myTracksLoaded) "${myTracks.size} треков" else "",
+                details = if (myTracksLoaded || myTracks.isNotEmpty()) "${myTracks.size} треков" else "",
                 artwork = PlaylistGridArtwork.Liked))
         }
         visiblePlaylists.filter { it.id >= 0 }.forEach { playlist ->
@@ -124,7 +120,7 @@ internal fun VkPlaylistGridRoute(
         title = stringResource(if (trackToAdd == null) Res.string.playlists_title else Res.string.playlists_add_track_title),
         items = items, selectedSource = HomeMusicSource.Vk, showSourceSelector = trackToAdd == null,
         emptyMessage = loadError ?: if (trackToAdd == null) "У вас пока нет плейлистов VK" else "Нет своих плейлистов для добавления трека",
-        isLoading = loading, isRefreshing = loading || busy,
+        isLoading = loading, isRefreshing = refreshing || busy,
         dialog = if (creating) PlaylistGridDialogState.Create(HomeMusicSource.Vk, busy) else null,
         message = null,
     )
@@ -168,7 +164,7 @@ internal fun VkPlaylistGridRoute(
                 playlists.firstOrNull { it.fullId == fullId }?.let { component.coverRepository.getVkPlaylistCover(it)?.toImageBitmapOrNull() }
             }
         },
-        onRefresh = { if (!loading && !busy && authorized) scope.launch { reload() } },
+        onRefresh = { if (!refreshing && !busy && authorized) scope.launch { reload() } },
         onDialogDismiss = { if (!busy) creating = false },
         onCreatePlaylist = { title, _ ->
             if (!busy && title.isNotBlank()) {

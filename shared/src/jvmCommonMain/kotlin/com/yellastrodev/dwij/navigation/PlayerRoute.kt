@@ -64,7 +64,7 @@ import kotlinx.coroutines.withTimeoutOrNull
 import org.jetbrains.compose.resources.getString
 import org.jetbrains.compose.resources.stringResource
 
-/** Shared-плеер с реакциями Яндекс, «Моими треками» VK, плейлистами и постоянным сохранением. */
+/** Shared-плеер: VK-состояния коллекции независимы от Song.isLiked, доступность проверяется без URI в метадате. */
 @Composable
 fun PlayerRoute(
     component: DwijComponent,
@@ -352,6 +352,16 @@ fun PlayerRoute(
             .distinctBy { entry -> entry.instance.id }
     }
 
+    var playableVkIds by remember { mutableStateOf(emptySet<String>()) }
+    LaunchedEffect(sourceEntries, vkAuthorized, vkLocalStorageRevision) {
+        playableVkIds = withContext(Dispatchers.IO) {
+            sourceEntries.mapNotNull { entry ->
+                val instance = entry.instance as? TrackInstance.Vk ?: return@mapNotNull null
+                instance.id.takeIf { vkAuthorized || component.vkMusicRepository.isSavedLocally(instance.track.fullId) }
+            }.toSet()
+        }
+    }
+
     LaunchedEffect(showMultiSourceDialog, sourceEntries) {
         if (!showMultiSourceDialog) return@LaunchedEffect
         val unavailableIds = sourceEntries.mapNotNull { entry ->
@@ -388,13 +398,14 @@ fun PlayerRoute(
                 is TrackInstance.Yandex -> TrackSourceIndicator.YANDEX
                 is TrackInstance.Local -> TrackSourceIndicator.LOCAL
             },
-            isPlayable = instance.isPlayable(cachedUnavailableYandexIds),
+            isPlayable = instance.isPlayable(cachedUnavailableYandexIds, playableVkIds),
         )
 
     val confirmedSourceOptions = remember(
         confirmedSourceEntries,
         unknownArtist,
         cachedUnavailableYandexIds,
+        playableVkIds,
     ) {
         confirmedSourceEntries.map { entry -> entry.toOption() }
     }
@@ -403,6 +414,7 @@ fun PlayerRoute(
         candidateSourceEntries,
         unknownArtist,
         cachedUnavailableYandexIds,
+        playableVkIds,
     ) {
         candidateSourceEntries.map { entry -> entry.toOption() }
     }
@@ -410,17 +422,18 @@ fun PlayerRoute(
     val effectivePreferredInstanceId = remember(
         track,
         cachedUnavailableYandexIds,
+        playableVkIds,
     ) {
         track?.preferredInstanceId
             ?.takeIf { preferredId ->
                 track?.instances?.any { instance ->
                     instance.id == preferredId &&
-                        instance.isPlayable(cachedUnavailableYandexIds)
+                        instance.isPlayable(cachedUnavailableYandexIds, playableVkIds)
                 } == true
             }
             ?: track?.localInstances?.firstOrNull()?.id
             ?: track?.yandexInstances?.firstOrNull { instance ->
-                instance.isPlayable(cachedUnavailableYandexIds)
+                instance.isPlayable(cachedUnavailableYandexIds, playableVkIds)
             }?.id
     }
 
@@ -861,10 +874,10 @@ private data class PlayerSourceDialogEntry(
         get() = song.id
 }
 
-/** VK требует подготовленный URI; локальный файл playable, Яндекс требует доступность либо кэш. */
-private fun TrackInstance.isPlayable(cachedUnavailableYandexIds: Set<String>): Boolean =
+/** VK требует сессию или offline-bundle; адрес создаст очередь, проверки Яндекса/локального файла прежние. */
+private fun TrackInstance.isPlayable(cachedUnavailableYandexIds: Set<String>, playableVkIds: Set<String>): Boolean =
     when (this) {
-        is TrackInstance.Vk -> playbackUri.isNotBlank()
+        is TrackInstance.Vk -> id in playableVkIds
         is TrackInstance.Local -> true
         is TrackInstance.Yandex -> track.available || track.id in cachedUnavailableYandexIds
     }

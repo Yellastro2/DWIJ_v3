@@ -17,7 +17,7 @@ import kotlinx.coroutines.flow.onEach
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 
-/** Хранит подсказки resolver-а и последовательно сканирует только новые версии [SongWithInstances]. */
+/** Предлагает межсурсные совпадения ЯМ, локальных и VK-песен, не объединяя их автоматически. */
 class SongMatchRepository(
     private val songDao: SongDao,
     private val matchDao: SongMatchDao,
@@ -118,6 +118,7 @@ class SongMatchRepository(
         Unit
     }
 
+    /** Сравнивает независимые группы; дополнительные ограничения записи применяются только к парам с VK. */
     private fun findCandidates(
         song: SongWithInstances,
         allSongs: List<SongWithInstances>,
@@ -128,7 +129,14 @@ class SongMatchRepository(
                 return@mapNotNull null
             }
             comparedPairs += 1
-            val score = resolver.compare(song.song, other.song) ?: return@mapNotNull null
+            val includesVk = (song.instances + other.instances).any {
+                it.source == MusicSource.VK.name
+            }
+            val score = resolver.compare(
+                song.song,
+                other.song,
+                checkRecording = includesVk,
+            ) ?: return@mapNotNull null
             val (firstId, secondId) = orderedIds(song.song.songId, other.song.songId)
             SongMatchCandidateEntity(
                 firstSongId = firstId,
@@ -145,16 +153,19 @@ class SongMatchRepository(
         )
     }
 
-    /** На первом этапе предлагаем только пары Яндекс ↔ локальный файл. */
+    /** Дополняет группу новым источником, исключая дубли внутри одного источника и пересекающихся групп. */
     private fun isCrossSourcePair(
         first: SongWithInstances,
         second: SongWithInstances,
     ): Boolean {
+        val supportedSources = MusicSource.entries.mapTo(mutableSetOf()) { it.name }
         val firstSources = first.instances.mapTo(mutableSetOf()) { instance -> instance.source }
+            .intersect(supportedSources)
         val secondSources = second.instances.mapTo(mutableSetOf()) { instance -> instance.source }
+            .intersect(supportedSources)
+        if (firstSources.isEmpty() || secondSources.isEmpty()) return false
         if (firstSources.intersect(secondSources).isNotEmpty()) return false
-        val combined = firstSources + secondSources
-        return MusicSource.YANDEX.name in combined && MusicSource.LOCAL.name in combined
+        return true
     }
 
     private fun orderedIds(firstSongId: String, secondSongId: String): Pair<String, String> =
@@ -165,7 +176,7 @@ class SongMatchRepository(
         }
 
     companion object {
-        const val CURRENT_RESOLVER_VERSION = 1
+        const val CURRENT_RESOLVER_VERSION = 2
         private const val SCAN_BATCH_SIZE = 32
         private const val TAG = "SongMatchRepository"
     }

@@ -79,7 +79,7 @@ import org.jetbrains.compose.resources.pluralStringResource
 import org.jetbrains.compose.resources.painterResource
 import org.jetbrains.compose.resources.stringResource
 
-/** Shared-route объекта; VK использует общий ObjectScreen, отдельный data-сценарий и платформенную очередь сохранения. */
+/** Shared-route объекта; VK использует общий индекс Song, а source-доступность не зависит от готового relay URI. */
 @Composable
 fun ObjectRoute(
     component: DwijComponent,
@@ -315,6 +315,18 @@ fun ObjectRoute(
             .distinctBy { entry -> entry.instance.id }
     }
 
+    val vkAuthorized by component.vkMusicRepository.authorized.collectAsState()
+    val vkLocalStorageRevision by component.vkMusicRepository.localStorageRevision.collectAsState()
+    var playableVkIds by remember { mutableStateOf(emptySet<String>()) }
+    LaunchedEffect(sourceEntries, vkAuthorized, vkLocalStorageRevision) {
+        playableVkIds = withContext(Dispatchers.IO) {
+            sourceEntries.mapNotNull { entry ->
+                val instance = entry.instance as? TrackInstance.Vk ?: return@mapNotNull null
+                instance.id.takeIf { vkAuthorized || component.vkMusicRepository.isSavedLocally(instance.track.fullId) }
+            }.toSet()
+        }
+    }
+
     LaunchedEffect(sourceDialogSongId, sourceEntries) {
         if (sourceDialogSongId == null) return@LaunchedEffect
         val unavailableIds = sourceEntries.mapNotNull { entry ->
@@ -330,7 +342,7 @@ fun ObjectRoute(
         }
     }
 
-    /** Создаёт вариант источника с отдельной VK-меткой и проверкой playable URI. */
+    /** Создаёт вариант источника; VK проверяется по сессии/offline-файлу, без создания URI в UI. */
     fun ObjectSourceDialogEntry.toOption(): TrackSourceOptionUiModel =
         TrackSourceOptionUiModel(
             instanceId = instance.id,
@@ -351,13 +363,14 @@ fun ObjectRoute(
                 is TrackInstance.Yandex -> TrackSourceIndicator.YANDEX
                 is TrackInstance.Local -> TrackSourceIndicator.LOCAL
             },
-            isPlayable = instance.isPlayable(cachedUnavailableYandexIds),
+            isPlayable = instance.isPlayable(cachedUnavailableYandexIds, playableVkIds),
         )
 
     val confirmedSourceOptions = remember(
         confirmedSourceEntries,
         unknownArtist,
         cachedUnavailableYandexIds,
+        playableVkIds,
     ) {
         confirmedSourceEntries.map { entry -> entry.toOption() }
     }
@@ -366,6 +379,7 @@ fun ObjectRoute(
         candidateSourceEntries,
         unknownArtist,
         cachedUnavailableYandexIds,
+        playableVkIds,
     ) {
         candidateSourceEntries.map { entry -> entry.toOption() }
     }
@@ -373,17 +387,18 @@ fun ObjectRoute(
     val effectivePreferredInstanceId = remember(
         sourceDialogSong,
         cachedUnavailableYandexIds,
+        playableVkIds,
     ) {
         sourceDialogSong?.preferredInstanceId
             ?.takeIf { preferredId ->
                 sourceDialogSong?.instances?.any { instance ->
                     instance.id == preferredId &&
-                        instance.isPlayable(cachedUnavailableYandexIds)
+                        instance.isPlayable(cachedUnavailableYandexIds, playableVkIds)
                 } == true
             }
             ?: sourceDialogSong?.localInstances?.firstOrNull()?.id
             ?: sourceDialogSong?.yandexInstances?.firstOrNull { instance ->
-                instance.isPlayable(cachedUnavailableYandexIds)
+                instance.isPlayable(cachedUnavailableYandexIds, playableVkIds)
             }?.id
     }
 
@@ -1085,10 +1100,10 @@ private data class ObjectSourceDialogEntry(
         get() = song.id
 }
 
-/** Проверяет конкретную версию Song, включая подготовленный URI временного VK-инстанса. */
-private fun TrackInstance.isPlayable(cachedUnavailableYandexIds: Set<String>): Boolean =
+/** Проверяет экземпляр по source-доступности; URI VK разрешается позднее общей очередью. */
+private fun TrackInstance.isPlayable(cachedUnavailableYandexIds: Set<String>, playableVkIds: Set<String>): Boolean =
     when (this) {
-        is TrackInstance.Vk -> playbackUri.isNotBlank()
+        is TrackInstance.Vk -> id in playableVkIds
         is TrackInstance.Local -> true
         is TrackInstance.Yandex -> track.available || track.id in cachedUnavailableYandexIds
     }

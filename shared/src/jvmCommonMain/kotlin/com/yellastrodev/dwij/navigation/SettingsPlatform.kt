@@ -40,6 +40,12 @@ interface SettingsPlatform {
     /** Android предлагает собственный браузер входа; остальные платформы используют ручной callback. */
     val hasEmbeddedVkLogin: Boolean get() = false
 
+    /** Временный сброс браузерной сессии доступен только в Android debug. */
+    val canResetVkBrowserSession: Boolean get() = false
+
+    /** Очищает браузерные данные, не затрагивая сохранённую авторизацию SDK. */
+    suspend fun resetVkBrowserSession() = Unit
+
     /** Показывает платформенный браузер; callback возвращает URL только в памяти, fallback открывает внешний браузер. */
     @Composable
     fun VkLoginBrowser(url: String, onRedirect: (String) -> Unit, onDismiss: () -> Unit,

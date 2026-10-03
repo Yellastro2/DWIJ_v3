@@ -18,11 +18,22 @@ data class PlaybackTrack(
     val localTrack: LocalTrackEntity? = null,
 )
 
-/** Выбирает preferred, локальный, временный VK либо доступный/закэшированный Яндекс-экземпляр. */
-fun Song.toPlaybackTrack(isYandexCached: (String) -> Boolean): PlaybackTrack? {
+/** Сохраняет прежний контракт для очередей без VK-resolver. */
+fun Song.toPlaybackTrack(isYandexCached: (String) -> Boolean): PlaybackTrack? =
+    toPlaybackTrack(isYandexCached, { null })
+
+/** Выбирает экземпляр; VK-resolver создаёт адрес текущего relay, не изменяя постоянную Song. */
+fun Song.toPlaybackTrack(
+    isYandexCached: (String) -> Boolean,
+    resolveVkUri: (TrackInstance.Vk) -> String?,
+): PlaybackTrack? {
+    val vkUris = mutableMapOf<String, String?>()
     /** Проверяет доступность конкретного источника для очереди. */
     fun TrackInstance.isPlayable(): Boolean = when (this) {
-        is TrackInstance.Vk -> playbackUri.isNotBlank()
+        is TrackInstance.Vk -> {
+            if (!vkUris.containsKey(id)) vkUris[id] = resolveVkUri(this)
+            vkUris[id]?.isNotBlank() == true
+        }
         is TrackInstance.Local -> true
         is TrackInstance.Yandex -> track.available || isYandexCached(track.id)
     }
@@ -40,7 +51,7 @@ fun Song.toPlaybackTrack(isYandexCached: (String) -> Boolean): PlaybackTrack? {
         is TrackInstance.Vk -> PlaybackTrack(
             id = selected.track.fullId, songId = id, instanceId = selected.id,
             source = MusicSource.VK, title = title, artistNames = artistNames,
-            durationMs = durationMs, playbackUri = selected.playbackUri, artworkUri = coverUri,
+            durationMs = durationMs, playbackUri = vkUris[selected.id] ?: return null, artworkUri = coverUri,
         )
         is TrackInstance.Yandex -> PlaybackTrack(
             id = selected.track.id,

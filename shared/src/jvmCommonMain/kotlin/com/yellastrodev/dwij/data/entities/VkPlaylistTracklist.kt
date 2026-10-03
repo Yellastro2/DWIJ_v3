@@ -2,10 +2,10 @@ package com.yellastrodev.dwij.data.entities
 
 import com.yellastrodev.vkmusicsdk.VkPlaylist
 
-/** Конечная очередь VK-плейлиста; новый запуск получает собственный relay и уникальную identity. */
+/** Конечная очередь VK-плейлиста; новый запуск получает уникальную identity независимо от relay. */
 class VkPlaylistTracklist(private val playlist: VkPlaylist) : dTracklist {
     private val identity = "vk-playlist:${playlist.fullId}:${java.util.UUID.randomUUID()}"
-    /** Идентификатор очереди отличает новый relay от предыдущего запуска этого же списка. */
+    /** Идентификатор отличает новый запуск этого же списка для состояния общей очереди. */
     override fun getdId(): String = identity
     /** Показывает настоящее название плейлиста над очередью плеера. */
     override fun getDTitle(): String = playlist.title

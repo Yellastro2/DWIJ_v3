@@ -45,7 +45,13 @@ import com.yellastrodev.dwij.data.entities.dYaArtist
 import com.yellastrodev.dwij.data.entities.dYaPlaylist
 import com.yellastrodev.dwij.data.entities.dYaTrack
 import kotlinx.coroutines.Dispatchers
+import com.yellastrodev.dwij.data.dao.VkLibraryDao
+import com.yellastrodev.dwij.data.entities.VkTrackEntity
+import com.yellastrodev.dwij.data.entities.VkLibraryEntity
+import com.yellastrodev.dwij.data.db.DatabaseMigrations.Companion.MIGRATION_14_15
+import com.yellastrodev.dwij.data.db.DatabaseMigrations.Companion.MIGRATION_15_16
 
+/** Общая Room-база: source-таблицы раздельны, логические песни связаны через track_instances. */
 @Database(
     entities = [
         dYaPlaylist::class,
@@ -69,10 +75,14 @@ import kotlinx.coroutines.Dispatchers
         CatalogAlbumEntity::class,
         CatalogAlbumMetadataEntity::class,
         CatalogAlbumTrackEntity::class,
+        VkTrackEntity::class,
+        VkLibraryEntity::class,
     ],
-    version = 14,
+    version = 16,
 )
 abstract class DwijDatabase : RoomDatabase() {
+    /** Метадата и аккаунтные коллекции VK, отдельно от таблиц других источников. */
+    abstract fun vkLibraryDao(): VkLibraryDao
     abstract fun catalogDao(): CatalogDao
     abstract fun dPlaylistDao(): dPlaylistDao
     abstract fun dTrackDao(): dTrackDao
@@ -81,6 +91,7 @@ abstract class DwijDatabase : RoomDatabase() {
     abstract fun songMatchDao(): SongMatchDao
 }
 
+/** Подключает последовательные миграции, включая добавление независимого VK-хранилища. */
 fun buildDwijDatabase(
     builder: RoomDatabase.Builder<DwijDatabase>,
 ): DwijDatabase {
@@ -99,6 +110,8 @@ fun buildDwijDatabase(
             MIGRATION_11_12,
             MIGRATION_12_13,
             MIGRATION_13_14,
+            MIGRATION_14_15,
+            MIGRATION_15_16,
         )
         .build()
 }

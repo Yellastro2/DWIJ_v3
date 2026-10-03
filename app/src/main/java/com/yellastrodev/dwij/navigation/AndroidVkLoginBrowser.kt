@@ -20,24 +20,30 @@ import android.webkit.WebView
 import android.webkit.WebViewClient
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
-import androidx.compose.material3.LinearProgressIndicator
+
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.Alignment
-import androidx.compose.ui.text.style.TextAlign
+
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.viewinterop.AndroidView
 import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
+import androidx.webkit.UserAgentMetadata
+import androidx.webkit.WebSettingsCompat
+import androidx.webkit.WebViewFeature
+import com.yellastrodev.dwij.BuildConfig
 import com.yellastrodev.dwij.ui.theme.DwijColors
 import com.yellastrodev.vkmusicsdk.VkOAuth
-import kotlinx.coroutines.delay
+import com.yellastrodev.vkmusicsdk.VkRedirectException
+import com.yellastrodev.vkmusicsdk.VkRedirectFailure
 
-/** Android OAuth с desktop UA, автоматическим callback и заметным состоянием ожидания загрузки страницы. */
+
+/** Android OAuth: один повтор после VK ID payload или выхода на главную аккаунта, без очистки cookies. */
 @SuppressLint("SetJavaScriptEnabled")
 @Composable
 internal fun AndroidVkLoginBrowser(url: String, onRedirect: (String) -> Unit,
@@ -45,24 +51,33 @@ internal fun AndroidVkLoginBrowser(url: String, onRedirect: (String) -> Unit,
     val context = LocalContext.current
     val currentRedirect = rememberUpdatedState(onRedirect)
     var loading by remember(url) { mutableStateOf(true) }
-    var error by remember(url) { mutableStateOf<String?>(null) }
     var completed by remember(url) { mutableStateOf(false) }
-    var longWait by remember(url) { mutableStateOf(false) }
-    var externalMessage by remember(url) { mutableStateOf<String?>(null) }
+    var restartPending by remember(url) { mutableStateOf(false) }
+    var oauthRestarted by remember(url) { mutableStateOf(false) }
 
-    LaunchedEffect(loading) {
-        longWait = false
-        if (loading) {
-            delay(8_000)
-            longWait = true
-        }
+    /** Распознаёт наблюдавшийся выход из OAuth на account/#/main с account_action_redirect_url. */
+    fun consumeAccountLanding(candidate: String?): Boolean {
+        if (candidate == null || completed || restartPending || oauthRestarted) return false
+        val page = Uri.parse(candidate)
+        val fragment = page.fragment.orEmpty()
+        val route = fragment.substringBefore('?')
+        val fragmentKeys = fragment.substringAfter('?', "").split('&').map { it.substringBefore('=') }
+        if (page.scheme != "https" || page.host !in setOf("id.vk.ru", "id.vk.com") ||
+            page.encodedAuthority != page.host || page.path?.trimEnd('/') != "/account" ||
+            route != "/main" || "account_action_redirect_url" !in fragmentKeys) return false
+        oauthRestarted = true
+        restartPending = true
+        loading = true
+        Log.i(TAG, "[restartVkLogin] VK ID перешёл на account/#/main вместо OAuth callback; однократно открываем исходный OAuth с сохранёнными cookies")
+        return true
     }
 
-    /** Перехватывает callback один раз до загрузки страницы; в логах только тип ответа, без URL/профиля/токена. */
+
+    /** Логирует callback и один раз повторяет OAuth после проверенного payload; остальные ответы передаёт карточке. */
     fun consumeRedirect(candidate: String?): Boolean {
         if (candidate == null || !VkOAuth.isRedirectUrl(candidate)) return false
+        if (restartPending) return true
         if (!completed) {
-            completed = true
             val fragment = Uri.parse(candidate).encodedFragment.orEmpty()
             val kind = when {
                 fragment.startsWith("access_token=") || fragment.contains("&access_token=") -> "access_token"
@@ -70,7 +85,32 @@ internal fun AndroidVkLoginBrowser(url: String, onRedirect: (String) -> Unit,
                 else -> "без токена"
             }
             Log.i(TAG, "[consumeVkRedirect] Получен callback: тип=$kind")
-            currentRedirect.value(candidate)
+            // ВРЕМЕННО: удалить после диагностики VK ID. Callback содержит секреты.
+            if (true) {
+                val chunks = candidate.chunked(2000)
+                chunks.forEachIndexed { index, chunk ->
+                    Log.d(TAG, "[debugVkRedirect] ВРЕМЕННАЯ полная ссылка ${index + 1}/${chunks.size}: $chunk")
+                }
+            }
+            val expectedState = Uri.parse(url).getQueryParameter("state")
+            val states = fragment.split('&').filter { it.substringBefore('=') == "state" }
+                .map { Uri.decode(it.substringAfter('=', "")) }
+            val verifiedPayload = !expectedState.isNullOrBlank() && states.singleOrNull() == expectedState &&
+                try {
+                    VkOAuth.parseAutomaticRedirect(candidate, expectedState)
+                    false
+                } catch (error: VkRedirectException) {
+                    error.reason == VkRedirectFailure.VkIdPayload
+                }
+            if (verifiedPayload && !oauthRestarted) {
+                oauthRestarted = true
+                restartPending = true
+                loading = true
+                Log.i(TAG, "[restartVkLogin] Получен VK ID payload с совпадающим state; однократно повторяем исходный OAuth с сохранёнными cookies")
+            } else {
+                completed = true
+                currentRedirect.value(candidate)
+            }
         }
         return true
     }
@@ -79,18 +119,23 @@ internal fun AndroidVkLoginBrowser(url: String, onRedirect: (String) -> Unit,
         WebView(context).apply {
             settings.javaScriptEnabled = true
             settings.domStorageEnabled = true
-            settings.userAgentString = vkDesktopUserAgent(settings.userAgentString)
-            settings.useWideViewPort = true
-            settings.loadWithOverviewMode = true
-            settings.setSupportZoom(true)
-            settings.builtInZoomControls = true
-            settings.displayZoomControls = false
+            configureVkDesktopMode()
             settings.allowFileAccess = false
             settings.allowContentAccess = false
             settings.mixedContentMode = WebSettings.MIXED_CONTENT_NEVER_ALLOW
+            addOnLayoutChangeListener { view, left, top, right, bottom, oldLeft, oldTop, oldRight, oldBottom ->
+                if (right - left != oldRight - oldLeft || bottom - top != oldBottom - oldTop) {
+                    Log.d(TAG, "[layoutVkLogin] Размер WebView: ширина=${view.width}, высота=${view.height}, прокруткаY=${view.scrollY}")
+                }
+            }
             CookieManager.getInstance().setAcceptCookie(true)
             CookieManager.getInstance().setAcceptThirdPartyCookies(this, true)
             webChromeClient = object : WebChromeClient() {
+                /** Отмечает достижение полной загрузки документа без вывода содержимого страницы. */
+                override fun onProgressChanged(view: WebView?, newProgress: Int) {
+                    if (newProgress == 100) Log.d(TAG,
+                        "[traceVkPage] событие=progress100; ${vkPageDescription(view?.url)}")
+                }
                 /** Не передаёт console-вывод сторонней страницы в логи приложения. */
                 override fun onConsoleMessage(message: ConsoleMessage?): Boolean = true
             }
@@ -99,60 +144,63 @@ internal fun AndroidVkLoginBrowser(url: String, onRedirect: (String) -> Unit,
                 override fun shouldOverrideUrlLoading(view: WebView?, request: WebResourceRequest?): Boolean {
                     if (request == null || !request.isForMainFrame) return false
                     val target = request.url.toString()
+                    Log.d(TAG, "[traceVkPage] событие=navigate; жест=${request.hasGesture()}; ${vkPageDescription(target)}")
                     if (consumeRedirect(target)) return true
                     if (request.url.scheme != "https") {
                         loading = false
                         val sourceHost = view?.url?.let { Uri.parse(it).host }
                         if (!isVkLoginHost(sourceHost)) {
-                            error = "Не удалось открыть внешнее приложение с этой страницы. Используйте вход через браузер."
                             Log.w(TAG, "[navigateVkLogin] Внешний переход отклонён: источник вне VK, схема=${request.url.scheme}")
                             return true
                         }
                         when (val navigation = openVkExternalLink(context, target)) {
-                            is VkExternalNavigation.Opened -> {
-                                error = null
-                                externalMessage = "Открыто внешнее приложение. После входа вернитесь сюда. Если вход завершился в браузере, используйте «Открыть в браузере» и вставьте итоговую ссылку."
-                            }
+                            is VkExternalNavigation.Opened -> Unit
                             is VkExternalNavigation.Fallback -> {
-                                error = null
-                                externalMessage = null
                                 loading = true
                                 if (!consumeRedirect(navigation.url)) view?.loadUrl(navigation.url)
                             }
-                            is VkExternalNavigation.Unavailable -> {
-                                error = "Не удалось открыть приложение для входа VK. Попробуйте вход через браузер."
-                            }
+                            is VkExternalNavigation.Unavailable -> Unit
                         }
                         return true
                     }
                     return false
                 }
 
-                /** Старт основного документа также ловит редиректы; диагностика содержит только hostname. */
+                /** Старт документа логирует путь без значений параметров и также ловит callback. */
                 override fun onPageStarted(view: WebView?, target: String?, favicon: Bitmap?) {
+                    Log.d(TAG, "[traceVkPage] событие=started; ${vkPageDescription(target)}")
                     if (consumeRedirect(target)) { view?.stopLoading(); return }
                     if (completed) return
                     loading = true
-                    error = null
-                    externalMessage = null
                     Log.d(TAG, "[loadVkLoginPage] Загрузка страницы: host=${target?.let { Uri.parse(it).host }.orEmpty()}")
                 }
 
                 /** Завершение ловит callback при изменении hash; полная ссылка никуда не сохраняется. */
                 override fun onPageFinished(view: WebView?, target: String?) {
-                    if (!consumeRedirect(target) && !completed) loading = false
+                    Log.d(TAG, "[traceVkPage] событие=finished; ${vkPageDescription(target)}")
+                    if (consumeAccountLanding(target)) return
+                    if (!consumeRedirect(target) && !completed) {
+                        loading = false
+                        Log.d(TAG, "[layoutVkLogin] Страница загружена: ширина=${view?.width}, высота=${view?.height}, высотаКонтента=${view?.contentHeight}, прокруткаY=${view?.scrollY}")
+                    }
                 }
 
                 /** Ловит изменения URL средствами JS без обязательной загрузки нового документа. */
                 override fun doUpdateVisitedHistory(view: WebView?, target: String?, isReload: Boolean) {
+                    Log.d(TAG, "[traceVkPage] событие=history; reload=$isReload; ${vkPageDescription(target)}")
+                    if (consumeAccountLanding(target)) return
                     consumeRedirect(target)
+                }
+
+                /** Отмечает появление нового документа на экране, не гарантируя завершение JS-приложения VK. */
+                override fun onPageCommitVisible(view: WebView?, target: String?) {
+                    Log.d(TAG, "[traceVkPage] событие=visible; ${vkPageDescription(target)}")
                 }
 
                 /** Ошибки основного документа показываются без описания WebView, которое может содержать URL. */
                 override fun onReceivedError(view: WebView?, request: WebResourceRequest?, failure: WebResourceError?) {
                     if (request?.isForMainFrame != true || completed) return
                     loading = false
-                    error = "Не удалось загрузить страницу VK. Повторите попытку или откройте вход в браузере."
                     Log.w(TAG, "[loadVkLoginPage] Сетевая ошибка: код=${failure?.errorCode}")
                 }
 
@@ -161,10 +209,18 @@ internal fun AndroidVkLoginBrowser(url: String, onRedirect: (String) -> Unit,
                     handler?.cancel()
                     if (completed) return
                     loading = false
-                    error = "Не удалось установить защищённое соединение с VK."
                     Log.w(TAG, "[loadVkLoginPage] Ошибка TLS: код=${failure?.primaryError}")
                 }
             }
+        }
+    }
+
+    LaunchedEffect(browser, restartPending) {
+        if (restartPending && !completed) {
+            browser.stopLoading()
+            CookieManager.getInstance().flush()
+            restartPending = false
+            browser.loadUrl(url)
         }
     }
 
@@ -184,45 +240,40 @@ internal fun AndroidVkLoginBrowser(url: String, onRedirect: (String) -> Unit,
     }
 
     Dialog(onDismissRequest = onDismiss, properties = DialogProperties(
-        usePlatformDefaultWidth = false, decorFitsSystemWindows = false,
+        usePlatformDefaultWidth = false, decorFitsSystemWindows = true,
     )) {
-        Column(Modifier.fillMaxSize().background(DwijColors.Background).systemBarsPadding().imePadding()) {
-            Text("Вход в ВК Музыку", color = DwijColors.White, modifier = Modifier.padding(16.dp, 8.dp))
-            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
-                TextButton(onClick = onDismiss) { Text("Закрыть", color = DwijColors.White) }
-                TextButton(onClick = onOpenExternalBrowser) { Text("Открыть в браузере", color = DwijColors.CyanBright) }
-            }
-            error?.let { message ->
-                Text(message, color = DwijColors.White, modifier = Modifier.padding(horizontal = 16.dp))
-                TextButton(onClick = { error = null; loading = true; browser.loadUrl(url) }) {
-                    Text("Повторить", color = DwijColors.CyanBright)
+        Column(Modifier.fillMaxSize().background(DwijColors.Background)) {
+            Row(
+                modifier = Modifier.fillMaxWidth().height(48.dp).padding(horizontal = 8.dp),
+                horizontalArrangement = Arrangement.End,
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                if (loading) {
+                    CircularProgressIndicator(modifier = Modifier.size(20.dp),
+                        color = DwijColors.CyanBright, strokeWidth = 2.dp)
+                    Spacer(Modifier.width(8.dp))
+                }
+                TextButton(onClick = onOpenExternalBrowser) {
+                    Text("Внешний браузер", color = DwijColors.CyanBright)
                 }
             }
-            externalMessage?.let { message ->
-                Text(message, color = DwijColors.White, modifier = Modifier.padding(16.dp, 8.dp))
-            }
-            if (loading) LinearProgressIndicator(Modifier.fillMaxWidth(), color = DwijColors.CyanBright)
-            Box(Modifier.fillMaxWidth().weight(1f)) {
-                AndroidView(factory = { browser }, modifier = Modifier.fillMaxSize())
-                if (loading && error == null) {
-                    Column(
-                        modifier = Modifier.align(Alignment.Center)
-                            .padding(24.dp).background(DwijColors.Background, androidx.compose.foundation.shape.RoundedCornerShape(18.dp))
-                            .padding(24.dp),
-                        horizontalAlignment = Alignment.CenterHorizontally,
-                        verticalArrangement = Arrangement.spacedBy(16.dp),
-                    ) {
-                        CircularProgressIndicator(color = DwijColors.CyanBright)
-                        Text("Загружаем страницу входа VK…", color = DwijColors.White, textAlign = TextAlign.Center)
-                        if (longWait) {
-                            Text("VK отвечает дольше обычного. Можно подождать или открыть вход в браузере.",
-                                color = DwijColors.White, textAlign = TextAlign.Center)
-                        }
-                    }
-                }
-            }
+            AndroidView(factory = { browser }, modifier = Modifier.fillMaxWidth().weight(1f))
         }
     }
+}
+
+/** Описывает маршрут и имена параметров; значения query/fragment, userInfo и полный URL не выводит. */
+private fun vkPageDescription(value: String?): String {
+    if (value == null) return "страница=неизвестна"
+    return try {
+        val uri = Uri.parse(value)
+        val queryKeys = uri.encodedQuery.orEmpty().split('&').filter { it.isNotBlank() }
+            .map { it.substringBefore('=').take(60) }.distinct().take(20).joinToString(",")
+        val fragmentKeys = uri.encodedFragment.orEmpty().split('&').filter { it.isNotBlank() }
+            .map { if ('=' in it) it.substringBefore('=').take(60) else "маршрут" }
+            .distinct().take(20).joinToString(",")
+        "страница=${uri.scheme}://${uri.host.orEmpty()}${uri.encodedPath.orEmpty().take(200)}; query=[$queryKeys]; fragment=[$fragmentKeys]"
+    } catch (_: Exception) { "страница=не удалось разобрать" }
 }
 
 /** Подменяет платформу на Windows, сохраняя фактическую версию Chromium установленного WebView. */
@@ -231,6 +282,46 @@ internal fun vkDesktopUserAgent(original: String): String {
         ?: return original.replace("; wv", "").replace(" Mobile", "")
     return "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 " +
         "(KHTML, like Gecko) Chrome/$chromeVersion Safari/537.36"
+}
+
+/** Задаёт desktop UA/Client Hints до запроса; форма использует ширину WebView без overview-масштабирования. */
+private fun WebView.configureVkDesktopMode() {
+    val original = WebSettings.getDefaultUserAgent(context)
+    val version = Regex("Chrome/([0-9.]+)").find(original)?.groupValues?.get(1)
+    settings.userAgentString = vkDesktopUserAgent(original)
+    settings.useWideViewPort = false
+    settings.loadWithOverviewMode = false
+    settings.setSupportZoom(true)
+    settings.builtInZoomControls = true
+    settings.displayZoomControls = false
+    val supported = WebViewFeature.isFeatureSupported(WebViewFeature.USER_AGENT_METADATA)
+    val formFactorsSupported = WebViewFeature.isFeatureSupported(WebViewFeature.USER_AGENT_METADATA_FORM_FACTORS)
+    if (!supported) {
+        Log.w(TAG, "[configureVkDesktopMode] Desktop UA включён; Client Hints не поддерживаются установленным WebView")
+        return
+    }
+    try {
+        val metadata = UserAgentMetadata.Builder()
+            .setPlatform("Windows")
+            .setPlatformVersion("10.0.0")
+            .setMobile(false)
+            .setModel("")
+            .setArchitecture("x86")
+            .setBitness(64)
+            .setWow64(false)
+        if (version != null) {
+            metadata.setFullVersion(version)
+            metadata.setBrandVersionList(listOf("Chromium", "Google Chrome").map { brand ->
+                UserAgentMetadata.BrandVersion.Builder().setBrand(brand)
+                    .setMajorVersion(version.substringBefore('.')).setFullVersion(version).build()
+            })
+        }
+        if (formFactorsSupported) metadata.setFormFactors(listOf(UserAgentMetadata.FORM_FACTOR_DESKTOP))
+        WebSettingsCompat.setUserAgentMetadata(settings, metadata.build())
+        Log.i(TAG, "[configureVkDesktopMode] Desktop включён: Chrome=$version; Client Hints=true; formFactorDesktop=$formFactorsSupported")
+    } catch (error: Exception) {
+        Log.w(TAG, "[configureVkDesktopMode] Desktop UA включён; ошибка Client Hints: тип=${error.javaClass.simpleName}")
+    }
 }
 
 private const val TAG = "VkLoginWebView"

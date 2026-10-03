@@ -4,9 +4,18 @@ import androidx.room.migration.Migration
 import androidx.sqlite.SQLiteConnection
 import androidx.sqlite.execSQL
 
+/** Последовательные миграции общей базы; добавление VK не меняет таблицы Яндекс/локального источника. */
 class DatabaseMigrations {
 
     companion object {
+
+        /** Добавляет кеш сетки VK, сохраняя все прежние треки и аккаунтные снимки. */
+        val MIGRATION_15_16 = object : Migration(15, 16) {
+            /** Старые снимки остаются с неизвестной сеткой до первого успешного обновления. */
+            override fun migrate(connection: SQLiteConnection) {
+                connection.execSQL("ALTER TABLE vk_library ADD COLUMN playlistsJson TEXT")
+            }
+        }
 
         val MIGRATION_3_4 = object : Migration(3, 4) {
             override fun migrate(connection: SQLiteConnection) {
@@ -729,6 +738,15 @@ class DatabaseMigrations {
                     """.trimIndent(),
                 )
                 connection.execSQL("DROP TABLE migration_catalog_album_ids")
+            }
+        }
+
+        /** Добавляет метадату VK и аккаунтные состояния, не изменяя существующие source-таблицы. */
+        val MIGRATION_14_15 = object : Migration(14, 15) {
+            /** Создаёт две независимые таблицы; индекс Song использует существующие связи track_instances. */
+            override fun migrate(connection: SQLiteConnection) {
+                connection.execSQL("CREATE TABLE IF NOT EXISTS vk_tracks (fullId TEXT NOT NULL PRIMARY KEY, metadataJson TEXT NOT NULL, isHls INTEGER NOT NULL)")
+                connection.execSQL("CREATE TABLE IF NOT EXISTS vk_library (accountId INTEGER NOT NULL PRIMARY KEY, myTracksJson TEXT, aliasesJson TEXT NOT NULL, playlistTracksJson TEXT NOT NULL)")
             }
         }
 

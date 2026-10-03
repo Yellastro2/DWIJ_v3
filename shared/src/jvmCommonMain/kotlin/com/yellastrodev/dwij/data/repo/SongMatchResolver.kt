@@ -8,22 +8,32 @@ import java.util.Locale
 import java.util.concurrent.atomic.AtomicLong
 import kotlin.math.max
 
+/** Сходство названия и артистов для неподтверждённой пары песен. */
 data class SongMatchScore(
     val titleSimilarity: Float,
     val artistSimilarity: Float,
     val total: Float,
 )
 
-/** Fuzzy-поиск: сравнивает только название и исполнителей, не объединяя песни. */
+/** Ищет кандидатов по названию и артистам; для VK дополнительно проверяет известную длительность и версию. */
 class SongMatchResolver(
     private val logger: YamLogger
 ) {
-    fun compare(first: SongEntity, second: SongEntity): SongMatchScore? {
+    /** Возвращает подсказку, а не доказательство идентичности; прежний режим ЯМ ↔ local сохраняется по умолчанию. */
+    fun compare(
+        first: SongEntity,
+        second: SongEntity,
+        checkRecording: Boolean = false,
+    ): SongMatchScore? {
         val comparisonNumber = comparisonCounter.incrementAndGet()
+        if (checkRecording && !isCompatibleRecording(first, second)) {
+            logRejected(comparisonNumber, first, second) { "разная длительность или обозначение версии" }
+            return null
+        }
         val firstTitle = normalize(first.title)
         val secondTitle = normalize(second.title)
-        val firstArtists = normalizeArtists(first.artistNames)
-        val secondArtists = normalizeArtists(second.artistNames)
+        val firstArtists = normalizeArtists(first.artistNames, splitCredits = checkRecording)
+        val secondArtists = normalizeArtists(second.artistNames, splitCredits = checkRecording)
         if (
             firstTitle.isBlank() || secondTitle.isBlank() ||
             firstArtists.isBlank() || secondArtists.isBlank()
@@ -85,6 +95,24 @@ class SongMatchResolver(
         )
     }
 
+    /** Неизвестная длительность не означает несовпадение; известные версии и заметно разные записи исключаются. */
+    private fun isCompatibleRecording(first: SongEntity, second: SongEntity): Boolean {
+        val firstDuration = first.durationMs?.takeIf { it > 0 }
+        val secondDuration = second.durationMs?.takeIf { it > 0 }
+        if (firstDuration != null && secondDuration != null &&
+            max(firstDuration, secondDuration) - minOf(firstDuration, secondDuration) > MAX_DURATION_DIFFERENCE_MS
+        ) return false
+        return recordingMarkers(first.title) == recordingMarkers(second.title)
+    }
+
+    /** Проверяет целые слова, сохраняя пометки live/remix и другие варианты вместо удаления суффиксов. */
+    private fun recordingMarkers(title: String): Set<Int> {
+        val normalized = normalize(title)
+        return RECORDING_MARKERS.indices.filterTo(mutableSetOf()) { index ->
+            RECORDING_MARKERS[index].containsMatchIn(normalized)
+        }
+    }
+
     /** Подробно показывает первые сравнения, затем оставляет редкие контрольные записи. */
     private inline fun logRejected(
         comparisonNumber: Long,
@@ -115,8 +143,10 @@ class SongMatchResolver(
 
     private fun Float.formatScore(): String = String.format(Locale.ROOT, "%.3f", this)
 
-    private fun normalizeArtists(value: String): String = value
+    /** Для VK сопоставляет старую строку artist с массивом артистов; режим ЯМ ↔ local оставляет прежним. */
+    private fun normalizeArtists(value: String, splitCredits: Boolean): String = value
         .split(SONG_ARTIST_SEPARATOR)
+        .flatMap { if (splitCredits) it.split(ARTIST_CREDIT_DIVIDERS) else listOf(it) }
         .map(::normalize)
         .filter(String::isNotBlank)
         .sorted()
@@ -180,6 +210,23 @@ class SongMatchResolver(
         const val INITIAL_VERBOSE_COMPARISONS = 20L
         const val COMPARISON_LOG_INTERVAL = 100L
         const val DEBUG_TEXT_LIMIT = 48
+        const val MAX_DURATION_DIFFERENCE_MS = 10_000L
+        val ARTIST_CREDIT_DIVIDERS = Regex(
+            "(?iu)\\s+(?:feat(?:uring)?|ft)\\.?\\s+|,\\s*|\\s+(?:x|vs\\.?|и|&)\\s+",
+        )
+        val RECORDING_MARKERS = listOf(
+            "live|concert|лайв|концерт|концертная|концертный",
+            "remix|ремикс|mix|микс",
+            "acoustic|акустика|акустическая|акустический|unplugged",
+            "instrumental|инструментал|инструментальная",
+            "karaoke|караоке",
+            "cover|кавер",
+            "sped up|speed up|speedup|ускоренная|ускоренный",
+            "slowed|замедленная|замедленный",
+            "radio edit|radio version",
+            "extended",
+            "remaster|remastered|ремастер",
+        ).map { Regex("(?<![\\p{L}\\p{N}])(?:$it)(?![\\p{L}\\p{N}])") }
         val comparisonCounter = AtomicLong()
         val NON_ALPHANUMERIC = Regex("[^\\p{L}\\p{N}]+")
         val MULTIPLE_SPACES = Regex("\\s+")

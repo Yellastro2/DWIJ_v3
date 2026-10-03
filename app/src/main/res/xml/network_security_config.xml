@@ -3,6 +3,6 @@
     <base-config cleartextTrafficPermitted="false" />
     <!-- HLS relay VK слушает только loopback; внешние ресурсы загружаются по HTTPS. -->
     <domain-config cleartextTrafficPermitted="true">
-        <domain>127.0.0.1</domain>
+        <domain includeSubdomains="false">127.0.0.1</domain>
     </domain-config>
 </network-security-config>

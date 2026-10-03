@@ -66,6 +66,29 @@ Android-проверка WebView выявила попытку перехода 
 
 ## Фонотека и операции плейлистов
 
+### Живая проверка обмена silent_token (2026-10-03)
+
+Проверены POST-запросы к `https://api.vk.com/method/auth.exchangeSilentAuthToken`
+с `v=5.199`, `client_id=6463690`, пустым `uuid` и только вымышленными токенами.
+Без `access_token` ответ: `error_code=5`, `descr=token required`.
+С вымышленным `access_token` ответ: `error_code=5`, `User authorization failed`.
+Метод существует и требует авторизации самого запроса; одного client_id недостаточно.
+Эти проверки не подтверждают обмен настоящего silent_token или музыкальные права результата.
+Пользовательские токены не использовались и не сохранялись.
+
+В локальных vk-audio, vkpymusic и LavaSrc рецепта такого обмена не найдено.
+LavaSrc описывает получение готового implicit access_token, а не обмен payload.
+Актуальная публичная [схема VK auth](https://github.com/VKCOM/vk-api-schema/blob/master/auth/methods.json)
+не содержит exchangeSilentAuthToken; страницы старой документации VK ID при исследовании
+не удалось прочитать. Поэтому требования к типу авторизующего токена и привязке приложения
+не считаются подтверждёнными этими запросами.
+
+Гипотезы: обмен требует сервисной авторизации соответствующего приложения;
+получение токена собственного приложения не гарантирует доступ к audio API Маруси.
+Для следующего живого теста нужен свежий payload (наблюдавшийся ttl — 600 секунд)
+и установленный источник подходящей авторизации запроса. Не добавлять угадываемый
+обмен в SDK и не принимать payload.token напрямую как музыкальный access_token.
+
 В [объяснении команды VK Музыки от 2024-10-21](https://vc.ru/design/1600718-sdelat-prilozhenie-takim-zhe-emocionalnym-kak-sama-muzyka)
 «Мои треки» названы основной сущностью личной коллекции. Добавление в «Мою музыку»
 и лайк объединены в одну кнопку, которая также влияет на рекомендации.
@@ -86,6 +109,18 @@ Android-проверка WebView выявила попытку перехода 
   чужую подборку. Добавление чужого плейлиста и копирование всех треков — разные операции.
 - Удаление из плейлиста вызывает `audio.removeFromPlaylist`, а не `audio.delete`.
 - Новые методы плейлистов в текущем токене Маруси требуют ручной проверки пользователем.
+
+## Desktop-режим WebView: Client Hints (2026-10-03)
+
+По [Android Developers](https://developer.android.com/reference/androidx/webkit/UserAgentMetadata.Builder)
+подмена UA и user-agent metadata — отдельные настройки. `setMobile(false)`,
+`setPlatform("Windows")` и остальные поля меняют Client Hints; подменять только
+строку UA недостаточно для согласованной desktop-идентификации.
+`setFormFactors`/`FORM_FACTOR_DESKTOP` доступны с AndroidX WebKit 1.16, но требуют
+отдельной runtime-проверки `USER_AGENT_METADATA_FORM_FACTORS` установленного WebView.
+[Официальные релизы](https://developer.android.com/jetpack/androidx/releases/webkit)
+на дату проверки указывают 1.17.1 как stable; проект подключает эту версию только в Android.
+Работа с VK ID и исчезновение silent_token после этих настроек ещё не подтверждены.
 
 ## Личная коллекция: сверка локальных исходников 2026-10-02
 
