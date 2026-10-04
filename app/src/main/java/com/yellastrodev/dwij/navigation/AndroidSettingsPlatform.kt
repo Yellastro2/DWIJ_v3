@@ -44,7 +44,7 @@ fun rememberAndroidSettingsPlatform(): SettingsPlatform {
     }
 }
 
-/** Платформенные действия; WebView существует только пока открыт диалог VK-входа. */
+/** Платформенные действия: отдельные браузеры OAuth Маруси и обычного входа VK. */
 private class AndroidSettingsPlatform(
     private val context: Context,
 ) : SettingsPlatform {
@@ -65,6 +65,15 @@ private class AndroidSettingsPlatform(
         get() = true
 
     override val hasEmbeddedVkLogin: Boolean get() = true
+
+    override val hasVkWebLogin: Boolean get() = true
+
+    /** Открывает обычный сайт VK и отдаёт cookies для проверки web_token в shared. */
+    @Composable
+    override fun VkWebLoginBrowser(onSession: (com.yellastrodev.vkmusicsdk.VkWebSession) -> Unit,
+        onDismiss: () -> Unit, busy: Boolean, error: String?) {
+        AndroidVkWebLoginBrowser(onSession, onDismiss, busy, error)
+    }
 
     override val canResetVkBrowserSession: Boolean get() = BuildConfig.DEBUG
 

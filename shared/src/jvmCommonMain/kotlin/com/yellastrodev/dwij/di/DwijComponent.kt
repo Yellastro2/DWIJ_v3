@@ -67,6 +67,7 @@ import java.util.concurrent.atomic.AtomicBoolean
  * Подключает аудиокеш VK к общему лимиту хранения при старте.
  * Постоянные VK-bundle используют отдельный каталог и общую платформенную очередь загрузки.
  * Общий SongRepository передаётся VK-репозиторию напрямую; обратной зависимости нет.
+ * Загрузка VK-обложек учитывает диагностический режим текущей OAuth или web-сессии.
  *
  * Платформа передаёт системные реализации, низкоуровневое key-value хранилище
  * обычных настроек и защищённое хранилище авторизации.
@@ -185,6 +186,7 @@ class DwijComponent private constructor(
         CoverRepository(
             yamClient = yamClient,
             fileCache = coverFileCache,
+            vkRequestsEnabled = { !vkMusicRepository.authorizationOnly },
         )
     }
 

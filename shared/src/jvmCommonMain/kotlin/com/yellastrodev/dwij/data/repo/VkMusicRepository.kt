@@ -13,6 +13,7 @@ import com.yellastrodev.vkmusicsdk.VkHlsRelay
 import com.yellastrodev.vkmusicsdk.VkAudioCache
 import com.yellastrodev.vkmusicsdk.VkPlaylist
 import com.yellastrodev.vkmusicsdk.VkPlaylistPermissions
+import com.yellastrodev.vkmusicsdk.VkWebSession
 import com.yellastrodev.yamusicsdk.YamLogger
 import java.io.Closeable
 import kotlinx.coroutines.CancellationException
@@ -34,6 +35,8 @@ import kotlinx.serialization.json.put
 import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.jsonPrimitive
 import kotlinx.serialization.json.contentOrNull
+import kotlinx.serialization.json.jsonArray
+import kotlinx.serialization.json.long
 import kotlinx.serialization.json.longOrNull
 
 /** Зарезервированный маршрут личной коллекции VK. */
@@ -43,7 +46,8 @@ const val VK_ALL_TRACKS = "0_-2"
 
 /**
  * Сессия и коллекции VK; Room-кеш аккаунта доступен до сети, Song собирается общим индексом.
- * Токен сохраняется только в защищённом payload, временные URI создаются при подготовке очереди.
+ * OAuth-токен либо браузерные cookies с обновляемым токеном сохраняются только в защищённом payload.
+ * Временные URI создаются при подготовке очереди; диагностический запрет относится только к OAuth.
  * Аудио проходит через relay с необязательным постоянным кешем приложения.
  * Явное сохранение публикует независимый offline-bundle вне LRU.
  */
@@ -54,6 +58,7 @@ class VkMusicRepository(
     private val libraryDao: VkLibraryDao,
 ) : Closeable {
     private val mutex = Mutex()
+    private val sessionStorageLock = Any()
     @Volatile private var client: VkApiClient? = null
     @Volatile private var relay: VkHlsRelay? = null
     @Volatile private var audioCache: VkAudioCache? = null
@@ -220,13 +225,58 @@ class VkMusicRepository(
         refreshedMemberships.clear()
     }
 
-    /** Хранит токен и его владельца вместе в уже существующем защищённом payload. */
-    private fun saveSession(token: String, owner: Long) {
-        store.write(buildJsonObject { put("token", token); put("accountId", owner) }.toString().toByteArray(Charsets.UTF_8))
+    /** Хранит OAuth либо полный web-снимок и профиль в защищённом payload под общим lock. */
+    private fun saveSession(token: String, owner: Long, profile: VkAccountProfile? = mutableAccountProfile.value,
+        webSession: VkWebSession? = client?.webSession) = synchronized(sessionStorageLock) {
+        store.write(buildJsonObject {
+            put("token", token)
+            put("accountId", owner)
+            put("authMethod", if (webSession == null) "marusya" else "web")
+            webSession?.let {
+                put("p", it.p)
+                put("remixsid", it.remixsid)
+                put("userAgent", it.userAgent)
+                put("expiresAt", it.expiresAt)
+            }
+            profile?.takeIf { it.id == owner }?.let {
+                put("firstName", it.firstName)
+                put("lastName", it.lastName)
+            }
+        }.toString().toByteArray(Charsets.UTF_8))
+    }
+
+    /** Читает профиль владельца токена через уже существующий транспорт SDK. */
+    private suspend fun readAccountProfile(active: VkApiClient): VkAccountProfile {
+        val user = active.request("users.get").jsonArray.first().jsonObject
+        return VkAccountProfile(user.getValue("id").jsonPrimitive.long,
+            user["first_name"]?.jsonPrimitive?.contentOrNull.orEmpty(),
+            user["last_name"]?.jsonPrimitive?.contentOrNull.orEmpty())
+    }
+
+    /** Дополняет сессию именем, сохраняя web-cookies; диагностический OAuth не обращается к API. */
+    suspend fun loadAccountProfile() = withContext(Dispatchers.IO) {
+        if (authorizationOnly) return@withContext
+        mutex.withLock {
+            if (mutableAccountProfile.value?.displayName?.isNotBlank() == true) return@withLock
+            val active = client ?: return@withLock
+            try {
+                val profile = readAccountProfile(active)
+                val payload = store.read()?.toString(Charsets.UTF_8) ?: return@withLock
+                val token = if (payload.startsWith("{")) json.parseToJsonElement(payload).jsonObject
+                    .getValue("token").jsonPrimitive.content else payload
+                saveSession(token, profile.id, profile)
+                mutableAccountProfile.value = profile
+            } catch (error: CancellationException) {
+                throw error
+            } catch (_: Exception) {
+                logger.warning(TAG, "[loadAccountProfile] Не удалось загрузить или сохранить имя аккаунта VK")
+            }
+        }
     }
 
     /** Создаёт lazy URI только для выбранного источника; сеть запускается при чтении relay, а не сборке Song. */
     fun playbackUri(instance: TrackInstance.Vk): String? = synchronized(playbackLock) {
+        if (authorizationOnly) return@synchronized null
         val audio = instance.track
         val metadata = downloadMetadata[audio.fullId] ?: audio
         val saved = localStorage?.readyFile(audio.fullId)
@@ -335,9 +385,16 @@ class VkMusicRepository(
     }
     private val mutableAuthorized = MutableStateFlow(false)
     val authorized = mutableAuthorized.asStateFlow()
+    private val mutableBrowserSession = MutableStateFlow(false)
+    /** Позволяет UI отличать обычную браузерную сессию от диагностического OAuth. */
+    val browserSession = mutableBrowserSession.asStateFlow()
+    /** OAuth-эксперимент не отключает новый браузерный способ входа. */
+    val authorizationOnly: Boolean get() = AUTHORIZATION_ONLY && !mutableBrowserSession.value
     private val mutablePlaylists = MutableStateFlow<List<VkPlaylist>>(emptyList())
     val playlists = mutablePlaylists.asStateFlow()
     private val mutableUserId = MutableStateFlow<Long?>(null)
+    private val mutableAccountProfile = MutableStateFlow<VkAccountProfile?>(null)
+    val accountProfile = mutableAccountProfile.asStateFlow()
     val userId = mutableUserId.asStateFlow()
     private val mutableSessionRevision = MutableStateFlow(0L)
     val sessionRevision = mutableSessionRevision.asStateFlow()
@@ -436,16 +493,28 @@ class VkMusicRepository(
         }
     }
 
-    /** Восстанавливает защищённую сессию и аккаунтный кеш без сети; поддерживает прежний payload с одним токеном. */
+    /** Восстанавливает OAuth или web-сессию и кеш без сети; истёкший web-токен обновится перед первым запросом. */
     suspend fun restore() = withContext(Dispatchers.IO) {
         mutex.withLock {
             try {
                 val payload = store.read()?.toString(Charsets.UTF_8)?.takeIf(String::isNotBlank)
                 val session = payload?.takeIf { it.startsWith("{") }?.let { json.parseToJsonElement(it).jsonObject }
-                val token = session?.get("token")?.jsonPrimitive?.contentOrNull ?: payload
-                client = token?.let { VkApiClient(it) }
+                val token = if (session != null) session["token"]?.jsonPrimitive?.contentOrNull else payload
+                val webSession = session?.takeIf { it["authMethod"]?.jsonPrimitive?.contentOrNull == "web" }?.let {
+                    VkWebSession(p = it.getValue("p").jsonPrimitive.content,
+                        remixsid = it.getValue("remixsid").jsonPrimitive.content,
+                        userAgent = it.getValue("userAgent").jsonPrimitive.content,
+                        accessToken = token.orEmpty(), expiresAt = it.getValue("expiresAt").jsonPrimitive.long,
+                        userId = it["accountId"]?.jsonPrimitive?.longOrNull)
+                }
+                client = if (webSession != null) createWebClient(webSession)
+                    else token?.let { VkApiClient(it, minRequestIntervalMs = 1_000, requestsEnabled = !AUTHORIZATION_ONLY) }
+                mutableBrowserSession.value = webSession != null
                 session?.get("accountId")?.jsonPrimitive?.longOrNull?.let { owner ->
                     mutableUserId.value = owner
+                    mutableAccountProfile.value = VkAccountProfile(owner,
+                        session["firstName"]?.jsonPrimitive?.contentOrNull.orEmpty(),
+                        session["lastName"]?.jsonPrimitive?.contentOrNull.orEmpty())
                     restoreLibrary(owner)
                 }
                 mutableAuthorized.value = client != null
@@ -457,30 +526,22 @@ class VkMusicRepository(
         }
     }
 
-    /** Проверяет музыкальный доступ до атомарной замены сохранённой сессии. */
+    /** В диагностическом режиме сохраняет только OAuth-токен; обычно проверяет музыкальный доступ и профиль. */
     suspend fun authorize(token: String): DataResult<Unit> = operation("authorize") {
         mutex.withLock {
-            val candidate = VkApiClient(token)
+            val candidate = VkApiClient(token, minRequestIntervalMs = 1_000, requestsEnabled = !AUTHORIZATION_ONLY)
             try {
-                candidate.validateMusicAccess()
-                val owner = candidate.getCurrentUserId()
-                saveSession(token, owner)
-                val old = client
-                client = candidate
-                mutablePlaylists.value = emptyList()
-                clearLibraryCache()
-                mutablePlaylistTracks.value = emptyMap()
-                mutableMembershipRevision.value += 1
-                mutableUserId.value = owner
-                mutableMyTracks.value = emptyList()
-                mutableMyTracksLoaded.value = false
-                myTrackAliases.value = emptyMap()
-                restoreLibrary(owner)
-                downloadMetadata.clear()
-                resetPlayback()
-                mutableSessionRevision.value += 1
-                mutableAuthorized.value = true
-                old?.close()
+                val profile = if (AUTHORIZATION_ONLY) null else {
+                    candidate.validateMusicAccess()
+                    readAccountProfile(candidate)
+                }
+                val owner = profile?.id
+                synchronized(sessionStorageLock) {
+                    if (owner != null) saveSession(token, owner, profile, webSession = null)
+                    else store.write(token.toByteArray(Charsets.UTF_8))
+                    adoptSession(candidate, profile)
+                }
+                owner?.let { restoreLibrary(it) }
             } catch (error: Exception) {
                 candidate.close()
                 throw error
@@ -488,18 +549,84 @@ class VkMusicRepository(
         }
     }
 
+    /** Проверяет браузерный токен, музыку и профиль; прежняя сессия заменяется только после успеха. */
+    suspend fun authorizeWebSession(session: VkWebSession): DataResult<Unit> = operation("authorizeWebSession") {
+        mutex.withLock {
+            logger.info(TAG, "[authorizeWebSession] Проверяем браузерную сессию, музыкальный доступ и профиль VK")
+            val candidate = createWebClient(session)
+            try {
+                candidate.authenticateWebSession()
+                candidate.validateMusicAccess()
+                val profile = readAccountProfile(candidate)
+                synchronized(sessionStorageLock) {
+                    val updated = checkNotNull(candidate.webSession)
+                    if (updated.userId != null && updated.userId != profile.id) throw VkApiException(5)
+                    saveSession(updated.accessToken, profile.id, profile, updated)
+                    adoptSession(candidate, profile)
+                }
+                restoreLibrary(profile.id)
+                logger.info(TAG, "[authorizeWebSession] Браузерная авторизация VK сохранена; музыкальный доступ проверен")
+            } catch (error: Exception) {
+                candidate.close()
+                throw error
+            }
+        }
+    }
+
+    /** Создаёт web-клиент; обновления устаревшего клиента не перезаписывают новую сессию или выход. */
+    private fun createWebClient(session: VkWebSession): VkApiClient {
+        lateinit var created: VkApiClient
+        created = VkApiClient(session.accessToken, apiBase = "https://api.vk.ru/method/", version = "5.282",
+            minRequestIntervalMs = 1_000, webSession = session, onWebSessionUpdated = { updated ->
+                synchronized(sessionStorageLock) {
+                    if (client === created) {
+                        val owner = mutableUserId.value ?: updated.userId
+                            ?: error("VK не вернул владельца браузерной сессии")
+                        saveSession(updated.accessToken, owner, webSession = updated)
+                        logger.info(TAG, "[refreshWebSession] Веб-токен VK обновлён и сохранён")
+                    }
+                }
+            })
+        return created
+    }
+
+    /** Публикует уже сохранённую сессию и сбрасывает только аккаунтные кеши прежнего входа. */
+    private fun adoptSession(candidate: VkApiClient, profile: VkAccountProfile?) {
+        val old = client
+        client = candidate
+        mutableBrowserSession.value = candidate.webSession != null
+        mutableAccountProfile.value = profile
+        mutablePlaylists.value = emptyList()
+        clearLibraryCache()
+        mutablePlaylistTracks.value = emptyMap()
+        mutableMembershipRevision.value += 1
+        mutableUserId.value = profile?.id
+        mutableMyTracks.value = emptyList()
+        mutableMyTracksLoaded.value = false
+        myTrackAliases.value = emptyMap()
+        downloadMetadata.clear()
+        resetPlayback()
+        mutableSessionRevision.value += 1
+        mutableAuthorized.value = true
+        old?.close()
+    }
+
     /** Удаляет только VK-сессию, сохраняя состояние Яндекс Музыки. */
     suspend fun logout(): DataResult<Unit> = operation("logout") {
         mutex.withLock {
-            store.clear()
-            client?.close()
-            client = null
+            synchronized(sessionStorageLock) {
+                store.clear()
+                client?.close()
+                client = null
+                mutableBrowserSession.value = false
+            }
             mutableAuthorized.value = false
             mutablePlaylists.value = emptyList()
             clearLibraryCache()
             mutablePlaylistTracks.value = emptyMap()
             mutableMembershipRevision.value += 1
             mutableUserId.value = null
+            mutableAccountProfile.value = null
             mutableMyTracks.value = emptyList()
             mutableMyTracksLoaded.value = false
             myTrackAliases.value = emptyMap()
@@ -724,12 +851,15 @@ class VkMusicRepository(
     private suspend fun <T> operation(name: String, block: suspend () -> T): DataResult<T> =
         withContext(Dispatchers.IO) {
             try {
+                if (authorizationOnly && name !in setOf("authorize", "authorizeWebSession", "logout")) {
+                    return@withContext DataResult.Failure(DataError.InvalidData("VK отключён для проверки авторизации"))
+                }
                 DataResult.Success(block())
             } catch (error: CancellationException) {
                 throw error
             } catch (error: VkApiException) {
                 logger.warning(TAG, "[$name] VK API вернул код ${error.code}")
-                if (error.code == 5) mutableAuthorized.value = false
+                if (error.code == 5 && name !in setOf("authorize", "authorizeWebSession")) mutableAuthorized.value = false
                 DataResult.Failure(if (error.code == 5) DataError.Unauthorized
                     else DataError.Remote(200, error.code.toString(), "VK API: ${error.code}"))
             } catch (error: Exception) {
@@ -757,7 +887,11 @@ class VkMusicRepository(
     /** Освобождает сессию и текущий relay вместе с графом приложения. */
     override fun close() { client?.close(); resetPlayback() }
 
-    private companion object { const val TAG = "VkMusicRepository" }
+    companion object {
+        /** Временный эксперимент Маруси: только OAuth и хранение токена; браузерная сессия работает обычно. */
+        const val AUTHORIZATION_ONLY = true
+        private const val TAG = "VkMusicRepository"
+    }
 }
 
 /** Состав VK-плейлиста для source-интерфейса; его треки также индексируются общими Song. */

@@ -19,10 +19,11 @@ enum class CoverSource {
     Network,
 }
 
-/** Общий memory/disk cache обложек; транспорт VK отделён от Яндекс API и proxy. */
+/** Общий кеш обложек; запрет диагностики OAuth учитывает текущий способ входа VK. */
 class CoverRepository(
     private val yamClient: YamApiClient,
     private val fileCache: FileCacheStore,
+    private val vkRequestsEnabled: () -> Boolean = { !VkMusicRepository.AUTHORIZATION_ONLY },
 ) {
 
     private val memoryCache = object :
@@ -76,13 +77,14 @@ class CoverRepository(
         )
     }
 
-    /** Кэширует обложки; VK использует независимый загрузчик без преобразования URL ЯМ. */
+    /** Кэширует обложки; в режиме диагностики авторизации загрузка обложек VK отключена. */
     suspend fun getRemoteCover(
         entityType: String,
         entityId: String,
         url: String,
         size: CoverSize,
     ): CoverData? {
+        if (!vkRequestsEnabled() && entityType in setOf("vk-track", "vk-playlist")) return null
         val key = coverKey(
             entityType = entityType,
             entityId = entityId,

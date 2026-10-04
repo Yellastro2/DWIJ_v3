@@ -7,7 +7,7 @@ import androidx.compose.runtime.Composable
  *
  * OAuth, постоянные настройки и состояние авторизации принадлежат shared.
  * Платформа предоставляет только конфигурацию, сведения о диске
- * внешние системные действия и Android-окно браузерной авторизации.
+ * внешние системные действия и отдельные Android-окна OAuth и cookie-авторизации VK.
  */
 interface SettingsPlatform {
 
@@ -39,6 +39,14 @@ interface SettingsPlatform {
 
     /** Android предлагает собственный браузер входа; остальные платформы используют ручной callback. */
     val hasEmbeddedVkLogin: Boolean get() = false
+
+    /** Браузерная cookie-сессия пока поддерживается только Android. */
+    val hasVkWebLogin: Boolean get() = false
+
+    /** Передаёт браузерную сессию только в памяти; busy и error отражают проверку в shared. */
+    @Composable
+    fun VkWebLoginBrowser(onSession: (com.yellastrodev.vkmusicsdk.VkWebSession) -> Unit,
+        onDismiss: () -> Unit, busy: Boolean, error: String?) = Unit
 
     /** Временный сброс браузерной сессии доступен только в Android debug. */
     val canResetVkBrowserSession: Boolean get() = false

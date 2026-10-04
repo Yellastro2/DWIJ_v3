@@ -783,7 +783,7 @@ private fun SettingsCacheValue(
 
 /** Накладывает существующую текстуру на тёмную карточку с тонкой неоновой рамкой. */
 @Composable
-private fun SettingsTextureCard(
+internal fun SettingsTextureCard(
     textureRes: DrawableResource,
     accent: Color,
     modifier: Modifier = Modifier,
@@ -815,7 +815,7 @@ private fun SettingsTextureCard(
 
 /** Рисует компактное действие аккаунта с состоянием ожидания OAuth. */
 @Composable
-private fun SettingsActionButton(
+internal fun SettingsActionButton(
     text: String,
     enabled: Boolean,
     isLoading: Boolean,
