@@ -12,12 +12,13 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.ImageBitmap
 import androidx.compose.ui.unit.dp
+import androidx.lifecycle.viewmodel.compose.viewModel
 import com.yellastrodev.dwij.TrackListItemUiModel
 import com.yellastrodev.dwij.data.DataError
 import com.yellastrodev.dwij.data.DataResult
-import com.yellastrodev.dwij.data.repo.VK_MY_TRACKS
-import com.yellastrodev.dwij.data.repo.VK_ALL_TRACKS
+import com.yellastrodev.dwij.data.entities.TrackInstance
 import com.yellastrodev.dwij.di.DwijComponent
+import com.yellastrodev.dwij.models.VkPlaylistModel
 import com.yellastrodev.dwij.resources.*
 import com.yellastrodev.dwij.ui.ObjectScreen
 import com.yellastrodev.dwij.ui.toImageBitmapOrNull
@@ -30,7 +31,7 @@ import org.jetbrains.compose.resources.pluralStringResource
 import org.jetbrains.compose.resources.stringResource
 import org.jetbrains.compose.resources.getString
 
-/** Открывает сохранённый состав VK сразу, затем обновляет серверный снимок без блокировки очереди. */
+/** Показывает удерживаемый состав VK и общие признаки источников/совпадений из индекса Song. */
 @Composable
 internal fun VkPlaylistRoute(
     component: DwijComponent,
@@ -51,17 +52,27 @@ internal fun VkPlaylistRoute(
     val myTracks by repository.myTracks.collectAsState()
     val myTracksLoaded by repository.myTracksLoaded.collectAsState()
     val membershipRevision by repository.membershipRevision.collectAsState()
-    val isCollection = playlistId == VK_MY_TRACKS || playlistId == VK_ALL_TRACKS
+    val factory = remember(repository, playlistId) { VkPlaylistModel.Factory(repository, playlistId) }
+    val model = viewModel<VkPlaylistModel>(key = "vk-playlist:$playlistId", factory = factory)
+    val state by model.state.collectAsState()
+    val indexedSongs by component.songRepository.vkSongs.collectAsState(initial = emptyList())
+    val songsByVkId = remember(indexedSongs) {
+        buildMap {
+            indexedSongs.forEach { song ->
+                song.instances.filterIsInstance<TrackInstance.Vk>().forEach { put(it.track.fullId, song) }
+            }
+        }
+    }
+    val playlist = state.playlist
+    val tracks = state.tracks
+    val loading = state.isLoading
+    val refreshing = state.isRefreshing
+    val loadError = state.error?.vkPlaylistMessage()
     var savedIds by remember { mutableStateOf(emptySet<String>()) }
     val scope = rememberCoroutineScope()
     val snackbar = remember { SnackbarHostState() }
-    var playlist by remember(playlistId, sessionRevision) { mutableStateOf<VkPlaylist?>(null) }
-    var tracks by remember(playlistId, sessionRevision) { mutableStateOf<List<VkAudio>>(emptyList()) }
     var cover by remember(playlistId, sessionRevision) { mutableStateOf<ImageBitmap?>(null) }
-    var loading by remember(playlistId) { mutableStateOf(true) }
-    var refreshing by remember(playlistId, sessionRevision) { mutableStateOf(false) }
     var busy by remember { mutableStateOf(false) }
-    var loadError by remember { mutableStateOf<String?>(null) }
     var removeTrack by remember { mutableStateOf<VkAudio?>(null) }
     var deletePlaylist by remember { mutableStateOf(false) }
 
@@ -70,29 +81,8 @@ internal fun VkPlaylistRoute(
         scope.launch { snackbar.showSnackbar(error.vkPlaylistMessage()) }
     }
 
-    /** Показывает кеш до сетевого запроса; при ошибке сохраняет показанный состав и доступность воспроизведения. */
-    suspend fun reload(preferLocal: Boolean = true) {
-        refreshing = true
-        loadError = null
-        try {
-            if (preferLocal) repository.cachedPlaylist(playlistId)?.let {
-                playlist = it.playlist
-                tracks = it.tracks
-            }
-            loading = playlist == null
-            if (!authorized) return
-            when (val result = repository.getPlaylist(playlistId, preferLocal = false)) {
-                is DataResult.Success -> {
-                    playlist = result.value.playlist
-                    tracks = result.value.tracks
-                    loading = false
-                }
-                is DataResult.Failure -> {
-                    loadError = result.error.vkPlaylistMessage()
-                    showFailure(result.error)
-                }
-            }
-        } finally { loading = false; refreshing = false }
+    LaunchedEffect(state.error) {
+        state.error?.let { snackbar.showSnackbar(it.vkPlaylistMessage()) }
     }
 
     LaunchedEffect(playlist?.coverUrl) {
@@ -101,12 +91,13 @@ internal fun VkPlaylistRoute(
         } }
     }
 
-    LaunchedEffect(playlistId, authorized, sessionRevision, if (isCollection) membershipRevision else 0L) {
+    LaunchedEffect(model, authorized, sessionRevision, membershipRevision) {
+        model.load(authorized, sessionRevision, membershipRevision)
+    }
+
+    LaunchedEffect(playlistId, authorized, sessionRevision) {
         removeTrack = null
         deletePlaylist = false
-        // Обычный кеш сначала доступен для нажатий; обновление лайков не задерживает его показ.
-        reload()
-        if (authorized && !isCollection) repository.refreshMyTracks()
     }
 
     /** Запускает весь снимок плейлиста с выбранного индекса, сохраняя дубли и исходный порядок. */
@@ -129,8 +120,11 @@ internal fun VkPlaylistRoute(
         savedIds = withContext(Dispatchers.IO) { tracks.filter { repository.isSavedLocally(it.fullId) }.map { it.fullId }.toSet() }
     }
     val items = tracks.mapIndexed { index, audio ->
+        val song = songsByVkId[audio.fullId]
         TrackListItemUiModel(key = "${audio.fullId}:$index", trackId = audio.fullId,
             title = audio.title, artist = audio.artistNames.joinToString(", "), shouldLoadCover = audio.coverUrl != null,
+            hasMultipleSources = (song?.instances?.size ?: 0) > 1,
+            hasUnresolvedMatchCandidate = song?.hasPendingMatchCandidate == true,
             isSavedLocally = audio.fullId in savedIds, isSavingLocally = "vk:${audio.fullId}" in downloads)
     }
     Box(modifier.fillMaxSize()) {
@@ -165,7 +159,7 @@ internal fun VkPlaylistRoute(
                         onClick = { dismiss(); deletePlaylist = true })
                 }
                 DropdownMenuItem(text = { Text("Обновить") }, enabled = !busy && !loading && authorized,
-                    onClick = { dismiss(); if (!refreshing) scope.launch { reload(false) } })
+                    onClick = { dismiss(); if (!refreshing) model.refresh() })
             },
             trackContextMenuContent = { index, item, dismiss ->
                 val audio = tracks.getOrNull(index)
@@ -213,7 +207,7 @@ internal fun VkPlaylistRoute(
             } },
             showShare = false, showWave = false, isLoading = loading, isRefreshing = busy || refreshing,
             emptyMessage = loadError ?: stringResource(Res.string.track_list_empty),
-            onRefresh = { if (!refreshing && !busy && authorized) scope.launch { reload(false) } },
+            onRefresh = { if (!refreshing && !busy && authorized) model.refresh() },
             modifier = Modifier.fillMaxSize(),
         )
         SnackbarHost(snackbar, Modifier.align(Alignment.BottomCenter).padding(12.dp))
@@ -232,8 +226,7 @@ internal fun VkPlaylistRoute(
                             when (val result = repository.removeFromPlaylist(currentPlaylist, audio)) {
                                 is DataResult.Success -> {
                                     removeTrack = null
-                                    tracks = tracks.filterNot { it.fullId == audio.fullId }
-                                    reload(false)
+                                    model.removeTrack(audio.fullId)
                                 }
                                 is DataResult.Failure -> showFailure(result.error)
                             }

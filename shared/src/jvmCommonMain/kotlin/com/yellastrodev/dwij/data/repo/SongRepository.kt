@@ -30,7 +30,8 @@ import kotlinx.coroutines.sync.withLock
 /**
  * Индексирует source-треки и собирает из компактных Room-связей полные [Song],
  * добавляя признак ожидающего решения о совпадении. VK хранится в своей source-таблице;
- * сборка Song не запрашивает сеть и не создаёт адресов воспроизведения.
+ * сборка Song не запрашивает сеть и не создаёт адресов воспроизведения. VK-экраны наблюдают
+ * отдельный поток общих песен с актуальными объединениями и кандидатами.
  */
 class SongRepository(
     private val songDao: SongDao,
@@ -45,6 +46,13 @@ class SongRepository(
         .observePendingSongIds()
         .map { ids -> ids.toSet() }
         .distinctUntilChanged()
+
+    /** Общие песни VK с актуальными объединениями и кандидатами, без загрузки всей фонотеки. */
+    val vkSongs: Flow<List<Song>> = combine(
+        songDao.observeSongsForSource(MusicSource.VK.name),
+        pendingSongIds,
+        vkTrackDao.observeTrackChanges(),
+    ) { relations, pendingIds, _ -> assemble(relations, pendingIds) }
 
     val songs: Flow<List<Song>> = combine(
         songDao.observeSongs(),

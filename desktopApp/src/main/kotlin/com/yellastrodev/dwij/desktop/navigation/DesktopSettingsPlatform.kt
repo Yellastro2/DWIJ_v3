@@ -20,6 +20,8 @@ import java.util.Properties
 import javax.swing.JFileChooser
 import javax.swing.UIManager
 import javax.swing.filechooser.FileNameExtensionFilter
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
 
 /**
  * Windows/JVM-внешние действия экрана настроек.
@@ -45,11 +47,19 @@ fun rememberDesktopSettingsPlatform(
         )
     }
 
+/** Windows-настройки, отдельное окно VK и явный сброс его профиля без удаления SDK-сессии. */
 private class DesktopSettingsPlatform(
     private val paths: DesktopPaths,
     private val musicDirectoryStore: DesktopMusicDirectoryStore,
     private val sessionLogStore: DesktopSessionLogStore,
 ) : SettingsPlatform {
+
+    override val canResetVkBrowserSession: Boolean get() = hasVkWebLogin
+
+    /** Очищает только собственный браузерный профиль VK; ожидание helper не блокирует Compose UI. */
+    override suspend fun resetVkBrowserSession() = withContext(Dispatchers.IO) {
+        DesktopVkWebView2Host(paths).use { it.resetBrowserSession() }
+    }
 
     override val appVersion: String
         get() =
@@ -60,6 +70,16 @@ private class DesktopSettingsPlatform(
 
     override val canShareLogs: Boolean
         get() = true
+
+    override val hasVkWebLogin: Boolean
+        get() = System.getProperty("os.name").startsWith("Windows", ignoreCase = true)
+
+    /** Передаёт web-сессию из Windows host в существующий shared-репозиторий без ручного экспорта. */
+    @Composable
+    override fun VkWebLoginBrowser(onSession: (com.yellastrodev.vkmusicsdk.VkWebSession) -> Unit,
+        onDismiss: () -> Unit, busy: Boolean, error: String?) {
+        DesktopVkWebLoginBrowser(paths, onSession, onDismiss, busy, error, ::openUrl)
+    }
 
     private val localProperties:
         Properties by lazy {

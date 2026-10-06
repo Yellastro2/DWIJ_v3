@@ -61,6 +61,7 @@ import org.jetbrains.compose.resources.stringResource
  * Закрытие окна OAuth скрывает только интерфейс, не отменяя текущий вход.
  * Размер и очистка постоянного хранения включают Яндекс и VK, независимо от LRU-кеша.
  * Ошибки VK OAuth выводятся в общий snackbar поверх прокручиваемых настроек.
+ * Переключатель мультисурсов сохраняется репозиторием и управляет текущим фоновым сканом.
  */
 @Composable
 fun SettingsRoute(
@@ -77,6 +78,8 @@ fun SettingsRoute(
         rememberCoroutineScope()
 
     val httpRemote = remember(component) { component.httpMediaRemote }
+    val songMatches = remember(component) { component.songMatchRepository }
+    val multiSourceScanEnabled by songMatches.scanEnabled.collectAsState()
     val httpRemoteServiceName by httpRemote.serviceName.collectAsState()
     var httpRemoteEnabled by remember(httpRemote) { mutableStateOf(httpRemote.enabled) }
     var httpRemotePort by remember(httpRemote) { mutableStateOf(httpRemote.port) }
@@ -935,6 +938,8 @@ fun SettingsRoute(
             isSharingLogs =
                 isSharingLogs,
             httpRemoteEnabled = httpRemoteEnabled,
+            multiSourceScanEnabled = multiSourceScanEnabled,
+            onMultiSourceScanEnabledChange = songMatches::setScanEnabled,
             httpRemotePort = httpRemotePort,
             httpRemoteAddress = httpRemoteAddress,
             httpRemoteServiceName = httpRemoteServiceName,

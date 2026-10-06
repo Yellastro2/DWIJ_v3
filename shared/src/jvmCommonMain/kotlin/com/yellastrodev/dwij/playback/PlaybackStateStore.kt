@@ -9,7 +9,9 @@ import kotlinx.coroutines.flow.SharedFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asSharedFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.update
 
+/** Атомарно публикует состояние: фоновые обновления прогресса не затирают конкурентные команды. */
 class PlaybackStateStore {
     private val _state = MutableStateFlow(PlayerState())
     val state: StateFlow<PlayerState> = _state.asStateFlow()
@@ -17,52 +19,52 @@ class PlaybackStateStore {
     private val _events = MutableSharedFlow<PlayerEvent>()
     val events: SharedFlow<PlayerEvent> = _events.asSharedFlow()
 
+    /** Обновляет фактическое воспроизведение и индекс, сохраняя конкурентные изменения остальных полей. */
     fun setPlayback(isPlaying: Boolean, currentIndex: Int) {
-        _state.value = _state.value.copy(
-            isPlaying = isPlaying,
-            currentIndex = currentIndex,
-        )
+        _state.update { it.copy(isPlaying = isPlaying, currentIndex = currentIndex) }
     }
 
+    /** Меняет только текущий индекс очереди. */
     fun setCurrentIndex(index: Int) {
-        _state.value = _state.value.copy(currentIndex = index)
+        _state.update { it.copy(currentIndex = index) }
     }
 
+    /** Меняет фактическое состояние воспроизведения без потери других полей. */
     fun setPlaying(isPlaying: Boolean) {
-        _state.value = _state.value.copy(isPlaying = isPlaying)
+        _state.update { it.copy(isPlaying = isPlaying) }
     }
 
+    /** Запоминает намерение пользователя независимо от частого прогресса. */
     fun setWantsToPlay(wantsToPlay: Boolean) {
-        _state.value = _state.value.copy(wantsToPlay = wantsToPlay)
+        _state.update { it.copy(wantsToPlay = wantsToPlay) }
     }
 
+    /** Устанавливает направление перехода и намерение воспроизведения одним атомарным обновлением. */
     fun beginTrackChange(
         direction: TrackChangeDirection,
         wantsToPlay: Boolean = _state.value.wantsToPlay,
     ) {
-        _state.value = _state.value.copy(
-            wantsToPlay = wantsToPlay,
-            pendingTrackChange = direction,
-        )
+        _state.update { it.copy(wantsToPlay = wantsToPlay, pendingTrackChange = direction) }
     }
 
+    /** Снимает индикатор перехода, сохраняя актуальные команды и прогресс. */
     fun completeTrackChange() {
-        _state.value = _state.value.copy(pendingTrackChange = null)
+        _state.update { it.copy(pendingTrackChange = null) }
     }
 
+    /** Обновляет позицию и длительность, не перезаписывая конкурентную паузу или режимы очереди. */
     fun setProgress(positionMs: Long, durationMs: Long) {
-        _state.value = _state.value.copy(
-            currentPosition = positionMs,
-            duration = durationMs,
-        )
+        _state.update { it.copy(currentPosition = positionMs, duration = durationMs) }
     }
 
+    /** Меняет только признак случайного порядка. */
     fun setShuffle(enabled: Boolean) {
-        _state.value = _state.value.copy(isShuffle = enabled)
+        _state.update { it.copy(isShuffle = enabled) }
     }
 
+    /** Меняет только признак повтора очереди. */
     fun setRepeatAll(enabled: Boolean) {
-        _state.value = _state.value.copy(isRepeatAll = enabled)
+        _state.update { it.copy(isRepeatAll = enabled) }
     }
 
     suspend fun emit(event: PlayerEvent) {

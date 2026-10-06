@@ -173,3 +173,16 @@ compose.desktop {
         }
     }
 }
+
+// В JAR включаем только небольшой WinForms-host и SDK DLL; Evergreen Runtime остаётся общим для Windows.
+val webView2Resources = layout.buildDirectory.dir("generated/webview2-resources")
+val buildVkWebView2Helper by tasks.registering(Exec::class) {
+    onlyIf { System.getProperty("os.name").startsWith("Windows", ignoreCase = true) }
+    inputs.files(fileTree("windows-webview2") { include("*.cs", "*.ps1", "*.config") })
+    outputs.dir(webView2Resources)
+    commandLine("powershell.exe", "-NoProfile", "-ExecutionPolicy", "Bypass", "-File",
+        file("windows-webview2/build-helper.ps1").absolutePath, "-OutputDirectory",
+        webView2Resources.get().dir("windows-webview2").asFile.absolutePath)
+}
+sourceSets.main { resources.srcDir(webView2Resources) }
+tasks.named("processResources") { dependsOn(buildVkWebView2Helper) }

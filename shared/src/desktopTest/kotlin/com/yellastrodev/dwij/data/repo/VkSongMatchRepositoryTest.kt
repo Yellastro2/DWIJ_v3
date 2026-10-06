@@ -12,6 +12,8 @@ import com.yellastrodev.dwij.data.entities.dYaArtist
 import com.yellastrodev.dwij.data.entities.dYaTrack
 import com.yellastrodev.vkmusicsdk.VkAudio
 import com.yellastrodev.yamusicsdk.NoOpYamLogger
+import com.yellastrodev.yamusicsdk.YamLogger
+import com.yellastrodev.dwij.storage.LocalKeyValueStore
 import java.nio.file.Files
 import kotlinx.coroutines.runBlocking
 import kotlin.test.Test
@@ -19,8 +21,59 @@ import kotlin.test.assertEquals
 import kotlin.test.assertNull
 import kotlin.test.assertTrue
 
-/** Проверяет VK-пары, повторный скан, пользовательский отказ и объединение через настоящий Room. */
+/** Проверяет VK-пары, пользовательские решения и остановку/возобновление скана через настоящий Room. */
 class VkSongMatchRepositoryTest {
+    /** Отсутствующий ключ включает скан; сохранённое отключение переживает создание репозитория и оставляет очередь. */
+    @Test
+    fun persistsScanSettingAndResumesUnprocessedSongs() = runBlocking {
+        withDatabase { db ->
+            link(db, "vk", MusicSource.VK)
+            link(db, "ya", MusicSource.YANDEX)
+            val settings = BooleanSettingsStore()
+            val matches = SongMatchRepository(db.songDao(), db.songMatchDao(), NoOpYamLogger, settings)
+            assertTrue(matches.scanEnabled.value)
+            matches.setScanEnabled(false)
+            val restored = SongMatchRepository(db.songDao(), db.songMatchDao(), NoOpYamLogger, settings)
+            assertEquals(false, restored.scanEnabled.value)
+            restored.scanUnprocessedSongs()
+            assertEquals(2, db.songDao().getUnscannedSongs(SongMatchRepository.CURRENT_RESOLVER_VERSION, 32).size)
+            assertEquals(0, db.songMatchDao().getPendingCandidateCount())
+            restored.setScanEnabled(true)
+            restored.scanUnprocessedSongs()
+            assertEquals(1, db.songMatchDao().getPendingCandidateCount())
+            assertTrue(db.songDao().getUnscannedSongs(SongMatchRepository.CURRENT_RESOLVER_VERSION, 32).isEmpty())
+            restored.setScanEnabled(false)
+            restored.scanUnprocessedSongs()
+            assertEquals(1, db.songMatchDao().getPendingCandidateCount())
+        }
+    }
+
+    /** Отключение во время CPU-сравнения не помечает прерванную песню обработанной и не продолжает сравнения. */
+    @Test
+    fun stopsInsideCandidateComparison() = runBlocking {
+        withDatabase { db ->
+            link(db, "a-vk", MusicSource.VK)
+            link(db, "b-ya", MusicSource.YANDEX)
+            link(db, "c-local", MusicSource.LOCAL)
+            lateinit var matches: SongMatchRepository
+            var comparisons = 0
+            val logger = object : YamLogger by NoOpYamLogger {
+                /** Имитирует отключение переключателя сразу после первого сравнения. */
+                override fun debug(tag: String, message: String) {
+                    if (tag == "SongMatchResolver") {
+                        comparisons += 1
+                        matches.setScanEnabled(false)
+                    }
+                }
+            }
+            matches = SongMatchRepository(db.songDao(), db.songMatchDao(), logger)
+            matches.scanUnprocessedSongs()
+            assertEquals(1, comparisons)
+            assertEquals(3, db.songDao().getUnscannedSongs(SongMatchRepository.CURRENT_RESOLVER_VERSION, 32).size)
+            assertEquals(0, db.songMatchDao().getPendingCandidateCount())
+        }
+    }
+
     /** Версия 2 пересканирует старые записи, а REJECTED остаётся постоянным решением пользователя. */
     @Test
     fun findsCrossSourcePairsAndPreservesRejection() = runBlocking {
@@ -89,6 +142,30 @@ class VkSongMatchRepositoryTest {
             assertEquals(audio.fullId, queue.first().vkInstances.single().track.fullId)
             assertEquals(collection, db.vkLibraryDao().library(20))
             assertEquals(0, db.songMatchDao().getPendingCandidateCount())
+        }
+    }
+
+    /** Минимальное key-value хранилище для проверки восстановления переключателя. */
+    private class BooleanSettingsStore : LocalKeyValueStore {
+        private val values = mutableMapOf<String, Boolean>()
+        /** Строковые настройки эта проверка не использует. */
+        override fun getString(key: String): String? = null
+        /** Числовые настройки эта проверка не использует. */
+        override fun getLong(key: String): Long? = null
+        /** Возвращает сохранённое значение или отсутствие ключа. */
+        override fun getBoolean(key: String): Boolean? = values[key]
+        /** Применяет операции к общему состоянию, доступному следующему экземпляру репозитория. */
+        override fun edit(block: LocalKeyValueStore.Editor.() -> Unit) {
+            block(object : LocalKeyValueStore.Editor {
+                /** Строковые записи здесь не используются. */
+                override fun putString(key: String, value: String) = Unit
+                /** Числовые записи здесь не используются. */
+                override fun putLong(key: String, value: Long) = Unit
+                /** Сохраняет булеву настройку. */
+                override fun putBoolean(key: String, value: Boolean) { values[key] = value }
+                /** Удаляет сохранённую настройку. */
+                override fun remove(key: String) { values.remove(key) }
+            })
         }
     }
 

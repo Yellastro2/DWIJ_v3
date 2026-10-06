@@ -44,7 +44,7 @@ fun rememberAndroidSettingsPlatform(): SettingsPlatform {
     }
 }
 
-/** Платформенные действия: отдельные браузеры OAuth Маруси и обычного входа VK. */
+/** Платформенные браузеры VK; явный сброс WebView доступен во всех сборках и не удаляет токен SDK. */
 private class AndroidSettingsPlatform(
     private val context: Context,
 ) : SettingsPlatform {
@@ -75,11 +75,10 @@ private class AndroidSettingsPlatform(
         AndroidVkWebLoginBrowser(onSession, onDismiss, busy, error)
     }
 
-    override val canResetVkBrowserSession: Boolean get() = BuildConfig.DEBUG
+    override val canResetVkBrowserSession: Boolean get() = true
 
-    /** Ждёт удаления общих cookies WebView на main-потоке; токены SDK не удаляет. */
+    /** Во всех сборках ждёт удаления cookies WebView на main-потоке; токены SDK не удаляет. */
     override suspend fun resetVkBrowserSession() {
-        check(BuildConfig.DEBUG)
         withContext(Dispatchers.Main.immediate) {
             val cookies = CookieManager.getInstance()
             suspendCancellableCoroutine<Unit> { continuation ->

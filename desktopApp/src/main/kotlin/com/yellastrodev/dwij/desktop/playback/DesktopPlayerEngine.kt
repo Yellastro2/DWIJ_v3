@@ -40,6 +40,9 @@ import java.util.UUID
  * и принимает системные media commands. JavaFX callback'и также передают
  * фактические события прослушивания в общий [PlaybackFeedbackTracker].
  * Подготовка ограничена 12с (VK: 45с для API/master/media/key); после трёх повторов трек пропускается.
+ * Диагностика отделяет загрузку, буферизацию и декодирование без URI и текста приватных ошибок.
+ * FX-поток только управляет MediaPlayer и снимает его свойства; логи, SMTC,
+ * публикация прогресса и feedback выполняются последовательной фоновой очередью.
  */
 class DesktopPlayerEngine(
     private val scope: CoroutineScope,
@@ -58,6 +61,8 @@ class DesktopPlayerEngine(
 
     private val stateStore =
         PlaybackStateStore()
+
+    private val callbackQueue = DesktopPlaybackCallbackQueue(logger)
 
     override val state:
             StateFlow<PlayerState> =
@@ -473,36 +478,36 @@ class DesktopPlayerEngine(
         )
     }
 
-    /** Отменяет попытку и её таймеры до освобождения JavaFX и источника. */
+    /** Останавливает JavaFX, дожидается фоновых событий и затем закрывает feedback, SMTC и очередь. */
     fun close() {
+        if (closed) return
         closed = true
         currentAttempt = null
         preparationJob?.cancel()
         stalledJob?.cancel()
-        finishCurrentFeedback(
-            positionMs =
-                state.value.currentPosition,
-            durationMs =
-                state.value.duration,
-            completed =
-                false,
-        )
-
         currentTrackInstanceId =
             null
 
         try {
             runBlocking {
-                JavaFxRuntime.call {
-                    disposeCurrentPlayer()
+                try {
+                    JavaFxRuntime.call { disposeCurrentPlayer() }
+                } finally {
+                    callbackQueue.call {
+                        try {
+                            finishCurrentFeedback(state.value.currentPosition, state.value.duration, false)
+                        } finally {
+                            windowsMediaSession.close()
+                        }
+                    }
                 }
             }
         } finally {
-            try { closeSource() } finally { windowsMediaSession.close() }
+            try { closeSource() } finally { callbackQueue.close() }
         }
     }
 
-    /** Запускает попытку с конечным бюджетом источника; повторные GET/HEAD не продлевают watchdog. */
+    /** Инициализирует состояние/feedback/SMTC вне FX до создания плеера; ограничивает бюджет подготовки. */
     private suspend fun startTrackLocked(
         index: Int,
         autoPlay: Boolean,
@@ -536,6 +541,9 @@ class DesktopPlayerEngine(
             else DesktopPlaybackAttempt.PREPARE_TIMEOUT_MS
         preparationJob = scope.launch {
             delay(prepareTimeout)
+            JavaFxRuntime.call {
+                if (currentAttempt === attempt) currentPlayer?.let { logPlayerDiagnostics("prepareTimeout", it, index) }
+            }
             recoverAttempt(attempt, "подготовка превысила ${prepareTimeout / 1000}с")
         }
         val prepareStarted = System.nanoTime()
@@ -571,25 +579,25 @@ class DesktopPlayerEngine(
             track.instanceId
 
         val newPlayer = try {
+            callbackQueue.call {
+                if (closed || currentAttempt !== attempt || attempt.isFailed) return@call
+                stateStore.setPlayback(isPlaying = false, currentIndex = index)
+                stateStore.setProgress(positionMs = 0L, durationMs = track.durationMs ?: 0L)
+                currentFeedbackMetadata = track.toFeedbackMetadata()
+                playbackFeedbackTracker?.onMediaItemTransition(
+                    metadata = currentFeedbackMetadata,
+                    reason = feedbackReason,
+                    isPlaying = false,
+                    currentPositionMs = 0L,
+                    durationMs = track.durationMs,
+                )
+                windowsMediaSession.setTrack(track)
+                lastWindowsPositionUpdateNanos = 0L
+            }
+            if (closed || currentAttempt !== attempt || attempt.isFailed) return
+
             JavaFxRuntime.call {
-                currentIndex =
-                    index
-
-                stateStore.setPlayback(
-                    isPlaying =
-                        false,
-                    currentIndex =
-                        index,
-                )
-
-                stateStore.setProgress(
-                    positionMs =
-                        0L,
-                    durationMs =
-                        track.durationMs
-                            ?: 0L,
-                )
-
+                if (closed || currentAttempt !== attempt || attempt.isFailed) return@call null
                 val media =
                     Media(
                         resolvedUri,
@@ -630,43 +638,19 @@ class DesktopPlayerEngine(
             windowsMediaSession.setPlaying(false)
             recoverAttempt(attempt, "JavaFX не открыл аудио")
             return
-        }
+        } ?: return
         val prepareMs = (System.nanoTime() - prepareStarted) / 1_000_000
         logger.debug(TAG, "[startTrack] JavaFX создан: instanceId=${track.instanceId}, ${prepareMs}мс; ожидаем READY")
-
-        currentFeedbackMetadata =
-            track.toFeedbackMetadata()
-
-        playbackFeedbackTracker
-            ?.onMediaItemTransition(
-                metadata =
-                    currentFeedbackMetadata,
-                reason =
-                    feedbackReason,
-                isPlaying =
-                    false,
-                currentPositionMs =
-                    0L,
-                durationMs =
-                    track.durationMs,
-            )
-
-        windowsMediaSession.setTrack(
-            track,
-        )
 
         requestWindowsArtwork(
             track,
         )
 
-        lastWindowsPositionUpdateNanos =
-            0L
-
         if (state.value.wantsToPlay) {
             JavaFxRuntime.call {
                 if (
                     currentPlayer ===
-                    newPlayer
+                    newPlayer && !closed && currentAttempt === attempt && !attempt.isFailed
                 ) {
                     newPlayer.play()
                 }
@@ -719,7 +703,7 @@ class DesktopPlayerEngine(
         }
     }
 
-    /** Привязывает события к попытке; VK допускает ограниченную цепочку загрузки сегмента и AES-ключа. */
+    /** Снимает свойства на FX и передаёт побочные действия в очередь; старые попытки отбрасываются. */
     private fun installCallbacks(
         player: MediaPlayer,
         index: Int,
@@ -727,6 +711,34 @@ class DesktopPlayerEngine(
     ) {
         val stallTimeout = if (queue.getOrNull(index)?.source == MusicSource.VK) DesktopPlaybackAttempt.VK_STALL_TIMEOUT_MS
             else DesktopPlaybackAttempt.STALL_TIMEOUT_MS
+        player.statusProperty().addListener { _, previous, current ->
+            if (currentPlayer === player && currentAttempt === attempt) {
+                callbackQueue.post {
+                    logger.debug(TAG, "[playerStatus] index=$index, статус=$previous → $current")
+                }
+                logPlayerDiagnostics("playerStatus", player, index)
+            }
+        }
+        var lastBufferBucket = -1L
+        player.bufferProgressTimeProperty().addListener { _, _, buffered ->
+            val bucket = buffered.toMillisSafe() / 10_000
+            if (currentPlayer === player && currentAttempt === attempt && bucket != lastBufferBucket) {
+                lastBufferBucket = bucket
+                logPlayerDiagnostics("playerBuffer", player, index)
+            }
+        }
+        player.media.setOnError {
+            if (currentPlayer === player && currentAttempt === attempt) {
+                val error = player.media.error
+                callbackQueue.post {
+                    logger.error(TAG, "[mediaError] Ошибка медиа: index=$index, ${safeMediaError(error)}")
+                }
+                logPlayerDiagnostics("mediaError", player, index)
+            }
+        }
+        player.setOnHalted {
+            if (currentPlayer === player && currentAttempt === attempt) logPlayerDiagnostics("playerHalted", player, index)
+        }
         player.setOnReady {
             if (
                 currentPlayer !== player ||
@@ -734,7 +746,7 @@ class DesktopPlayerEngine(
             ) {
                 return@setOnReady
             }
-            logger.debug(TAG, "[ready] index=$index, durationMs=${player.totalDuration.toMillisSafe()}")
+            logPlayerDiagnostics("ready", player, index)
             preparationJob?.cancel()
 
             val positionMs =
@@ -745,31 +757,15 @@ class DesktopPlayerEngine(
                 player.totalDuration
                     .toMillisSafe()
 
-            stateStore.setProgress(
-                positionMs =
-                    positionMs,
-                durationMs =
-                    durationMs,
-            )
-
-            stateStore.completeTrackChange()
-
-            windowsMediaSession.setTimeline(
-                durationMs =
-                    durationMs,
-                positionMs =
-                    positionMs,
-            )
-
-            notifyFeedbackProgress(
-                positionMs =
-                    positionMs,
-                durationMs =
-                    durationMs,
-            )
-
-            lastWindowsPositionUpdateNanos =
-                System.nanoTime()
+            dispatchCallback(attempt) {
+                if (attempt.isFailed) return@dispatchCallback
+                logger.debug(TAG, "[ready] Плеер готов: index=$index, длительностьМс=$durationMs")
+                stateStore.setProgress(positionMs, durationMs)
+                stateStore.completeTrackChange()
+                windowsMediaSession.setTimeline(durationMs, positionMs)
+                notifyFeedbackProgress(positionMs, durationMs)
+                lastWindowsPositionUpdateNanos = System.nanoTime()
+            }
         }
 
         player.setOnPlaying {
@@ -777,27 +773,26 @@ class DesktopPlayerEngine(
                 currentPlayer === player && currentAttempt === attempt && !attempt.isFailed
             ) {
                 stalledJob?.cancel()
-                logger.debug(TAG, "[playing] index=$index, positionMs=${player.currentTime.toMillisSafe()}")
-                stateStore.setPlaying(
-                    true,
-                )
-
-                windowsMediaSession.setPlaying(
-                    true,
-                )
-
-                notifyFeedbackPlaying(
-                    player =
-                        player,
-                    isPlaying =
-                        true,
-                )
+                logPlayerDiagnostics("playing", player, index)
+                val positionMs = player.currentTime.toMillisSafe()
+                val durationMs = player.totalDuration.toMillisSafe()
+                dispatchCallback(attempt) {
+                    if (attempt.isFailed) return@dispatchCallback
+                    logger.debug(TAG, "[playing] Воспроизведение началось: index=$index, позицияМс=$positionMs")
+                    stateStore.setPlaying(true)
+                    windowsMediaSession.setPlaying(true)
+                    notifyFeedbackPlaying(true, positionMs, durationMs)
+                }
             }
         }
 
         player.setOnStalled {
-            if (currentPlayer === player) {
-                logger.warning(TAG, "[stalled] index=$index, positionMs=${player.currentTime.toMillisSafe()}: JavaFX ожидает данные")
+            if (currentPlayer === player && currentAttempt === attempt && !attempt.isFailed) {
+                val positionMs = player.currentTime.toMillisSafe()
+                callbackQueue.post {
+                    logger.warning(TAG, "[stalled] index=$index, позицияМс=$positionMs: JavaFX ожидает данные")
+                }
+                logPlayerDiagnostics("stalled", player, index)
                 if (stalledJob?.isActive != true && state.value.wantsToPlay) {
                     stalledJob = scope.launch {
                         delay(stallTimeout)
@@ -809,47 +804,34 @@ class DesktopPlayerEngine(
 
         player.setOnPaused {
             if (
-                currentPlayer === player
+                currentPlayer === player && currentAttempt === attempt
             ) {
                 stalledJob?.cancel()
-                stateStore.setPlaying(
-                    false,
-                )
-
-                windowsMediaSession.setPlaying(
-                    false,
-                )
-
-                notifyFeedbackPlaying(
-                    player =
-                        player,
-                    isPlaying =
-                        false,
-                )
+                val positionMs = player.currentTime.toMillisSafe()
+                val durationMs = player.totalDuration.toMillisSafe()
+                dispatchCallback(attempt) {
+                    stateStore.setPlaying(false)
+                    windowsMediaSession.setPlaying(false)
+                    notifyFeedbackPlaying(false, positionMs, durationMs)
+                }
             }
         }
 
         player.setOnStopped {
             if (
-                currentPlayer === player
+                currentPlayer === player && currentAttempt === attempt
             ) {
-                stateStore.setPlaying(
-                    false,
-                )
-
-                windowsMediaSession.setPlaying(
-                    false,
-                )
-
-                notifyFeedbackPlaying(
-                    player =
-                        player,
-                    isPlaying =
-                        false,
-                )
+                val positionMs = player.currentTime.toMillisSafe()
+                val durationMs = player.totalDuration.toMillisSafe()
+                dispatchCallback(attempt) {
+                    stateStore.setPlaying(false)
+                    windowsMediaSession.setPlaying(false)
+                    notifyFeedbackPlaying(false, positionMs, durationMs)
+                }
             }
         }
 
+        var lastProgressUpdateNanos = 0L
         player.currentTimeProperty()
             .addListener {
                     _,
@@ -858,8 +840,13 @@ class DesktopPlayerEngine(
                 ->
 
                 if (
-                    currentPlayer === player
+                    currentPlayer === player && currentAttempt === attempt && !attempt.isFailed
                 ) {
+                    val now = System.nanoTime()
+                    if (lastProgressUpdateNanos != 0L && now - lastProgressUpdateNanos < PROGRESS_UPDATE_INTERVAL_NANOS) {
+                        return@addListener
+                    }
+                    lastProgressUpdateNanos = now
                     val positionMs =
                         currentTime
                             .toMillisSafe()
@@ -868,23 +855,13 @@ class DesktopPlayerEngine(
                         player.totalDuration
                             .toMillisSafe()
 
-                    stateStore.setProgress(
-                        positionMs =
-                            positionMs,
-                        durationMs =
-                            durationMs,
-                    )
-
-                    maybeUpdateWindowsPosition(
-                        positionMs,
-                    )
-
-                    notifyFeedbackProgress(
-                        positionMs =
-                            positionMs,
-                        durationMs =
-                            durationMs,
-                    )
+                    callbackQueue.postProgress {
+                        if (!closed && currentAttempt === attempt && !attempt.isFailed) {
+                            stateStore.setProgress(positionMs, durationMs)
+                            maybeUpdateWindowsPosition(positionMs)
+                            notifyFeedbackProgress(positionMs, durationMs)
+                        }
+                    }
                 }
             }
 
@@ -895,23 +872,13 @@ class DesktopPlayerEngine(
                 return@setOnEndOfMedia
             }
 
-            finishCurrentFeedback(
-                positionMs =
-                    player.currentTime
-                        .toMillisSafe(),
-                durationMs =
-                    player.totalDuration
-                        .toMillisSafe(),
-                completed =
-                    true,
-            )
-
-            scope.launch {
-                handleTrackEnded(
-                    finishedIndex =
-                        index,
-                    attempt = attempt,
-                )
+            val positionMs = player.currentTime.toMillisSafe()
+            val durationMs = player.totalDuration.toMillisSafe()
+            dispatchCallback(attempt) {
+                if (attempt.isFailed) return@dispatchCallback
+                stateStore.setProgress(positionMs, durationMs)
+                finishCurrentFeedback(positionMs, durationMs, true)
+                scope.launch { handleTrackEnded(finishedIndex = index, attempt = attempt) }
             }
         }
 
@@ -925,35 +892,62 @@ class DesktopPlayerEngine(
             val error =
                 player.error
 
-            logger.error(
-                TAG,
-                "[MediaPlayer] Ошибка воспроизведения " +
-                        "index=$index, type=${error?.type}",
-            )
-
-            windowsMediaSession.setPlaying(
-                false,
-            )
-
-            finishCurrentFeedback(
-                positionMs =
-                    player.currentTime
-                        .toMillisSafe(),
-                durationMs =
-                    player.totalDuration
-                        .toMillisSafe(),
-                completed =
-                    false,
-            )
+            logPlayerDiagnostics("playerError", player, index)
+            val positionMs = player.currentTime.toMillisSafe()
+            val durationMs = player.totalDuration.toMillisSafe()
+            dispatchCallback(attempt) {
+                logger.error(TAG, "[MediaPlayer] Ошибка воспроизведения: index=$index, ${safeMediaError(error)}")
+                windowsMediaSession.setPlaying(false)
+                finishCurrentFeedback(positionMs, durationMs, false)
+            }
 
             recoverAttempt(attempt, "ошибка JavaFX ${error?.type}")
         }
     }
 
-    /** Повторяет всю цепочку три раза; устаревшие и дублирующиеся сигналы игнорируются. */
+    /** Исполняет побочные действия в последовательной очереди, пока их попытка остаётся текущей. */
+    private fun dispatchCallback(attempt: DesktopPlaybackAttempt, action: () -> Unit) {
+        callbackQueue.post {
+            if (!closed && currentAttempt === attempt) action()
+        }
+    }
+
+    /** Снимает свойства на FX; форматирование, обход причин ошибок и запись происходят в фоне. */
+    private fun logPlayerDiagnostics(stage: String, player: MediaPlayer, index: Int) {
+        val source = queue.getOrNull(index)?.source
+        val status = player.status
+        val positionMs = player.currentTime.toMillisSafe()
+        val bufferMs = player.bufferProgressTime.toMillisSafe()
+        val durationMs = player.totalDuration.toMillisSafe()
+        val wantsToPlay = state.value.wantsToPlay
+        val mute = player.isMute
+        val volume = player.volume
+        val rate = player.rate
+        val trackTypes = player.media.tracks.map { it.javaClass }
+        val playerError = player.error
+        val mediaError = player.media.error
+        callbackQueue.post {
+            logger.debug(TAG, "[$stage] index=$index, источник=$source, " +
+                "статус=$status, позицияМс=$positionMs, буферМс=$bufferMs, длительностьМс=$durationMs, " +
+                "хочетИграть=$wantsToPlay, mute=$mute, громкость=$volume, скорость=$rate, " +
+                "дорожки=${trackTypes.joinToString { it.simpleName }}, " +
+                "ошибкаПлеера=${safeMediaError(playerError)}, ошибкаМедиа=${safeMediaError(mediaError)}")
+        }
+    }
+
+    /** Описывает тип ошибки и классы причин; message/stack trace могут содержать приватную медиассылку. */
+    private fun safeMediaError(error: javafx.scene.media.MediaException?): String {
+        if (error == null) return "нет"
+        val causes = generateSequence(error as Throwable) { it.cause }.take(4).joinToString(" → ") { it.javaClass.simpleName }
+        return "тип=${error.type}, причины=$causes"
+    }
+
+    /** Принимает отказ без IO на FX; лог и восстановление выполняются фоновыми обработчиками. */
     private fun recoverAttempt(attempt: DesktopPlaybackAttempt, reason: String) {
         if (closed || currentAttempt !== attempt || !attempt.fail()) return
-        logger.warning(TAG, "[retryTrack] index=${attempt.index}, попытка=${attempt.retry + 1}/4: $reason")
+        callbackQueue.post {
+            logger.warning(TAG, "[retryTrack] index=${attempt.index}, попытка=${attempt.retry + 1}/4: $reason")
+        }
         scope.launch {
             commandMutex.withLock {
                 if (closed || currentAttempt !== attempt) return@withLock
@@ -961,8 +955,10 @@ class DesktopPlayerEngine(
                 stalledJob?.cancel()
                 JavaFxRuntime.call { disposeCurrentPlayer() }
                 resetSource()
-                stateStore.setPlaying(false)
-                windowsMediaSession.setPlaying(false)
+                callbackQueue.call {
+                    stateStore.setPlaying(false)
+                    windowsMediaSession.setPlaying(false)
+                }
             }
             delay(DesktopPlaybackAttempt.RETRY_DELAY_MS)
             commandMutex.withLock {
@@ -976,7 +972,9 @@ class DesktopPlayerEngine(
                         retry = attempt.retry + 1,
                     )
                 } else {
-                    finishCurrentFeedback(state.value.currentPosition, state.value.duration, false)
+                    callbackQueue.call {
+                        finishCurrentFeedback(state.value.currentPosition, state.value.duration, false)
+                    }
                     val next = nextIndex()?.takeIf { it != attempt.index }
                     logger.warning(TAG, "[skipFailedTrack] index=${attempt.index}: четыре попытки исчерпаны, следующий=$next")
                     if (next != null) {
@@ -997,6 +995,7 @@ class DesktopPlayerEngine(
         }
     }
 
+    /** Ограничивает SMTC-обновления; вызывается только фоновым обработчиком событий. */
     private fun maybeUpdateWindowsPosition(
         positionMs: Long,
     ) {
@@ -1099,10 +1098,8 @@ class DesktopPlayerEngine(
                     ?.available,
         )
 
-    private fun notifyFeedbackPlaying(
-        player: MediaPlayer,
-        isPlaying: Boolean,
-    ) {
+    /** Передаёт feedback снимок позиции без обращения к MediaPlayer из фонового потока. */
+    private fun notifyFeedbackPlaying(isPlaying: Boolean, positionMs: Long, durationMs: Long) {
         playbackFeedbackTracker
             ?.onIsPlayingChanged(
                 metadata =
@@ -1110,11 +1107,9 @@ class DesktopPlayerEngine(
                 isPlaying =
                     isPlaying,
                 currentPositionMs =
-                    player.currentTime
-                        .toMillisSafe(),
+                    positionMs,
                 durationMs =
-                    player.totalDuration
-                        .toMillisSafe()
+                    durationMs
                         .takeIf {
                             it > 0L
                         },
@@ -1287,5 +1282,8 @@ class DesktopPlayerEngine(
 
         const val WINDOWS_POSITION_UPDATE_INTERVAL_NANOS =
             2_000_000_000L
+
+        const val PROGRESS_UPDATE_INTERVAL_NANOS =
+            200_000_000L
     }
 }

@@ -5,28 +5,45 @@ import com.yellastrodev.dwij.data.dao.SongMatchDao
 import com.yellastrodev.dwij.data.dao.SongWithInstances
 import com.yellastrodev.dwij.data.entities.MusicSource
 import com.yellastrodev.dwij.data.entities.SongMatchCandidateEntity
+import com.yellastrodev.dwij.storage.LocalKeyValueStore
 import com.yellastrodev.yamusicsdk.YamLogger
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Job
+import kotlinx.coroutines.currentCoroutineContext
+import kotlinx.coroutines.ensureActive
 import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.collect
+import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.filter
-import kotlinx.coroutines.flow.launchIn
-import kotlinx.coroutines.flow.onEach
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 
-/** Предлагает межсурсные совпадения ЯМ, локальных и VK-песен, не объединяя их автоматически. */
+/** Предлагает межсурсные совпадения; сохранённый переключатель приостанавливает скан без удаления результатов. */
 class SongMatchRepository(
     private val songDao: SongDao,
     private val matchDao: SongMatchDao,
     private val logger: YamLogger,
+    private val settings: LocalKeyValueStore? = null,
 ) {
 
 
     private val resolver: SongMatchResolver = SongMatchResolver(logger)
     private val scanMutex = Mutex()
+    private val mutableScanEnabled = MutableStateFlow(settings?.getBoolean(KEY_SCAN_ENABLED) ?: true)
+    val scanEnabled = mutableScanEnabled.asStateFlow()
+
+    /** Сохраняет выбор; наблюдатель отменяет текущий скан либо возобновляет обработку оставшихся песен. */
+    fun setScanEnabled(enabled: Boolean) {
+        if (mutableScanEnabled.value == enabled) return
+        settings?.edit { putBoolean(KEY_SCAN_ENABLED, enabled) }
+        mutableScanEnabled.value = enabled
+        logger.debug(TAG, "[setScanEnabled] Сканирование мультисурсов ${if (enabled) "включено" else "выключено"}")
+    }
 
     /** Все найденные пары: сначала ожидающие решения, затем уже обработанные. */
     val candidates: Flow<List<SongMatchCandidateEntity>> =
@@ -44,21 +61,28 @@ class SongMatchRepository(
         matchDao.rejectCandidate(first, second)
     }
 
-    /** Запускает один наблюдатель: новая Song с resolverVersion=0 сама попадёт в скан. */
-    fun start(scope: CoroutineScope): Job = songDao
-        .observeUnscannedSongCount(CURRENT_RESOLVER_VERSION)
-        .distinctUntilChanged()
-        .filter { count -> count > 0 }
-        .onEach { count ->
-            logger.debug(TAG, "[start] В очереди resolver-а песен=$count")
-            scanUnprocessedSongs()
+    /** Наблюдает очередь только при включённом скане; collectLatest отменяет обработку при отключении. */
+    fun start(scope: CoroutineScope): Job = scope.launch {
+        scanEnabled.collectLatest { enabled ->
+            if (enabled) {
+                songDao.observeUnscannedSongCount(CURRENT_RESOLVER_VERSION)
+                    .distinctUntilChanged()
+                    .filter { count -> count > 0 }
+                    .collect { count ->
+                        logger.debug(TAG, "[start] В очереди resolver-а песен=$count")
+                        scanUnprocessedSongs()
+                    }
+            }
         }
-        .launchIn(scope)
+    }
 
-    /** Пост-скан после обновления и инкрементальный скан используют один механизм. */
+    /** Сканирует только при включённой настройке; незавершённые песни остаются для следующего запуска. */
     suspend fun scanUnprocessedSongs(): Unit = scanMutex.withLock {
+        if (!scanEnabled.value) return@withLock
         var scannedCount = 0
         while (true) {
+            currentCoroutineContext().ensureActive()
+            if (!scanEnabled.value) return@withLock
             val batch = songDao.getUnscannedSongs(
                 resolverVersion = CURRENT_RESOLVER_VERSION,
                 limit = SCAN_BATCH_SIZE,
@@ -74,7 +98,10 @@ class SongMatchRepository(
             var batchCandidateCount = 0
             batch.forEach { song ->
                 try {
-                    val search = findCandidates(song, allSongs)
+                    currentCoroutineContext().ensureActive()
+                    if (!scanEnabled.value) return@withLock
+                    val search = findCandidates(song, allSongs) ?: return@withLock
+                    if (!scanEnabled.value) return@withLock
                     batchComparisonCount += search.comparedPairs
                     batchCandidateCount += search.candidates.size
                     matchDao.replacePendingCandidatesForSong(
@@ -118,13 +145,15 @@ class SongMatchRepository(
         Unit
     }
 
-    /** Сравнивает независимые группы; дополнительные ограничения записи применяются только к парам с VK. */
-    private fun findCandidates(
+    /** Сравнивает независимые группы, проверяя отмену и переключатель между парами; null означает прерванный скан. */
+    private suspend fun findCandidates(
         song: SongWithInstances,
         allSongs: List<SongWithInstances>,
-    ): SongCandidateSearch {
+    ): SongCandidateSearch? {
         var comparedPairs = 0
         val candidates = allSongs.mapNotNull { other ->
+            currentCoroutineContext().ensureActive()
+            if (!scanEnabled.value) return null
             if (song.song.songId == other.song.songId || !isCrossSourcePair(song, other)) {
                 return@mapNotNull null
             }
@@ -179,6 +208,7 @@ class SongMatchRepository(
         const val CURRENT_RESOLVER_VERSION = 2
         private const val SCAN_BATCH_SIZE = 32
         private const val TAG = "SongMatchRepository"
+        private const val KEY_SCAN_ENABLED = "multi_source_scan_enabled"
     }
 }
 

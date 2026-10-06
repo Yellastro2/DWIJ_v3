@@ -21,6 +21,7 @@ import kotlin.math.roundToLong
 
 /**
  * Windows runtime вокруг общего DwijComponent с независимыми DPAPI-сессиями Яндекс/VK.
+ * VK HLS отдаётся JavaFX как MP3 без TS/PES-обёртки, с прежним форматом хранения.
  */
 class DesktopRuntime private constructor(
     val component: DwijComponent,
@@ -76,6 +77,7 @@ class DesktopRuntime private constructor(
 
         /**
          * Собирает desktop-граф, DPAPI-сессии и журнал; сброс плеера отменяет чтения обоих сетевых источников.
+         * Включает снятие TS-обёртки VK MP3 для HLS-плеера JavaFX.
          */
         fun create():
                 DesktopRuntime {
@@ -274,6 +276,7 @@ class DesktopRuntime private constructor(
                     },
                     platformLifecycle =
                         DesktopDwijPlatformLifecycle,
+                    vkMp3HlsSegments = true,
                 )
 
             playerEngine.bindPlaybackFeedback(

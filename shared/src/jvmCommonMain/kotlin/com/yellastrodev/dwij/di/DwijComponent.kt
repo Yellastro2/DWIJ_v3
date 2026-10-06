@@ -68,6 +68,8 @@ import java.util.concurrent.atomic.AtomicBoolean
  * Постоянные VK-bundle используют отдельный каталог и общую платформенную очередь загрузки.
  * Общий SongRepository передаётся VK-репозиторию напрямую; обратной зависимости нет.
  * Загрузка VK-обложек учитывает диагностический режим текущей OAuth или web-сессии.
+ * Скан мультисурсных совпадений использует общее постоянное хранилище настроек.
+ * Desktop передаёт режим MP3 HLS для совместимости VK с JavaFX.
  *
  * Платформа передаёт системные реализации, низкоуровневое key-value хранилище
  * обычных настроек и защищённое хранилище авторизации.
@@ -308,6 +310,7 @@ class DwijComponent private constructor(
             songDao = db.songDao(),
             matchDao = db.songMatchDao(),
             logger = logger,
+            settings = localKeyValueStore,
         )
     }
 
@@ -439,6 +442,7 @@ class DwijComponent private constructor(
         /**
          * Восстанавливает постоянные настройки и независимые защищённые Яндекс/VK-сессии,
          * затем создаёт общий индекс Song и передаёт его source-репозиториям без циклических зависимостей.
+         * vkMp3HlsSegments включается desktop-хостом; Android сохраняет прежний TS-поток.
          */
         fun create(
             applicationScope: CoroutineScope,
@@ -456,6 +460,7 @@ class DwijComponent private constructor(
             canReadAudio: () -> Boolean,
             platformLifecycle: DwijPlatformLifecycle =
                 NoOpDwijPlatformLifecycle,
+            vkMp3HlsSegments: Boolean = false,
         ): DwijComponent {
 
             val cacheSettings =
@@ -508,7 +513,7 @@ class DwijComponent private constructor(
                     sessionManager,
                 vkMusicRepository = runBlocking(Dispatchers.IO) {
                     com.yellastrodev.dwij.data.repo.VkMusicRepository(vkSessionPayloadStore, logger,
-                        songRepository, db.vkLibraryDao())
+                        songRepository, db.vkLibraryDao(), mp3HlsSegments = vkMp3HlsSegments)
                         .also { it.restore() }
                 },
                 cacheSettings =

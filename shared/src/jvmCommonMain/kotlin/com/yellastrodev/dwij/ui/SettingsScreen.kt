@@ -62,6 +62,7 @@ import kotlin.math.roundToInt
  * Экран не читает платформенные сведения и не запускает OAuth самостоятельно: хост передаёт
  * версию сборки, готовое состояние и обработчики, а также слот авторизации VK рядом с Яндексом.
  * Интерфейс можно превьюить отдельно.
+ * Внизу находится переключатель фонового поиска мультисурсных совпадений.
  */
 @Composable
 fun SettingsScreen(
@@ -89,6 +90,8 @@ fun SettingsScreen(
     httpRemoteError: String?,
     onHttpRemoteEnabledChange: (Boolean) -> Unit,
     onHttpRemotePortChange: (Int) -> Unit,
+    multiSourceScanEnabled: Boolean,
+    onMultiSourceScanEnabledChange: (Boolean) -> Unit,
     vkAuthorizationContent: @Composable () -> Unit = {},
     modifier: Modifier = Modifier,
 ) {
@@ -173,6 +176,10 @@ fun SettingsScreen(
                     onEnabledChange = onHttpRemoteEnabledChange,
                     onPortChange = onHttpRemotePortChange,
                 )
+                SettingsMultiSourceScanCard(
+                    enabled = multiSourceScanEnabled,
+                    onEnabledChange = onMultiSourceScanEnabledChange,
+                )
             }
             Text(
                 text =
@@ -201,6 +208,34 @@ fun SettingsScreen(
                 .align(Alignment.BottomCenter)
                 .padding(horizontal = 14.dp, vertical = 12.dp),
         )
+    }
+}
+
+/** Управляет фоновым поиском совпадений песен между источниками музыки. */
+@Composable
+private fun SettingsMultiSourceScanCard(enabled: Boolean, onEnabledChange: (Boolean) -> Unit) {
+    SettingsTextureCard(
+        textureRes = Res.drawable.bg_focus_texture,
+        accent = DwijColors.CyanBright,
+    ) {
+        Column(modifier = Modifier.fillMaxWidth().padding(18.dp)) {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Text(
+                    text = stringResource(Res.string.settings_multi_source_scan_title),
+                    color = DwijColors.White,
+                    fontSize = 18.sp,
+                    fontWeight = FontWeight.Bold,
+                    modifier = Modifier.weight(1f),
+                )
+                Switch(checked = enabled, onCheckedChange = onEnabledChange)
+            }
+            Text(
+                text = stringResource(Res.string.settings_multi_source_scan_description),
+                color = DwijColors.SecondaryText,
+                fontSize = 12.sp,
+                modifier = Modifier.padding(top = 5.dp),
+            )
+        }
     }
 }
 
@@ -911,5 +946,7 @@ private fun SettingsScreenPreview() {
         httpRemoteError = null,
         onHttpRemoteEnabledChange = {},
         onHttpRemotePortChange = {},
+        multiSourceScanEnabled = true,
+        onMultiSourceScanEnabledChange = {},
     )
 }

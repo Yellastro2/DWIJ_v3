@@ -29,7 +29,7 @@ import com.yellastrodev.vkmusicsdk.VkWebSession
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.CancellationException
 
-/** Показывает аккаунт VK, Android-вход через сайт и сохранённые способы OAuth Маруси. */
+/** Показывает аккаунт и вход через сайт VK; сброс браузера доступен до/после входа, OAuth Маруси скрыт из UI. */
 @Composable
 fun VkAuthorizationCard(repository: VkMusicRepository, platform: SettingsPlatform, onMessage: (String) -> Unit = {}) {
     val authorized by repository.authorized.collectAsState()
@@ -49,7 +49,7 @@ fun VkAuthorizationCard(repository: VkMusicRepository, platform: SettingsPlatfor
     var busy by remember { mutableStateOf(false) }
     var message by remember { mutableStateOf<String?>(null) }
     var messageIsError by remember { mutableStateOf(false) }
-    var browserOpen by rememberSaveable { mutableStateOf(false) }
+    var browserOpen by remember { mutableStateOf(false) }
     var webBrowserOpen by rememberSaveable { mutableStateOf(false) }
     var manualLogin by rememberSaveable { mutableStateOf(true) }
 
@@ -58,6 +58,25 @@ fun VkAuthorizationCard(repository: VkMusicRepository, platform: SettingsPlatfor
         message = text
         messageIsError = isError
         onMessage(text)
+    }
+
+    /** Очищает только браузерный профиль; сохранённая авторизация репозитория остаётся до явного удаления. */
+    fun resetBrowserSession() {
+        if (busy || browserOpen || webBrowserOpen) return
+        busy = true
+        state = null
+        callback = ""
+        scope.launch {
+            try {
+                platform.resetVkBrowserSession()
+                reportMessage("Сессия браузера VK сброшена", isError = false)
+            } catch (error: CancellationException) {
+                throw error
+            } catch (error: Exception) {
+                logger.warning("VkAuthorizationCard", "[resetVkBrowserSession] Ошибка очистки: тип=${error.javaClass.simpleName}")
+                reportMessage("Не удалось сбросить сессию браузера")
+            } finally { busy = false }
+        }
     }
 
     /** Проверяет callback/state и сохраняет вход; в режиме только OAuth музыкальный API не вызывается. */
@@ -149,7 +168,12 @@ fun VkAuthorizationCard(repository: VkMusicRepository, platform: SettingsPlatfor
                     }
                 },
             )
-            message?.takeIf { messageIsError }?.let { Text(it, color = Color(0xFFFFB4AB)) }
+            if (platform.canResetVkBrowserSession) {
+                TextButton(enabled = !busy && !browserOpen && !webBrowserOpen, onClick = ::resetBrowserSession) {
+                    Text("Сбросить сессию браузера VK", color = DwijColors.CyanBright)
+                }
+            }
+            message?.let { Text(it, color = if (messageIsError) Color(0xFFFFB4AB) else DwijColors.CyanBright) }
         }
     } else Card(
         modifier = Modifier.fillMaxWidth(), shape = RoundedCornerShape(18.dp),
@@ -163,39 +187,6 @@ fun VkAuthorizationCard(repository: VkMusicRepository, platform: SettingsPlatfor
             if (busy) Text(if (webBrowserOpen) "Подключаем аккаунт VK…"
                 else if (VkMusicRepository.AUTHORIZATION_ONLY) "Сохраняем авторизацию VK…"
                 else "Проверяем доступ к VK Music…", color = DwijColors.CyanBright)
-            if (state != null && manualLogin) {
-                Text("После входа скопируйте полный адрес страницы из адресной строки браузера и вставьте сюда.")
-                OutlinedTextField(
-                    value = callback, onValueChange = { callback = it; message = null; messageIsError = false }, enabled = !busy,
-                    isError = messageIsError,
-                    label = { Text("Адрес страницы после входа") },
-                    colors = OutlinedTextFieldDefaults.colors(
-                        focusedTextColor = DwijColors.White, unfocusedTextColor = DwijColors.White,
-                        disabledTextColor = DwijColors.White.copy(alpha = 0.75f),
-                        focusedLabelColor = DwijColors.CyanBright, unfocusedLabelColor = DwijColors.White,
-                        disabledLabelColor = DwijColors.White.copy(alpha = 0.75f),
-                        unfocusedBorderColor = Color(0xFF5B9BFF),
-                        disabledBorderColor = Color(0xFF5B9BFF).copy(alpha = 0.65f),
-                        focusedContainerColor = DwijColors.SettingsCardBackground,
-                        unfocusedContainerColor = DwijColors.SettingsCardBackground,
-                        disabledContainerColor = DwijColors.SettingsCardBackground,
-                        focusedBorderColor = DwijColors.CyanBright, cursorColor = DwijColors.CyanBright,
-                        errorTextColor = DwijColors.White, errorLabelColor = Color(0xFFFFB4AB),
-                        errorBorderColor = Color(0xFFFFB4AB), errorCursorColor = DwijColors.CyanBright,
-                        errorContainerColor = DwijColors.SettingsCardBackground,
-                    ),
-                    minLines = 3, maxLines = 6,
-                    modifier = Modifier.fillMaxWidth().heightIn(min = 120.dp, max = 220.dp),
-                )
-                Button(
-                    enabled = !busy && callback.isNotBlank(), modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp),
-                    colors = ButtonDefaults.buttonColors(
-                        containerColor = DwijColors.CyanBright, contentColor = DwijColors.Black,
-                        disabledContainerColor = Color(0xFF263348), disabledContentColor = Color(0xFFCBD5E1),
-                    ),
-                    onClick = { completeAuthorization(callback, automatic = false) },
-                ) { Text(if (busy) "Проверяем доступ…" else "Завершить вход") }
-            }
             if (platform.hasVkWebLogin) {
                 OutlinedButton(
                     enabled = !busy, modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp),
@@ -211,36 +202,10 @@ fun VkAuthorizationCard(repository: VkMusicRepository, platform: SettingsPlatfor
                     },
                 ) { Text("Войти через сайт VK") }
             }
-            OutlinedButton(
-                enabled = !busy, modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp),
-                colors = ButtonDefaults.outlinedButtonColors(
-                    contentColor = DwijColors.White, disabledContentColor = Color(0xFFCBD5E1),
-                ),
-                border = BorderStroke(1.dp, Color(0xFF5B9BFF)),
-                onClick = { beginLogin(platform.hasEmbeddedVkLogin) },
-            ) { Text(if (state != null) "Открыть вход заново" else "Войти в VK через Марусю") }
-            if (platform.hasEmbeddedVkLogin) {
-                TextButton(enabled = !busy, onClick = { beginLogin(embedded = false) }) {
-                    Text("Войти через внешний браузер", color = DwijColors.CyanBright)
-                }
-            }
             if (platform.canResetVkBrowserSession) {
-                TextButton(enabled = !busy && !browserOpen && !webBrowserOpen, onClick = {
-                    busy = true
-                    state = null
-                    callback = ""
-                    scope.launch {
-                        try {
-                            platform.resetVkBrowserSession()
-                            reportMessage("Сессия браузера сброшена. Откройте вход VK заново", isError = false)
-                        } catch (error: CancellationException) {
-                            throw error
-                        } catch (error: Exception) {
-                            logger.warning("VkAuthorizationCard", "[resetVkBrowserSession] Ошибка очистки: тип=${error.javaClass.simpleName}")
-                            reportMessage("Не удалось сбросить сессию браузера")
-                        } finally { busy = false }
-                    }
-                }) { Text("Сбросить сессию браузера VK", color = DwijColors.CyanBright) }
+                TextButton(enabled = !busy && !browserOpen && !webBrowserOpen, onClick = ::resetBrowserSession) {
+                    Text("Сбросить сессию браузера VK", color = DwijColors.CyanBright)
+                }
             }
         }
     }
@@ -248,16 +213,6 @@ fun VkAuthorizationCard(repository: VkMusicRepository, platform: SettingsPlatfor
         platform.VkWebLoginBrowser(onSession = ::completeWebAuthorization,
             onDismiss = { webBrowserOpen = false; message = null; messageIsError = false },
             busy = busy, error = message?.takeIf { messageIsError })
-    }
-    if (browserOpen && state != null) {
-        platform.VkLoginBrowser(VkOAuth.authorizationUrl(state.orEmpty()),
-            onRedirect = { completeAuthorization(it, automatic = true) },
-            onDismiss = { browserOpen = false; state = null; callback = "" },
-            onOpenExternalBrowser = {
-                browserOpen = false
-                manualLogin = true
-                if (!platform.openUrl(VkOAuth.authorizationUrl(state.orEmpty()))) reportMessage("Не удалось открыть браузер")
-            })
     }
 }
 

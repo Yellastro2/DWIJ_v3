@@ -49,15 +49,19 @@ const val VK_ALL_TRACKS = "0_-2"
  * OAuth-токен либо браузерные cookies с обновляемым токеном сохраняются только в защищённом payload.
  * Временные URI создаются при подготовке очереди; диагностический запрет относится только к OAuth.
  * Аудио проходит через relay с необязательным постоянным кешем приложения.
+ * Desktop может получать MP3 HLS без TS-обёртки; формат кеша и offline-bundle сохраняется.
  * Явное сохранение публикует независимый offline-bundle вне LRU.
+ * Сборка очередей использует отдельный mutex и не ожидает сетевого обновления фонотеки.
  */
 class VkMusicRepository(
     private val store: ProtectedSessionPayloadStore,
     private val logger: YamLogger,
     private val songs: SongRepository,
     private val libraryDao: VkLibraryDao,
+    private val mp3HlsSegments: Boolean = false,
 ) : Closeable {
     private val mutex = Mutex()
+    private val queueMutex = Mutex()
     private val sessionStorageLock = Any()
     @Volatile private var client: VkApiClient? = null
     @Volatile private var relay: VkHlsRelay? = null
@@ -369,8 +373,8 @@ class VkMusicRepository(
     /** Подключает общее хранилище до первого воспроизведения; SDK не зависит от файлов приложения. */
     fun useAudioCache(cache: VkAudioCache) { audioCache = cache }
 
-    /** Создаёт relay с общим кешем и диагностикой без подписанных URL. */
-    private fun createRelay(): VkHlsRelay = VkHlsRelay().also {
+    /** Создаёт relay с платформенным HLS-режимом, общим кешем и безопасной диагностикой. */
+    private fun createRelay(): VkHlsRelay = VkHlsRelay(mp3HlsSegments).also {
         it.useAudioCache(audioCache)
         it.onError { message -> logger.warning(TAG, message) }
         it.onDiagnostic { message -> logger.debug(TAG, message) }
@@ -410,6 +414,13 @@ class VkMusicRepository(
 
     /** Сопоставляет исходный трек с подтверждённым audio.add личным экземпляром без сравнения названий. */
     fun isInMyTracks(audio: VkAudio): Boolean = myTrackInstance(audio) != null
+
+    /** Идентификаторы одной VK-записи: точный ID, release ID и подтверждённый сервером alias. */
+    fun audioIdentityIds(audio: VkAudio): Set<String> = buildSet {
+        add(audio.fullId)
+        audio.releaseAudioId?.takeIf(String::isNotBlank)?.let(::add)
+        myTrackAliases.value[audio.fullId]?.let(::add)
+    }
 
     /** Находит только точный source-id или серверную связь ID, полученную при добавлении. */
     private fun myTrackInstance(audio: VkAudio): VkAudio? {
@@ -676,10 +687,13 @@ class VkMusicRepository(
         return owner
     }
 
-    /** Получает актуальный состав; preferLocal сначала возвращает аккаунтный Room-кеш или offline-снимок. */
-    suspend fun getPlaylist(fullId: String, preferLocal: Boolean = false): DataResult<VkPlaylistContent> {
+    /** Читает состав с кешем; allowSavedFallback=false требует сетевой ответ перед изменением членства. */
+    suspend fun getPlaylist(fullId: String, preferLocal: Boolean = false,
+        allowSavedFallback: Boolean = true): DataResult<VkPlaylistContent> {
         if (preferLocal) cachedPlaylist(fullId)?.let { return DataResult.Success(it) }
-        val saved = withContext(Dispatchers.IO) { localStorage?.playlists()?.firstOrNull { it.playlist.fullId == fullId } }
+        val saved = if (allowSavedFallback) withContext(Dispatchers.IO) {
+            localStorage?.playlists()?.firstOrNull { it.playlist.fullId == fullId }
+        } else null
         if (fullId == VK_MY_TRACKS || fullId == VK_ALL_TRACKS) {
             val result = getCollection(fullId)
             return if (result is DataResult.Failure && saved != null)
@@ -817,14 +831,16 @@ class VkMusicRepository(
         }
     }
 
-    /** Индексирует состав и передаёт обычные Song; URI VK создаёт callback общей очереди. */
+    /** Собирает готовую очередь без сетевого mutex фонотеки; URI разрешается отдельно плеером. */
     suspend fun playPlaylist(
         playlist: VkPlaylist, tracks: List<VkAudio>, startIndex: Int, player: PlayerRepository,
     ): DataResult<Unit> = operation("playPlaylist") {
-        mutex.withLock {
+        queueMutex.withLock {
+            val session = sessionRevision.value
             require(tracks.isNotEmpty() && startIndex in tracks.indices)
             registerTracks(tracks)
             val queue = songs.songsForVkTracks(tracks)
+            check(session == sessionRevision.value) { "Сессия VK изменилась при подготовке очереди" }
             require(queue.size == tracks.size) { "Не удалось собрать полный состав VK" }
             player.playQueue(queue, startIndex, VkPlaylistTracklist(playlist))
             logger.info(TAG, "[playPlaylist] Общая очередь VK передана плееру: треков=${queue.size}, позиция=$startIndex")
@@ -838,11 +854,13 @@ class VkMusicRepository(
         return fresh
     }
 
-    /** Индексирует выбранный трек, не меняя коллекции; URI разрешается отдельно от Song. */
+    /** Запускает выбранный трек без ожидания сетевого обновления фонотеки; индекс имеет свой mutex. */
     suspend fun play(audio: VkAudio, player: PlayerRepository): DataResult<Unit> = operation("play") {
-        mutex.withLock {
+        queueMutex.withLock {
+            val session = sessionRevision.value
             registerTracks(listOf(audio))
             val queue = songs.songsForVkTracks(listOf(audio))
+            check(session == sessionRevision.value) { "Сессия VK изменилась при подготовке трека" }
             require(queue.size == 1) { "Не удалось собрать трек VK" }
             player.playQueue(queue, 0, VkSearchTracklist())
         }

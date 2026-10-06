@@ -14,11 +14,13 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
+import androidx.lifecycle.viewmodel.compose.viewModel
 import com.yellastrodev.dwij.HomeMusicSource
 import com.yellastrodev.dwij.data.DataError
 import com.yellastrodev.dwij.data.DataResult
 import com.yellastrodev.dwij.data.repo.VK_MY_TRACKS
 import com.yellastrodev.dwij.di.DwijComponent
+import com.yellastrodev.dwij.models.VkPlaylistGridModel
 import com.yellastrodev.dwij.resources.*
 import com.yellastrodev.dwij.ui.playlist.*
 import com.yellastrodev.dwij.ui.theme.DwijColors
@@ -31,7 +33,7 @@ import kotlinx.coroutines.withContext
 import org.jetbrains.compose.resources.stringResource
 import org.jetbrains.compose.resources.getString
 
-/** Сразу показывает аккаунтный кеш сетки и обновляет его в фоне, не ожидая загрузки «Моих треков». */
+/** Показывает удерживаемую сетку и offline-обложки, отмечает членство и подтверждает удаление трека. */
 @Composable
 internal fun VkPlaylistGridRoute(
     component: DwijComponent,
@@ -50,51 +52,39 @@ internal fun VkPlaylistGridRoute(
     val sessionRevision by repository.sessionRevision.collectAsState()
     val myTracks by repository.myTracks.collectAsState()
     val myTracksLoaded by repository.myTracksLoaded.collectAsState()
+    val playlistTracks by repository.playlistTracks.collectAsState()
     val scope = rememberCoroutineScope()
     val snackbar = remember { SnackbarHostState() }
-    var loading by remember(sessionRevision) { mutableStateOf(!repository.hasCachedPlaylists()) }
-    var refreshing by remember(sessionRevision) { mutableStateOf(false) }
-    var loadError by remember { mutableStateOf<String?>(null) }
+    val model = viewModel(key = "vk-playlist-grid:${trackToAdd ?: "browse"}") {
+        VkPlaylistGridModel(repository, trackToAdd)
+    }
+    val gridState by model.state.collectAsState()
+    val loading = gridState.loading
+    val refreshing = gridState.refreshing
+    val pickedTrack = gridState.pickedTrack
+    val loadError = gridState.error?.vkPlaylistMessage()
+        ?: if (!authorized && savedPlaylists.isEmpty()) "Войдите в ВК Музыку в настройках" else null
     var busy by remember { mutableStateOf(false) }
     var creating by remember { mutableStateOf(false) }
     var deleting by remember { mutableStateOf<VkPlaylist?>(null) }
     var contextPlaylist by remember { mutableStateOf<VkPlaylist?>(null) }
-    var pickedTrack by remember(trackToAdd, sessionRevision) { mutableStateOf<VkAudio?>(null) }
+    var removing by remember(sessionRevision) { mutableStateOf<Pair<VkPlaylist, VkAudio>?>(null) }
 
     /** Показывает безопасный код ошибки API и сохраняет доступ к повторной попытке. */
     fun showFailure(error: DataError) {
         scope.launch { snackbar.showSnackbar(error.vkPlaylistMessage()) }
     }
 
-    /** Фоновое обновление не блокирует готовые плитки; режим добавления отдельно ждёт исходный трек. */
-    suspend fun reload() {
-        loading = !repository.hasCachedPlaylists()
-        refreshing = true
-        loadError = null
-        try {
-            when (val result = repository.refreshPlaylists()) {
-                is DataResult.Success -> Unit
-                is DataResult.Failure -> {
-                    loadError = result.error.vkPlaylistMessage()
-                    showFailure(result.error)
-                }
-            }
-            if (trackToAdd != null) {
-                when (val result = repository.getAudio(trackToAdd.removePrefix("vk:"))) {
-                    is DataResult.Success -> pickedTrack = result.value
-                    is DataResult.Failure -> { pickedTrack = null; showFailure(result.error) }
-                }
-            }
-        } finally { loading = false; refreshing = false }
+    LaunchedEffect(gridState.error) {
+        gridState.error?.let { snackbar.showSnackbar(it.vkPlaylistMessage()) }
     }
 
     LaunchedEffect(authorized, sessionRevision, trackToAdd) {
         creating = false
         deleting = null
-        if (authorized) reload() else {
-            loading = false
-            loadError = if (savedPlaylists.isEmpty()) "Войдите в ВК Музыку в настройках" else null
-        }
+        removing = null
+        contextPlaylist = null
+        model.load(authorized, sessionRevision)
     }
 
     val visiblePlaylists = if (!authorized && trackToAdd == null) savedPlaylists
@@ -113,6 +103,9 @@ internal fun VkPlaylistGridRoute(
         visiblePlaylists.filter { it.id >= 0 }.forEach { playlist ->
             add(PlaylistGridScreenItem(id = playlist.fullId, title = playlist.title,
                 details = "${playlist.count} треков", shouldLoadCover = playlist.coverUrl != null,
+                highlighted = pickedTrack?.let { audio ->
+                    repository.audioIdentityIds(audio).any { it in playlistTracks[playlist.fullId].orEmpty() }
+                } == true,
                 fallbackArtwork = PlaylistGridArtwork.PlayerFallback))
         }
     }
@@ -142,13 +135,28 @@ internal fun VkPlaylistGridRoute(
             if (item.id == VK_MY_TRACKS && trackToAdd == null) { onOpenPlaylist(VK_MY_TRACKS); return@click }
             val playlist = visiblePlaylists.firstOrNull { it.fullId == item.id } ?: return@click
             if (trackToAdd == null) onOpenPlaylist(playlist.fullId) else {
-                val audio = pickedTrack ?: return@click
+                val audio = pickedTrack
+                if (audio == null) {
+                    scope.launch { snackbar.showSnackbar(getString(Res.string.playlists_track_load_failed)) }
+                    return@click
+                }
                 busy = true
                 scope.launch {
                     try {
-                        when (val result = repository.addToPlaylist(playlist, audio)) {
-                            is DataResult.Success -> onBackClick()
-                            is DataResult.Failure -> showFailure(result.error)
+                        // Проверяем именно выбранный список: неизвестный или устаревший кеш не означает отсутствия трека.
+                        when (val content = repository.getPlaylist(playlist.fullId, allowSavedFallback = false)) {
+                            is DataResult.Failure -> showFailure(content.error)
+                            is DataResult.Success -> {
+                                val ids = repository.audioIdentityIds(audio)
+                                val existing = content.value.tracks.firstOrNull { candidate ->
+                                    repository.audioIdentityIds(candidate).any { it in ids }
+                                }
+                                if (existing != null) removing = content.value.playlist to existing
+                                else when (val result = repository.addToPlaylist(content.value.playlist, audio)) {
+                                    is DataResult.Success -> onBackClick()
+                                    is DataResult.Failure -> showFailure(result.error)
+                                }
+                            }
                         }
                     } finally { busy = false }
                 }
@@ -161,10 +169,11 @@ internal fun VkPlaylistGridRoute(
         },
         loadCover = { fullId ->
             withContext(Dispatchers.IO) {
-                playlists.firstOrNull { it.fullId == fullId }?.let { component.coverRepository.getVkPlaylistCover(it)?.toImageBitmapOrNull() }
+                visiblePlaylists.firstOrNull { it.fullId == fullId }
+                    ?.let { component.coverRepository.getVkPlaylistCover(it)?.toImageBitmapOrNull() }
             }
         },
-        onRefresh = { if (!refreshing && !busy && authorized) scope.launch { reload() } },
+        onRefresh = { if (!refreshing && !busy && authorized) model.refresh() },
         onDialogDismiss = { if (!busy) creating = false },
         onCreatePlaylist = { title, _ ->
             if (!busy && title.isNotBlank()) {
@@ -184,6 +193,26 @@ internal fun VkPlaylistGridRoute(
     Box(modifier.fillMaxSize()) {
         PlaylistGridContent(state, actions, Modifier.fillMaxSize())
         SnackbarHost(snackbar, Modifier.align(Alignment.BottomCenter).padding(12.dp))
+    }
+    removing?.let { (playlist, audio) ->
+        VkPlaylistConfirmDialog(
+            title = "Удалить трек из плейлиста?",
+            text = "«${audio.title}» уже есть в «${playlist.title}». Удалить его из этого плейлиста?",
+            busy = busy, onDismiss = { removing = null },
+            onConfirm = {
+                if (!busy) {
+                    busy = true
+                    scope.launch {
+                        try {
+                            when (val result = repository.removeFromPlaylist(playlist, audio)) {
+                                is DataResult.Success -> { removing = null; onBackClick() }
+                                is DataResult.Failure -> showFailure(result.error)
+                            }
+                        } finally { busy = false }
+                    }
+                }
+            },
+        )
     }
     contextPlaylist?.let { playlist ->
         AlertDialog(onDismissRequest = { if (!busy) contextPlaylist = null }, containerColor = DwijColors.Background,

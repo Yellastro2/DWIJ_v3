@@ -278,4 +278,6 @@
     <string name="settings_local_storage_cleared">Локальное хранение очищено</string>
     <string name="settings_local_storage_clear_failed">Не удалось удалить часть локальных файлов</string>
     <string name="settings_local_storage_cancel">Отмена</string>
+    <string name="settings_multi_source_scan_title">Сканирование мультисурсов</string>
+    <string name="settings_multi_source_scan_description">Искать совпадения песен между Яндекс Музыкой, ВК и локальной музыкой</string>
 </resources>
