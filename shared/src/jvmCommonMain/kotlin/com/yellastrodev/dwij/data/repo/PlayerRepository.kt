@@ -10,7 +10,6 @@ import com.yellastrodev.dwij.data.entities.dYaPlaylist
 import com.yellastrodev.dwij.data.entities.dYaWave
 import com.yellastrodev.dwij.data.entities.toPlaybackTrack
 import com.yellastrodev.dwij.playback.PlaybackSettings
-import com.yellastrodev.dwij.playback.DailyPlaylistTracklist
 import com.yellastrodev.dwij.playback.PlayerEngine
 import com.yellastrodev.dwij.playback.RepeatMode
 import com.yellastrodev.dwij.utils.PlayerEvent
@@ -31,7 +30,7 @@ import kotlinx.coroutines.flow.onEach
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 
-/** Управляет очередью; VK URI получает через callback, платформенные движки и другие источники не меняются. */
+/** Управляет очередью; продолжает её по явному seed треклиста, VK URI разрешает независимо от происхождения песни. */
 class PlayerRepository(
     private val engine: PlayerEngine,
     private val settings: PlaybackSettings,
@@ -98,17 +97,14 @@ class PlayerRepository(
             .launchIn(scope)
     }
 
-    /** Продолжает подходящие списки волной, сохраняя конечность плейлиста дня и всех VK-очередей. */
+    /** Продолжает очередь ЯМ-волной только при явно указанном поддерживаемом seed треклиста. */
     private suspend fun handleEngineEvent(event: PlayerEvent) {
         if (event is PlayerEvent.TrackListEnd) {
             val tracklist = dtracklist.value
 
             if (
                 tracklist != null &&
-                tracklist !is DailyPlaylistTracklist &&
-                tracklist !is com.yellastrodev.dwij.data.entities.VkSearchTracklist &&
-                tracklist !is com.yellastrodev.dwij.data.entities.VkPlaylistTracklist &&
-                tracklist.getType() != LocalTracklist.Companion.TYPE
+                !tracklist.yandexWaveSeed().isNullOrBlank()
             ) {
                 continueWave(tracklist)
                 return
@@ -258,7 +254,7 @@ class PlayerRepository(
         }
 
         blockShuffle(
-            isWave = tracklist.getType() == dYaWave.Companion.YA_WAVE,
+            isWave = tracklist.getType() == dYaWave.Companion.YA_WAVE || tracklist.preserveQueueOrder(),
         )
 
         currentTrackList = songs.map(Song::id)

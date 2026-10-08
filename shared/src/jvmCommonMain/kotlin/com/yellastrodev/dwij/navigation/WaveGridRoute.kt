@@ -6,6 +6,9 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.size
 import androidx.compose.runtime.Composable
+import com.yellastrodev.dwij.RadialMenuTarget
+import com.yellastrodev.dwij.RadialMenuCollection
+import com.yellastrodev.dwij.ui.LocalRadialMenuSelection
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -55,7 +58,7 @@ import kotlinx.coroutines.withContext
 import org.jetbrains.compose.resources.painterResource
 import org.jetbrains.compose.resources.stringResource
 
-/** Моя волна, временный плейлист дня и каталог; рекомендации загружаются при каждом входе. */
+/** Волны и плейлист дня; при выборе сектора сохраняет точку входа вместо запуска очереди. */
 @Composable
 fun WaveGridRoute(
     component: DwijComponent,
@@ -64,6 +67,7 @@ fun WaveGridRoute(
     modifier: Modifier = Modifier,
 ) {
     val logger = LocalYamLogger.current
+    val selection = LocalRadialMenuSelection.current
     val screenScope = rememberCoroutineScope()
     var stations by remember(component) {
         mutableStateOf<List<RotorStation>>(emptyList())
@@ -172,7 +176,11 @@ fun WaveGridRoute(
         onSourceSelected = {},
         onBackClick = onBackClick,
         onItemClick = { item ->
-            if (item.station == null) {
+            if (selection != null) {
+                selection.onSelect(item.station?.let {
+                    RadialMenuTarget.YandexWave(it.id, item.title)
+                } ?: RadialMenuTarget.Collection(RadialMenuCollection.YANDEX_DAILY))
+            } else if (item.station == null) {
                 dailyPlaylist?.let { details ->
                     if (component.dailyPlaylistPlayback.play(details)) onOpenPlayer()
                 }

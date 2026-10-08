@@ -9,6 +9,9 @@ import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import com.yellastrodev.dwij.RadialMenuTarget
+import com.yellastrodev.dwij.RadialMenuCollection
+import com.yellastrodev.dwij.data.entities.MusicSource
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
@@ -38,7 +41,7 @@ import com.yellastrodev.dwij.ui.LocalTrackCollectionObjectScreen
 import kotlinx.coroutines.flow.firstOrNull
 import org.jetbrains.compose.resources.stringResource
 
-/** Shared-route локальных списков, всех треков и локального плейлиста. */
+/** Локальные списки и плейлисты; передаёт устойчивое назначение общей шапке в режиме выбора. */
 @Composable
 fun LocalLibraryRoute(
     component: DwijComponent,
@@ -150,6 +153,9 @@ fun LocalLibraryRoute(
 
             LocalTrackCollectionObjectScreen(
                 title = playlistTitle,
+                selectionTarget = state.playlist?.let {
+                    RadialMenuTarget.Playlist(MusicSource.LOCAL, it.playlistId, it.name)
+                },
                 tracks = loadedTracks,
                 onBackClick = onBackClick,
                 onPlayClick = {
@@ -183,6 +189,7 @@ fun LocalLibraryRoute(
 
             LocalTrackCollectionObjectScreen(
                 title = allTracksTitle,
+                selectionTarget = RadialMenuTarget.Collection(RadialMenuCollection.LOCAL_TRACKS),
                 tracks = loadedTracks,
                 onBackClick = onBackClick,
                 onPlayClick = {

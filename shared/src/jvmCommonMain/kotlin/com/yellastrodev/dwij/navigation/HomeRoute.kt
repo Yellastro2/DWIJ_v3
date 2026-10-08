@@ -16,6 +16,9 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.ImageBitmap
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.yellastrodev.dwij.HomeMusicSource
+import com.yellastrodev.dwij.RadialMenuCollection
+import com.yellastrodev.dwij.RadialMenuTarget
+import com.yellastrodev.dwij.playback.playRadialMenuTarget
 import com.yellastrodev.dwij.di.DwijComponent
 import com.yellastrodev.dwij.models.PlayerModel
 import com.yellastrodev.dwij.models.SearchModel
@@ -26,6 +29,8 @@ import com.yellastrodev.dwij.resources.Res
 import com.yellastrodev.dwij.resources.home_player_unknown_artist
 import com.yellastrodev.dwij.ui.HomeCompactPlayerUiState
 import com.yellastrodev.dwij.ui.HomeScreen
+import com.yellastrodev.dwij.ui.LocalRadialMenuSelection
+import com.yellastrodev.dwij.data.entities.MusicSource
 import com.yellastrodev.dwij.utils.TrackChangeDirection
 import com.yellastrodev.dwij.ui.HomeScreenPlatform
 import com.yellastrodev.dwij.ui.LocalYamLogger
@@ -46,6 +51,11 @@ import org.jetbrains.compose.resources.stringResource
  * Shared-route главного экрана.
  * Поиск выбирает независимый VK-репозиторий либо существующий локальный/Яндекс-сценарий.
  * «Треки» открывает полную фонотеку выбранного источника, включая объединённую коллекцию VK.
+ * «Рекомендации» VK открывает карточки с загрузкой составов по нажатию.
+ * Каталог VK отдельно открывает личные треки и объединённую фонотеку.
+ * «Всё сразу» запускает только общую подборку ЯМ/VK, остальные действия пока не подключены.
+ * Сектор «Настроить» передаёт переход к экрану радиального меню владельцу навигации.
+ * Пять секторов запускают сохранённые коллекции независимо от вкладки источника.
  *
  * Не зависит от Android Context, Activity Result API, WorkManager и Navigation.
  * Платформа передаёт разрешения, системный back-handler и действия переходов.
@@ -58,24 +68,79 @@ fun HomeRoute(
     routePlatform: HomeRoutePlatform,
     screenPlatform: HomeScreenPlatform,
     onOpenSettings: () -> Unit,
+    onOpenRadialMenuSettings: () -> Unit,
     onOpenSongMatches: () -> Unit,
     onOpenPlaylists: () -> Unit,
     onOpenWaves: () -> Unit,
+    onOpenVkRecommendations: () -> Unit,
     onOpenYandexPlaylist: (playlistId: String) -> Unit,
     onOpenArtists: () -> Unit,
     onOpenAlbums: () -> Unit,
     onOpenLocalTracks: () -> Unit,
     onOpenYandexTracks: () -> Unit,
     onOpenVkTracks: () -> Unit,
+    onOpenVkMyTracks: () -> Unit,
     onOpenCatalogObject: (type: String, externalId: Int) -> Unit,
     onOpenPlayer: () -> Unit,
     onRequestLocalTrackDownload: (trackId: String, title: String) -> Unit,
     onShareYandexUrl: (String) -> Unit,
     modifier: Modifier = Modifier,
 ) {
+    val selection = LocalRadialMenuSelection.current
     val logger = LocalYamLogger.current
     val coroutineScope = rememberCoroutineScope()
     val musicSourceSelectionStore = component.musicSourceSelectionStore
+    val mixedLoading by component.mixedRecommendationPlayback.loading.collectAsState()
+    var mixedError by remember { mutableStateOf<String?>(null) }
+    val radialTargets by component.radialMenuSettingsStore.targets.collectAsState()
+    val primaryTarget by component.radialMenuSettingsStore.primaryTarget.collectAsState()
+    var radialStarting by remember { mutableStateOf(false) }
+    var radialMessage by remember { mutableStateOf<String?>(null) }
+
+    /** Проверяет локальный доступ и запускает одно назначение; ошибки оставляют прежнюю очередь. */
+    fun startRadialTarget(target: RadialMenuTarget) {
+        if (radialStarting || selection != null) return
+        radialStarting = true
+        radialMessage = "Загружаем список…"
+        coroutineScope.launch {
+            try {
+                val localTarget = target == RadialMenuTarget.Collection(RadialMenuCollection.LOCAL_TRACKS) ||
+                    (target is RadialMenuTarget.Playlist && target.source == MusicSource.LOCAL)
+                if (localTarget &&
+                    !routePlatform.hasLocalMusicAccess() && !routePlatform.requestLocalMusicAccess()
+                ) {
+                    radialMessage = "Для локальных треков разрешите доступ к музыке"
+                    return@launch
+                }
+                when (val result = component.playRadialMenuTarget(target)) {
+                    is com.yellastrodev.dwij.data.DataResult.Success -> {
+                        radialMessage = null
+                        onOpenPlayer()
+                    }
+                    is com.yellastrodev.dwij.data.DataResult.Failure -> {
+                        if (result.error == com.yellastrodev.dwij.data.DataError.Unauthorized &&
+                            (target is RadialMenuTarget.YandexWave ||
+                                (target is RadialMenuTarget.Playlist && target.source == MusicSource.YANDEX) ||
+                                (target is RadialMenuTarget.Collection && target.kind in listOf(
+                                    RadialMenuCollection.YANDEX_DAILY, RadialMenuCollection.YANDEX_LIKED,
+                                    RadialMenuCollection.YANDEX_TRACKS)))
+                        ) component.requireYandexAuthorization()
+                        radialMessage = (result.error as? com.yellastrodev.dwij.data.DataError.InvalidData)?.message
+                            ?: if (result.error == com.yellastrodev.dwij.data.DataError.Unauthorized)
+                                "Войдите в нужный музыкальный сервис в настройках"
+                            else "Не удалось загрузить список. Повторите попытку"
+                    }
+                }
+            } catch (error: CancellationException) {
+                throw error
+            } catch (error: Exception) {
+                logger.error(TAG, "[startRadialTarget] Не удалось запустить назначение радиального меню", error)
+                radialMessage = "Не удалось запустить список. Повторите попытку"
+            } finally {
+                radialStarting = false
+            }
+        }
+    }
 
     val selectedSource by
         musicSourceSelectionStore.selectedSource.collectAsState()
@@ -166,7 +231,7 @@ fun HomeRoute(
     }
 
     LaunchedEffect(selectedSource) {
-        searchModel.setSource(selectedSource)
+        if (selectedSource != HomeMusicSource.All) searchModel.setSource(selectedSource)
     }
 
     LaunchedEffect(
@@ -238,6 +303,11 @@ fun HomeRoute(
     }
 
     HomeScreen(
+        onPrimaryStartClick = { startRadialTarget(primaryTarget) },
+        radialTargets = radialTargets,
+        onRadialTargetClick = ::startRadialTarget,
+        radialPlaybackMessage = radialMessage,
+        onRadialMenuSettingsClick = onOpenRadialMenuSettings,
         modifier = modifier
             .fillMaxSize()
             .windowInsetsPadding(WindowInsets.safeDrawing),
@@ -249,16 +319,40 @@ fun HomeRoute(
                 HomeMusicSource.Local -> onOpenLocalTracks()
                 HomeMusicSource.Yandex -> onOpenYandexTracks()
                 HomeMusicSource.Vk -> onOpenVkTracks()
+                HomeMusicSource.All -> Unit
             }
         },
         onWaveClick = {
-            component.waveRepository.requestWave()
-            onOpenPlayer()
+            if (selection != null) selection.onSelect(RadialMenuTarget.YandexWave("user:onyourwave", "Моя волна"))
+            else {
+                component.waveRepository.requestWave()
+                onOpenPlayer()
+            }
         },
         onWavesClick = {
             onOpenWaves()
         },
         onAllTracksClick = {},
+        onVkRecommendationsClick = onOpenVkRecommendations,
+        onVkMyTracksClick = onOpenVkMyTracks,
+        mixedRecommendationLoading = mixedLoading,
+        mixedRecommendationError = mixedError,
+        onMixedRecommendationClick = {
+            if (selection != null) selection.onSelect(RadialMenuTarget.Collection(RadialMenuCollection.MIXED_RECOMMENDATIONS))
+            else if (!mixedLoading) {
+                mixedError = null
+                coroutineScope.launch {
+                    when (val result = component.mixedRecommendationPlayback.play("Подборка")) {
+                        is com.yellastrodev.dwij.data.DataResult.Success -> onOpenPlayer()
+                        is com.yellastrodev.dwij.data.DataResult.Failure -> mixedError =
+                            (result.error as? com.yellastrodev.dwij.data.DataError.InvalidData)?.message
+                                ?: if (result.error == com.yellastrodev.dwij.data.DataError.Unauthorized)
+                                    "Для подборки войдите в Яндекс Музыку и VK в настройках"
+                                else "Не удалось загрузить подборку. Повторите попытку"
+                    }
+                }
+            }
+        },
         onArtistsClick = onOpenArtists,
         onAlbumsClick = onOpenAlbums,
         onLikedClick = {
@@ -311,6 +405,7 @@ fun HomeRoute(
                 onDismiss = state.onDismiss,
                 outerRadiusFraction = state.outerRadiusFraction,
                 animationStyle = RadialMenuAnimationStyle.GlitchFlicker,
+                enabled = selection == null,
                 modifier = radialModifier,
             )
         },
@@ -368,7 +463,7 @@ fun HomeRoute(
                 onResultClick = { item ->
                     when (item) {
                         is SearchResultItemUiModel.Track -> {
-                            searchModel.playTrack(item, onStarted = onOpenPlayer)
+                            if (selection == null) searchModel.playTrack(item, onStarted = onOpenPlayer)
                         }
                         is SearchResultItemUiModel.Entity -> {
                             val type = when (item.kind) {

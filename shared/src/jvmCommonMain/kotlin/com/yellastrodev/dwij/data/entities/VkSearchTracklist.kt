@@ -10,5 +10,7 @@ class VkSearchTracklist : dTracklist {
     override fun getType(): String = "vk-search"
     /** VK-поиск не связан с Яндекс-станцией. */
     override fun getWaveId(): String = ""
+    /** Исходная сущность этой очереди принадлежит VK. */
+    override fun originOf(songId: String): MusicSource = MusicSource.VK
     private val identity = "vk-search:${java.util.UUID.randomUUID()}"
 }

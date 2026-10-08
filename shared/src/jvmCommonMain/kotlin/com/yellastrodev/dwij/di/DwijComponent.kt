@@ -61,6 +61,7 @@ import java.util.concurrent.atomic.AtomicBoolean
 
 /**
  * Общий JVM-граф приложения.
+ * Радиальное меню получает единое хранилище назначений для главной и экрана просмотра.
  *
  * Создаёт YamApiClient, восстанавливает отдельные сессии Яндекс/VK и собирает общие
  * репозитории, временное воспроизведение рекомендаций, HTTP-пульт с DNS-SD и постоянные настройки.
@@ -261,6 +262,11 @@ class DwijComponent private constructor(
         )
     }
 
+    /** Общие сохранённые назначения пяти секторов радиального меню. */
+    val radialMenuSettingsStore by lazy {
+        com.yellastrodev.dwij.storage.RadialMenuSettingsStore(localKeyValueStore)
+    }
+
     /** Временный плейлист дня: прямой API и очередь, без репозиториев фонотеки. */
     val dailyPlaylistPlayback: DailyPlaylistPlayback by lazy {
         DailyPlaylistPlayback(
@@ -272,6 +278,14 @@ class DwijComponent private constructor(
             isTrackCached = trackCacheRepo::isCached,
             onAuthorizationRequired = ::requireYandexAuthorization,
             logger = logger,
+        )
+    }
+
+    /** Конечная общая подборка с чередованием плейлиста дня ЯМ и рекомендаций VK. */
+    val mixedRecommendationPlayback by lazy {
+        com.yellastrodev.dwij.playback.MixedRecommendationPlayback(
+            dailyPlaylistPlayback, vkMusicRepository, trackRepository, songRepository, playerRepo,
+            waveRepository::stopObserving, { waveRepository.isLoading.value }, trackCacheRepo::isCached, logger,
         )
     }
 

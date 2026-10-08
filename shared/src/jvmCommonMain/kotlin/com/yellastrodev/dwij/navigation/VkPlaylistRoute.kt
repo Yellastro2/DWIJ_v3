@@ -8,6 +8,11 @@ import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.Text
 import androidx.compose.runtime.*
+import com.yellastrodev.dwij.RadialMenuTarget
+import com.yellastrodev.dwij.RadialMenuCollection
+import com.yellastrodev.dwij.data.entities.MusicSource
+import com.yellastrodev.dwij.data.repo.VK_ALL_TRACKS
+import com.yellastrodev.dwij.data.repo.VK_MY_TRACKS
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.ImageBitmap
@@ -31,7 +36,7 @@ import org.jetbrains.compose.resources.pluralStringResource
 import org.jetbrains.compose.resources.stringResource
 import org.jetbrains.compose.resources.getString
 
-/** Показывает удерживаемый состав VK и общие признаки источников/совпадений из индекса Song. */
+/** Показывает VK-список и предоставляет коллекцию либо устойчивый fullId для назначения сектора. */
 @Composable
 internal fun VkPlaylistRoute(
     component: DwijComponent,
@@ -129,6 +134,12 @@ internal fun VkPlaylistRoute(
     }
     Box(modifier.fillMaxSize()) {
         ObjectScreen(
+            selectionTarget = when (playlistId) {
+                VK_ALL_TRACKS -> RadialMenuTarget.Collection(RadialMenuCollection.VK_ALL_TRACKS)
+                VK_MY_TRACKS -> RadialMenuTarget.Collection(RadialMenuCollection.VK_MY_TRACKS)
+                "vkrec:recommendations" -> RadialMenuTarget.Collection(RadialMenuCollection.VK_RECOMMENDATIONS)
+                else -> playlist?.let { RadialMenuTarget.Playlist(MusicSource.VK, playlistId, it.title) }
+            },
             title = playlist?.title ?: stringResource(Res.string.object_loading_title),
             subtitle = pluralStringResource(Res.plurals.object_track_count, tracks.size, tracks.size),
             description = playlist?.description?.takeIf(String::isNotBlank), cover = cover, tracks = items,

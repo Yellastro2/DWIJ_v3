@@ -41,6 +41,13 @@ Windows-версия пока развивается как desktop-порт и 
 Используйте её как справочник при исследовании API и реализации методов в
 `:yaMusicSdk`; для сборки приложения эта папка не требуется.
 
+## Похожие приложения
+
+[BitChord](https://github.com/kushagrasinghx/BitChord) — музыкальный клиент на
+Kotlin/Compose с YouTube Music, заявленной Spotify-интеграцией и desktop-версией.
+[Заметка для изучения](docs/legend/similar-music-apps.md) описывает полезные для
+DWIJ направления и ограничения проверки интеграций.
+
 ## Требования
 
 - Git с поддержкой submodules;

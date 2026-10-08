@@ -5,17 +5,21 @@ package com.yellastrodev.dwij.navigation
  *
  * Файл не зависит от Android Navigation и может использоваться
  * Android- и desktop-слоями.
+ * VK-рекомендации используют самостоятельную запись back stack.
+ * Настройка радиального меню открывается отдельным маршрутом.
  */
 object DwijDestination {
 
     const val HOME = "home"
     const val PLAYLISTS = "playlists"
     const val WAVES = "waves"
+    const val VK_RECOMMENDATIONS = "vk-recommendations"
     const val CATALOG_ARTISTS = "catalog/artists"
     const val CATALOG_ALBUMS = "catalog/albums"
     const val PLAYER = "player"
     const val SONG_MATCHES = "song-matches"
     const val SETTINGS = "settings"
+    const val RADIAL_MENU_SETTINGS = "radial-menu/settings"
     const val SETTINGS_AUTH = "settings/authorize"
 
     const val OBJECT_TYPE_TRACK = "track"

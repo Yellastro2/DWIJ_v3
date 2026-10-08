@@ -4,6 +4,7 @@ import androidx.room.Entity
 import com.yellastrodev.yamusicsdk.entities.YaLikeTracklist
 
 
+/** Серверный список лайков ЯМ с rotor seed по владельцу и kind, а не Room UUID. */
 @Entity
 class dYaLikeTracklist(
     playlistUuid: String,
@@ -37,7 +38,8 @@ class dYaLikeTracklist(
     override fun getDTitle(): String = title
 
     override fun getType(): String = KIND_LIKED
-    override fun getWaveId(): String = "playlist:$playlistUuid"
+    /** Использует серверную идентичность плейлиста вместо внутреннего UUID Room. */
+    override fun getWaveId(): String = super<dYaPlaylist>.getWaveId()
 }
 
 fun YaLikeTracklist.toEntity(): dYaLikeTracklist {

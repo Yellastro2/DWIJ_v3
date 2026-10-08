@@ -27,6 +27,10 @@ import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.pulltorefresh.PullToRefreshBox
 import androidx.compose.runtime.Composable
+import com.yellastrodev.dwij.RadialMenuTarget
+import com.yellastrodev.dwij.resources.radial_menu_assign_list
+import com.yellastrodev.dwij.resources.radial_menu_assign_wave
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -58,6 +62,7 @@ import org.jetbrains.compose.resources.stringResource
 
 /**
  * Универсальный экран музыкального объекта: общая шапка и переданный список треков.
+ * При назначении сектора блокирует песни и предлагает только поддерживаемую точку входа.
  *
  * Подходит плейлисту, альбому, исполнителю или абстрактной подборке: route передаёт только
  * заголовок, описание, обложку, доступные действия и подготовленные элементы списка.
@@ -91,7 +96,10 @@ fun ObjectScreen(
     isLoading: Boolean = false,
     isRefreshing: Boolean = false,
     onRefresh: () -> Unit = {},
+    selectionTarget: RadialMenuTarget? = null,
+    waveSelectionTarget: RadialMenuTarget.YandexWave? = null,
 ) {
+    val selection = LocalRadialMenuSelection.current
     Column(
         modifier = modifier
             .fillMaxSize()
@@ -102,7 +110,7 @@ fun ObjectScreen(
             title = title,
             listState = listState,
             onBackClick = onBackClick,
-            menuContent = objectMenuContent,
+            menuContent = if (selection == null) objectMenuContent else null,
         )
         PullToRefreshBox(
             isRefreshing = isRefreshing,
@@ -113,8 +121,8 @@ fun ObjectScreen(
                 items = tracks,
                 state = listState,
                 loadCover = loadTrackCover,
-                onItemClick = onTrackClick,
-                contextMenuContent = trackContextMenuContent,
+                onItemClick = { index, item -> if (selection == null) onTrackClick(index, item) },
+                contextMenuContent = if (selection == null) trackContextMenuContent else null,
                 emptyMessage = emptyMessage,
                 isLoading = isLoading,
                 header = {
@@ -123,11 +131,18 @@ fun ObjectScreen(
                         subtitle = subtitle,
                         description = description,
                         cover = cover,
-                        showShare = showShare,
-                        showWave = showWave,
+                        showShare = showShare && selection == null,
+                        showWave = showWave && (selection == null || waveSelectionTarget != null),
                         onShareClick = onShareClick,
                         onPlayClick = onPlayClick,
-                        onWaveClick = onWaveClick,
+                        onWaveClick = {
+                            if (selection == null) onWaveClick()
+                            else waveSelectionTarget?.let(selection.onSelect)
+                        },
+                        selecting = selection != null,
+                        onAssign = if (selection != null && selectionTarget != null) {
+                            { selection.onSelect(selectionTarget) }
+                        } else null,
                     )
                 },
                 modifier = Modifier.fillMaxSize(),
@@ -252,7 +267,7 @@ private fun ObjectTopBar(
     }
 }
 
-/** Рисует неоновую обложку, метаданные и действия объекта перед первым треком. */
+/** Рисует шапку объекта; в режиме выбора заменяет воспроизведение кнопкой назначения. */
 @Composable
 private fun ObjectHeader(
     title: String,
@@ -264,6 +279,8 @@ private fun ObjectHeader(
     onShareClick: () -> Unit,
     onPlayClick: () -> Unit,
     onWaveClick: () -> Unit,
+    selecting: Boolean,
+    onAssign: (() -> Unit)?,
 ) {
     Box(
         modifier = Modifier
@@ -331,10 +348,21 @@ private fun ObjectHeader(
                     ObjectShareButton(onClick = onShareClick)
                     Spacer(modifier = Modifier.width(12.dp))
                 }
-                ObjectPlayButton(onClick = onPlayClick)
-                if (showWave) {
-                    Spacer(modifier = Modifier.width(12.dp))
-                    ObjectWaveButton(onClick = onWaveClick)
+                if (selecting) {
+                    Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                        if (onAssign != null) TextButton(onClick = onAssign) {
+                            Text(stringResource(Res.string.radial_menu_assign_list), color = DwijColors.CyanBright)
+                        }
+                        if (showWave) TextButton(onClick = onWaveClick) {
+                            Text(stringResource(Res.string.radial_menu_assign_wave), color = DwijColors.CyanBright)
+                        }
+                    }
+                } else {
+                    ObjectPlayButton(onClick = onPlayClick)
+                    if (showWave) {
+                        Spacer(modifier = Modifier.width(12.dp))
+                        ObjectWaveButton(onClick = onWaveClick)
+                    }
                 }
             }
             Canvas(

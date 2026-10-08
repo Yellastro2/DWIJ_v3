@@ -11,6 +11,10 @@ import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import com.yellastrodev.dwij.RadialMenuTarget
+import com.yellastrodev.dwij.RadialMenuCollection
+import com.yellastrodev.dwij.data.entities.MusicSource
+import com.yellastrodev.dwij.data.entities.dYaLikeTracklist.Companion.KIND_LIKED
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
@@ -79,7 +83,7 @@ import org.jetbrains.compose.resources.pluralStringResource
 import org.jetbrains.compose.resources.painterResource
 import org.jetbrains.compose.resources.stringResource
 
-/** Shared-route объекта; VK использует общий индекс Song, а source-доступность не зависит от готового relay URI. */
+/** Shared-route объекта; в режиме назначения передаёт плейлист, коллекцию или seed волны общей шапке. */
 @Composable
 fun ObjectRoute(
     component: DwijComponent,
@@ -454,6 +458,13 @@ fun ObjectRoute(
         modifier = modifier.fillMaxSize(),
     ) {
         ObjectScreen(
+            selectionTarget = yandexPlaylist?.let {
+                if (it.kind == KIND_LIKED) RadialMenuTarget.Collection(RadialMenuCollection.YANDEX_LIKED)
+                else RadialMenuTarget.Playlist(MusicSource.YANDEX, it.playlistUuid, it.title)
+            } ?: if (objectType == DwijDestination.OBJECT_TYPE_TRACKLIST) {
+                RadialMenuTarget.Collection(RadialMenuCollection.YANDEX_TRACKS)
+            } else null,
+            waveSelectionTarget = yandexPlaylist?.yandexWaveSeed()?.let { RadialMenuTarget.YandexWave(it, title) },
             title = title,
             subtitle = subtitle,
             description = yandexPlaylist?.description,
@@ -811,7 +822,7 @@ fun ObjectRoute(
     }
 }
 
-/** Экран альбома или артиста ЯМ поверх общих canonical Song и ObjectScreen. */
+/** Каталог ЯМ: списки артиста/альбома не назначаются, но волна по артисту доступна для выбора. */
 @Composable
 private fun CatalogObjectRoute(
     component: DwijComponent,
@@ -901,6 +912,9 @@ private fun CatalogObjectRoute(
         title = state.title.ifBlank {
             stringResource(Res.string.object_loading_title)
         },
+        waveSelectionTarget = if (kind == CatalogObjectKind.Artist && externalId != null) {
+            RadialMenuTarget.YandexWave("artist:$externalId", state.title)
+        } else null,
         subtitle = subtitle,
         description = state.description,
         cover = cover,

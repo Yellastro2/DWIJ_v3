@@ -17,6 +17,7 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import com.yellastrodev.dwij.RadialMenuTarget
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -89,6 +90,7 @@ fun LocalLibraryScreen(
  *
  * У локальной коллекции пока нет собственной обложки, поэтому [ObjectScreen] получает `null`
  * и рисует штатную фирменную заглушку. Очередь и загрузка миниатюр остаются локальными.
+ * При назначении сектора передаёт selectionTarget общей шапке без запуска песен.
  */
 @Composable
 fun LocalTrackCollectionObjectScreen(
@@ -101,6 +103,7 @@ fun LocalTrackCollectionObjectScreen(
     loadTrackCover: suspend (Song) -> ImageBitmap?,
     modifier: Modifier = Modifier,
     isLoading: Boolean = false,
+    selectionTarget: RadialMenuTarget? = null,
 ) {
     val unknownArtist = stringResource(Res.string.home_player_unknown_artist)
     val tracksById = remember(tracks) { tracks.associateBy(Song::id) }
@@ -108,6 +111,7 @@ fun LocalTrackCollectionObjectScreen(
         tracks.toTrackListItems(unknownArtist)
     }
     ObjectScreen(
+        selectionTarget = selectionTarget,
         title = title,
         subtitle = pluralStringResource(
             Res.plurals.object_track_count,

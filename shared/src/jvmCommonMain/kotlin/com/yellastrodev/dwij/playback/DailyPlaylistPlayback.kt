@@ -68,7 +68,7 @@ class DailyPlaylistPlayback(
     }
 }
 
-/** Конечная рекомендация в памяти; не является сущностью сохранённого ЯМ-плейлиста. */
+/** Конечная рекомендация ЯМ в памяти: сохраняет происхождение песен, не предоставляет rotor seed. */
 data class DailyPlaylistTracklist(val title: String) : dTracklist {
     /** Отдельное пространство идентификаторов исключает совпадение с фонотекой. */
     override fun getdId(): String = "recommendation:daily"
@@ -78,6 +78,9 @@ data class DailyPlaylistTracklist(val title: String) : dTracklist {
     override fun getType(): String = "daily_recommendation"
     /** Rotor для этой очереди не используется. */
     override fun getWaveId(): String = ""
+    /** Песня рекомендована ЯМ, даже если для неё найден другой экземпляр. */
+    override fun originOf(songId: String): com.yellastrodev.dwij.data.entities.MusicSource =
+        com.yellastrodev.dwij.data.entities.MusicSource.YANDEX
 }
 
 /** Создаёт только снимок для плеера, не добавляя песню, артистов или связи в Room. */

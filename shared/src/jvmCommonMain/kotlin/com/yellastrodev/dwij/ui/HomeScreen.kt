@@ -76,6 +76,9 @@ import org.jetbrains.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.yellastrodev.dwij.HomeMusicSource
+import com.yellastrodev.dwij.RadialMenuTarget
+import com.yellastrodev.dwij.RadialMenuCollection
+import com.yellastrodev.dwij.defaultRadialMenuTargets
 import com.yellastrodev.dwij.ui.theme.DwijColors
 import com.yellastrodev.yamusicsdk.YamLogger
 import kotlinx.coroutines.delay
@@ -86,7 +89,12 @@ import java.util.Locale
 /**
  * Полный Compose-интерфейс домашнего экрана: орбитальный и радиальный плеер,
  * переключатель источников, сетка разделов, компактный плеер других вкладок
- * и нижняя навигация. VK-плейлисты и общая фонотека открываются своими маршрутами.
+ * и нижняя навигация. Для VK вместо волны доступна сетка рекомендаций.
+ * Каталог VK ведёт в готовые коллекции и рекомендации.
+ * Режим «Всё сразу» включает только третью карточку смешанной подборки.
+ * Сектор «Настроить» открывает отдельный экран радиального меню.
+ * Остальные сектора отображают назначения из общего хранилища и передают их на запуск.
+ * Короткое нажатие при пустом плеере запускает отдельно назначенное действие центральной кнопки.
  */
 @Composable
 fun HomeScreen(
@@ -111,6 +119,16 @@ fun HomeScreen(
     searchContent: @Composable (Modifier) -> Unit,
     platform: HomeScreenPlatform,
     modifier: Modifier = Modifier,
+    onVkRecommendationsClick: () -> Unit = {},
+    onVkMyTracksClick: () -> Unit = {},
+    onMixedRecommendationClick: () -> Unit = {},
+    onRadialMenuSettingsClick: () -> Unit = {},
+    mixedRecommendationLoading: Boolean = false,
+    mixedRecommendationError: String? = null,
+    radialTargets: List<RadialMenuTarget> = defaultRadialMenuTargets(),
+    onRadialTargetClick: (RadialMenuTarget) -> Unit = {},
+    radialPlaybackMessage: String? = null,
+    onPrimaryStartClick: () -> Unit = {},
 ) {
     var isRadialMenuVisible by remember { mutableStateOf(false) }
     var isPlayerPressed by remember { mutableStateOf(false) }
@@ -119,16 +137,12 @@ fun HomeScreen(
     val navigationTimingTracker = remember(logger) {
         HomeNavigationTimingTracker(logger)
     }
-    val radialMenuItems = homeRadialMenuItems()
+    val radialMenuItems = homeRadialMenuItems(radialTargets)
     val snackbarHostState = remember { SnackbarHostState() }
     val coroutineScope = rememberCoroutineScope()
-    val radialActionMessages = radialMenuItems.mapIndexed { index, item ->
-        item.id to stringResource(
-            Res.string.home_radial_action_triggered,
-            index + 2,
-            item.title,
-        )
-    }.toMap()
+    LaunchedEffect(radialPlaybackMessage) {
+        radialPlaybackMessage?.let { snackbarHostState.showSnackbar(it) }
+    }
     val likedPlaylistEmptyMessage = stringResource(
         Res.string.catalog_liked_empty,
     )
@@ -144,6 +158,9 @@ fun HomeScreen(
             snackbarHostState.currentSnackbarData?.dismiss()
             snackbarHostState.showSnackbar(message)
         }
+    }
+    LaunchedEffect(mixedRecommendationError) {
+        mixedRecommendationError?.let { snackbarHostState.showSnackbar(it) }
     }
 
     platform.BackHandler(enabled = selectedTab != HomeNavigationTab.Main) {
@@ -272,7 +289,7 @@ fun HomeScreen(
                                     outerRadiusFraction = HOME_RADIAL_MENU_OUTER_RADIUS_FRACTION,
                                     onPrimaryClick = {
                                         if (player == null) {
-                                            openSourceAction(onWaveClick)
+                                            onPrimaryStartClick()
                                         } else {
                                             onPlayerPlayPauseClick()
                                         }
@@ -285,7 +302,11 @@ fun HomeScreen(
                                     },
                                     onItemClick = { item ->
                                         isRadialMenuVisible = false
-                                        radialActionMessages[item.id]?.let(::showActionSnackbar)
+                                        if (item.id == RADIAL_MENU_SETTINGS_ITEM_ID) {
+                                            onRadialMenuSettingsClick()
+                                        } else {
+                                            item.target?.let(onRadialTargetClick)
+                                        }
                                     },
                                     onDismiss = {
                                         isRadialMenuVisible = false
@@ -334,13 +355,24 @@ fun HomeScreen(
                         MusicSourceSelector(
                             selectedSource = selectedSource,
                             onSourceSelected = onSourceSelected,
+                            includeAll = true,
                         )
                         HomeMenuGrid(
                             onPlaylistsClick = onPlaylistsClick,
                             onTracksClick = onTracksClick,
-                            onWaveClick = onWavesClick,
+                            onWaveClick = when (selectedSource) {
+                                HomeMusicSource.All -> onMixedRecommendationClick
+                                HomeMusicSource.Vk -> onVkRecommendationsClick
+                                else -> onWavesClick
+                            },
                             onAllTracksClick = onAllTracksClick,
-                            waveEnabled = selectedSource == HomeMusicSource.Yandex,
+                            waveEnabled = selectedSource != HomeMusicSource.Local && !mixedRecommendationLoading,
+                            otherActionsEnabled = selectedSource != HomeMusicSource.All,
+                            waveTitle = when (selectedSource) {
+                                HomeMusicSource.All -> stringResource(if (mixedRecommendationLoading) Res.string.home_mixed_loading else Res.string.home_mixed_selection)
+                                HomeMusicSource.Vk -> stringResource(Res.string.home_recommendations)
+                                else -> stringResource(Res.string.home_wave)
+                            },
                         )
                     }
                 }
@@ -350,6 +382,9 @@ fun HomeScreen(
                         onSourceSelected = onSourceSelected,
                         onPlaylistsClick = onPlaylistsClick,
                         onArtistsClick = { openSourceAction(onArtistsClick) },
+                        onVkMyTracksClick = onVkMyTracksClick,
+                        onVkAllTracksClick = onTracksClick,
+                        onVkRecommendationsClick = onVkRecommendationsClick,
                         onAlbumsClick = { openSourceAction(onAlbumsClick) },
                         onLikedClick = {
                             if (!onLikedClick()) {
@@ -362,17 +397,24 @@ fun HomeScreen(
                         modifier = Modifier.fillMaxSize(),
                     )
                 }
-                HomeNavigationTab.Search -> searchContent(Modifier.fillMaxSize())
+                HomeNavigationTab.Search -> if (selectedSource == HomeMusicSource.All) {
+                    Column {
+                        MusicSourceSelector(selectedSource, onSourceSelected, includeAll = true)
+                        Text(stringResource(Res.string.home_all_search_pending), color = DwijColors.MutedText,
+                            modifier = Modifier.padding(20.dp))
+                    }
+                } else searchContent(Modifier.fillMaxSize())
             }
         }
     }
 }
 
-/** Один сектор радиального меню, не зависящий от его платформенной отрисовки. */
+/** Сектор меню с назначением; фиксированный сектор настройки не имеет playback-target. */
 data class RadialMenuItem(
     val id: String,
     val title: String,
     val color: Color,
+    val target: RadialMenuTarget? = null,
 )
 
 /** Состояние и действия, которые shared-экран передаёт реализации радиального меню. */
@@ -531,33 +573,40 @@ private class HomeNavigationTimingTracker(
 
 private const val HOME_NAVIGATION_TIMING_TAG = "HomeNavigationTiming"
 
+/** Общие сектора из назначений; экран настройки скрывает фиксированный служебный сектор. */
 @Composable
-private fun homeRadialMenuItems(): List<RadialMenuItem> {
-    val roadTitle = stringResource(Res.string.radial_menu_road)
-    val focusTitle = stringResource(Res.string.radial_menu_focus)
-    val calmTitle = stringResource(Res.string.radial_menu_calm)
-    val favoriteTitle = stringResource(Res.string.radial_menu_favorite)
-    val radioTitle = stringResource(Res.string.radial_menu_radio)
-    val partyTitle = stringResource(Res.string.radial_menu_party)
-
-    return remember(
-        roadTitle,
-        focusTitle,
-        calmTitle,
-        favoriteTitle,
-        radioTitle,
-        partyTitle,
-    ) {
-        listOf(
-            RadialMenuItem("road", roadTitle, DwijColors.HomeRadialRoad),
-            RadialMenuItem("focus", focusTitle, DwijColors.HomeRadialFocus),
-            RadialMenuItem("calm", calmTitle, DwijColors.HomeRadialCalm),
-            RadialMenuItem("favorite", favoriteTitle, DwijColors.HomeRadialFavorite),
-            RadialMenuItem("radio", radioTitle, DwijColors.HomeRadialRadio),
-            RadialMenuItem("party", partyTitle, DwijColors.HomeRadialParty),
-        )
-    }
+internal fun homeRadialMenuItems(
+    targets: List<RadialMenuTarget> = defaultRadialMenuTargets(),
+    includeSettings: Boolean = true,
+): List<RadialMenuItem> {
+    val titles = mapOf(
+        RadialMenuCollection.LOCAL_TRACKS to stringResource(Res.string.radial_menu_local_tracks),
+        RadialMenuCollection.YANDEX_DAILY to stringResource(Res.string.radial_menu_yandex_daily),
+        RadialMenuCollection.YANDEX_LIKED to stringResource(Res.string.radial_menu_yandex_liked),
+        RadialMenuCollection.YANDEX_TRACKS to stringResource(Res.string.radial_menu_yandex_tracks),
+        RadialMenuCollection.VK_RECOMMENDATIONS to stringResource(Res.string.radial_menu_vk_recommendations),
+        RadialMenuCollection.VK_ALL_TRACKS to stringResource(Res.string.radial_menu_vk_all_tracks),
+        RadialMenuCollection.VK_MY_TRACKS to stringResource(Res.string.radial_menu_vk_my_tracks),
+        RadialMenuCollection.MIXED_RECOMMENDATIONS to stringResource(Res.string.radial_menu_mixed),
+    )
+    val settingsTitle = stringResource(Res.string.radial_menu_configure)
+    val colors = listOf(
+        DwijColors.HomeRadialRoad, DwijColors.HomeRadialFocus, DwijColors.HomeRadialCalm,
+        DwijColors.HomeRadialFavorite, DwijColors.HomeRadialRadio,
+    )
+    return targets.mapIndexed { index, target ->
+        val title = when (target) {
+            is RadialMenuTarget.Collection -> titles.getValue(target.kind)
+            is RadialMenuTarget.Playlist -> target.title ?: target.key
+            is RadialMenuTarget.YandexWave -> target.title ?: target.seed
+        }
+        RadialMenuItem("slot:$index", title, colors[index % colors.size], target)
+    } + if (includeSettings) listOf(
+        RadialMenuItem(RADIAL_MENU_SETTINGS_ITEM_ID, settingsTitle, DwijColors.HomeRadialParty),
+    ) else emptyList()
 }
+
+internal const val RADIAL_MENU_SETTINGS_ITEM_ID = "settings"
 
 /** Рисует орбитальные элементы управления под слоем радиального меню. */
 @Suppress("UnusedBoxWithConstraintsScope")
@@ -1093,18 +1142,19 @@ private data class HomeSourceOption(
 )
 
 
-/** Собирает локализованные источники локальной, Яндекс- и ВК Музыки. */
+/** Собирает музыкальные источники и необязательный агрегированный режим главного экрана. */
 @Composable
-private fun homeSourceOptions(): List<HomeSourceOption> {
+private fun homeSourceOptions(includeAll: Boolean): List<HomeSourceOption> {
     val local = stringResource(Res.string.home_source_local)
     val yandexMusic = stringResource(Res.string.home_source_yandex_music)
     val vkMusic = stringResource(Res.string.home_source_vk_music)
-    return remember(local, yandexMusic, vkMusic) {
+    val all = stringResource(Res.string.home_source_all)
+    return remember(local, yandexMusic, vkMusic, all, includeAll) {
         listOf(
             HomeSourceOption("local", local, HomeMusicSource.Local),
             HomeSourceOption("yandex", yandexMusic, HomeMusicSource.Yandex),
             HomeSourceOption("vk", vkMusic, HomeMusicSource.Vk),
-        )
+        ) + if (includeAll) listOf(HomeSourceOption("all", all, HomeMusicSource.All)) else emptyList()
     }
 }
 
@@ -1117,8 +1167,9 @@ fun MusicSourceSelector(
     selectedSource: HomeMusicSource,
     onSourceSelected: (HomeMusicSource) -> Unit,
     modifier: Modifier = Modifier,
+    includeAll: Boolean = false,
 ) {
-    val options = homeSourceOptions()
+    val options = homeSourceOptions(includeAll)
     var selectedIndex by remember(options.size, selectedSource) {
         mutableIntStateOf(
             options.indexOfFirst { it.source == selectedSource }.coerceAtLeast(0)
@@ -1284,6 +1335,7 @@ fun MusicSourceSelector(
     }
 }
 
+/** Показывает разделы источника; карточка волны для VK открывает рекомендации. */
 @Composable
 private fun HomeMenuGrid(
     onPlaylistsClick: () -> Unit,
@@ -1291,6 +1343,8 @@ private fun HomeMenuGrid(
     onWaveClick: () -> Unit,
     onAllTracksClick: () -> Unit,
     waveEnabled: Boolean,
+    waveTitle: String,
+    otherActionsEnabled: Boolean = true,
 ) {
     LazyVerticalGrid(
         columns = GridCells.Fixed(2),
@@ -1306,6 +1360,7 @@ private fun HomeMenuGrid(
                 frameRes = Res.drawable.dvizh_calm_glitch_frame_contour,
                 title = stringResource(Res.string.home_playlists),
                 onClick = onPlaylistsClick,
+                enabled = otherActionsEnabled,
                 modifier = Modifier.height(110.dp),
             )
         }
@@ -1315,6 +1370,7 @@ private fun HomeMenuGrid(
                 frameRes = Res.drawable.dvizh_drive_glitch_frame_contour,
                 title = stringResource(Res.string.home_tracks),
                 onClick = onTracksClick,
+                enabled = otherActionsEnabled,
                 modifier = Modifier.height(110.dp),
             )
         }
@@ -1322,7 +1378,7 @@ private fun HomeMenuGrid(
             HomeMenuCard(
                 textureRes = Res.drawable.bg_focus_texture,
                 frameRes = Res.drawable.dvizh_focus_glitch_frame_contour,
-                title = stringResource(Res.string.home_wave),
+                title = waveTitle,
                 onClick = onWaveClick,
                 enabled = waveEnabled,
                 modifier = Modifier.height(110.dp),
@@ -1334,6 +1390,7 @@ private fun HomeMenuGrid(
                 frameRes = Res.drawable.dvizh_orange_glitch_frame_contour,
                 title = stringResource(Res.string.home_all_tracks),
                 onClick = onAllTracksClick,
+                enabled = otherActionsEnabled,
                 modifier = Modifier.height(110.dp),
             )
         }

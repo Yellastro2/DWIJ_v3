@@ -394,7 +394,7 @@ fun PlaylistGridRoute(
     }
 
     val screenItems = when (screenSource) {
-        HomeMusicSource.Vk -> emptyList()
+        HomeMusicSource.Vk, HomeMusicSource.All -> emptyList()
         HomeMusicSource.Yandex -> yandexScreenItems
         HomeMusicSource.Local -> localScreenItems
     }
@@ -407,7 +407,7 @@ fun PlaylistGridRoute(
         coroutineScope.launch {
             try {
                 when (source) {
-                    HomeMusicSource.Vk -> { isCreatingPlaylist = false; createDialogSource = null }
+                    HomeMusicSource.Vk, HomeMusicSource.All -> { isCreatingPlaylist = false; createDialogSource = null }
                     HomeMusicSource.Yandex -> {
                         when (
                             val result =
@@ -524,7 +524,7 @@ fun PlaylistGridRoute(
             },
         isLoading =
             when (screenSource) {
-                HomeMusicSource.Vk -> false
+                HomeMusicSource.Vk, HomeMusicSource.All -> false
                 HomeMusicSource.Yandex -> {
                     !yandexInitialLoadComplete
                 }

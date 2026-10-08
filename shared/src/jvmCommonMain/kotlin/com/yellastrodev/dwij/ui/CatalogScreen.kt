@@ -50,6 +50,14 @@ import com.yellastrodev.dwij.resources.catalog_playlists_title
 import com.yellastrodev.dwij.resources.catalog_recent_subtitle
 import com.yellastrodev.dwij.resources.catalog_recent_title
 import com.yellastrodev.dwij.resources.catalog_title
+import com.yellastrodev.dwij.resources.vk_catalog_my_tracks
+import com.yellastrodev.dwij.resources.vk_catalog_my_tracks_subtitle
+import com.yellastrodev.dwij.resources.vk_catalog_all_tracks
+import com.yellastrodev.dwij.resources.vk_catalog_all_tracks_subtitle
+import com.yellastrodev.dwij.resources.home_recommendations
+import com.yellastrodev.dwij.resources.home_source_all
+import com.yellastrodev.dwij.resources.home_all_catalog_pending
+import com.yellastrodev.dwij.resources.vk_catalog_recommendations_subtitle
 import com.yellastrodev.dwij.resources.dvizh_calm_glitch_frame_contour
 import com.yellastrodev.dwij.resources.dvizh_drive_glitch_frame_contour
 import com.yellastrodev.dwij.resources.dvizh_focus_glitch_frame_contour
@@ -72,6 +80,7 @@ import org.jetbrains.compose.ui.tooling.preview.Preview
 /**
  * Экран каталога с переключателем источника и плитками разделов.
  * Каждая плитка получает действие только после подключения соответствующего экрана.
+ * VK показывает ссылки на готовые коллекции и рекомендации без дополнительных запросов.
  */
 @Composable
 fun CatalogScreen(
@@ -83,6 +92,9 @@ fun CatalogScreen(
     onLikedClick: () -> Unit,
     onRecentClick: () -> Unit,
     modifier: Modifier = Modifier,
+    onVkMyTracksClick: () -> Unit = {},
+    onVkAllTracksClick: () -> Unit = {},
+    onVkRecommendationsClick: () -> Unit = {},
 ) {
     Column(
         modifier = modifier
@@ -104,6 +116,15 @@ fun CatalogScreen(
             onSourceSelected = onSourceSelected,
         )
         Spacer(modifier = Modifier.height(4.dp))
+        if (selectedSource == HomeMusicSource.All) {
+            Text(stringResource(Res.string.home_all_catalog_pending), color = DwijColors.MutedText,
+                modifier = Modifier.padding(20.dp))
+            return@Column
+        }
+        if (selectedSource == HomeMusicSource.Vk) {
+            VkCatalogContent(onVkMyTracksClick, onVkAllTracksClick, onPlaylistsClick, onVkRecommendationsClick)
+            return@Column
+        }
         CatalogCardRow(
             height = 144.dp,
             first = CatalogCardSpec(
@@ -181,7 +202,7 @@ fun CatalogScreen(
     }
 }
 
-/** Три переключателя источника; VK в первом сценарии доступен через поиск. */
+/** Переключает источники и агрегированный режим без открытия неподключённых разделов. */
 @Composable
 private fun CatalogSourceSelector(
     selectedSource: HomeMusicSource,
@@ -194,6 +215,11 @@ private fun CatalogSourceSelector(
             .height(52.dp)
             .padding(horizontal = 12.dp),
     ) {
+        CatalogSourceOption(
+            title = stringResource(Res.string.home_source_all), source = HomeMusicSource.All,
+            selectedSource = selectedSource, onSourceSelected = onSourceSelected,
+            modifier = Modifier.weight(1f),
+        )
         CatalogSourceOption(
             title = stringResource(Res.string.home_source_vk_music),
             source = HomeMusicSource.Vk,
@@ -260,6 +286,58 @@ private fun CatalogSourceOption(
             modifier = Modifier.padding(horizontal = 10.dp),
         )
     }
+}
+
+/** Навигационные карточки VK: только уже подключённые коллекции и конечные рекомендации. */
+@Composable
+private fun VkCatalogContent(
+    onMyTracksClick: () -> Unit,
+    onAllTracksClick: () -> Unit,
+    onPlaylistsClick: () -> Unit,
+    onRecommendationsClick: () -> Unit,
+) {
+    CatalogCardRow(
+        height = 160.dp,
+        first = CatalogCardSpec(
+            textureRes = Res.drawable.bg_drive_texture,
+            frameRes = Res.drawable.dvizh_drive_glitch_frame_contour,
+            artworkRes = Res.drawable.img_likes,
+            artworkWidthFraction = 0.65f, artworkHeightFraction = 0.75f,
+            title = stringResource(Res.string.vk_catalog_my_tracks),
+            subtitle = stringResource(Res.string.vk_catalog_my_tracks_subtitle),
+            onClick = onMyTracksClick,
+        ),
+        second = CatalogCardSpec(
+            textureRes = Res.drawable.bg_party_texture,
+            frameRes = Res.drawable.dvizh_orange_glitch_frame_contour,
+            artworkRes = Res.drawable.img_albums,
+            artworkWidthFraction = 0.75f, artworkHeightFraction = 0.7f,
+            title = stringResource(Res.string.vk_catalog_all_tracks),
+            subtitle = stringResource(Res.string.vk_catalog_all_tracks_subtitle),
+            onClick = onAllTracksClick,
+        ),
+    )
+    CatalogCardRow(
+        height = 160.dp,
+        first = CatalogCardSpec(
+            textureRes = Res.drawable.bg_calm_texture,
+            frameRes = Res.drawable.dvizh_calm_glitch_frame_contour,
+            artworkRes = Res.drawable.img_playlists,
+            artworkWidthFraction = 0.65f, artworkHeightFraction = 0.75f,
+            title = stringResource(Res.string.catalog_playlists_title),
+            subtitle = stringResource(Res.string.catalog_playlists_subtitle),
+            onClick = onPlaylistsClick,
+        ),
+        second = CatalogCardSpec(
+            textureRes = Res.drawable.bg_focus_texture,
+            frameRes = Res.drawable.dvizh_focus_glitch_frame_contour,
+            artworkRes = Res.drawable.img_gengers,
+            artworkWidthFraction = 0.7f, artworkHeightFraction = 0.75f,
+            title = stringResource(Res.string.home_recommendations),
+            subtitle = stringResource(Res.string.vk_catalog_recommendations_subtitle),
+            onClick = onRecommendationsClick,
+        ),
+    )
 }
 
 private data class CatalogCardSpec(

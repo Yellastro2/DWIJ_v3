@@ -189,6 +189,7 @@ class CatalogObjectModel(
     }
 }
 
+/** Контекст ЯМ-каталога; продолжение волной разрешено только для поддерживаемого seed артиста. */
 private data class CatalogTracklist(
     val kind: CatalogObjectKind,
     val externalId: Int,
@@ -198,4 +199,10 @@ private data class CatalogTracklist(
     override fun getDTitle(): String = title
     override fun getType(): String = kind.name.lowercase()
     override fun getWaveId(): String = ""
+    /** Для артиста существует поддерживаемый rotor seed; внутренний список альбома его не задаёт. */
+    override fun yandexWaveSeed(): String? =
+        if (kind == CatalogObjectKind.Artist && externalId > 0) "artist:$externalId" else null
+    /** Каталог содержит сущности ЯМ. */
+    override fun originOf(songId: String): com.yellastrodev.dwij.data.entities.MusicSource =
+        com.yellastrodev.dwij.data.entities.MusicSource.YANDEX
 }

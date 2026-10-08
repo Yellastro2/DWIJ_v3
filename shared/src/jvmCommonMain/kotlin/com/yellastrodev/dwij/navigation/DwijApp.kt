@@ -13,6 +13,16 @@ import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.CompositionLocalProvider
+import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.statusBarsPadding
+import androidx.compose.ui.unit.dp
+import com.yellastrodev.dwij.ui.LocalRadialMenuSelection
+import com.yellastrodev.dwij.ui.RadialMenuSelection
+import com.yellastrodev.dwij.ui.homeRadialMenuItems
+import com.yellastrodev.dwij.RADIAL_MENU_PRIMARY_SELECTION
+import com.yellastrodev.dwij.resources.radial_menu_primary_title
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
@@ -40,8 +50,11 @@ import com.yellastrodev.dwij.resources.auth_required_cancel
 import com.yellastrodev.dwij.resources.auth_required_confirm
 import com.yellastrodev.dwij.resources.auth_required_message
 import com.yellastrodev.dwij.resources.auth_required_title
+import com.yellastrodev.dwij.resources.radial_menu_selection_prompt
+import com.yellastrodev.dwij.resources.playlists_cancel
 import com.yellastrodev.dwij.ui.HomeCompactPlayer
 import com.yellastrodev.dwij.ui.HomeCompactPlayerUiState
+import com.yellastrodev.dwij.ui.RadialMenuSettingsScreen
 import com.yellastrodev.dwij.ui.theme.DwijColors
 import com.yellastrodev.dwij.utils.TrackChangeDirection
 import kotlinx.coroutines.Dispatchers
@@ -59,6 +72,11 @@ import org.jetbrains.compose.resources.stringResource
  * Входящие ссылки на треки превращает в очередь воспроизведения и открывает плеер.
  * Меню VK-треков/плейлистов передают загрузки общей платформенной очереди.
  * Общая фонотека VK использует маршрут виртуального плейлиста и тот же экран очереди.
+ * Конечные рекомендации VK используют отдельную сетку и общий экран VK-треклиста.
+ * Навигационный каталог VK открывает готовые коллекции, включая личные треки.
+ * Радиальное меню имеет отдельный экран настройки с раскрытым предпросмотром.
+ * Временный режим назначения сохраняет выбор без воспроизведения и возвращает к настройкам.
+ * Центральная кнопка выбирает назначение тем же путём, отдельно от пяти секторов.
  */
 @Composable
 fun DwijApp(
@@ -72,6 +90,29 @@ fun DwijApp(
     val navController = rememberNavController()
     val backStackEntry by navController.currentBackStackEntryAsState()
     val currentRoute = backStackEntry?.destination?.route
+    var selectingRadialSlot by rememberSaveable { mutableStateOf<Int?>(null) }
+    val radialTargets by component.radialMenuSettingsStore.targets.collectAsState()
+    val radialItems = homeRadialMenuItems(radialTargets)
+
+    /** Завершает выбор без изменения назначения и удаляет временные экраны из back stack. */
+    fun cancelRadialSelection() {
+        selectingRadialSlot = null
+        if (!navController.popBackStack(DwijDestination.RADIAL_MENU_SETTINGS, false)) {
+            navController.navigate(DwijDestination.RADIAL_MENU_SETTINGS) { launchSingleTop = true }
+        }
+    }
+    val radialSelection = selectingRadialSlot?.let { index ->
+        RadialMenuSelection { target ->
+            if (selectingRadialSlot == index) {
+                if (index == RADIAL_MENU_PRIMARY_SELECTION) component.radialMenuSettingsStore.setPrimaryTarget(target)
+                else component.radialMenuSettingsStore.setTarget(index, target)
+                cancelRadialSelection()
+            }
+        }
+    }
+    LaunchedEffect(currentRoute) {
+        if (currentRoute == DwijDestination.RADIAL_MENU_SETTINGS) selectingRadialSlot = null
+    }
 
     val track by playerModel.track.collectAsState()
     val playbackTrack by playerModel.playbackTrack.collectAsState()
@@ -142,7 +183,8 @@ fun DwijApp(
                 }
             },
             onBack = {
-                navController.navigateUp()
+                if (selectingRadialSlot != null && currentRoute == DwijDestination.HOME) cancelRadialSelection()
+                else navController.navigateUp()
             },
         )
 
@@ -178,6 +220,7 @@ fun DwijApp(
         }
     }
 
+    CompositionLocalProvider(LocalRadialMenuSelection provides radialSelection) {
     Scaffold(
         modifier = modifier
             .then(globalInputModifier)
@@ -185,8 +228,24 @@ fun DwijApp(
             .background(DwijColors.Background),
         containerColor = DwijColors.Background,
         contentWindowInsets = WindowInsets(0, 0, 0, 0),
+        topBar = {
+            selectingRadialSlot?.let { index ->
+                Row(modifier = Modifier.fillMaxWidth().statusBarsPadding().padding(12.dp)) {
+                    Text(
+                        stringResource(
+                            Res.string.radial_menu_selection_prompt,
+                            if (index == RADIAL_MENU_PRIMARY_SELECTION) stringResource(Res.string.radial_menu_primary_title)
+                            else radialItems[index].title.replace('\n', ' '),
+                        ),
+                        color = DwijColors.White,
+                        modifier = Modifier.weight(1f),
+                    )
+                    TextButton(onClick = ::cancelRadialSelection) { Text(stringResource(Res.string.playlists_cancel)) }
+                }
+            }
+        },
         bottomBar = {
-            if (showCompactPlayer) {
+            if (showCompactPlayer && selectingRadialSlot == null) {
                 track?.let { currentTrack ->
                     Box(
                         modifier = Modifier
@@ -248,6 +307,9 @@ fun DwijApp(
                             DwijDestination.SETTINGS,
                         )
                     },
+                    onOpenRadialMenuSettings = {
+                        navController.navigate(DwijDestination.RADIAL_MENU_SETTINGS)
+                    },
                     onOpenSongMatches = {
                         navController.navigate(
                             DwijDestination.SONG_MATCHES,
@@ -262,6 +324,9 @@ fun DwijApp(
                         navController.navigate(
                             DwijDestination.WAVES,
                         )
+                    },
+                    onOpenVkRecommendations = {
+                        navController.navigate(DwijDestination.VK_RECOMMENDATIONS)
                     },
                     onOpenYandexPlaylist = { playlistId ->
                         navController.navigate(
@@ -301,6 +366,12 @@ fun DwijApp(
                             value = com.yellastrodev.dwij.data.repo.VK_ALL_TRACKS,
                         ))
                     },
+                    onOpenVkMyTracks = {
+                        navController.navigate(DwijDestination.objectRoute(
+                            type = DwijDestination.OBJECT_TYPE_VK_PLAYLIST,
+                            value = com.yellastrodev.dwij.data.repo.VK_MY_TRACKS,
+                        ))
+                    },
                     onOpenCatalogObject = { type, externalId ->
                         navController.navigate(
                             DwijDestination.objectRoute(
@@ -317,6 +388,25 @@ fun DwijApp(
                     onRequestLocalTrackDownload =
                         localTrackDownloadRequester::request,
                     onShareYandexUrl = shareRequester::share,
+                )
+            }
+
+            composable(DwijDestination.RADIAL_MENU_SETTINGS) {
+                val targets by component.radialMenuSettingsStore.targets.collectAsState()
+                val primaryTarget by component.radialMenuSettingsStore.primaryTarget.collectAsState()
+                RadialMenuSettingsScreen(
+                    targets = targets,
+                    primaryTarget = primaryTarget,
+                    onSelectPrimary = {
+                        selectingRadialSlot = RADIAL_MENU_PRIMARY_SELECTION
+                        navController.navigate(DwijDestination.HOME)
+                    },
+                    onSelectSlot = { index ->
+                        selectingRadialSlot = index
+                        navController.navigate(DwijDestination.HOME)
+                    },
+                    onReset = component.radialMenuSettingsStore::reset,
+                    onBackClick = { navController.navigateUp() },
                 )
             }
 
@@ -351,6 +441,13 @@ fun DwijApp(
                 )
             }
 
+            composable(DwijDestination.VK_RECOMMENDATIONS) {
+                VkRecommendationsRoute(component,
+                    onBackClick = { navController.navigateUp() },
+                    onOpenTracks = { id -> navController.navigate(
+                        DwijDestination.objectRoute(DwijDestination.OBJECT_TYPE_VK_PLAYLIST, id)) },
+                )
+            }
             composable(DwijDestination.WAVES) {
                 WaveGridRoute(
                     component = component,
@@ -584,6 +681,13 @@ fun DwijApp(
             }
         }
     }
+
+    }
+    // Регистрируется после NavHost, чтобы Back с корня выбора возвращал к настройке.
+    platform.homeScreenPlatform.BackHandler(
+        enabled = selectingRadialSlot != null && currentRoute == DwijDestination.HOME,
+        onBack = ::cancelRadialSelection,
+    )
 
     if (showAuthorizationRequiredDialog) {
         AlertDialog(

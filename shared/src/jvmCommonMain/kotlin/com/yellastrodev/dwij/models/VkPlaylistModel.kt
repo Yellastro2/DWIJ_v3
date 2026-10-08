@@ -8,6 +8,7 @@ import com.yellastrodev.dwij.data.DataError
 import com.yellastrodev.dwij.data.DataResult
 import com.yellastrodev.dwij.data.repo.VK_ALL_TRACKS
 import com.yellastrodev.dwij.data.repo.VK_MY_TRACKS
+import com.yellastrodev.dwij.data.repo.VK_RECOMMENDATION_PREFIX
 import com.yellastrodev.dwij.data.repo.VkMusicRepository
 import com.yellastrodev.vkmusicsdk.VkAudio
 import com.yellastrodev.vkmusicsdk.VkPlaylist
@@ -29,7 +30,7 @@ data class VkPlaylistUiState(
     val error: DataError? = null,
 )
 
-/** Удерживает состав VK при переходе в плеер; обновляет его без промежуточного пустого списка. */
+/** Удерживает состав VK при переходе в плеер; рекомендации не требуют обновления личной фонотеки. */
 class VkPlaylistModel(
     private val repository: VkMusicRepository,
     private val playlistId: String,
@@ -37,12 +38,13 @@ class VkPlaylistModel(
     private val mutableState = MutableStateFlow(VkPlaylistUiState())
     val state = mutableState.asStateFlow()
     private val isCollection = playlistId == VK_MY_TRACKS || playlistId == VK_ALL_TRACKS
+    private val isRecommendation = playlistId.startsWith(VK_RECOMMENDATION_PREFIX)
     private var loadKey: Triple<Boolean, Long, Long>? = null
     private var loadJob: Job? = null
 
-    /** Повторный вход сохраняет данные; мутации коллекций обновляют состав, смена сессии очищает снимок. */
+    /** Повторный вход сохраняет данные; рекомендации игнорируют мутации личной коллекции, смена сессии очищает снимок. */
     fun load(authorized: Boolean, sessionRevision: Long, membershipRevision: Long) {
-        val key = Triple(authorized, sessionRevision, membershipRevision)
+        val key = Triple(authorized, sessionRevision, if (isRecommendation) 0L else membershipRevision)
         if (loadKey == key) return
         val previous = loadKey
         loadKey = key
@@ -94,7 +96,7 @@ class VkPlaylistModel(
                     mutableState.value = mutableState.value.copy(isLoading = false, isRefreshing = false)
                 }
             }
-            if (!isCollection && repository.authorized.value) repository.refreshMyTracks()
+            if (!isCollection && !isRecommendation && repository.authorized.value) repository.refreshMyTracks()
         }
     }
 

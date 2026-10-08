@@ -7,6 +7,7 @@ import androidx.room.Index
 import androidx.room.PrimaryKey
 import com.yellastrodev.yamusicsdk.entities.YaPlaylist
 
+/** Сохранённый серверный плейлист ЯМ; внутренний UUID отделён от его rotor seed. */
 @Entity(tableName = "playlists")
 open class dYaPlaylist(
      @PrimaryKey val playlistUuid: String,
@@ -40,6 +41,10 @@ open class dYaPlaylist(
 
      override fun getType(): String = YA_PLAYLIST
      override fun getWaveId(): String = "playlist:${uid}_${kind}"
+     /** Серверный плейлист имеет валидный rotor seed по владельцу и kind. */
+     override fun yandexWaveSeed(): String? = getWaveId().takeIf { uid > 0 && kind.isNotBlank() }
+     /** Сущности списка принадлежат ЯМ, даже если плеер выбрал локальный экземпляр. */
+     override fun originOf(songId: String): MusicSource = MusicSource.YANDEX
 }
 
 fun YaPlaylist.toEntity(): dYaPlaylist {

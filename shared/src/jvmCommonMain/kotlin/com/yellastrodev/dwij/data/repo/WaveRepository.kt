@@ -73,9 +73,12 @@ class WaveRepository(
         }
     }
 
+    /** Не посылает внутренние очереди в rotor; отсутствие контекста означает личную волну. */
     suspend fun getWave(dTracklist: dTracklist?): List<Song> {
+        val seed = if (dTracklist == null) "user:onyourwave"
+            else dTracklist.yandexWaveSeed()?.takeIf(String::isNotBlank) ?: return emptyList()
         return when (
-            val result = remote.getWave(dTracklist?.getWaveId() ?: "user:onyourwave")
+            val result = remote.getWave(seed)
         ) {
             is YamResult.Success -> {
                 curentWave = dYaWave(
@@ -115,6 +118,7 @@ class WaveRepository(
      * Возвращает `false`, если первая пачка уже загружается.
      */
     fun requestWave(dtrackList: dTracklist? = null): Boolean {
+        if (dtrackList != null && dtrackList.yandexWaveSeed().isNullOrBlank()) return false
         if (!tryStartLoading()) return false
         scope.launch {
             try {
@@ -201,6 +205,7 @@ class WaveRepository(
      * Этот вариант нужен автоматическому продолжению волны в [com.yellastrodev.dwij.data.repo.PlayerRepository].
      */
     suspend fun playWave(dtrackList: dTracklist? = null) {
+        if (dtrackList != null && dtrackList.yandexWaveSeed().isNullOrBlank()) return
         if (!tryStartLoading()) return
         try {
             loadAndPlayWave(dtrackList)
@@ -434,6 +439,8 @@ private data class TrackWaveSeed(
     override fun getType(): String = TYPE
 
     override fun getWaveId(): String = "track:$trackId"
+    /** Seed этого серверного объекта поддерживается ЯМ rotor. */
+    override fun yandexWaveSeed(): String? = getWaveId().takeIf(String::isNotBlank)
 
     private companion object {
         const val TYPE = "ya_track_wave_seed"
@@ -454,6 +461,8 @@ private data class ArtistWaveSeed(
     override fun getType(): String = TYPE
 
     override fun getWaveId(): String = "artist:$artistId"
+    /** Seed этого серверного объекта поддерживается ЯМ rotor. */
+    override fun yandexWaveSeed(): String? = getWaveId().takeIf(String::isNotBlank)
 
     private companion object {
         const val TYPE = "ya_artist_wave_seed"
@@ -473,6 +482,8 @@ private data class StationWaveSeed(
     override fun getType(): String = TYPE
 
     override fun getWaveId(): String = stationId
+    /** Seed этого серверного объекта поддерживается ЯМ rotor. */
+    override fun yandexWaveSeed(): String? = getWaveId().takeIf(String::isNotBlank)
 
     private companion object {
         const val TYPE = "ya_station_wave_seed"

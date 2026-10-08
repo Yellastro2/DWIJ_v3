@@ -6,6 +6,8 @@ import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import com.yellastrodev.dwij.RadialMenuTarget
+import com.yellastrodev.dwij.ui.LocalRadialMenuSelection
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
@@ -64,7 +66,7 @@ import kotlinx.coroutines.withTimeoutOrNull
 import org.jetbrains.compose.resources.getString
 import org.jetbrains.compose.resources.stringResource
 
-/** Shared-плеер: VK-состояния коллекции независимы от Song.isLiked, доступность проверяется без URI в метадате. */
+/** Shared-плеер; в режиме назначения действие волны по треку сохраняет seed без запуска. */
 @Composable
 fun PlayerRoute(
     component: DwijComponent,
@@ -76,6 +78,7 @@ fun PlayerRoute(
     onShareYandexUrl: (String) -> Unit,
 ) {
     val logger = LocalYamLogger.current
+    val selection = LocalRadialMenuSelection.current
     val songMatchRepository = component.songMatchRepository
     val songRepository = component.songRepository
 
@@ -582,6 +585,7 @@ fun PlayerRoute(
                 ?.albumTitle
                 ?.takeIf(String::isNotBlank),
             sourceLabel = sourceLabel,
+            queueOrigin = track?.id?.let { playedTracklist?.originOf(it) },
             hasMultipleSources =
                 (track?.instances?.size ?: 0) > 1,
             hasUnresolvedMatchCandidate =
@@ -627,7 +631,10 @@ fun PlayerRoute(
         onRepeatClick = playerModel::rotate,
         onTrackWaveClick = {
             yandexTrack?.let { currentYandexTrack ->
-                component.waveRepository.requestTrackWave(
+                if (selection != null) selection.onSelect(RadialMenuTarget.YandexWave(
+                    "track:${currentYandexTrack.id}", currentYandexTrack.title,
+                ))
+                else component.waveRepository.requestTrackWave(
                     trackId = currentYandexTrack.id,
                     trackTitle = currentYandexTrack.title,
                 )

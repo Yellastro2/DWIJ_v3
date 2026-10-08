@@ -13,4 +13,6 @@ class VkPlaylistTracklist(private val playlist: VkPlaylist) : dTracklist {
     override fun getType(): String = "vk-playlist"
     /** VK-плейлист не связан с Яндекс Rotor. */
     override fun getWaveId(): String = ""
+    /** Исходная сущность этой очереди принадлежит VK. */
+    override fun originOf(songId: String): MusicSource = MusicSource.VK
 }

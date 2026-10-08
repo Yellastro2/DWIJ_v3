@@ -52,6 +52,7 @@ const val VK_ALL_TRACKS = "0_-2"
  * Desktop может получать MP3 HLS без TS-обёртки; формат кеша и offline-bundle сохраняется.
  * Явное сохранение публикует независимый offline-bundle вне LRU.
  * Сборка очередей использует отдельный mutex и не ожидает сетевого обновления фонотеки.
+ * Конечные рекомендации загружаются по нажатию независимо от обновления личной фонотеки.
  */
 class VkMusicRepository(
     private val store: ProtectedSessionPayloadStore,
@@ -687,9 +688,25 @@ class VkMusicRepository(
         return owner
     }
 
-    /** Читает состав с кешем; allowSavedFallback=false требует сетевой ответ перед изменением членства. */
+    /** Получает обложки персональных подборок, не запрашивая треки или разделы каталога. */
+    internal suspend fun recommendationCards(): DataResult<List<VkRecommendationCard>> = operation("recommendationCards") {
+        val revision = sessionRevision.value
+        VkRecommendationCatalog(client ?: throw VkApiException(5)).cards().also {
+            check(revision == sessionRevision.value) { "Сессия VK изменилась при загрузке каталога" }
+        }
+    }
+
+    /** Читает состав с кешем; виртуальные рекомендации загружает независимо от личной коллекции. */
     suspend fun getPlaylist(fullId: String, preferLocal: Boolean = false,
         allowSavedFallback: Boolean = true): DataResult<VkPlaylistContent> {
+        if (fullId.startsWith(VK_RECOMMENDATION_PREFIX)) return operation("getRecommendationPlaylist") {
+            val revision = sessionRevision.value
+            val content = VkRecommendationCatalog(client ?: throw VkApiException(5)).content(fullId)
+            check(revision == sessionRevision.value) { "Сессия VK изменилась при загрузке рекомендаций" }
+            registerTracks(content.tracks)
+            logger.info(TAG, "[getRecommendationPlaylist] Подборка ${content.playlist.title}: треков=${content.tracks.size}")
+            content
+        }
         if (preferLocal) cachedPlaylist(fullId)?.let { return DataResult.Success(it) }
         val saved = if (allowSavedFallback) withContext(Dispatchers.IO) {
             localStorage?.playlists()?.firstOrNull { it.playlist.fullId == fullId }

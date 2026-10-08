@@ -165,7 +165,7 @@ data class LocalLibraryStateEntity(
     val value: String,
 )
 
-/** Локальный треклист для общей очереди Media3. */
+/** Локальный треклист общей очереди; происхождение песен сохраняется при выборе сетевого экземпляра. */
 data class LocalTracklist(
     val id: String,
     val name: String,
@@ -174,6 +174,8 @@ data class LocalTracklist(
     override fun getDTitle(): String = name
     override fun getType(): String = TYPE
     override fun getWaveId(): String = ""
+    /** Песня взята из локальной коллекции независимо от выбранного для воспроизведения экземпляра. */
+    override fun originOf(songId: String): MusicSource = MusicSource.LOCAL
 
     companion object {
         const val TYPE = "local_tracklist"

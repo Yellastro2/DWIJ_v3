@@ -7,6 +7,7 @@ import androidx.compose.animation.core.tween
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.gestures.awaitEachGesture
 import androidx.compose.foundation.gestures.awaitFirstDown
+import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -29,6 +30,8 @@ import androidx.compose.ui.platform.LocalViewConfiguration
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.drawText
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.unit.Constraints
 import androidx.compose.ui.text.rememberTextMeasurer
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -40,10 +43,11 @@ import kotlin.math.roundToLong
 import kotlin.math.sin
 import kotlin.random.Random
 
-/** Доступные способы появления и исчезновения секторов кругового меню. */
+/** Анимации рабочего меню и раскрытый вид с необязательным выбором сектора в настройках. */
 enum class RadialMenuAnimationStyle {
     GlitchFlicker,
     Expand,
+    StaticPreview,
 }
 
 /** Результат ожидания между DOWN и подтверждением радиального жеста. */
@@ -61,6 +65,10 @@ private enum class PendingRadialGestureResult {
  * в центре от радиального жеста, активируемого long-press или немедленным
  * входом пальца в сектор, меняет выбор при протягивании и оставляет центр без
  * выбора. Радиусы задаются долей от меньшей стороны.
+ * [RadialMenuAnimationStyle.StaticPreview] сразу рисует раскрытые сектора, по умолчанию без жестов.
+ * Сектор настройки показывает общую иконку шестерёнки под своей подписью.
+ * Подписи назначений центрируются и переносятся в пределах ширины сектора.
+ * В настройке previewInteractive разрешает прямой выбор сектора; enabled отключает все жесты.
  */
 @Composable
 fun RadialMenu(
@@ -78,6 +86,8 @@ fun RadialMenu(
     innerRadiusFraction: Float = 0.11f,
     outerRadiusFraction: Float = 0.49f,
     animationStyle: RadialMenuAnimationStyle = RadialMenuAnimationStyle.GlitchFlicker,
+    enabled: Boolean = true,
+    previewInteractive: Boolean = false,
 ) {
     val glitchFrames = remember { createFixedRadialMenuGlitchFrames() }
     val expansionProgress = rememberRadialMenuExpansionProgress(
@@ -91,6 +101,7 @@ fun RadialMenu(
     val isAnimationVisible = when (animationStyle) {
         RadialMenuAnimationStyle.GlitchFlicker -> glitchFrame.opacity > 0f
         RadialMenuAnimationStyle.Expand -> expansionProgress > 0f
+        RadialMenuAnimationStyle.StaticPreview -> visible
     }
     var pressedIndex by remember { mutableIntStateOf(-1) }
     val currentOnPrimaryClick = rememberUpdatedState(onPrimaryClick)
@@ -104,11 +115,14 @@ fun RadialMenu(
     val glowWidth = with(density) { 4.5.dp.toPx() }
     val glitchWidth = with(density) { 1.1.dp.toPx() }
     val textMeasurer = rememberTextMeasurer()
+    val settingsIconSize = with(density) { 22.dp.toPx() }
+    val settingsIconGap = with(density) { 5.dp.toPx() }
     val textStyle = remember {
         TextStyle(
             color = Color.White,
             fontSize = 13.sp,
             fontWeight = FontWeight.Bold,
+            textAlign = TextAlign.Center,
         )
     }
     val safeTotalSweep = totalSweepAngle.coerceIn(1f, 360f)
@@ -286,7 +300,21 @@ fun RadialMenu(
         }
     }
 
-    Canvas(modifier = modifier.then(inputModifier)) {
+    val previewInput = Modifier.pointerInput(items, previewInteractive) {
+        detectTapGestures { position ->
+            val index = findRadialMenuItemAt(
+                position, size.width.toFloat(), size.height.toFloat(), items.size,
+                startAngle, safeTotalSweep, safeGap, safeInnerRadiusFraction, safeOuterRadiusFraction,
+            )
+            if (index >= 0) currentOnItemClick.value(items[index])
+        }
+    }
+    Canvas(modifier = modifier.then(when {
+        !enabled -> Modifier
+        animationStyle != RadialMenuAnimationStyle.StaticPreview -> inputModifier
+        previewInteractive -> previewInput
+        else -> Modifier
+    })) {
         if (items.isEmpty() || !isAnimationVisible) return@Canvas
 
         val center = Offset(size.width / 2f, size.height / 2f)
@@ -307,6 +335,14 @@ fun RadialMenu(
 
                 RadialMenuAnimationStyle.Expand -> radialMenuExpandItemAnimation(
                     animationProgress = expansionProgress,
+                    index = index,
+                    itemCount = items.size,
+                    finalInnerRadius = finalInnerRadius,
+                    finalOuterRadius = finalOuterRadius,
+                    finalVisibleSweep = finalVisibleSweep,
+                )
+                RadialMenuAnimationStyle.StaticPreview -> radialMenuExpandItemAnimation(
+                    animationProgress = 1f,
                     index = index,
                     itemCount = items.size,
                     finalInnerRadius = finalInnerRadius,
@@ -395,20 +431,57 @@ fun RadialMenu(
                 val textLayout = textMeasurer.measure(
                     text = item.title,
                     style = textStyle,
+                    constraints = Constraints(maxWidth = (minDimension * 0.30f).toInt().coerceAtLeast(1)),
                 )
+                val isSettingsItem = item.id == RADIAL_MENU_SETTINGS_ITEM_ID
+                val textTop = textPosition.y - textLayout.size.height / 2f -
+                    if (isSettingsItem) (settingsIconSize + settingsIconGap) / 2f else 0f
 
                 drawText(
                     textLayoutResult = textLayout,
                     color = Color.White,
                     topLeft = Offset(
                         x = textPosition.x - textLayout.size.width / 2f,
-                        y = textPosition.y - textLayout.size.height / 2f,
+                        y = textTop,
                     ),
                     alpha = contentProgress,
                 )
+                if (isSettingsItem) {
+                    drawRadialSettingsGear(
+                        center = Offset(
+                            textPosition.x,
+                            textTop + textLayout.size.height + settingsIconGap + settingsIconSize / 2f,
+                        ),
+                        diameter = settingsIconSize,
+                        alpha = contentProgress,
+                    )
+                }
             }
         }
     }
+}
+
+/** Рисует контур восьмизубой шестерёнки и центральное отверстие под подписью настройки. */
+private fun androidx.compose.ui.graphics.drawscope.DrawScope.drawRadialSettingsGear(
+    center: Offset,
+    diameter: Float,
+    alpha: Float,
+) {
+    val radius = diameter / 2f
+    val contour = Path().apply {
+        repeat(32) { index ->
+            val angle = index * 360f / 32f
+            val toothRadius = radius * if (index % 4 < 2) 0.76f else 1f
+            val x = center.x + toothRadius * cosDegrees(angle)
+            val y = center.y + toothRadius * sinDegrees(angle)
+            if (index == 0) moveTo(x, y) else lineTo(x, y)
+        }
+        close()
+    }
+    val stroke = Stroke(width = 1.4.dp.toPx())
+    val color = Color.White.copy(alpha = alpha)
+    drawPath(path = contour, color = color, style = stroke)
+    drawCircle(color = color, radius = radius * 0.3f, center = center, style = stroke)
 }
 
 /** Сохраняет прежнее плавное выдвижение секторов как переключаемый режим. */

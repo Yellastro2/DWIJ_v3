@@ -105,9 +105,10 @@ import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.window.Popup
 import androidx.compose.ui.window.PopupProperties
 import com.yellastrodev.dwij.playback.PlayerVolumeControl
+import com.yellastrodev.dwij.data.entities.MusicSource
 import kotlinx.coroutines.flow.MutableStateFlow
 
-/** Снимок плеера: доступ к плейлистам и дизлайку задаётся отдельно от лайка личной коллекции. */
+/** Снимок плеера: происхождение песни в очереди отделено от источника воспроизводимого экземпляра. */
 @Immutable
 data class FullPlayerUiState(
     val trackId: String?,
@@ -140,6 +141,7 @@ data class FullPlayerUiState(
     val pendingTrackChange: TrackChangeDirection? = null,
     val canAddToPlaylist: Boolean = canLike,
     val canDislike: Boolean = canLike,
+    val queueOrigin: MusicSource? = null,
 )
 
 /**
@@ -213,6 +215,7 @@ fun FullPlayerScreen(
                 queuePosition = state.queuePosition,
                 showSourcesIndicator = state.hasMultipleSources ||
                     state.hasUnresolvedMatchCandidate,
+                queueOrigin = state.queueOrigin,
                 canStartTrackWave = state.canStartTrackWave,
                 canDislike = state.canDislike,
                 isReactionPending = state.isLikePending,
@@ -360,12 +363,31 @@ fun FullPlayerScreen(
     }
 }
 
-/** Рисует закреплённую строку с возвратом и названием текущей очереди. */
+/** Отмечает происхождение песни в подборке, а не выбранный источник её аудио. */
+@Composable
+private fun QueueOriginIndicator(origin: MusicSource, modifier: Modifier = Modifier) {
+    val label = stringResource(when (origin) {
+        MusicSource.YANDEX -> Res.string.home_source_yandex_music
+        MusicSource.VK -> Res.string.home_source_vk_music
+        MusicSource.LOCAL -> Res.string.home_source_local
+    })
+    val description = stringResource(Res.string.player_queue_origin, label)
+    Box(modifier.semantics { contentDescription = description }, contentAlignment = Alignment.Center) {
+        Text(
+            text = when (origin) { MusicSource.YANDEX -> "Я"; MusicSource.VK -> "VK"; MusicSource.LOCAL -> "Л" },
+            color = when (origin) { MusicSource.YANDEX -> DwijColors.Pink; MusicSource.VK -> DwijColors.Cyan; MusicSource.LOCAL -> DwijColors.White },
+            fontSize = 12.sp, fontWeight = FontWeight.Bold,
+        )
+    }
+}
+
+/** Рисует заголовок очереди, мультисурс и независимый источник сущности в текущем списке. */
 @Composable
 private fun FullPlayerTopBar(
     queueTitle: String,
     queuePosition: Int,
     showSourcesIndicator: Boolean,
+    queueOrigin: MusicSource?,
     canStartTrackWave: Boolean,
     canDislike: Boolean,
     isReactionPending: Boolean,
@@ -454,6 +476,7 @@ private fun FullPlayerTopBar(
                 overflow = TextOverflow.Ellipsis,
             )
         }
+        queueOrigin?.let { origin -> QueueOriginIndicator(origin, Modifier.size(28.dp)) }
         if (showSourcesIndicator || isSavedLocally) {
             Column(
                 horizontalAlignment = Alignment.CenterHorizontally,

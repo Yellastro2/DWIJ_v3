@@ -115,6 +115,7 @@ fun CreatePlaylistDialog(
                             HomeMusicSource.Yandex -> Res.string.home_source_yandex_music
                             HomeMusicSource.Vk -> Res.string.home_source_vk_music
                             HomeMusicSource.Local -> Res.string.home_source_local
+                            HomeMusicSource.All -> Res.string.home_source_all
                         },
                     ),
                     color = DwijColors.CyanBright,
