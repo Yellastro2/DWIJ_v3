@@ -154,6 +154,9 @@
     <string name="radial_menu_mixed">Общая\nподборка</string>
     <string name="radial_menu_settings_title">Радиальное меню</string>
     <string name="radial_menu_reset">Сбросить меню</string>
+    <string name="radial_menu_add">+ Добавить</string>
+    <string name="radial_menu_new_sector">Новый сектор</string>
+    <string name="radial_menu_remove">Удалить</string>
     <string name="radial_menu_assign_list">Назначить этот список</string>
     <string name="radial_menu_assign_wave">Назначить волну</string>
     <string name="radial_menu_selection_prompt">Выберите назначение для «%1$s»</string>
@@ -309,6 +312,11 @@
     <string name="settings_local_storage_cleared">Локальное хранение очищено</string>
     <string name="settings_local_storage_clear_failed">Не удалось удалить часть локальных файлов</string>
     <string name="settings_local_storage_cancel">Отмена</string>
+    <string name="settings_auto_merge_title">Автослияние вариантов</string>
+    <string name="settings_auto_merge_description">Автоматически объединять текущие и новые предложения мультисурсов. Отклонённые пары пропускаются.</string>
+    <string name="settings_auto_merge_confirm_title">Включить автослияние?</string>
+    <string name="settings_auto_merge_confirm_message">Все ожидающие и будущие предложения будут автоматически объединяться в мультисурсы. Совпадения определяются по метаданным и могут быть неточными. Ранее отклонённые пары останутся отклонёнными. Выключение автослияния не отменяет уже выполненные объединения.</string>
+    <string name="settings_auto_merge_enable">Включить</string>
     <string name="settings_multi_source_scan_title">Сканирование мультисурсов</string>
     <string name="settings_multi_source_scan_description">Искать совпадения песен между Яндекс Музыкой, ВК и локальной музыкой</string>
 </resources>

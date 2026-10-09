@@ -60,8 +60,10 @@ import org.jetbrains.compose.resources.stringResource
  * Платформа используется только для StatFs, Intent, clipboard и lifecycle.
  * Закрытие окна OAuth скрывает только интерфейс, не отменяя текущий вход.
  * Размер и очистка постоянного хранения включают Яндекс и VK, независимо от LRU-кеша.
+ * Кнопка на карточке открывает подтверждение; удаление запускается только после согласия.
  * Ошибки VK OAuth выводятся в общий snackbar поверх прокручиваемых настроек.
  * Переключатель мультисурсов сохраняется репозиторием и управляет текущим фоновым сканом.
+ * Автослияние включается только после подтверждения обработки текущих и будущих предложений.
  */
 @Composable
 fun SettingsRoute(
@@ -80,6 +82,8 @@ fun SettingsRoute(
     val httpRemote = remember(component) { component.httpMediaRemote }
     val songMatches = remember(component) { component.songMatchRepository }
     val multiSourceScanEnabled by songMatches.scanEnabled.collectAsState()
+    val autoMergeEnabled by songMatches.autoMergeEnabled.collectAsState()
+    var showAutoMergeConfirmation by remember { mutableStateOf(false) }
     val httpRemoteServiceName by httpRemote.serviceName.collectAsState()
     var httpRemoteEnabled by remember(httpRemote) { mutableStateOf(httpRemote.enabled) }
     var httpRemotePort by remember(httpRemote) { mutableStateOf(httpRemote.port) }
@@ -145,10 +149,6 @@ fun SettingsRoute(
     val localStorageRevision by
         component.trackCacheRepo.localStorageRevision.collectAsState()
     val vkLocalStorageRevision by component.vkMusicRepository.localStorageRevision.collectAsState()
-
-    var showLocalStorageDialog by remember {
-        mutableStateOf(false)
-    }
 
     var showLocalStorageClearConfirmation by remember {
         mutableStateOf(false)
@@ -869,8 +869,8 @@ fun SettingsRoute(
                     normalizedMb.toLong() *
                             BYTES_PER_MEGABYTE
             },
-            onLocalStorageClick = {
-                showLocalStorageDialog = true
+            onClearLocalStorageClick = {
+                if (!isClearingLocalStorage) showLocalStorageClearConfirmation = true
             },
             onProxyClick = {
                 val settings =
@@ -940,6 +940,11 @@ fun SettingsRoute(
             httpRemoteEnabled = httpRemoteEnabled,
             multiSourceScanEnabled = multiSourceScanEnabled,
             onMultiSourceScanEnabledChange = songMatches::setScanEnabled,
+            autoMergeEnabled = autoMergeEnabled,
+            onAutoMergeEnabledChange = { enabled ->
+                if (enabled) showAutoMergeConfirmation = true
+                else songMatches.setAutoMergeEnabled(false)
+            },
             httpRemotePort = httpRemotePort,
             httpRemoteAddress = httpRemoteAddress,
             httpRemoteServiceName = httpRemoteServiceName,
@@ -976,51 +981,6 @@ fun SettingsRoute(
         )
     }
 
-    if (showLocalStorageDialog && !showLocalStorageClearConfirmation) {
-        AlertDialog(
-            onDismissRequest = {
-                if (!isClearingLocalStorage) showLocalStorageDialog = false
-            },
-            title = {
-                Text(stringResource(Res.string.settings_local_storage_title))
-            },
-            text = {
-                Column {
-                    Text(
-                        stringResource(
-                            Res.string.settings_local_storage_description,
-                        ),
-                    )
-                    Text(
-                        stringResource(
-                            Res.string.settings_local_storage_occupied,
-                            occupiedLocalStorageSize,
-                        ),
-                        modifier = Modifier.padding(top = 10.dp),
-                    )
-                }
-            },
-            confirmButton = {
-                TextButton(
-                    enabled = !isClearingLocalStorage,
-                    onClick = {
-                        showLocalStorageClearConfirmation = true
-                    },
-                ) {
-                    Text(stringResource(Res.string.settings_local_storage_clear))
-                }
-            },
-            dismissButton = {
-                TextButton(
-                    enabled = !isClearingLocalStorage,
-                    onClick = { showLocalStorageDialog = false },
-                ) {
-                    Text(stringResource(Res.string.settings_local_storage_close))
-                }
-            },
-        )
-    }
-
     if (showLocalStorageClearConfirmation) {
         AlertDialog(
             onDismissRequest = {
@@ -1039,8 +999,8 @@ fun SettingsRoute(
                     enabled = !isClearingLocalStorage,
                     onClick = {
                         if (!isClearingLocalStorage) {
+                            isClearingLocalStorage = true
                             coroutineScope.launch {
-                                isClearingLocalStorage = true
                                 val cleared = try {
                                     val yandexCleared = component.trackCacheRepo.clearLocalStorage()
                                     val vkCleared = component.vkMusicRepository.clearLocalStorage()
@@ -1058,7 +1018,6 @@ fun SettingsRoute(
                                     isClearingLocalStorage = false
                                 }
                                 showLocalStorageClearConfirmation = false
-                                showLocalStorageDialog = false
                                 refreshLocalStorageState()
                                 showMessage(
                                     getString(
@@ -1083,6 +1042,27 @@ fun SettingsRoute(
                         showLocalStorageClearConfirmation = false
                     },
                 ) {
+                    Text(stringResource(Res.string.settings_local_storage_cancel))
+                }
+            },
+        )
+    }
+
+    if (showAutoMergeConfirmation) {
+        AlertDialog(
+            onDismissRequest = { showAutoMergeConfirmation = false },
+            title = { Text(stringResource(Res.string.settings_auto_merge_confirm_title)) },
+            text = { Text(stringResource(Res.string.settings_auto_merge_confirm_message)) },
+            confirmButton = {
+                TextButton(onClick = {
+                    showAutoMergeConfirmation = false
+                    songMatches.setAutoMergeEnabled(true)
+                }) {
+                    Text(stringResource(Res.string.settings_auto_merge_enable))
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { showAutoMergeConfirmation = false }) {
                     Text(stringResource(Res.string.settings_local_storage_cancel))
                 }
             },

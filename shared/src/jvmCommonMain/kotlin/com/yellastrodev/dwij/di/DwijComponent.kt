@@ -50,6 +50,7 @@ import com.yellastrodev.yamusicsdk.YamLogger
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.Job
@@ -69,7 +70,7 @@ import java.util.concurrent.atomic.AtomicBoolean
  * Постоянные VK-bundle используют отдельный каталог и общую платформенную очередь загрузки.
  * Общий SongRepository передаётся VK-репозиторию напрямую; обратной зависимости нет.
  * Загрузка VK-обложек учитывает диагностический режим текущей OAuth или web-сессии.
- * Скан мультисурсных совпадений использует общее постоянное хранилище настроек.
+ * Скан и автослияние мультисурсов используют постоянные настройки; слияние обновляет очередь на Main.
  * Desktop передаёт режим MP3 HLS для совместимости VK с JavaFX.
  *
  * Платформа передаёт системные реализации, низкоуровневое key-value хранилище
@@ -364,6 +365,7 @@ class DwijComponent private constructor(
 
     /**
      * Подключает VK-кеш/bundle, импортирует отсутствующую метадату и отменяет неактивные чтения relay.
+     * Запускает скан/автослияние; завершённые объединения обновляют очередь без смены воспроизведения.
      */
     fun start() {
         if (
@@ -430,7 +432,13 @@ class DwijComponent private constructor(
 
             songMatchRepository.start(
                 applicationScope,
-            )
+            ) { sourceSongIds, mergedSongId ->
+                songRepository.songsByIds(listOf(mergedSongId)).firstOrNull()?.let { mergedSong ->
+                    withContext(Dispatchers.Main) {
+                        playerRepository.applyMergedSong(sourceSongIds, mergedSong)
+                    }
+                }
+            }
         }
     }
 

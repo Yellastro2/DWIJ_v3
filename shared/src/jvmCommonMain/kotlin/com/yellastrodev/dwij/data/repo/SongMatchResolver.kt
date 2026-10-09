@@ -15,9 +15,10 @@ data class SongMatchScore(
     val total: Float,
 )
 
-/** Ищет кандидатов по названию и артистам; для VK дополнительно проверяет известную длительность и версию. */
+/** Ищет кандидатов по метаданным; подробные логи сравнений выключены, включаются явно для диагностики. */
 class SongMatchResolver(
-    private val logger: YamLogger
+    private val logger: YamLogger,
+    private val logComparisons: Boolean = false,
 ) {
     /** Возвращает подсказку, а не доказательство идентичности; прежний режим ЯМ ↔ local сохраняется по умолчанию. */
     fun compare(
@@ -25,7 +26,7 @@ class SongMatchResolver(
         second: SongEntity,
         checkRecording: Boolean = false,
     ): SongMatchScore? {
-        val comparisonNumber = comparisonCounter.incrementAndGet()
+        val comparisonNumber = if (logComparisons) comparisonCounter.incrementAndGet() else 0L
         if (checkRecording && !isCompatibleRecording(first, second)) {
             logRejected(comparisonNumber, first, second) { "разная длительность или обозначение версии" }
             return null
@@ -81,7 +82,7 @@ class SongMatchResolver(
             return null
         }
         val total = titleSimilarity * TITLE_WEIGHT + artistSimilarity * ARTIST_WEIGHT
-        logger.debug(
+        if (logComparisons) logger.debug(
             TAG,
             "[compare] #$comparisonNumber кандидат: " +
                 "'${first.debugName()}' ↔ '${second.debugName()}', " +
@@ -113,13 +114,14 @@ class SongMatchResolver(
         }
     }
 
-    /** Подробно показывает первые сравнения, затем оставляет редкие контрольные записи. */
+    /** При явно включённой диагностике показывает первые отказы и редкие контрольные записи. */
     private inline fun logRejected(
         comparisonNumber: Long,
         first: SongEntity,
         second: SongEntity,
         reason: () -> String,
     ) {
+        if (!logComparisons) return
         if (comparisonNumber > INITIAL_VERBOSE_COMPARISONS &&
             comparisonNumber % COMPARISON_LOG_INTERVAL != 0L
         ) {

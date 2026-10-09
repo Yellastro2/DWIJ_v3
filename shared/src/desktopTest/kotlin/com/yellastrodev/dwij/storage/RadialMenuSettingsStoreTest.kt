@@ -8,7 +8,7 @@ import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFailsWith
 
-/** Проверяет восстановление назначений после перезапуска и сохранность неподдерживаемой записи. */
+/** Проверяет восстановление, добавление и удаление назначений и сохранность неподдерживаемой записи. */
 class RadialMenuSettingsStoreTest {
     /** Все виды назначений и источники плейлистов восстанавливаются в прежних позициях. */
     @Test
@@ -76,7 +76,7 @@ class RadialMenuSettingsStoreTest {
         listOf(
             "broken json",
             "{\"version\":2,\"targets\":[]}",
-            "{\"version\":1,\"targets\":[]}",
+            "{\"version\":1,\"targets\":[{}, {}, {}, {}, {}, {}]}",
             "{\"version\":1,\"targets\":[{}, {}, {}, {}, {}]}",
         ).forEach { raw ->
             val storage = MemoryStorage()
@@ -99,6 +99,39 @@ class RadialMenuSettingsStoreTest {
         settings.setTarget(0, RadialMenuTarget.YandexWave("user:onyourwave"))
         settings.reset()
         assertEquals(defaults, RadialMenuSettingsStore(storage).targets.value)
+    }
+
+    /** Удаление сдвигает сектора, любое число назначений восстанавливается, центр не меняется. */
+    @Test
+    fun `удаление и добавление сохраняют порядок и центральное действие`() {
+        val storage = MemoryStorage()
+        val settings = RadialMenuSettingsStore(storage)
+        val defaults = settings.targets.value
+        val primary = RadialMenuTarget.YandexWave("artist:123", "Артист")
+        settings.setPrimaryTarget(primary)
+        settings.removeTarget(1)
+        val remaining = defaults.filterIndexed { index, _ -> index != 1 }
+        assertEquals(remaining, RadialMenuSettingsStore(storage).targets.value)
+        assertFailsWith<IllegalArgumentException> { settings.setTarget(4, primary) }
+        assertFailsWith<IllegalArgumentException> { settings.removeTarget(-1) }
+        while (settings.targets.value.isNotEmpty()) {
+            settings.removeTarget(0)
+            assertEquals(settings.targets.value, RadialMenuSettingsStore(storage).targets.value)
+        }
+        assertEquals(primary, RadialMenuSettingsStore(storage).primaryTarget.value)
+        assertFailsWith<IllegalArgumentException> { settings.removeTarget(0) }
+        assertFailsWith<IllegalArgumentException> { settings.setTarget(0, primary) }
+        defaults.forEach { target ->
+            settings.addTarget(target)
+            assertEquals(settings.targets.value, RadialMenuSettingsStore(storage).targets.value)
+        }
+        assertFailsWith<IllegalArgumentException> { settings.addTarget(primary) }
+        assertEquals(defaults, RadialMenuSettingsStore(storage).targets.value)
+        assertEquals(primary, RadialMenuSettingsStore(storage).primaryTarget.value)
+        settings.removeTarget(2)
+        settings.reset()
+        assertEquals(defaults, RadialMenuSettingsStore(storage).targets.value)
+        assertEquals(defaultRadialPrimaryTarget(), RadialMenuSettingsStore(storage).primaryTarget.value)
     }
 
     /** Подменяет платформенный key-value backend для проверки постоянного строкового формата. */

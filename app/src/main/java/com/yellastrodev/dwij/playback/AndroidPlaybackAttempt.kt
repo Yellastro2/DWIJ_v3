@@ -1,14 +1,13 @@
 package com.yellastrodev.dwij.playback
 
-/** Срок одной попытки не продлевается повторными BUFFERING и заменой метаданных. */
-internal class AndroidPlaybackAttempt(val startedMs: Long, val retry: Int = 0) {
+/** Срок подготовки и затыка не продлевается повторными BUFFERING или повторами сетевых запросов. */
+internal class AndroidPlaybackAttempt(val startedMs: Long) {
     var failed = false
         private set
     private var ready = false
     private var stalledSinceMs: Long? = null
-    val canRetry: Boolean get() = retry < MAX_RETRIES
 
-    /** READY завершает подготовку, но сохраняет число уже потраченных повторов трека. */
+    /** READY завершает подготовку или текущий затык; следующий затык получает новый срок. */
     fun onReady() {
         ready = true
         stalledSinceMs = null
@@ -35,9 +34,7 @@ internal class AndroidPlaybackAttempt(val startedMs: Long, val retry: Int = 0) {
     }
 
     companion object {
-        const val MAX_RETRIES = 3
-        const val PREPARE_TIMEOUT_MS = 12_000L
-        const val STALL_TIMEOUT_MS = 5_000L
-        const val RETRY_DELAY_MS = 250L
+        const val PREPARE_TIMEOUT_MS = 20_000L
+        const val STALL_TIMEOUT_MS = 20_000L
     }
 }

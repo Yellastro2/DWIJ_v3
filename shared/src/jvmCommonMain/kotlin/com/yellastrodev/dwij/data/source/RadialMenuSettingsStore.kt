@@ -21,7 +21,7 @@ import kotlinx.serialization.json.contentOrNull
 import kotlinx.serialization.json.put
 
 /**
- * Хранит пять секторов и действие центральной кнопки одним JSON в платформенном хранилище.
+ * Хранит от нуля до пяти секторов и действие центральной кнопки одним JSON в платформенном хранилище.
  * Позиция в списке соответствует сектору. Главная и экран просмотра используют общий StateFlow.
  * Отсутствующий, повреждённый или неподдерживаемый формат даёт дефолты в памяти,
  * но исходная запись не перезаписывается до явного изменения назначений.
@@ -34,16 +34,28 @@ class RadialMenuSettingsStore(private val storage: LocalKeyValueStore) {
     val targets: StateFlow<List<RadialMenuTarget>> = mutableTargets.asStateFlow()
     val primaryTarget: StateFlow<RadialMenuTarget> = mutablePrimaryTarget.asStateFlow()
 
-    /** Меняет действие короткого нажатия при пустой очереди, сохраняя пять секторов. */
+    /** Меняет действие короткого нажатия при пустой очереди, сохраняя сектора. */
     fun setPrimaryTarget(target: RadialMenuTarget) {
         save(mutableTargets.value, target)
     }
 
     /** Меняет одно назначение; сохранение выполняется до публикации нового состояния. */
     fun setTarget(index: Int, target: RadialMenuTarget) {
-        require(index in 0 until RADIAL_MENU_TARGET_COUNT) { "Неверный индекс сектора: $index" }
+        require(index in mutableTargets.value.indices) { "Неверный индекс сектора: $index" }
         val updated = mutableTargets.value.toMutableList().apply { this[index] = target }
         save(updated)
+    }
+
+    /** Добавляет выбранное назначение в конец, сохраняя остальные сектора и центр. */
+    fun addTarget(target: RadialMenuTarget) {
+        require(mutableTargets.value.size < RADIAL_MENU_TARGET_COUNT) { "Достигнут предел секторов" }
+        save(mutableTargets.value + target)
+    }
+
+    /** Удаляет сектор и сдвигает последующие назначения, сохраняя центральное действие. */
+    fun removeTarget(index: Int) {
+        require(index in mutableTargets.value.indices) { "Неверный индекс сектора: $index" }
+        save(mutableTargets.value.filterIndexed { position, _ -> position != index })
     }
 
     /** Восстанавливает пять секторов и личную ЯМ-волну для центральной кнопки. */
@@ -59,7 +71,7 @@ class RadialMenuSettingsStore(private val storage: LocalKeyValueStore) {
             val root = Json.parseToJsonElement(saved).jsonObject
             require(root.getValue("version").jsonPrimitive.int == VERSION)
             val entries = root.getValue("targets").jsonArray
-            require(entries.size == RADIAL_MENU_TARGET_COUNT)
+            require(entries.size <= RADIAL_MENU_TARGET_COUNT)
             entries.map { decodeTarget(it.jsonObject) } to
                 (root["primary"]?.let { decodeTarget(it.jsonObject) } ?: defaultRadialPrimaryTarget())
         } catch (_: IllegalArgumentException) {

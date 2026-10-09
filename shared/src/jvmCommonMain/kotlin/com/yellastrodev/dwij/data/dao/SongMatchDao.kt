@@ -7,11 +7,53 @@ import androidx.room.Query
 import androidx.room.Transaction
 import com.yellastrodev.dwij.data.entities.SongMatchCandidateEntity
 import com.yellastrodev.dwij.data.entities.SongMatchCandidateStatus
+import com.yellastrodev.dwij.data.entities.MusicSource
 import kotlinx.coroutines.flow.Flow
 import kotlin.collections.forEach
 
+/** Хранит предложения и пользовательские решения; автоматическое слияние проверяет пару в транзакции. */
 @Dao
 abstract class SongMatchDao {
+    /** Объединяет только актуальную PENDING-пару с непересекающимися источниками, сохраняя ручные отказы. */
+    @Transaction
+    open suspend fun mergePendingCandidate(
+        songDao: SongDao,
+        firstSongId: String,
+        secondSongId: String,
+    ): String? {
+        val candidate = getCandidate(firstSongId, secondSongId) ?: return null
+        if (candidate.status != SongMatchCandidateStatus.PENDING.name) return null
+        val songs = songDao.getSongs(listOf(firstSongId, secondSongId)).associateBy { it.song.songId }
+        val first = songs[firstSongId] ?: return null
+        val second = songs[secondSongId] ?: return null
+        val supported = MusicSource.entries.mapTo(mutableSetOf()) { it.name }
+        val firstSources = first.instances.mapTo(mutableSetOf()) { it.source }
+        val secondSources = second.instances.mapTo(mutableSetOf()) { it.source }
+        if (firstSources.isEmpty() || secondSources.isEmpty() ||
+            !supported.containsAll(firstSources + secondSources) ||
+            firstSources.intersect(secondSources).isNotEmpty()
+        ) return null
+        val relatedCandidates = getCandidatesForSongs(listOf(firstSongId, secondSongId))
+        val mergedId = songDao.mergeInstances((first.instances + second.instances).map { it.instanceId })
+        relatedCandidates.forEach { related ->
+            val firstId = if (related.firstSongId == firstSongId || related.firstSongId == secondSongId)
+                mergedId else related.firstSongId
+            val secondId = if (related.secondSongId == firstSongId || related.secondSongId == secondSongId)
+                mergedId else related.secondSongId
+            if (firstId == secondId) return@forEach
+            val remapped = related.copy(firstSongId = minOf(firstId, secondId), secondSongId = maxOf(firstId, secondId))
+            insertCandidate(remapped)
+            if (remapped.status == SongMatchCandidateStatus.REJECTED.name) {
+                rejectCandidate(remapped.firstSongId, remapped.secondSongId)
+            }
+        }
+        return mergedId
+    }
+
+    /** Снимок рёбер группы для переноса предложений и отказов после удаления одной из Song. */
+    @Query("SELECT * FROM song_match_candidates WHERE firstSongId IN (:songIds) OR secondSongId IN (:songIds)")
+    abstract suspend fun getCandidatesForSongs(songIds: List<String>): List<SongMatchCandidateEntity>
+
     /** Наблюдает все решения: ожидающие идут первыми, затем остальные по убыванию score. */
     @Query(
         "SELECT * FROM song_match_candidates " +

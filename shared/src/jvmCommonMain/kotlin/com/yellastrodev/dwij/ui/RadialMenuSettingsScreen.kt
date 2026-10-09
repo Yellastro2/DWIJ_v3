@@ -2,6 +2,7 @@ package com.yellastrodev.dwij.ui
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
@@ -11,6 +12,8 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.safeDrawing
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.offset
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.foundation.shape.CircleShape
@@ -22,9 +25,15 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.yellastrodev.dwij.RadialMenuTarget
+import com.yellastrodev.dwij.RADIAL_MENU_TARGET_COUNT
+import com.yellastrodev.dwij.resources.radial_menu_add
+import com.yellastrodev.dwij.resources.radial_menu_remove
+import kotlin.math.cos
+import kotlin.math.sin
 import com.yellastrodev.dwij.defaultRadialMenuTargets
 import com.yellastrodev.dwij.defaultRadialPrimaryTarget
 import com.yellastrodev.dwij.resources.ic_home_player_play
@@ -40,7 +49,7 @@ import com.yellastrodev.dwij.ui.theme.DwijColors
 import org.jetbrains.compose.resources.stringResource
 import org.jetbrains.compose.ui.tooling.preview.Preview
 
-/** Настраивает пять секторов и центральный Play; служебный сектор настройки здесь скрыт. */
+/** Настраивает до пяти секторов и Play; под подписями удаление, свободный слот добавляет назначение. */
 @Composable
 fun RadialMenuSettingsScreen(
     onBackClick: () -> Unit,
@@ -50,8 +59,13 @@ fun RadialMenuSettingsScreen(
     onReset: () -> Unit = {},
     primaryTarget: RadialMenuTarget = defaultRadialPrimaryTarget(),
     onSelectPrimary: () -> Unit = {},
+    onRemoveSlot: (Int) -> Unit = {},
+    onAddSlot: () -> Unit = {},
 ) {
-    val items = homeRadialMenuItems(targets, includeSettings = false)
+    val items = homeRadialMenuItems(targets, includeSettings = false) +
+        if (targets.size < RADIAL_MENU_TARGET_COUNT) listOf(
+            RadialMenuItem("add", stringResource(Res.string.radial_menu_add), DwijColors.HomeRadialParty),
+        ) else emptyList()
     val primaryTitle = homeRadialMenuItems(listOf(primaryTarget), includeSettings = false).first().title.replace('\n', ' ')
     Column(
         modifier = modifier
@@ -103,14 +117,43 @@ fun RadialMenuSettingsScreen(
                     onVisualActivation = {},
                     onPressChange = {},
                     onItemClick = { item ->
-                        if (item.target != null) onSelectSlot(items.indexOf(item))
+                        if (item.target != null) onSelectSlot(items.indexOf(item)) else onAddSlot()
                     },
                     onDismiss = {},
                     animationStyle = RadialMenuAnimationStyle.StaticPreview,
                     previewInteractive = true,
+                    showItemTitles = false,
                     innerRadiusFraction = 0.14f,
                     modifier = Modifier.fillMaxSize(),
                 )
+                // Центры совпадают с подписями Canvas: радиусы 0.14/0.49, доля содержимого 0.55.
+                items.forEachIndexed { index, item ->
+                    val angle = Math.toRadians(-90.0 + 360.0 / items.size * (index + 0.5))
+                    val contentRadius = menuSize * (0.14f + (0.49f - 0.14f) * 0.55f)
+                    Column(
+                        horizontalAlignment = Alignment.CenterHorizontally,
+                        modifier = Modifier
+                            .align(Alignment.Center)
+                            .offset(contentRadius * cos(angle).toFloat(), contentRadius * sin(angle).toFloat())
+                            .width(menuSize * 0.30f),
+                    ) {
+                        Text(
+                            text = item.title,
+                            color = DwijColors.White,
+                            fontSize = 13.sp,
+                            fontWeight = FontWeight.Bold,
+                            textAlign = TextAlign.Center,
+                            modifier = Modifier.clickable {
+                                if (item.target != null) onSelectSlot(index) else onAddSlot()
+                            },
+                        )
+                        if (item.target != null) {
+                            TextButton(onClick = { onRemoveSlot(index) }) {
+                                Text(stringResource(Res.string.radial_menu_remove), color = DwijColors.CyanBright, fontSize = 12.sp)
+                            }
+                        }
+                    }
+                }
                 IconButton(
                     onClick = onSelectPrimary,
                     modifier = Modifier

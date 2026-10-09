@@ -37,6 +37,7 @@ import kotlinx.coroutines.flow.receiveAsFlow
  * Android-точка входа приложения.
  *
  * Создаёт Android-зависимости и запускает полностью shared Compose-корень.
+ * Передаёт входящие ссылки на треки и альбомы в shared-навигацию.
  */
 class MainActivity : ComponentActivity() {
 
@@ -46,6 +47,8 @@ class MainActivity : ComponentActivity() {
     private val playerOpenRequestFlow = playerOpenRequests.receiveAsFlow()
     private val yandexTrackRequests = Channel<String>(Channel.CONFLATED)
     private val yandexTrackRequestFlow = yandexTrackRequests.receiveAsFlow()
+    private val yandexAlbumRequests = Channel<Int>(Channel.CONFLATED)
+    private val yandexAlbumRequestFlow = yandexAlbumRequests.receiveAsFlow()
 
     val playerModel: PlayerModel by viewModels {
         viewModelFactory {
@@ -74,6 +77,7 @@ class MainActivity : ComponentActivity() {
         }
     }
 
+    /** Принимает стартовый intent до подписки Compose, сохраняя запрос в канале. */
     override fun onCreate(
         savedInstanceState: Bundle?,
     ) {
@@ -86,7 +90,7 @@ class MainActivity : ComponentActivity() {
         }
 
         consumePlayerOpenIntent(intent)
-        consumeYandexTrackIntent(intent)
+        consumeYandexMusicIntent(intent)
 
         enableEdgeToEdge()
 
@@ -125,6 +129,8 @@ class MainActivity : ComponentActivity() {
                         playerOpenRequestFlow,
                     yandexTrackRequests =
                         yandexTrackRequestFlow,
+                    yandexAlbumRequests =
+                        yandexAlbumRequestFlow,
                 )
                 if (showYandexLinksDialog) {
                     AlertDialog(
@@ -150,11 +156,12 @@ class MainActivity : ComponentActivity() {
         }
     }
 
+    /** Передаёт повторное открытие плеера или музыкальной ссылки в текущую навигацию. */
     override fun onNewIntent(intent: Intent) {
         super.onNewIntent(intent)
         setIntent(intent)
         consumePlayerOpenIntent(intent)
-        consumeYandexTrackIntent(intent)
+        consumeYandexMusicIntent(intent)
     }
 
     /** Передаёт одноразовую команду системного медиаплеера в Compose-навигацию. */
@@ -165,13 +172,20 @@ class MainActivity : ComponentActivity() {
         intent.action = Intent.ACTION_MAIN
     }
 
-    /** Извлекает ID трека из прямой ссылки или ссылки на трек внутри альбома. */
-    private fun consumeYandexTrackIntent(intent: Intent?) {
+    /** Передаёт альбом или трек по пути ссылки, игнорируя рекламные параметры запроса. */
+    private fun consumeYandexMusicIntent(intent: Intent?) {
         if (intent?.action != Intent.ACTION_VIEW) return
         val uri = intent.data ?: return
         if (uri.scheme != "https" || uri.host != YANDEX_MUSIC_HOST) return
 
         val segments = uri.pathSegments
+        if (segments.size == 2 && segments[0] == "album") {
+            val albumId = segments[1].takeIf { it.isNotBlank() && it.all(Char::isDigit) }
+                ?.toIntOrNull() ?: return
+            yandexAlbumRequests.trySend(albumId)
+            intent.action = Intent.ACTION_MAIN
+            return
+        }
         val trackId = when {
             segments.size == 2 && segments[0] == "track" -> segments[1]
             segments.size == 4 && segments[0] == "album" &&

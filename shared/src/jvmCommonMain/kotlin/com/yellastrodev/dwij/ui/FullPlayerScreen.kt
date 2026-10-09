@@ -149,6 +149,7 @@ data class FullPlayerUiState(
  * Позиция ползунка меняется локально во время жеста, а seek отправляется плееру только при отпускании.
  * Горизонтальный свайп центральной секции переключает трек; область прогресса сохраняет собственные жесты.
  * Метки плейлистов и кнопка добавления доступны всем подключённым сервисам независимо от лайков.
+ * Ошибки воспроизведения показывает общий snackbar DwijApp; здесь остаются сообщения экрана и конца очереди.
  */
 @Composable
 fun FullPlayerScreen(
@@ -185,7 +186,7 @@ fun FullPlayerScreen(
     LaunchedEffect(playerEvents) {
         playerEvents.collect { event ->
             val message = when (event) {
-                is PlayerEvent.ShowError -> event.message
+                is PlayerEvent.ShowError -> return@collect // Общие ошибки показывает DwijApp на любом экране.
                 is PlayerEvent.TrackListEnd -> event.message
             }
             snackbarHostState.showSnackbar(message)

@@ -11,7 +11,7 @@ enum class SongMatchCandidateStatus {
 
 /**
  * Неподтверждённое сходство двух независимых [SongEntity].
- * Resolver никогда не объединяет песни сам: решение остаётся за пользователем.
+ * Resolver создаёт предложения; пользователь объединяет вручную или явно включает автослияние.
  */
 @Entity(
     tableName = "song_match_candidates",

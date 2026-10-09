@@ -6,6 +6,7 @@ import com.yellastrodev.dwij.data.db.buildDwijDatabase
 import com.yellastrodev.dwij.data.entities.MusicSource
 import com.yellastrodev.dwij.data.entities.SongEntity
 import com.yellastrodev.dwij.data.entities.SongMatchCandidateStatus
+import com.yellastrodev.dwij.data.entities.SongMatchCandidateEntity
 import com.yellastrodev.dwij.data.entities.TrackInstanceEntity
 import com.yellastrodev.dwij.data.entities.VkLibraryEntity
 import com.yellastrodev.dwij.data.entities.dYaArtist
@@ -16,13 +17,96 @@ import com.yellastrodev.yamusicsdk.YamLogger
 import com.yellastrodev.dwij.storage.LocalKeyValueStore
 import java.nio.file.Files
 import kotlinx.coroutines.runBlocking
+import kotlinx.coroutines.cancelAndJoin
+import kotlinx.coroutines.channels.Channel
+import kotlinx.coroutines.withTimeout
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertNull
 import kotlin.test.assertTrue
 
-/** Проверяет VK-пары, пользовательские решения и остановку/возобновление скана через настоящий Room. */
+/** Проверяет VK-пары, решения, фоновый скан и автослияние через настоящий Room. */
 class VkSongMatchRepositoryTest {
+    /** Автослияние выключено по умолчанию, сохраняется отдельно и не включает поиск. */
+    @Test
+    fun restoresAutoMergeSettingIndependently() = runBlocking {
+        withDatabase { db ->
+            val settings = BooleanSettingsStore()
+            val matches = SongMatchRepository(db.songDao(), db.songMatchDao(), NoOpYamLogger, settings)
+            assertEquals(false, matches.autoMergeEnabled.value)
+            matches.setScanEnabled(false)
+            matches.setAutoMergeEnabled(true)
+            val restored = SongMatchRepository(db.songDao(), db.songMatchDao(), NoOpYamLogger, settings)
+            assertEquals(true, restored.autoMergeEnabled.value)
+            assertEquals(false, restored.scanEnabled.value)
+        }
+    }
+
+    /** При выключенном скане обрабатывает накопленные и будущие предложения, в том числе цепочку через удалённую Song. */
+    @Test
+    fun autoMergesBacklogAndFutureCandidatesWithoutScan() = runBlocking {
+        withDatabase { db ->
+            link(db, "a", MusicSource.LOCAL)
+            link(db, "b", MusicSource.YANDEX)
+            link(db, "c", MusicSource.VK)
+            val dao = db.songMatchDao()
+            dao.savePendingCandidate(candidate("a", "b"))
+            dao.savePendingCandidate(candidate("b", "c"))
+            val matches = SongMatchRepository(db.songDao(), dao, NoOpYamLogger)
+            matches.setScanEnabled(false)
+            val merged = Channel<String>(Channel.UNLIMITED)
+            val job = matches.start(this) { _, id -> merged.send(id) }
+            try {
+                matches.setAutoMergeEnabled(true)
+                withTimeout(5000) { repeat(2) { merged.receive() } }
+                assertEquals(3, db.songDao().getSongs(listOf("a")).single().instances.size)
+                assertEquals(0, dao.getPendingCandidateCount())
+                link(db, "d", MusicSource.LOCAL)
+                link(db, "e", MusicSource.VK)
+                dao.savePendingCandidate(candidate("d", "e"))
+                assertEquals("d", withTimeout(5000) { merged.receive() })
+                assertEquals(2, db.songDao().getSongs(listOf("d")).single().instances.size)
+                matches.setAutoMergeEnabled(false)
+                link(db, "f", MusicSource.LOCAL)
+                link(db, "g", MusicSource.VK)
+                dao.savePendingCandidate(candidate("f", "g"))
+                assertEquals(1, dao.getPendingCandidateCount())
+                assertEquals(null, dao.mergePendingCandidate(db.songDao(), "a", "d"))
+            } finally {
+                job.cancelAndJoin()
+                merged.close()
+            }
+        }
+    }
+
+    /** Отказ от B↔C переносится к A↔C после A+B и не даёт автоматически обойти решение пользователя. */
+    @Test
+    fun autoMergePreservesRejectedEdgesAndSkipsOverlappingSources() = runBlocking {
+        withDatabase { db ->
+            link(db, "a", MusicSource.LOCAL)
+            link(db, "b", MusicSource.YANDEX)
+            link(db, "c", MusicSource.VK)
+            link(db, "d", MusicSource.LOCAL)
+            val dao = db.songMatchDao()
+            dao.savePendingCandidate(candidate("a", "b"))
+            dao.savePendingCandidate(candidate("a", "c"))
+            dao.savePendingCandidate(candidate("b", "c"))
+            dao.rejectCandidate("b", "c")
+            assertEquals(null, dao.mergePendingCandidate(db.songDao(), "b", "c"))
+            assertEquals("a", dao.mergePendingCandidate(db.songDao(), "a", "b"))
+            assertEquals(SongMatchCandidateStatus.REJECTED.name, dao.getCandidate("a", "c")?.status)
+            assertEquals(null, dao.mergePendingCandidate(db.songDao(), "a", "c"))
+            dao.savePendingCandidate(candidate("a", "d"))
+            assertEquals(null, dao.mergePendingCandidate(db.songDao(), "a", "d"))
+            assertEquals(3, db.songDao().getAllSongs().size)
+        }
+    }
+
+    /** Создаёт одинаково оценённую ожидающую пару для независимой проверки обработки очереди. */
+    private fun candidate(first: String, second: String) = SongMatchCandidateEntity(
+        first, second, 1f, 1f, 1f, SongMatchRepository.CURRENT_RESOLVER_VERSION,
+    )
+
     /** Отсутствующий ключ включает скан; сохранённое отключение переживает создание репозитория и оставляет очередь. */
     @Test
     fun persistsScanSettingAndResumesUnprocessedSongs() = runBlocking {
@@ -48,7 +132,7 @@ class VkSongMatchRepositoryTest {
         }
     }
 
-    /** Отключение во время CPU-сравнения не помечает прерванную песню обработанной и не продолжает сравнения. */
+    /** Диагностический resolver позволяет отключить скан во время сравнения и проверить сохранение прогресса. */
     @Test
     fun stopsInsideCandidateComparison() = runBlocking {
         withDatabase { db ->
@@ -66,7 +150,8 @@ class VkSongMatchRepositoryTest {
                     }
                 }
             }
-            matches = SongMatchRepository(db.songDao(), db.songMatchDao(), logger)
+            matches = SongMatchRepository(db.songDao(), db.songMatchDao(), logger,
+                resolver = SongMatchResolver(logger, logComparisons = true))
             matches.scanUnprocessedSongs()
             assertEquals(1, comparisons)
             assertEquals(3, db.songDao().getUnscannedSongs(SongMatchRepository.CURRENT_RESOLVER_VERSION, 32).size)

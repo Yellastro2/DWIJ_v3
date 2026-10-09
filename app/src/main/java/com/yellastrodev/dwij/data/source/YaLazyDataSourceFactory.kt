@@ -16,13 +16,16 @@ import com.yellastrodev.dwij.playback.stream.StreamingTrackSession
 import java.io.IOException
 import java.net.URI
 
-/** Готовые ЯМ-файлы открываются локально, остальные читаются через общий потоковый кэш. */
+/** ЯМ читает общий кэш, HTTP/HLS использует двадцатисекундные таймауты под общим watchdog плеера. */
 class YaLazyDataSourceFactory(
     context: Context,
     private val trackCacheRepository: TrackCacheRepository,
     private val streamingCache: StreamingTrackCache,
 ) : DataSource.Factory {
-    private val defaultFactory = DefaultDataSource.Factory(context.applicationContext)
+    private val defaultFactory = DefaultDataSource.Factory(context.applicationContext,
+        androidx.media3.datasource.DefaultHttpDataSource.Factory()
+            .setConnectTimeoutMs(20_000)
+            .setReadTimeoutMs(20_000))
 
     override fun createDataSource(): DataSource = object : DataSource {
         private val listeners = mutableListOf<TransferListener>()

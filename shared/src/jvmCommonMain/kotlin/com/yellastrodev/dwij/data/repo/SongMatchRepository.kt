@@ -9,7 +9,10 @@ import com.yellastrodev.dwij.storage.LocalKeyValueStore
 import com.yellastrodev.yamusicsdk.YamLogger
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
+import kotlinx.coroutines.NonCancellable
+import kotlinx.coroutines.withContext
 import kotlinx.coroutines.currentCoroutineContext
 import kotlinx.coroutines.ensureActive
 import kotlinx.coroutines.flow.Flow
@@ -23,19 +26,28 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 
-/** Предлагает межсурсные совпадения; сохранённый переключатель приостанавливает скан без удаления результатов. */
+/** Предлагает межсурсные совпадения и при явном включении автоматически объединяет ожидающие пары. */
 class SongMatchRepository(
     private val songDao: SongDao,
     private val matchDao: SongMatchDao,
     private val logger: YamLogger,
     private val settings: LocalKeyValueStore? = null,
+    private val resolver: SongMatchResolver = SongMatchResolver(logger),
 ) {
 
 
-    private val resolver: SongMatchResolver = SongMatchResolver(logger)
     private val scanMutex = Mutex()
     private val mutableScanEnabled = MutableStateFlow(settings?.getBoolean(KEY_SCAN_ENABLED) ?: true)
     val scanEnabled = mutableScanEnabled.asStateFlow()
+    private val mutableAutoMergeEnabled = MutableStateFlow(settings?.getBoolean(KEY_AUTO_MERGE_ENABLED) ?: false)
+    val autoMergeEnabled = mutableAutoMergeEnabled.asStateFlow()
+
+    /** Сохраняет автослияние; интерфейс запрашивает подтверждение перед включением. Отключение не разъединяет группы. */
+    fun setAutoMergeEnabled(enabled: Boolean) {
+        settings?.edit { putBoolean(KEY_AUTO_MERGE_ENABLED, enabled) }
+        mutableAutoMergeEnabled.value = enabled
+        logger.info(TAG, "[setAutoMergeEnabled] Автослияние мультисурсов ${if (enabled) "включено" else "выключено"}")
+    }
 
     /** Сохраняет выбор; наблюдатель отменяет текущий скан либо возобновляет обработку оставшихся песен. */
     fun setScanEnabled(enabled: Boolean) {
@@ -61,17 +73,56 @@ class SongMatchRepository(
         matchDao.rejectCandidate(first, second)
     }
 
-    /** Наблюдает очередь только при включённом скане; collectLatest отменяет обработку при отключении. */
-    fun start(scope: CoroutineScope): Job = scope.launch {
-        scanEnabled.collectLatest { enabled ->
-            if (enabled) {
-                songDao.observeUnscannedSongCount(CURRENT_RESOLVER_VERSION)
-                    .distinctUntilChanged()
-                    .filter { count -> count > 0 }
-                    .collect { count ->
-                        logger.debug(TAG, "[start] В очереди resolver-а песен=$count")
-                        scanUnprocessedSongs()
-                    }
+    /** Независимо наблюдает скан и автослияние; накопленные предложения обрабатываются и при выключенном скане. */
+    fun start(
+        scope: CoroutineScope,
+        onMerged: suspend (sourceSongIds: Set<String>, mergedSongId: String) -> Unit = { _, _ -> },
+    ): Job = scope.launch(Dispatchers.IO) {
+        launch {
+            autoMergeEnabled.collectLatest { enabled ->
+                if (enabled) pendingCandidates.collect { mergePendingCandidates(it, onMerged) }
+            }
+        }
+        launch {
+            scanEnabled.collectLatest { enabled ->
+                if (enabled) {
+                    songDao.observeUnscannedSongCount(CURRENT_RESOLVER_VERSION)
+                        .distinctUntilChanged()
+                        .filter { count -> count > 0 }
+                        .collect { count ->
+                            logger.debug(TAG, "[start] В очереди resolver-а песен=$count")
+                            scanUnprocessedSongs()
+                        }
+                }
+            }
+        }
+    }
+
+    /** Сериализует слияние со сканом, повторно проверяет решения в Room и обновляет текущую очередь после каждой пары. */
+    private suspend fun mergePendingCandidates(
+        candidates: List<SongMatchCandidateEntity>,
+        onMerged: suspend (Set<String>, String) -> Unit,
+    ) = scanMutex.withLock {
+        candidates.forEach { candidate ->
+            currentCoroutineContext().ensureActive()
+            if (!autoMergeEnabled.value) return@withLock
+            try {
+                val songs = songDao.getSongs(listOf(candidate.firstSongId, candidate.secondSongId))
+                    .associateBy { it.song.songId }
+                val first = songs[candidate.firstSongId] ?: return@forEach
+                val second = songs[candidate.secondSongId] ?: return@forEach
+                val includesVk = (first.instances + second.instances).any { it.source == MusicSource.VK.name }
+                if (resolver.compare(first.song, second.song, checkRecording = includesVk) == null) return@forEach
+                val mergedId = matchDao.mergePendingCandidate(songDao, candidate.firstSongId, candidate.secondSongId)
+                    ?: return@forEach
+                withContext(NonCancellable) {
+                    onMerged(setOf(candidate.firstSongId, candidate.secondSongId), mergedId)
+                }
+                logger.info(TAG, "[mergePendingCandidates] Объединены варианты ${candidate.firstSongId} и ${candidate.secondSongId}")
+            } catch (error: CancellationException) {
+                throw error
+            } catch (error: Exception) {
+                logger.error(TAG, "[mergePendingCandidates] Не удалось объединить варианты ${candidate.firstSongId} и ${candidate.secondSongId}", error)
             }
         }
     }
@@ -209,6 +260,7 @@ class SongMatchRepository(
         private const val SCAN_BATCH_SIZE = 32
         private const val TAG = "SongMatchRepository"
         private const val KEY_SCAN_ENABLED = "multi_source_scan_enabled"
+        private const val KEY_AUTO_MERGE_ENABLED = "multi_source_auto_merge_enabled"
     }
 }
 

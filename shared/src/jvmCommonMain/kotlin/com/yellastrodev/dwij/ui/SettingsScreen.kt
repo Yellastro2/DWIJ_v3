@@ -57,12 +57,12 @@ import java.util.Locale
 import kotlin.math.roundToInt
 
 /**
- * Полностью Compose-экран авторизации, кэша и платформенных настроек.
+ * Полностью Compose-экран авторизации, кэша, постоянного хранения и платформенных настроек.
  *
  * Экран не читает платформенные сведения и не запускает OAuth самостоятельно: хост передаёт
  * версию сборки, готовое состояние и обработчики, а также слот авторизации VK рядом с Яндексом.
  * Интерфейс можно превьюить отдельно.
- * Внизу находится переключатель фонового поиска мультисурсных совпадений.
+ * Внизу находятся переключатели фонового поиска мультисурсных совпадений и автослияния.
  */
 @Composable
 fun SettingsScreen(
@@ -78,7 +78,7 @@ fun SettingsScreen(
     onBackClick: () -> Unit,
     onAuthClick: () -> Unit,
     onCacheLimitCommitted: (megabytes: Int) -> Unit,
-    onLocalStorageClick: () -> Unit,
+    onClearLocalStorageClick: () -> Unit,
     onProxyClick: () -> Unit,
     onMusicDirectoriesClick: () -> Unit,
     onShareLogsClick: (() -> Unit)?,
@@ -92,6 +92,8 @@ fun SettingsScreen(
     onHttpRemotePortChange: (Int) -> Unit,
     multiSourceScanEnabled: Boolean,
     onMultiSourceScanEnabledChange: (Boolean) -> Unit,
+    autoMergeEnabled: Boolean,
+    onAutoMergeEnabledChange: (Boolean) -> Unit,
     vkAuthorizationContent: @Composable () -> Unit = {},
     modifier: Modifier = Modifier,
 ) {
@@ -149,7 +151,7 @@ fun SettingsScreen(
                 )
                 SettingsLocalStorageCard(
                     occupiedSize = occupiedLocalStorageSize,
-                    onClick = onLocalStorageClick,
+                    onClearClick = onClearLocalStorageClick,
                 )
                 musicDirectories?.let { directories ->
                     SettingsMusicDirectoriesCard(
@@ -179,6 +181,8 @@ fun SettingsScreen(
                 SettingsMultiSourceScanCard(
                     enabled = multiSourceScanEnabled,
                     onEnabledChange = onMultiSourceScanEnabledChange,
+                    autoMergeEnabled = autoMergeEnabled,
+                    onAutoMergeEnabledChange = onAutoMergeEnabledChange,
                 )
             }
             Text(
@@ -211,9 +215,14 @@ fun SettingsScreen(
     }
 }
 
-/** Управляет фоновым поиском совпадений песен между источниками музыки. */
+/** Управляет поиском совпадений и автослиянием; подтверждение включения принадлежит хосту. */
 @Composable
-private fun SettingsMultiSourceScanCard(enabled: Boolean, onEnabledChange: (Boolean) -> Unit) {
+private fun SettingsMultiSourceScanCard(
+    enabled: Boolean,
+    onEnabledChange: (Boolean) -> Unit,
+    autoMergeEnabled: Boolean,
+    onAutoMergeEnabledChange: (Boolean) -> Unit,
+) {
     SettingsTextureCard(
         textureRes = Res.drawable.bg_focus_texture,
         accent = DwijColors.CyanBright,
@@ -231,6 +240,25 @@ private fun SettingsMultiSourceScanCard(enabled: Boolean, onEnabledChange: (Bool
             }
             Text(
                 text = stringResource(Res.string.settings_multi_source_scan_description),
+                color = DwijColors.SecondaryText,
+                fontSize = 12.sp,
+                modifier = Modifier.padding(top = 5.dp),
+            )
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                modifier = Modifier.padding(top = 16.dp),
+            ) {
+                Text(
+                    text = stringResource(Res.string.settings_auto_merge_title),
+                    color = DwijColors.White,
+                    fontSize = 16.sp,
+                    fontWeight = FontWeight.SemiBold,
+                    modifier = Modifier.weight(1f),
+                )
+                Switch(checked = autoMergeEnabled, onCheckedChange = onAutoMergeEnabledChange)
+            }
+            Text(
+                text = stringResource(Res.string.settings_auto_merge_description),
                 color = DwijColors.SecondaryText,
                 fontSize = 12.sp,
                 modifier = Modifier.padding(top = 5.dp),
@@ -753,22 +781,19 @@ private fun SettingsCacheCard(
     }
 }
 
-/** Открывает управление постоянными app-private ЯМ-файлами. */
+/** Показывает общий размер постоянных ЯМ/VK-файлов и открывает подтверждение очистки. */
 @Composable
 private fun SettingsLocalStorageCard(
     occupiedSize: String,
-    onClick: () -> Unit,
+    onClearClick: () -> Unit,
 ) {
     SettingsTextureCard(
         textureRes = Res.drawable.bg_focus_texture,
         accent = DwijColors.Pink,
-        modifier = Modifier
-            .height(108.dp)
-            .clickable(onClick = onClick),
     ) {
         Column(
             modifier = Modifier
-                .fillMaxSize()
+                .fillMaxWidth()
                 .padding(horizontal = 18.dp, vertical = 16.dp),
         ) {
             Text(
@@ -787,6 +812,22 @@ private fun SettingsLocalStorageCard(
                 fontWeight = FontWeight.SemiBold,
                 modifier = Modifier.padding(top = 7.dp),
             )
+            Text(
+                text = stringResource(Res.string.settings_local_storage_description),
+                color = DwijColors.SecondaryText,
+                fontSize = 12.sp,
+                lineHeight = 17.sp,
+                modifier = Modifier.padding(top = 7.dp),
+            )
+            Box(modifier = Modifier.padding(top = 14.dp)) {
+                SettingsActionButton(
+                    text = stringResource(Res.string.settings_local_storage_clear),
+                    enabled = true,
+                    isLoading = false,
+                    accent = DwijColors.Pink,
+                    onClick = onClearClick,
+                )
+            }
         }
     }
 }
@@ -934,7 +975,7 @@ private fun SettingsScreenPreview() {
         onBackClick = {},
         onAuthClick = {},
         onCacheLimitCommitted = {},
-        onLocalStorageClick = {},
+        onClearLocalStorageClick = {},
         onProxyClick = {},
         onMusicDirectoriesClick = {},
         onShareLogsClick = {},
@@ -948,5 +989,7 @@ private fun SettingsScreenPreview() {
         onHttpRemotePortChange = {},
         multiSourceScanEnabled = true,
         onMultiSourceScanEnabledChange = {},
+        autoMergeEnabled = false,
+        onAutoMergeEnabledChange = {},
     )
 }

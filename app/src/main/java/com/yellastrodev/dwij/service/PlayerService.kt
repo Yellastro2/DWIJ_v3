@@ -177,6 +177,10 @@ class PlayerService : MediaSessionService() {
         val dataSourceFactory = YaLazyDataSourceFactory(this, trackCacheRepo, streamingCache)
 
         player = ExoPlayer.Builder(this)
+            .setLoadControl(androidx.media3.exoplayer.DefaultLoadControl.Builder()
+                .setBufferDurationsMs(60_000, 120_000, 2_500, 5_000)
+                .setPrioritizeTimeOverSizeThresholds(true)
+                .build())
             .setMediaSourceFactory(
                 DefaultMediaSourceFactory(dataSourceFactory)
                     .setLoadErrorHandlingPolicy(AndroidPlaybackLoadErrorPolicy()),

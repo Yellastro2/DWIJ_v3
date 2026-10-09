@@ -17,7 +17,7 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.yield
 
-/** Управляет четырьмя полными попытками на application looper Media3, не меняя очередь. */
+/** Ограничивает подготовку и каждый затык двадцатью секундами, затем пропускает трек без перезапуска. */
 internal class AndroidPlaybackRecovery(
     private val player: Player,
     private val scope: CoroutineScope,
@@ -86,7 +86,7 @@ internal class AndroidPlaybackRecovery(
         scheduleDeadline(current)
     }
 
-    /** Ошибка и таймер используют один счётчик; сообщения/кнопки пользователю не показываются. */
+    /** После исчерпания повторов сегмента ошибка пропускает трек и сообщает о ней через общий snackbar. */
     override fun onPlayerError(error: PlaybackException) {
         if (mutating || released) return
         if (attempt == null || key != currentKey()) begin()
@@ -100,10 +100,10 @@ internal class AndroidPlaybackRecovery(
     }
 
     /** Выделяет новую попытку; индекс различает одинаковые песни в очереди. */
-    private fun begin(retry: Int = 0) {
+    private fun begin() {
         deadlineJob?.cancel()
         key = currentKey()
-        attempt = key?.let { AndroidPlaybackAttempt(SystemClock.elapsedRealtime(), retry) }
+        attempt = key?.let { AndroidPlaybackAttempt(SystemClock.elapsedRealtime()) }
         attempt?.let(::scheduleDeadline)
     }
 
@@ -125,15 +125,17 @@ internal class AndroidPlaybackRecovery(
         }
     }
 
-    /** Останавливает старую загрузку и повторяет с нуля, затем пропускает исчерпавший попытки трек. */
+    /** Останавливает неисправный источник и переходит дальше; текущую песню с начала не повторяет. */
     private fun recover(current: AndroidPlaybackAttempt, reason: String) {
         if (released || attempt !== current || key != currentKey() || !current.fail()) return
         deadlineJob?.cancel()
         val failedKey = key ?: return
-        Log.w(TAG, "[retryTrack] index=${failedKey.index}, трек=${failedKey.id}, попытка=${current.retry + 1}/4: $reason")
+        Log.w(TAG, "[skipFailedTrack] Индекс=${failedKey.index}, трек=${failedKey.id}: $reason")
         recoveryJob = scope.launch {
             // Не изменяем плеер внутри его текущей рассылки callback.
             yield()
+            if (!isCurrent(current, failedKey)) return@launch
+            stateStore.emit(PlayerEvent.ShowError("Не удалось загрузить трек. Переходим к следующему."))
             if (!isCurrent(current, failedKey)) return@launch
             finishFeedback()
             mutating = true
@@ -144,31 +146,27 @@ internal class AndroidPlaybackRecovery(
                 mutating = false
             }
             stateStore.setPlaying(false)
-            delay(AndroidPlaybackAttempt.RETRY_DELAY_MS)
-            if (!isCurrent(current, failedKey)) return@launch
-            val next = if (current.canRetry) failedKey.index else player.currentTimeline.getNextWindowIndex(
+            val next = player.currentTimeline.getNextWindowIndex(
                 failedKey.index,
                 if (player.repeatMode == Player.REPEAT_MODE_ONE) Player.REPEAT_MODE_OFF else player.repeatMode,
                 player.shuffleModeEnabled,
             )
-            if (next == C.INDEX_UNSET || (!current.canRetry && next == failedKey.index)) {
+            if (next == C.INDEX_UNSET || next == failedKey.index) {
                 attempt = null
                 key = null
                 player.playWhenReady = false
                 stateStore.setWantsToPlay(false)
                 stateStore.completeTrackChange()
-                Log.w(TAG, "[skipFailedTrack] Трек=${failedKey.id}: попытки исчерпаны, очередь закончилась")
+                Log.w(TAG, "[skipFailedTrack] Трек=${failedKey.id}: очередь закончилась")
                 stateStore.emit(PlayerEvent.TrackListEnd("Playlist finished"))
                 return@launch
             }
-            if (!current.canRetry) {
-                Log.w(TAG, "[skipFailedTrack] Трек=${failedKey.id}: попытки исчерпаны, следующий=$next")
-                stateStore.beginTrackChange(TrackChangeDirection.NEXT, player.playWhenReady)
-            }
+            Log.w(TAG, "[skipFailedTrack] Трек=${failedKey.id}: следующий=$next")
+            stateStore.beginTrackChange(TrackChangeDirection.NEXT, player.playWhenReady)
             mutating = true
             try {
                 player.seekTo(next, 0L)
-                begin(if (current.canRetry) current.retry + 1 else 0)
+                begin()
                 player.prepare()
             } finally {
                 mutating = false
@@ -197,8 +195,10 @@ internal class AndroidPlaybackRecovery(
     private companion object { const val TAG = "AndroidPlaybackRecovery" }
 }
 
-/** Полные повторы принадлежат recovery; Media3 не добавляет собственную цепочку retry. */
-internal class AndroidPlaybackLoadErrorPolicy : DefaultLoadErrorHandlingPolicy(0) {
-    /** Сетевой диапазон уже повторяется общим StreamingTrackSession. */
-    override fun getRetryDelayMsFor(loadErrorInfo: LoadErrorHandlingPolicy.LoadErrorInfo): Long = C.TIME_UNSET
+/** Повторяет отказавшую загрузку до трёх раз; общий срок BUFFERING ограничивает recovery. */
+internal class AndroidPlaybackLoadErrorPolicy : DefaultLoadErrorHandlingPolicy(3) {
+    /** Повтор не меняет элемент очереди и не сбрасывает абсолютный двадцатисекундный срок. */
+    override fun getRetryDelayMsFor(loadErrorInfo: LoadErrorHandlingPolicy.LoadErrorInfo): Long =
+        if (loadErrorInfo.errorCount <= 3) super.getRetryDelayMsFor(loadErrorInfo)
+        else C.TIME_UNSET
 }

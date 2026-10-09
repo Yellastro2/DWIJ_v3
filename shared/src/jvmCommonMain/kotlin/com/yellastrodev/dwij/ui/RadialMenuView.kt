@@ -69,6 +69,7 @@ private enum class PendingRadialGestureResult {
  * Сектор настройки показывает общую иконку шестерёнки под своей подписью.
  * Подписи назначений центрируются и переносятся в пределах ширины сектора.
  * В настройке previewInteractive разрешает прямой выбор сектора; enabled отключает все жесты.
+ * showItemTitles позволяет экрану настройки заменить подписи Compose-кнопками удаления.
  */
 @Composable
 fun RadialMenu(
@@ -88,6 +89,7 @@ fun RadialMenu(
     animationStyle: RadialMenuAnimationStyle = RadialMenuAnimationStyle.GlitchFlicker,
     enabled: Boolean = true,
     previewInteractive: Boolean = false,
+    showItemTitles: Boolean = true,
 ) {
     val glitchFrames = remember { createFixedRadialMenuGlitchFrames() }
     val expansionProgress = rememberRadialMenuExpansionProgress(
@@ -420,7 +422,7 @@ fun RadialMenu(
             )
 
             val contentProgress = itemAnimation.contentAlpha
-            if (contentProgress > 0f) {
+            if (contentProgress > 0f && showItemTitles) {
                 val contentRadius = finalInnerRadius +
                         (outerRadius - finalInnerRadius) * 0.55f
                 val contentAngle = currentStart + currentSweep / 2f
