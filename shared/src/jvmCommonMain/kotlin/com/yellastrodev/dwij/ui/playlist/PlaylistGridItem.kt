@@ -35,13 +35,14 @@ import com.yellastrodev.dwij.ui.theme.DwijColors
 /**
  * Платформонезависимые данные плитки плейлиста.
  *
- * Конкретные Android/desktop-ресурсы сюда не передаются.
+ * Конкретные Android/desktop-ресурсы сюда не передаются; sourceLabel отмечает источник.
  */
 @Immutable
 data class PlaylistGridItemUiModel(
     val title: String,
     val details: String = "",
     val highlighted: Boolean = false,
+    val sourceLabel: String? = null,
 )
 
 /**
@@ -89,7 +90,7 @@ class PlaylistCoverState(
 }
 
 /**
- * Общая Compose-плитка плейлиста.
+ * Общая Compose-плитка плейлиста с индикатором источника в нижнем левом углу.
  *
  * [fallbackContent] и [artworkContent] передаются платформенным слоем,
  * поскольку Android и desktop используют разные системы ресурсов.
@@ -170,6 +171,21 @@ fun PlaylistGridItem(
                             horizontal = 8.dp,
                             vertical = 4.dp,
                         ),
+                    )
+                }
+            }
+        }
+
+        item.sourceLabel?.let { label ->
+            Box(Modifier.align(Alignment.BottomStart).padding(6.dp)) {
+                PlaylistGridTextPlate(backgroundColor = DwijColors.PlaylistTitleBackground) {
+                    Text(
+                        text = label,
+                        color = DwijColors.White,
+                        fontSize = 9.sp,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
+                        modifier = Modifier.padding(horizontal = 6.dp, vertical = 3.dp),
                     )
                 }
             }

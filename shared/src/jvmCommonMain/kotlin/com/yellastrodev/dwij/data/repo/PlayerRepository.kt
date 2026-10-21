@@ -29,8 +29,14 @@ import kotlinx.coroutines.flow.launchIn
 import kotlinx.coroutines.flow.onEach
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.yield
+import kotlinx.coroutines.withTimeoutOrNull
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
+import com.yellastrodev.dwij.playback.OfflinePlaybackPolicy
 
-/** Управляет очередью; продолжает её по явному seed треклиста, VK URI разрешает независимо от происхождения песни. */
+/** Управляет очередью, автоматическим офлайном и восстановлением полного состава без перезапуска текущего звука. */
 class PlayerRepository(
     private val engine: PlayerEngine,
     private val settings: PlaybackSettings,
@@ -40,7 +46,21 @@ class PlayerRepository(
     private val continueWave: suspend (dTracklist) -> Unit,
     private val logger: YamLogger,
     private val resolveVkUri: (com.yellastrodev.dwij.data.entities.TrackInstance.Vk) -> String? = { null },
+    private val resolveOfflineTrack: (Song) -> PlaybackTrack? = { null },
+    private val networkFailure: (PlaybackTrack, Boolean) -> Boolean = { track, network -> track.source != MusicSource.LOCAL && network },
+    private val probeOnline: suspend (List<Song>) -> Boolean = { false },
 ) : PlaybackQueue {
+
+    private val offlinePolicy = OfflinePlaybackPolicy()
+    val isOffline: StateFlow<Boolean> = offlinePolicy.offline
+    @Volatile private var originalSongs: List<Song> = emptyList()
+    @Volatile private var offlinePositions: List<Int> = emptyList()
+    private val rejectedOfflinePositions = java.util.concurrent.ConcurrentHashMap.newKeySet<Int>()
+    @Volatile private var userQueueGeneration = 0L
+    private val queueCommandMutex = Mutex()
+    @Volatile private var offlineTransition: Job? = null
+    @Volatile private var probeJob: Job? = null
+    private var lastProbeMs = 0L
 
     private val mutableState = MutableStateFlow(PlayerState())
     override val state: StateFlow<PlayerState> = mutableState.asStateFlow()
@@ -51,9 +71,10 @@ class PlayerRepository(
     var currentTrackList: List<String> = emptyList()
         private set
 
-    private var currentSongQueue: List<Song> = emptyList()
-    private var currentPlaybackQueue: List<PlaybackTrack> = emptyList()
-    private var queueRevision = 0L
+    @Volatile private var currentSongQueue: List<Song> = emptyList()
+    @Volatile private var currentPlaybackQueue: List<PlaybackTrack> = emptyList()
+    @Volatile private var queueRevision = 0L
+    private val queueRestoreLock = Any()
 
     private var prefetchJob: Job? = null
     private var lastPrefetchKey: String? = null
@@ -81,10 +102,13 @@ class PlayerRepository(
         private set
 
     init {
+        engine.setFailureHandler(::onTerminalFailure)
         engine.state
             .onEach { playerState ->
+                offlinePolicy.progress(playerState)
                 if (playerState.currentIndex != mutableState.value.currentIndex) {
                     updateCurrentTrack(playerState.currentIndex)
+                    scheduleOnlineProbe()
                 }
 
                 mutableState.value = playerState
@@ -97,13 +121,13 @@ class PlayerRepository(
             .launchIn(scope)
     }
 
-    /** Продолжает очередь ЯМ-волной только при явно указанном поддерживаемом seed треклиста. */
+    /** Продолжает ЯМ-волну только онлайн и с явно указанным поддерживаемым seed треклиста. */
     private suspend fun handleEngineEvent(event: PlayerEvent) {
         if (event is PlayerEvent.TrackListEnd) {
             val tracklist = dtracklist.value
 
             if (
-                tracklist != null &&
+                !isOffline.value && tracklist != null &&
                 !tracklist.yandexWaveSeed().isNullOrBlank()
             ) {
                 continueWave(tracklist)
@@ -118,6 +142,7 @@ class PlayerRepository(
      * Запускает очередь логических песен, выбирая для каждой
      * воспроизводимый экземпляр.
      * VK callback разрешает лишь локальный адрес relay; сетевые запросы остаются ленивыми.
+     * В офлайне сохраняет исходный состав отдельно и выбирает только готовые локальные экземпляры.
      *
      * [startIndex] переводится из индекса исходного списка
      * в индекс уже отфильтрованной воспроизводимой очереди.
@@ -136,9 +161,18 @@ class PlayerRepository(
             return
         }
 
+        userQueueGeneration++
+        val generation = userQueueGeneration
+        offlineTransition?.cancel()
+        probeJob?.cancel()
+        originalSongs = songs
+        offlinePositions = emptyList()
+        rejectedOfflinePositions.clear()
+        offlinePolicy.resetStreak()
+
         val playableSongs = withContext(Dispatchers.IO) {
             songs.mapIndexedNotNull { index, song ->
-                song.toPlaybackTrack(isTrackCached, resolveVkUri)?.let { playbackTrack ->
+                resolveSong(song)?.let { playbackTrack ->
                     IndexedValue(
                         index = index,
                         value = song to playbackTrack,
@@ -146,14 +180,23 @@ class PlayerRepository(
                 }
             }
         }
+        if (generation != userQueueGeneration) return
 
         if (playableSongs.isEmpty()) {
+            if (isOffline.value) {
+                mutableTracklist.value = tracklist
+                clearUnavailableQueue(generation)
+                mutableEvents.emit(PlayerEvent.ShowError("В этой очереди нет треков, доступных без сети"))
+                scheduleOnlineProbe()
+            }
             logger.warning(
                 TAG,
                 "[playQueue] В очереди нет воспроизводимых экземпляров",
             )
             return
         }
+
+        offlinePositions = if (isOffline.value) playableSongs.map { it.index } else emptyList()
 
         val resolvedStartIndex = playableSongs
             .indexOfFirst { indexedSong ->
@@ -187,15 +230,21 @@ class PlayerRepository(
             },
             startIndex = resolvedStartIndex,
             tracklist = tracklist,
+            expectedGeneration = generation,
         )
+        scheduleOnlineProbe()
     }
 
+    /** Публикует очередь, включая восстановленную без контекста; autoPlay=false сохраняет паузу. */
     private suspend fun playPreparedQueue(
         songs: List<Song>,
         tracks: List<PlaybackTrack>,
         startIndex: Int,
-        tracklist: dTracklist,
-    ) {
+        tracklist: dTracklist?,
+        autoPlay: Boolean = true,
+        expectedGeneration: Long = userQueueGeneration,
+    ): Unit = queueCommandMutex.withLock {
+        if (expectedGeneration != userQueueGeneration) return
         if (tracks.isEmpty() || startIndex !in tracks.indices) {
             logger.warning(
                 TAG,
@@ -208,15 +257,16 @@ class PlayerRepository(
         logger.debug(TAG, "[playQueue] Подготовка очереди")
 
         engine.prepare()
+        if (expectedGeneration != userQueueGeneration) return
 
-        if (dtracklist.value?.getdId() == tracklist.getdId()) {
+        if (tracklist != null && dtracklist.value?.getdId() == tracklist.getdId()) {
             logger.debug(TAG, "[playQueue] Треклист не изменился")
 
             val newSongIds = songs.map(Song::id)
 
             val sameInstances =
-                currentPlaybackQueue.map(PlaybackTrack::instanceId) ==
-                        tracks.map(PlaybackTrack::instanceId)
+                currentPlaybackQueue.map { it.instanceId to it.playbackUri } ==
+                        tracks.map { it.instanceId to it.playbackUri }
 
             if (
                 currentTrackList == newSongIds &&
@@ -254,21 +304,23 @@ class PlayerRepository(
         }
 
         blockShuffle(
-            isWave = tracklist.getType() == dYaWave.Companion.YA_WAVE || tracklist.preserveQueueOrder(),
+            isWave = tracklist?.getType() == dYaWave.Companion.YA_WAVE || tracklist?.preserveQueueOrder() == true,
         )
 
-        currentTrackList = songs.map(Song::id)
-        currentSongQueue = songs
-        currentPlaybackQueue = tracks
-        queueRevision += 1L
-        cancelPrefetch()
+        synchronized(queueRestoreLock) {
+            currentTrackList = songs.map(Song::id)
+            currentSongQueue = songs
+            currentPlaybackQueue = tracks
+            queueRevision += 1L
+            cancelPrefetch()
 
-        mutableCurrentTrack.value = songs[startIndex].id
-        mutableCurrentSong.value = songs[startIndex]
-        mutableCurrentPlaybackTrack.value = tracks[startIndex]
-        mutableTracklist.value = tracklist
+            mutableCurrentTrack.value = songs[startIndex].id
+            mutableCurrentSong.value = songs[startIndex]
+            mutableCurrentPlaybackTrack.value = tracks[startIndex]
+            mutableTracklist.value = tracklist
 
-        relativeIndex = startIndex
+            relativeIndex = startIndex
+        }
 
         logger.debug(
             TAG,
@@ -281,6 +333,7 @@ class PlayerRepository(
             tracks = tracks,
             startIndex = startIndex,
             tracklist = tracklist,
+            autoPlay = autoPlay,
         )
 
         logger.debug(
@@ -309,7 +362,11 @@ class PlayerRepository(
      */
     override suspend fun addTracks(
         songs: List<Song>,
-    ) {
+    ): Unit = queueCommandMutex.withLock {
+        if (isOffline.value) {
+            // Волна и другая автоматическая догрузка не расширяют офлайн-очередь сетевыми треками.
+            return
+        }
         val resolved = withContext(Dispatchers.IO) {
             songs.mapNotNull { song ->
                 song.toPlaybackTrack(isTrackCached, resolveVkUri)?.let { playbackTrack ->
@@ -317,6 +374,7 @@ class PlayerRepository(
                 }
             }
         }
+        if (isOffline.value) return
 
         val skippedCount = songs.size - resolved.size
 
@@ -337,17 +395,17 @@ class PlayerRepository(
         val playbackTracks = resolved.map { pair ->
             pair.second
         }
+        originalSongs = originalSongs + resolvedSongs
 
-        currentTrackList =
-            currentTrackList + resolvedSongs.map(Song::id)
+        synchronized(queueRestoreLock) {
+            currentTrackList = currentTrackList + resolvedSongs.map(Song::id)
 
-        currentSongQueue =
-            currentSongQueue + resolvedSongs
+            currentSongQueue = currentSongQueue + resolvedSongs
 
-        currentPlaybackQueue =
-            currentPlaybackQueue + playbackTracks
+            currentPlaybackQueue = currentPlaybackQueue + playbackTracks
 
-        queueRevision += 1L
+            queueRevision += 1L
+        }
 
         engine.appendTracks(
             tracks = playbackTracks,
@@ -439,6 +497,33 @@ class PlayerRepository(
     }
 
     /**
+     * Принимает фактическую очередь после смерти процесса, не вызывая команды движка.
+     * Пустой контекст не выдумывает seed волны; новая пользовательская очередь имеет приоритет.
+     */
+    fun restoreQueueIfEmpty(
+        songs: List<Song>,
+        tracks: List<PlaybackTrack>,
+        playerState: PlayerState,
+    ): Boolean = synchronized(queueRestoreLock) {
+        if (currentSongQueue.isNotEmpty() || songs.isEmpty() ||
+            songs.size != tracks.size || playerState.currentIndex !in songs.indices
+        ) return@synchronized false
+
+        currentTrackList = songs.map(Song::id)
+        currentSongQueue = songs
+        currentPlaybackQueue = tracks
+        originalSongs = songs
+        queueRevision += 1L
+        mutableTracklist.value = null
+        mutableIsShuffleBlock.value = false
+        relativeIndex = playerState.currentIndex
+        mutableState.value = playerState
+        updateCurrentTrack(playerState.currentIndex)
+        logger.debug(TAG, "[restoreQueueIfEmpty] Очередь принята из плеера: size=${songs.size}, index=${playerState.currentIndex}")
+        true
+    }
+
+    /**
      * Поддерживает в LRU-кэше два следующих ЯМ-трека плейлиста или волны.
      * Задание запускается только после подготовки текущего трека, чтобы фоновая
      * загрузка не заняла файловый mutex раньше воспроизведения.
@@ -446,6 +531,10 @@ class PlayerRepository(
     private fun schedulePrefetch(
         playerState: PlayerState,
     ) {
+        if (isOffline.value) {
+            cancelPrefetch()
+            return
+        }
         val tracklist = dtracklist.value
         val isEligibleTracklist = when (tracklist?.getType()) {
             dYaPlaylist.YA_PLAYLIST,
@@ -516,6 +605,138 @@ class PlayerRepository(
         lastPrefetchKey = null
     }
 
+    /** Разрешение офлайн никогда не вызывает сетевой resolver и не использует неполный кеш. */
+    private fun resolveSong(song: Song): PlaybackTrack? = if (isOffline.value) resolveOfflineTrack(song)
+        else song.toPlaybackTrack(isTrackCached, resolveVkUri)
+
+    /** Принимает решение синхронно; команды выполняются отдельной задачей после выхода из recovery движка. */
+    private fun onTerminalFailure(index: Int, platformNetworkFailure: Boolean): Boolean {
+        val track = currentPlaybackQueue.getOrNull(index) ?: return false
+        val wasOffline = isOffline.value
+        val network = networkFailure(track, platformNetworkFailure)
+        if (!offlinePolicy.failed(queueRevision, index, network)) return false
+        cancelPrefetch()
+        val generation = userQueueGeneration
+        val revision = queueRevision
+        offlineTransition?.cancel()
+        offlineTransition = scope.launch {
+            yield()
+            if (generation != userQueueGeneration || revision != queueRevision) return@launch
+            val songs = if (offlinePositions.isEmpty()) currentSongQueue else originalSongs
+            val failedOriginal = offlinePositions.getOrNull(index) ?: index
+            if (wasOffline) rejectedOfflinePositions += failedOriginal
+            val tracklist = dtracklist.value
+            val upcoming = engine.getUpcomingIndices(currentSongQueue.size)
+                .map { offlinePositions.getOrNull(it) ?: it }
+            val local = withContext(Dispatchers.IO) {
+                songs.mapIndexedNotNull { position, song ->
+                    if (position in rejectedOfflinePositions) null
+                    else resolveOfflineTrack(song)?.let { Triple(position, song, it) }
+                }
+            }
+            if (generation != userQueueGeneration || revision != queueRevision) return@launch
+            if (offlinePositions.isEmpty()) originalSongs = songs
+            logger.warning(TAG, "[onTerminalFailure] Офлайн: доступно=${local.size}, отказавший индекс=$failedOriginal")
+            if (local.isEmpty()) {
+                clearUnavailableQueue(generation)
+                mutableEvents.emit(PlayerEvent.ShowError("Офлайн: в очереди нет доступных локально треков"))
+            } else {
+                val preferred = (listOf(failedOriginal) + upcoming).firstNotNullOfOrNull { candidate ->
+                    local.indexOfFirst { it.first == candidate }.takeIf { it >= 0 }
+                } ?: 0
+                offlinePositions = local.map { it.first }
+                val wantsToPlay = engine.state.value.wantsToPlay
+                playPreparedQueue(local.map { it.second }, local.map { it.third }, preferred, tracklist, wantsToPlay, generation)
+            }
+            scheduleOnlineProbe()
+        }
+        return true
+    }
+
+    /** Пустой офлайн-список не оставляет сетевую очередь доступной кнопке Play или гарнитуре. */
+    private suspend fun clearUnavailableQueue(expectedGeneration: Long): Unit = queueCommandMutex.withLock {
+        if (expectedGeneration != userQueueGeneration) return
+        engine.stopPlayback(clearQueue = true)
+        currentSongQueue = emptyList()
+        currentPlaybackQueue = emptyList()
+        currentTrackList = emptyList()
+        mutableCurrentSong.value = null
+        mutableCurrentTrack.value = null
+        mutableCurrentPlaybackTrack.value = null
+        offlinePositions = emptyList()
+        queueRevision++
+    }
+
+    /** Один ограниченный probe между песнями; при пустой/законченной очереди продолжает проверять раз в 15с. */
+    @Synchronized private fun scheduleOnlineProbe() {
+        if (!isOffline.value || probeJob?.isActive == true) return
+        val generation = userQueueGeneration
+        probeJob = scope.launch {
+            // Переход в офлайн сначала завершает замену очереди и текущие отмены транспорта.
+            yield()
+            offlineTransition?.join()
+            while (isOffline.value && generation == userQueueGeneration) {
+                val probeIndex = engine.state.value.currentIndex
+                val elapsed = System.nanoTime() / 1_000_000 - lastProbeMs
+                if (elapsed < 15_000) delay(15_000 - elapsed)
+                lastProbeMs = System.nanoTime() / 1_000_000
+                val online = try {
+                    withTimeoutOrNull(8_000) { probeOnline(originalSongs) } == true
+                } catch (error: CancellationException) { throw error }
+                catch (error: Exception) {
+                    logger.debug(TAG, "[probeOnline] Онлайн ещё недоступен: ${error.javaClass.simpleName}")
+                    false
+                }
+                if (online && generation == userQueueGeneration) {
+                    restoreOnlineQueue(generation)
+                    if (!isOffline.value) return@launch
+                }
+                delay(15_000)
+                if (engine.state.value.isPlaying && engine.state.value.currentIndex == probeIndex) return@launch
+            }
+        }
+    }
+
+    /** Восстанавливает полный состав вокруг текущего файла, не перезапуская его воспроизведение. */
+    private suspend fun restoreOnlineQueue(generation: Long) {
+        val revision = queueRevision
+        val resolved = withContext(Dispatchers.IO) {
+            originalSongs.mapIndexedNotNull { index, song ->
+                song.toPlaybackTrack(isTrackCached, resolveVkUri)?.let { Triple(index, song, it) }
+            }
+        }
+        if (generation != userQueueGeneration || revision != queueRevision || resolved.isEmpty()) return
+        val index = engine.state.value.currentIndex
+        val originalIndex = offlinePositions.getOrNull(index) ?: index
+        val restoredIndex = resolved.indexOfFirst { it.first == originalIndex }
+        if (offlinePositions.isNotEmpty() && restoredIndex >= 0) {
+            queueCommandMutex.withLock {
+                if (generation != userQueueGeneration || revision != queueRevision) return
+                val tracks = resolved.map { it.third }.toMutableList()
+                currentPlaybackQueue.getOrNull(index)?.let { tracks[restoredIndex] = it }
+                if (!engine.replaceQueueKeepingCurrent(tracks, index, restoredIndex, dtracklist.value) {
+                        generation == userQueueGeneration && revision == queueRevision
+                    }) return
+                currentSongQueue = resolved.map { it.second }
+                currentPlaybackQueue = tracks
+                currentTrackList = currentSongQueue.map(Song::id)
+                queueRevision++
+                updateCurrentTrack(restoredIndex)
+            }
+        } else if (currentSongQueue.isEmpty()) {
+            val tracklist = dtracklist.value
+            offlinePolicy.onlineConfirmed()
+            playPreparedQueue(resolved.map { it.second }, resolved.map { it.third },
+                restoredIndex.coerceAtLeast(0), tracklist, autoPlay = false, expectedGeneration = generation)
+        }
+        if (generation != userQueueGeneration) return
+        offlinePositions = emptyList()
+        rejectedOfflinePositions.clear()
+        offlinePolicy.onlineConfirmed()
+        logger.info(TAG, "[restoreOnlineQueue] Сетевая проверка успешна, обычная очередь восстановлена")
+        schedulePrefetch(engine.state.value)
+    }
+
     /**
      * Заменяет объединённые Song в уже играющей очереди,
      * не перезапуская платформенный плеер.
@@ -527,6 +748,7 @@ class PlayerRepository(
         if (sourceSongIds.isEmpty()) {
             return
         }
+        originalSongs = originalSongs.map { if (it.id in sourceSongIds) mergedSong else it }
 
         currentSongQueue = currentSongQueue.map { song ->
             if (song.id in sourceSongIds) {
@@ -554,6 +776,7 @@ class PlayerRepository(
 
     /** Обновляет данные существующей Song в очереди без смены позиции и перезапуска плеера. */
     fun applyUpdatedSong(updatedSong: Song) {
+        originalSongs = originalSongs.map { if (it.id == updatedSong.id) updatedSong else it }
         currentSongQueue = currentSongQueue.map { song ->
             if (song.id == updatedSong.id) updatedSong else song
         }

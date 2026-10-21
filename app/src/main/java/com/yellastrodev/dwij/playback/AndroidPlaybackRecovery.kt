@@ -17,13 +17,14 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.yield
 
-/** Ограничивает подготовку и каждый затык двадцатью секундами, затем пропускает трек без перезапуска. */
+/** Ограничивает подготовку/затык двадцатью секундами; перед пропуском даёт общей политике включить офлайн. */
 internal class AndroidPlaybackRecovery(
     private val player: Player,
     private val scope: CoroutineScope,
     private val stateStore: PlaybackStateStore,
     private val resetSource: () -> Unit,
     private val finishFeedback: () -> Unit,
+    private val onFailure: (Int, Boolean) -> Boolean = { _, _ -> false },
 ) : Player.Listener {
     private var attempt: AndroidPlaybackAttempt? = null
     private var key: ItemKey? = null
@@ -90,7 +91,13 @@ internal class AndroidPlaybackRecovery(
     override fun onPlayerError(error: PlaybackException) {
         if (mutating || released) return
         if (attempt == null || key != currentKey()) begin()
-        attempt?.let { recover(it, "ошибка Media3, код=${error.errorCode}") }
+        val network = error.errorCode in setOf(
+            PlaybackException.ERROR_CODE_IO_NETWORK_CONNECTION_FAILED,
+            PlaybackException.ERROR_CODE_IO_NETWORK_CONNECTION_TIMEOUT,
+        ) || generateSequence(error as Throwable) { it.cause }
+            .filterIsInstance<androidx.media3.datasource.HttpDataSource.InvalidResponseCodeException>()
+            .any { it.responseCode >= 500 }
+        attempt?.let { recover(it, "ошибка Media3, код=${error.errorCode}", network) }
     }
 
     /** Полностью отменяет задачи перед release плеера. */
@@ -125,8 +132,8 @@ internal class AndroidPlaybackRecovery(
         }
     }
 
-    /** Останавливает неисправный источник и переходит дальше; текущую песню с начала не повторяет. */
-    private fun recover(current: AndroidPlaybackAttempt, reason: String) {
+    /** Останавливает источник и вызывает общий порог; если переход не перехвачен, пропускает трек. */
+    private fun recover(current: AndroidPlaybackAttempt, reason: String, networkFailure: Boolean = true) {
         if (released || attempt !== current || key != currentKey() || !current.fail()) return
         deadlineJob?.cancel()
         val failedKey = key ?: return
@@ -146,6 +153,7 @@ internal class AndroidPlaybackRecovery(
                 mutating = false
             }
             stateStore.setPlaying(false)
+            if (onFailure(failedKey.index, networkFailure)) return@launch
             val next = player.currentTimeline.getNextWindowIndex(
                 failedKey.index,
                 if (player.repeatMode == Player.REPEAT_MODE_ONE) Player.REPEAT_MODE_OFF else player.repeatMode,

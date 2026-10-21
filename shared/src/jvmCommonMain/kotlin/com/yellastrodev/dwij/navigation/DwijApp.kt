@@ -75,6 +75,8 @@ import org.jetbrains.compose.resources.stringResource
  * Входящие ссылки на альбомы открывает в существующем экране каталога.
  * Меню VK-треков/плейлистов передают загрузки общей платформенной очереди.
  * Общая фонотека VK использует маршрут виртуального плейлиста и тот же экран очереди.
+ * «Треки» в «Всё сразу» открывает общий перемешанный список трёх фонотек.
+ * «Скачанные» открывает сохранённые ЯМ/VK-файлы с фильтром выбранного источника.
  * Конечные рекомендации VK используют отдельную сетку и общий экран VK-треклиста.
  * Навигационный каталог VK открывает готовые коллекции, включая личные треки.
  * Радиальное меню имеет отдельный экран настройки с раскрытым предпросмотром.
@@ -394,6 +396,12 @@ fun DwijApp(
                             ),
                         )
                     },
+                    onOpenAllTracks = {
+                        navController.navigate(DwijDestination.ALL_TRACKS)
+                    },
+                    onOpenDownloadedTracks = { source ->
+                        navController.navigate(DwijDestination.downloadedTracksRoute(source.name))
+                    },
                     onOpenVkTracks = {
                         navController.navigate(DwijDestination.objectRoute(
                             type = DwijDestination.OBJECT_TYPE_VK_PLAYLIST,
@@ -477,6 +485,32 @@ fun DwijApp(
                     onBackClick = {
                         navController.navigateUp()
                     },
+                )
+            }
+
+            composable(DwijDestination.ALL_TRACKS) {
+                AllTracksRoute(
+                    component = component,
+                    playerModel = playerModel,
+                    playlistPlatform = platform.rememberPlaylistGridPlatform(),
+                    onBackClick = { navController.navigateUp() },
+                    onOpenPlayer = { navController.navigate(DwijDestination.PLAYER) },
+                )
+            }
+
+            composable(
+                route = DwijDestination.DOWNLOADED_TRACKS_PATTERN,
+                arguments = listOf(navArgument(DwijDestination.ARG_DOWNLOAD_SOURCE) { type = NavType.StringType }),
+            ) { entry ->
+                val downloadSource = com.yellastrodev.dwij.HomeMusicSource.entries.firstOrNull {
+                    it.name == entry.stringArgument(DwijDestination.ARG_DOWNLOAD_SOURCE)
+                } ?: com.yellastrodev.dwij.HomeMusicSource.All
+                DownloadedTracksRoute(
+                    component = component,
+                    playerModel = playerModel,
+                    source = downloadSource,
+                    onBackClick = { navController.navigateUp() },
+                    onOpenPlayer = { navController.navigate(DwijDestination.PLAYER) },
                 )
             }
 

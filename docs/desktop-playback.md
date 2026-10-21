@@ -1,5 +1,10 @@
 # Desktop: потоки воспроизведения
 
+С 2026-10-21 после всех повторов трека движок вызывает общий handler автоматического
+офлайна **до auto-next**. Возврат полной очереди сохраняет MediaPlayer и позицию,
+обновляя индекс попытки; callback читает этот актуальный индекс.
+Подробности и проверки: [offline-playback.md](offline-playback.md).
+
 `desktopApp/.../playback/DesktopPlayerEngine.kt` использует JavaFX MediaPlayer.
 Все обращения к его свойствам и методы play/pause/seek/stop/dispose остаются
 на JavaFX Application Thread через `JavaFxRuntime`.

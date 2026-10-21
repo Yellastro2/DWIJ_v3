@@ -79,3 +79,23 @@ fun Song.toPlaybackTrack(
         )
     }
 }
+
+/** Выбирает только готовый экземпляр, подставляя файл/локальный relay вместо сетевого URI. Вызывать на IO. */
+fun Song.toOfflinePlaybackTrack(
+    yandexFile: (String) -> java.io.File?,
+    vkUri: (TrackInstance.Vk) -> String?,
+): PlaybackTrack? {
+    val ordered = instances.sortedBy { if (it.id == preferredInstanceId) 0 else 1 }
+    for (instance in ordered) {
+        val uri = when (instance) {
+            is TrackInstance.Local -> instance.track.contentUri.takeIf { value ->
+                !value.startsWith("file:") || runCatching { java.io.File(java.net.URI(value)).isFile }.getOrDefault(false)
+            }
+            is TrackInstance.Yandex -> yandexFile(instance.track.id)?.toURI()?.toString()
+            is TrackInstance.Vk -> vkUri(instance)
+        } ?: continue
+        val single = copy(instances = listOf(instance), preferredInstanceId = instance.id)
+        return single.toPlaybackTrack({ true }, { uri })?.copy(playbackUri = uri)
+    }
+    return null
+}

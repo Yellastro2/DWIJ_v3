@@ -26,7 +26,7 @@ internal interface RelayAudioReader : AutoCloseable {
 /**
  * Один loopback-сервер на desktop runtime. ОС атомарно выделяет порт при bind(0).
  * Случайный путь разрешает только выбранный трек; произвольные URL и файлы не обслуживаются.
- * GET/HEAD и одиночный Range поддерживают JavaFX seek без отдельной загрузки аудио.
+ * GET/HEAD и Range поддерживают JavaFX seek; в офлайне reader не открывает сетевую сессию.
  */
 internal class DesktopAudioRelay(
     private val logger: YamLogger,
@@ -259,7 +259,7 @@ internal class DesktopAudioRelay(
         }
 
         /** Привязывает relay к тому же кэшу, который обслуживает Android. */
-        fun create(repository: TrackCacheRepository, logger: YamLogger): DesktopAudioRelay {
+        fun create(repository: TrackCacheRepository, logger: YamLogger, isOffline: () -> Boolean = { false }): DesktopAudioRelay {
             val cache = repository.createStreamingCache()
             return DesktopAudioRelay(logger, repository::readyFile, { trackId ->
                 val local = repository.readyFile(trackId)
@@ -274,6 +274,7 @@ internal class DesktopAudioRelay(
                         override fun close() = file.close()
                     }
                 } else {
+                    check(!isOffline()) { "Сетевое аудио отключено в офлайн-режиме" }
                     val session = cache.acquire(trackId)
                     object : RelayAudioReader {
                         override fun length() = session.length(0, prioritize = false)

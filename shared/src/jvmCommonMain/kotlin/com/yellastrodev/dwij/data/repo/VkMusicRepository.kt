@@ -48,7 +48,7 @@ const val VK_ALL_TRACKS = "0_-2"
  * Сессия и коллекции VK; Room-кеш аккаунта доступен до сети, Song собирается общим индексом.
  * OAuth-токен либо браузерные cookies с обновляемым токеном сохраняются только в защищённом payload.
  * Временные URI создаются при подготовке очереди; диагностический запрет относится только к OAuth.
- * Аудио проходит через relay с необязательным постоянным кешем приложения.
+ * Аудио проходит через relay с кешем; офлайн открывает только локальный bundle/полный кеш.
  * Desktop может получать MP3 HLS без TS-обёртки; формат кеша и offline-bundle сохраняется.
  * Явное сохранение публикует независимый offline-bundle вне LRU.
  * Сборка очередей использует отдельный mutex и не ожидает сетевого обновления фонотеки.
@@ -67,6 +67,8 @@ class VkMusicRepository(
     @Volatile private var client: VkApiClient? = null
     @Volatile private var relay: VkHlsRelay? = null
     @Volatile private var audioCache: VkAudioCache? = null
+    /** Общая политика аудио; probe обращается напрямую к транспорту и не снимает запрет сам. */
+    @Volatile var isPlaybackOffline: () -> Boolean = { false }
     private var localStorage: VkLocalStorage? = null
     private val downloadMutex = Mutex()
     private val downloadMetadata = java.util.concurrent.ConcurrentHashMap<String, VkAudio>()
@@ -279,13 +281,13 @@ class VkMusicRepository(
         }
     }
 
-    /** Создаёт lazy URI только для выбранного источника; сеть запускается при чтении relay, а не сборке Song. */
+    /** Создаёт lazy URI; без сессии допускает проверенный полный кеш, сетевой URL разрешается только при чтении relay. */
     fun playbackUri(instance: TrackInstance.Vk): String? = synchronized(playbackLock) {
         if (authorizationOnly) return@synchronized null
         val audio = instance.track
         val metadata = downloadMetadata[audio.fullId] ?: audio
         val saved = localStorage?.readyFile(audio.fullId)
-        if (saved == null && client == null) return@synchronized null
+        if (saved == null && client == null && !isCachedLocally(audio.fullId)) return@synchronized null
         // При появлении/удалении offline-файла выбирается новый корень, а не устаревший saved URI.
         val isHls = if (saved != null) saved.extension == "m3u8" else
             metadata.url.takeIf(String::isNotBlank)?.let {
@@ -297,6 +299,7 @@ class VkMusicRepository(
         val uri = if (saved != null) activeRelay.openSavedAudio(saved) else {
             activeRelay.openDeferredAudio(isHls, null, audio.fullId,
                 savedAudio = { localStorage?.readyFile(audio.fullId) }) {
+                check(!isPlaybackOffline()) { "Сетевое аудио отключено в офлайн-режиме" }
                 resolvePlaybackUrl(client, downloadMetadata[audio.fullId] ?: metadata)
             }
         }
@@ -306,6 +309,36 @@ class VkMusicRepository(
 
     /** Проверяет только постоянный bundle, не обычный кеш. */
     fun isSavedLocally(id: String): Boolean = localStorage?.readyFile(id.removePrefix("vk:")) != null
+
+    /** Открывает только готовый bundle либо полный кеш; сетевой fallback отсутствует. Вызывать на IO. */
+    fun offlinePlaybackUri(instance: TrackInstance.Vk): String? = synchronized(playbackLock) {
+        val activeRelay = relay ?: createRelay().also { relay = it }
+        localStorage?.readyFile(instance.track.fullId)?.let { activeRelay.openSavedAudio(it) }
+            ?: activeRelay.openCachedAudio(instance.track.fullId)
+    }
+
+    /** Забирает структурированный результат upstream, скрытого от плеера loopback-ответом. */
+    fun takePlaybackNetworkFailure(id: String): Boolean? = relay?.takeNetworkFailure(id)
+
+    /** Проверяет свежий VK API и реальные байты CDN без кеша и изменения текущего источника. */
+    suspend fun probePlayback(instance: TrackInstance.Vk): Boolean = withContext(Dispatchers.IO) {
+        val active = client ?: return@withContext false
+        val metadata = downloadMetadata[instance.track.fullId] ?: instance.track
+        val audio = active.getById(listOf(metadata.requestId)).firstOrNull { it.fullId == metadata.fullId }
+            ?: return@withContext false
+        if (audio.url.isBlank()) return@withContext false
+        kotlinx.coroutines.runInterruptible {
+            (relay ?: synchronized(playbackLock) { relay ?: createRelay().also { relay = it } }).probeNetwork(audio.url)
+        }
+    }
+
+    /** Проверяет весь обычный кеш трека без авторизации/сети; чтение и SHA-256 выполняются вызывающим IO-потоком. */
+    fun isCachedLocally(id: String): Boolean = try {
+        audioCache?.isTrackComplete(id.removePrefix("vk:")) == true
+    } catch (error: Exception) {
+        logger.warning(TAG, "[isCachedLocally] Не удалось проверить кеш VK: ${error.javaClass.simpleName}")
+        false
+    }
 
     /** Обновляет метадату в памяти, сохраняя известный access_key при передаче очищенной Room-записи. */
     fun rememberDownloadAudio(audio: VkAudio) {
@@ -377,6 +410,7 @@ class VkMusicRepository(
     /** Создаёт relay с платформенным HLS-режимом, общим кешем и безопасной диагностикой. */
     private fun createRelay(): VkHlsRelay = VkHlsRelay(mp3HlsSegments).also {
         it.useAudioCache(audioCache)
+        it.useNetworkPolicy { !isPlaybackOffline() }
         it.onError { message -> logger.warning(TAG, message) }
         it.onDiagnostic { message -> logger.debug(TAG, message) }
     }

@@ -42,7 +42,7 @@ data class LocalTrackDownloadProgress(
 
 /**
  * Управляет двумя уровнями ЯМ-аудио: ограничиваемым LRU-кэшем и постоянными
- * app-private файлами. Постоянный файл всегда имеет приоритет при воспроизведении.
+ * app-private файлами. Постоянный файл имеет приоритет; причины доставки и probe не смешиваются с кешем.
  */
 class TrackCacheRepository(
     private val cacheDir: File,
@@ -89,12 +89,33 @@ class TrackCacheRepository(
                 it.setLastModified(System.currentTimeMillis())
             }
 
+    private val playbackFailures = java.util.concurrent.ConcurrentHashMap<String, DataError>()
+
+    /** Забирает причину доставки аудио; HTTP/auth/storage не маскируются под отсутствие сети. */
+    fun takePlaybackNetworkFailure(trackId: String): Boolean? = playbackFailures.remove(trackId)?.let {
+        it == DataError.NoInternet || it == DataError.Timeout || it is DataError.Network ||
+            (it is DataError.Remote && it.statusCode >= 500)
+    }
+
+    /** Проверяет свежую ссылку и один байт через тот же SDK/прокси, полностью минуя файловый кеш. */
+    suspend fun probePlayback(trackId: String): Boolean {
+        val source = trackRepo.streamingSource
+        val url = when (val result = source.resolveUrl(trackId)) {
+            is DataResult.Success -> result.value
+            is DataResult.Failure -> return false
+        }
+        var received = false
+        val result = source.readRange(url, 0, 1, {}, { _, _, count -> if (count > 0) received = true })
+        return result is DataResult.Success && received
+    }
+
     /** Создаёт принадлежащий плееру потоковый кэш с общим JVM-механизмом диапазонов. */
     @Synchronized
     fun createStreamingCache(): StreamingTrackCache {
         check(streamingCache == null) { "Потоковый кэш уже подключён" }
         return StreamingTrackCache(
             createSession = { trackId, scope ->
+                playbackFailures.remove(trackId)
                 require(trackId.matches(Regex("[A-Za-z0-9:_-]+"))) { "Некорректный ID трека" }
                 streamingDirectory.mkdirs()
                 logger.debug(TAG, "[createStreamingCache] Начата потоковая загрузка трека $trackId")
@@ -392,7 +413,9 @@ class TrackCacheRepository(
         }
     }
 
+    /** Сохраняет структурированный отказ для recovery и прежнее уведомление об авторизации. */
     private fun handleDownloadFailure(trackId: String, error: DataError) {
+        playbackFailures[trackId] = error
         if (error == DataError.Unauthorized) {
             onAuthorizationRequired()
         }

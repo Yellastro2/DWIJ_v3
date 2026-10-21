@@ -29,6 +29,7 @@ import org.jetbrains.compose.resources.stringResource
  *
  * Платформа отвечает только за разрешения и синхронизацию. Все переходы выполняет
  * владелец общего NavHost через переданные callbacks. VK использует те же presentation-компоненты.
+ * Режим «Всё сразу» объединяет плейлисты всех источников в одной сетке.
  * Постоянное сохранение VK-плейлистов передаётся в общую платформенную очередь.
  */
 @Composable
@@ -105,6 +106,20 @@ fun PlaylistGridRoute(
                     Res.string.playlists_empty_yandex,
                 ),
         )
+
+    if (trackToAdd == null && selectedSource == HomeMusicSource.All) {
+        AllPlaylistGridRoute(
+            component = component,
+            platform = platform,
+            texts = texts,
+            onOpenLocalPlaylist = onOpenLocalPlaylist,
+            onOpenYandexPlaylist = onOpenYandexPlaylist,
+            onOpenVkPlaylist = onOpenVkPlaylist,
+            onBackClick = onBackClick,
+            modifier = modifier,
+        )
+        return
+    }
 
     SharedPlaylistGridRoute(
         trackToAdd = trackToAdd,

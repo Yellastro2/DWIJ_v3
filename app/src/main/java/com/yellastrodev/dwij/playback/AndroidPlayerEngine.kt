@@ -28,7 +28,7 @@ import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
 
-/** Связывает общий PlayerEngine с сервисом и переживает его пересоздание. */
+/** Связывает общий PlayerEngine с сервисом, recovery-политикой и восстановлением очереди без сброса звука. */
 class AndroidPlayerEngine(
     context: Context,
     private val scope: CoroutineScope,
@@ -38,6 +38,39 @@ class AndroidPlayerEngine(
 ) : PlayerEngine {
 
     private val applicationContext = context.applicationContext
+
+    @Volatile private var failureHandler: (Int, Boolean) -> Boolean = { _, _ -> false }
+
+    /** Подключает решение общей очереди до автоматического перехода сервиса. */
+    override fun setFailureHandler(handler: (Int, Boolean) -> Boolean) {
+        failureHandler = handler
+        service?.onPlaybackFailure = handler
+    }
+
+    /** Останавливает намерение играть; пустая офлайн-очередь удаляет недоступные сетевые элементы. */
+    override suspend fun stopPlayback(clearQueue: Boolean) {
+        withContext(Dispatchers.Main) {
+            service?.stopPlayback(clearQueue)
+            if (clearQueue) playbackSnapshot = null
+        }
+    }
+
+    /** Сохраняет текущий MediaItem и позицию, меняя только элементы до/после него. */
+    override suspend fun replaceQueueKeepingCurrent(tracks: List<PlaybackTrack>, oldIndex: Int, newIndex: Int,
+                                                  tracklist: dTracklist?, stillCurrent: () -> Boolean): Boolean = withContext(Dispatchers.Main) {
+        val active = service ?: return@withContext false
+        val player = active.player
+        if (!stillCurrent() || player.currentMediaItemIndex != oldIndex || newIndex !in tracks.indices) return@withContext false
+        val current = player.currentMediaItem ?: return@withContext false
+        val items = tracks.map { mediaItemMapper.map(it, tracklist) }.toMutableList()
+        items[newIndex] = current
+        player.removeMediaItems(oldIndex + 1, player.mediaItemCount)
+        player.removeMediaItems(0, oldIndex)
+        player.addMediaItems(0, items.take(newIndex))
+        player.addMediaItems(items.drop(newIndex + 1))
+        playbackSnapshot = PlaybackSnapshot(items)
+        true
+    }
 
     private var service: PlayerService? = null
 
@@ -69,6 +102,7 @@ class AndroidPlayerEngine(
 
     private var stateSubscriptionJob: Job? = null
     private var eventsSubscriptionJob: Job? = null
+    private var queueSubscriptionJob: Job? = null
 
     private val mutableState = MutableStateFlow(PlayerState())
     override val state: StateFlow<PlayerState> = mutableState.asStateFlow()
@@ -129,7 +163,7 @@ class AndroidPlayerEngine(
         }
     }
 
-    /** Принимает новый сервис и восстанавливает очередь из памяти, если она ещё доступна. */
+    /** Подписывается на сервис; снимок из памяти применяет только к ещё пустому плееру. */
     private fun restoreSnapshotIfNeeded(
         playerService: PlayerService,
     ) {
@@ -140,6 +174,7 @@ class AndroidPlayerEngine(
             startSubscriptionsIfNeeded(playerService)
         }
         val snapshot = playbackSnapshot ?: return
+        if (playerService.player.mediaItemCount > 0) return
 
         playerService.restoreQueue(
             tracks = snapshot.items,
@@ -182,12 +217,7 @@ class AndroidPlayerEngine(
         PlayerService? =
         serviceRegistry.current()
 
-    /**
-     * Вот здесь конкретно должна находиться проверка subscriptionsStarted.
-     *
-     * Проверка выполняется после того, как service уже получен,
-     * и непосредственно перед launchIn().
-     */
+    /** Подписывается на состояние и фактическую очередь, включая внешнее Media3-восстановление. */
     private fun startSubscriptionsIfNeeded(
         playerService: PlayerService,
     ) {
@@ -196,6 +226,13 @@ class AndroidPlayerEngine(
         }
 
         subscriptionsStarted = true
+        playerService.onPlaybackFailure = failureHandler
+
+        queueSubscriptionJob = playerService.queue
+            .onEach { items ->
+                if (items.isNotEmpty()) playbackSnapshot = PlaybackSnapshot(items)
+            }
+            .launchIn(scope)
 
         stateSubscriptionJob = playerService.state
             .onEach { playerState ->
@@ -216,7 +253,10 @@ class AndroidPlayerEngine(
             .launchIn(scope)
     }
 
+    /** Отменяет все подписки на прежний экземпляр сервиса. */
     private fun stopSubscriptions() {
+        queueSubscriptionJob?.cancel()
+        queueSubscriptionJob = null
         stateSubscriptionJob?.cancel()
         stateSubscriptionJob = null
 
@@ -226,10 +266,12 @@ class AndroidPlayerEngine(
         subscriptionsStarted = false
     }
 
+    /** Устанавливает очередь и сохраняет паузу, если смена режима не должна запускать звук. */
     override suspend fun setQueue(
         tracks: List<PlaybackTrack>,
         startIndex: Int,
         tracklist: dTracklist?,
+        autoPlay: Boolean,
     ) {
         prepare()
 
@@ -248,6 +290,7 @@ class AndroidPlayerEngine(
             requireNotNull(service).playQueue(
                 tracks = mediaItems,
                 startIndex = startIndex,
+                autoPlay = autoPlay,
             )
         }
     }

@@ -2,8 +2,8 @@ package com.yellastrodev.dwij.desktop.playback
 
 import java.util.concurrent.atomic.AtomicBoolean
 
-/** Одна попытка запуска; VK получает бюджет для цепочки API/HLS, конкурентные отказы дают один повтор. */
-internal class DesktopPlaybackAttempt(val index: Int, val retry: Int = 0) {
+/** Одна попытка запуска; индекс обновляется при возврате полной очереди, конкурентные отказы дают один повтор. */
+internal class DesktopPlaybackAttempt(@Volatile var index: Int, val retry: Int = 0) {
     private val failed = AtomicBoolean()
     val isFailed: Boolean get() = failed.get()
     val canRetry: Boolean get() = retry < MAX_RETRIES

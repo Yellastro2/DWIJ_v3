@@ -7,11 +7,18 @@ import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
 import java.io.File
 import java.security.MessageDigest
+import java.nio.file.AtomicMoveNotSupportedException
+import java.nio.file.Files
+import java.nio.file.StandardCopyOption
 
-class FileCacheStore(
+/** Атомарное LRU-хранилище; group объединяет ресурсы трека в каталог с общей давностью использования. */
+class FileCacheStore private constructor(
     private val directory: File,
     private val cacheManager: CacheManager,
+    private val groupDirectory: File?,
 ) {
+    /** Создаёт прежнее плоское хранилище обложек или ресурсов; формат имён файлов сохраняется. */
+    constructor(directory: File, cacheManager: CacheManager) : this(directory.absoluteFile, cacheManager, null)
 
     /*
      * Запись cache-файлов должна быть сериализована.
@@ -28,41 +35,53 @@ class FileCacheStore(
         Mutex()
 
     init {
-        if (!directory.exists()) {
+        if (groupDirectory == null && !directory.exists()) {
             directory.mkdirs()
         }
 
-        cacheManager.registerDir(
-            directory,
-        )
+        if (groupDirectory == null) cacheManager.registerDir(directory)
     }
 
+    /** Возвращает ленивое хранилище одного трека; чтение отсутствующей группы не создаёт пустой каталог. */
+    fun group(id: String): FileCacheStore {
+        enableGrouping()
+        val grouped = File(directory, "track-${id.sha256()}")
+        return FileCacheStore(grouped, cacheManager, grouped)
+    }
+
+    /** Включает подсчёт/вытеснение каталогов сразу при старте, до первого обращения к треку. */
+    fun enableGrouping() { cacheManager.registerGroupedDir(directory) }
+
+    /** Читает целый ресурс под блокировкой группы и обновляет давность использования всего трека. */
     fun read(
         key: String,
-    ): ByteArray? {
+    ): ByteArray? = cacheManager.withCacheGroup(directory) {
         val file =
             fileFor(
                 key,
             )
 
         if (!file.isFile) {
-            return null
+            return@withCacheGroup null
         }
 
-        return runCatching {
+        runCatching {
             file
                 .readBytes()
                 .also {
                     file.setLastModified(
                         System.currentTimeMillis(),
                     )
+                    groupDirectory?.setLastModified(System.currentTimeMillis())
                 }
         }.getOrNull()
     }
 
+    /** Публикует ресурс; replaceExisting атомарно заменяет изменяемый индекс, сохраняя общий лимит кеша. */
     suspend fun write(
         key: String,
         bytes: ByteArray,
+        replaceExisting: Boolean = false,
     ) {
         withContext(
             Dispatchers.IO,
@@ -71,84 +90,95 @@ class FileCacheStore(
                 false
 
             writeMutex.withLock {
-                val target =
-                    fileFor(
-                        key,
-                    )
-
-                /*
-                 * Это cache, поэтому существующий опубликованный файл
-                 * уже считается успешным результатом.
-                 *
-                 * Особенно важно для гонки:
-                 *
-                 * request A: cache miss -> download
-                 * request B: cache miss -> download
-                 * request A: write
-                 * request B: write
-                 *
-                 * B после ожидания mutex просто увидит готовый target
-                 * и не станет пытаться перезаписывать его.
-                 */
-                if (target.isFile) {
-                    target.setLastModified(
-                        System.currentTimeMillis(),
-                    )
-
-                    return@withLock
-                }
-
-                val temporary =
-                    File.createTempFile(
-                        "cache-",
-                        ".tmp",
-                        directory,
-                    )
-
-                try {
-                    temporary.writeBytes(
-                        bytes,
-                    )
+                cacheManager.withCacheGroup(directory) {
+                    directory.mkdirs()
+                    val target =
+                        fileFor(
+                            key,
+                        )
 
                     /*
-                     * temporary находится в той же директории,
-                     * поэтому renameTo обычно является самым дешёвым
-                     * способом атомарно опубликовать готовый cache-файл.
+                     * Это cache, поэтому существующий опубликованный файл
+                     * уже считается успешным результатом.
+                     *
+                     * Особенно важно для гонки:
+                     *
+                     * request A: cache miss -> download
+                     * request B: cache miss -> download
+                     * request A: write
+                     * request B: write
+                     *
+                     * B после ожидания mutex просто увидит готовый target
+                     * и не станет пытаться перезаписывать его.
                      */
-                    if (
-                        !temporary.renameTo(
-                            target,
+                    if (target.isFile && !replaceExisting) {
+                        target.setLastModified(
+                            System.currentTimeMillis(),
                         )
-                    ) {
+                        groupDirectory?.setLastModified(System.currentTimeMillis())
+
+                        return@withCacheGroup
+                    }
+
+                    val temporary =
+                        File.createTempFile(
+                            "cache-",
+                            ".tmp",
+                            directory,
+                        )
+
+                    try {
+                        temporary.writeBytes(
+                            bytes,
+                        )
+
                         /*
-                         * На случай если target каким-либо образом
-                         * появился извне между проверкой и rename.
+                         * temporary находится в той же директории,
+                         * поэтому renameTo обычно является самым дешёвым
+                         * способом атомарно опубликовать готовый cache-файл.
                          */
+                        if (replaceExisting) {
+                            try {
+                                Files.move(temporary.toPath(), target.toPath(), StandardCopyOption.ATOMIC_MOVE, StandardCopyOption.REPLACE_EXISTING)
+                            } catch (_: AtomicMoveNotSupportedException) {
+                                Files.move(temporary.toPath(), target.toPath(), StandardCopyOption.REPLACE_EXISTING)
+                            }
+                        } else if (
+                            !temporary.renameTo(
+                                target,
+                            )
+                        ) {
+                            /*
+                             * На случай если target каким-либо образом
+                             * появился извне между проверкой и rename.
+                             */
+                            if (!target.isFile) {
+                                temporary.copyTo(
+                                    target =
+                                        target,
+                                    overwrite =
+                                        false,
+                                )
+                            }
+                        }
+
                         if (!target.isFile) {
-                            temporary.copyTo(
-                                target =
-                                    target,
-                                overwrite =
-                                    false,
+                            error(
+                                "Не удалось сохранить cache-файл: " +
+                                        target.absolutePath,
                             )
                         }
-                    }
 
-                    if (!target.isFile) {
-                        error(
-                            "Не удалось сохранить cache-файл: " +
-                                    target.absolutePath,
+                        target.setLastModified(
+                            System.currentTimeMillis(),
                         )
+                        groupDirectory?.setLastModified(System.currentTimeMillis())
+
+                        createdNewFile =
+                            true
+                    } finally {
+                        temporary.delete()
                     }
-
-                    target.setLastModified(
-                        System.currentTimeMillis(),
-                    )
-
-                    createdNewFile =
-                        true
-                } finally {
-                    temporary.delete()
                 }
             }
 
@@ -164,6 +194,7 @@ class FileCacheStore(
         }
     }
 
+    /** Удаляет повреждённую запись под той же блокировкой, что публикация и групповое вытеснение. */
     suspend fun remove(
         key: String,
     ): Boolean {
@@ -171,13 +202,42 @@ class FileCacheStore(
             Dispatchers.IO,
         ) {
             writeMutex.withLock {
-                val file =
-                    fileFor(
-                        key,
-                    )
+                cacheManager.withCacheGroup(directory) {
+                    val file =
+                        fileFor(
+                            key,
+                        )
 
-                !file.exists() ||
-                        file.delete()
+                    !file.exists() ||
+                            file.delete()
+                }
+            }
+        }
+    }
+
+    /** Перемещает старую запись в группу без копирования и временного удвоения размера под LRU-лимитом. */
+    suspend fun adopt(key: String, legacy: FileCacheStore): Unit = withContext(Dispatchers.IO) {
+        if (directory == legacy.directory) return@withContext
+        legacy.writeMutex.withLock {
+            writeMutex.withLock {
+                cacheManager.withCacheGroup(legacy.directory) {
+                    cacheManager.withCacheGroup(directory) destination@{
+                        val source = legacy.fileFor(key)
+                        if (!source.isFile) return@destination
+                        directory.mkdirs()
+                        val target = fileFor(key)
+                        if (target.isFile) {
+                            source.delete()
+                        } else {
+                            try {
+                                Files.move(source.toPath(), target.toPath(), StandardCopyOption.ATOMIC_MOVE)
+                            } catch (_: AtomicMoveNotSupportedException) {
+                                Files.move(source.toPath(), target.toPath())
+                            }
+                        }
+                        groupDirectory?.setLastModified(System.currentTimeMillis())
+                    }
+                }
             }
         }
     }

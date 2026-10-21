@@ -16,17 +16,19 @@ import com.yellastrodev.dwij.playback.stream.StreamingTrackSession
 import java.io.IOException
 import java.net.URI
 
-/** ЯМ читает общий кэш, HTTP/HLS использует двадцатисекундные таймауты под общим watchdog плеера. */
+/** ЯМ читает общий кеш; в офлайне сеть запрещена, онлайн HTTP/HLS ограничены watchdog и таймаутом 20с. */
 class YaLazyDataSourceFactory(
     context: Context,
     private val trackCacheRepository: TrackCacheRepository,
     private val streamingCache: StreamingTrackCache,
+    private val isOffline: () -> Boolean = { false },
 ) : DataSource.Factory {
     private val defaultFactory = DefaultDataSource.Factory(context.applicationContext,
         androidx.media3.datasource.DefaultHttpDataSource.Factory()
             .setConnectTimeoutMs(20_000)
             .setReadTimeoutMs(20_000))
 
+    /** Каждый open заново проверяет режим: старый URI не обходит запрет сети после переключения. */
     override fun createDataSource(): DataSource = object : DataSource {
         private val listeners = mutableListOf<TransferListener>()
         private var actual: DataSource? = null
@@ -36,10 +38,15 @@ class YaLazyDataSourceFactory(
             actual?.addTransferListener(transferListener)
         }
 
+        /** Готовый файл доступен всегда; сеть разрешена только онлайн, loopback контролирует свой relay. */
         override fun open(dataSpec: DataSpec): Long {
             try {
                 val id = yandexStreamingTrackId(dataSpec.uri.toString())
                 val readyFile = id?.let(trackCacheRepository::readyFile)
+                if (isOffline() && ((id != null && readyFile == null) ||
+                        (dataSpec.uri.scheme in setOf("http", "https") && dataSpec.uri.host != "127.0.0.1"))) {
+                    throw IOException("Сетевое аудио отключено в офлайн-режиме")
+                }
                 val source = if (id != null && readyFile == null) {
                     YandexStreamDataSource(id, streamingCache)
                 } else {

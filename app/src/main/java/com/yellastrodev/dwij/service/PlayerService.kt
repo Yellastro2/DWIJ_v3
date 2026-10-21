@@ -27,6 +27,7 @@ import com.yellastrodev.dwij.data.source.yandexStreamingTrackId
 import com.yellastrodev.dwij.playback.stream.StreamingTrackCache
 import com.yellastrodev.dwij.playback.AndroidPlaybackFeedbackAdapter
 import com.yellastrodev.dwij.playback.AndroidPlayerListener
+import com.yellastrodev.dwij.playback.AndroidPlaybackQueueRestorer
 import com.yellastrodev.dwij.playback.BluetoothPlaybackResume
 import com.yellastrodev.dwij.playback.PlaybackResumeStore
 import com.yellastrodev.dwij.playback.AndroidPlaybackRecovery
@@ -39,19 +40,24 @@ import com.yellastrodev.dwij.yApplication
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.cancel
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.SharedFlow
 import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.flatMapLatest
 import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 
-/** Владеет Media3, кэшем, восстановлением воспроизведения и системной кнопкой лайка. */
+/** Владеет Media3, recovery-политикой офлайна и синхронизацией восстановленной очереди с UI. */
 @OptIn(UnstableApi::class)
 class PlayerService : MediaSessionService() {
 
@@ -66,6 +72,9 @@ class PlayerService : MediaSessionService() {
     private lateinit var resumeStore: PlaybackResumeStore
     private val likeCommand = SessionCommand(ACTION_TOGGLE_LIKE, Bundle.EMPTY)
     private val likeMutationMutex = Mutex()
+    private var queueRestoreJob: Job? = null
+    private val mutableQueue = MutableStateFlow<List<MediaItem>>(emptyList())
+    val queue: StateFlow<List<MediaItem>> = mutableQueue.asStateFlow()
 
     private val sessionCallback = object : MediaSession.Callback {
         /** Разрешает системной панели отправлять команду лайка, сохраняя обычные команды. */
@@ -135,8 +144,11 @@ class PlayerService : MediaSessionService() {
             }
         }
 
-        /** Сохраняет очередь и позицию при командах внешних MediaController. */
+        /** Сохраняет команды внешних контроллеров и публикует изменения очереди для UI и engine. */
         override fun onEvents(player: Player, events: Player.Events) {
+            if (events.contains(Player.EVENT_TIMELINE_CHANGED)) {
+                publishQueue()
+            }
             if (events.contains(Player.EVENT_TIMELINE_CHANGED) ||
                 events.contains(Player.EVENT_MEDIA_ITEM_TRANSITION) ||
                 events.contains(Player.EVENT_POSITION_DISCONTINUITY) ||
@@ -167,6 +179,45 @@ class PlayerService : MediaSessionService() {
     val state: StateFlow<PlayerState> = stateStore.state
     val events: SharedFlow<PlayerEvent> = stateStore.events
 
+    /** Перехват окончательного отказа до auto-next; задаётся application-scoped движком. */
+    @Volatile var onPlaybackFailure: (Int, Boolean) -> Boolean = { _, _ -> false }
+
+    /** Публикует фактическую очередь и асинхронно восстанавливает пустой UI-репозиторий. */
+    private fun publishQueue() {
+        val items = List(player.mediaItemCount, player::getMediaItemAt)
+        mutableQueue.value = items
+        queueRestoreJob?.cancel()
+        if (items.isEmpty() || applicationComponent.playerRepo.currentTrackList.isNotEmpty()) return
+
+        queueRestoreJob = serviceScope.launch {
+            try {
+                val restored = withContext(Dispatchers.IO) {
+                    AndroidPlaybackQueueRestorer(applicationComponent.songRepository).restore(items)
+                }
+                if (mutableQueue.value != items) return@launch
+                val currentState = state.value.copy(
+                    currentIndex = player.currentMediaItemIndex,
+                    currentPosition = player.currentPosition.coerceAtLeast(0L),
+                    duration = player.duration.coerceAtLeast(0L),
+                    isPlaying = player.isPlaying,
+                    wantsToPlay = player.playWhenReady,
+                    isShuffle = player.shuffleModeEnabled,
+                    isRepeatAll = player.repeatMode == Player.REPEAT_MODE_ALL,
+                )
+                val accepted = applicationComponent.playerRepo.restoreQueueIfEmpty(
+                    songs = restored.map { it.first },
+                    tracks = restored.map { it.second },
+                    playerState = currentState,
+                )
+                Log.d(TAG, "[publishQueue] Восстановление UI-очереди: size=${items.size}, index=${currentState.currentIndex}, accepted=$accepted")
+            } catch (error: CancellationException) {
+                throw error
+            } catch (error: Exception) {
+                Log.e(TAG, "[publishQueue] Не удалось восстановить UI-очередь", error)
+            }
+        }
+    }
+
     /** Подключает восстановление и системную MediaSession с наблюдением за лайком. */
     override fun onCreate() {
         super.onCreate()
@@ -174,7 +225,9 @@ class PlayerService : MediaSessionService() {
         resumeStore = PlaybackResumeStore(this)
 
         streamingCache = trackCacheRepo.createStreamingCache()
-        val dataSourceFactory = YaLazyDataSourceFactory(this, trackCacheRepo, streamingCache)
+        val dataSourceFactory = YaLazyDataSourceFactory(this, trackCacheRepo, streamingCache) {
+            applicationComponent.playerRepo.isOffline.value
+        }
 
         player = ExoPlayer.Builder(this)
             .setLoadControl(androidx.media3.exoplayer.DefaultLoadControl.Builder()
@@ -194,7 +247,11 @@ class PlayerService : MediaSessionService() {
             player = player,
             scope = serviceScope,
             stateStore = stateStore,
-            resetSource = streamingCache::stopPlayback,
+            resetSource = {
+                streamingCache.stopPlayback()
+                applicationComponent.vkMusicRepository.cancelPendingPlaybackRequests()
+            },
+            onFailure = { index, network -> onPlaybackFailure(index, network) },
             finishFeedback = {
                 playbackFeedback.onPlaybackEnded(player.currentPosition, player.duration, false)
             },
@@ -315,16 +372,18 @@ class PlayerService : MediaSessionService() {
     fun playQueue(
         tracks: List<MediaItem>,
         startIndex: Int = 0,
+        autoPlay: Boolean = true,
     ) {
         playbackRecovery.onUserCommand()
         stateStore.beginTrackChange(
             direction = TrackChangeDirection.DIRECT,
-            wantsToPlay = true,
+            wantsToPlay = autoPlay,
         )
         player.setMediaItems(tracks, startIndex, 0L)
+        player.playWhenReady = autoPlay
         resumeStore.save(player)
         player.prepare()
-        player.play()
+        if (autoPlay) player.play()
     }
 
     /**
@@ -380,6 +439,22 @@ class PlayerService : MediaSessionService() {
 
     fun addTracks(items: List<MediaItem>) {
         player.addMediaItems(items)
+    }
+
+    /** Пустой офлайн снимает pending-переход и удаляет сетевую очередь также из MediaSession. */
+    fun stopPlayback(clearQueue: Boolean) {
+        playbackRecovery.onUserCommand()
+        player.pause()
+        if (clearQueue) {
+            player.stop()
+            player.clearMediaItems()
+            streamingCache.stopPlayback()
+            applicationComponent.vkMusicRepository.cancelPendingPlaybackRequests()
+            stateStore.setProgress(0, 0)
+        }
+        stateStore.setPlaying(false)
+        stateStore.setWantsToPlay(false)
+        stateStore.completeTrackChange()
     }
 
     /** Ручной выбор начинает новую цепочку попыток, включая повторный выбор того же трека. */

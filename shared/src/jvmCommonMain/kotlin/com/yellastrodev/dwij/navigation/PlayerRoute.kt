@@ -66,7 +66,7 @@ import kotlinx.coroutines.withTimeoutOrNull
 import org.jetbrains.compose.resources.getString
 import org.jetbrains.compose.resources.stringResource
 
-/** Shared-плеер; в режиме назначения действие волны по треку сохраняет seed без запуска. */
+/** Shared-плеер с application-scoped индикатором офлайна; назначение волны сохраняет seed без запуска. */
 @Composable
 fun PlayerRoute(
     component: DwijComponent,
@@ -85,6 +85,7 @@ fun PlayerRoute(
     val track by playerModel.track.collectAsState()
     val playbackTrack by playerModel.playbackTrack.collectAsState()
     val playerState by playerModel.playerState.collectAsState()
+    val isOffline by component.playerRepo.isOffline.collectAsState()
     val playedTracklist by playerModel.playdTracklist.collectAsState()
     val shuffleBlocked by playerModel.shuffleBlock.collectAsState()
     val allPlaylists by playerModel.playlistRepo.playlists.collectAsState()
@@ -585,6 +586,7 @@ fun PlayerRoute(
                 ?.albumTitle
                 ?.takeIf(String::isNotBlank),
             sourceLabel = sourceLabel,
+            isOffline = isOffline,
             queueOrigin = track?.id?.let { playedTracklist?.originOf(it) },
             hasMultipleSources =
                 (track?.instances?.size ?: 0) > 1,

@@ -53,7 +53,8 @@ import org.jetbrains.compose.resources.stringResource
  * «Треки» открывает полную фонотеку выбранного источника, включая объединённую коллекцию VK.
  * «Рекомендации» VK открывает карточки с загрузкой составов по нажатию.
  * Каталог VK отдельно открывает личные треки и объединённую фонотеку.
- * «Всё сразу» запускает только общую подборку ЯМ/VK, остальные действия пока не подключены.
+ * «Всё сразу» открывает общие плейлисты, перемешанную фонотеку и подборку ЯМ/VK.
+ * Четвёртая карточка открывает постоянные загрузки ЯМ, VK либо обоих источников.
  * Сектор «Настроить» передаёт переход к экрану радиального меню владельцу навигации.
  * Пять секторов запускают сохранённые коллекции независимо от вкладки источника.
  *
@@ -78,6 +79,8 @@ fun HomeRoute(
     onOpenAlbums: () -> Unit,
     onOpenLocalTracks: () -> Unit,
     onOpenYandexTracks: () -> Unit,
+    onOpenAllTracks: () -> Unit,
+    onOpenDownloadedTracks: (HomeMusicSource) -> Unit,
     onOpenVkTracks: () -> Unit,
     onOpenVkMyTracks: () -> Unit,
     onOpenCatalogObject: (type: String, externalId: Int) -> Unit,
@@ -319,7 +322,7 @@ fun HomeRoute(
                 HomeMusicSource.Local -> onOpenLocalTracks()
                 HomeMusicSource.Yandex -> onOpenYandexTracks()
                 HomeMusicSource.Vk -> onOpenVkTracks()
-                HomeMusicSource.All -> Unit
+                HomeMusicSource.All -> onOpenAllTracks()
             }
         },
         onWaveClick = {
@@ -332,7 +335,9 @@ fun HomeRoute(
         onWavesClick = {
             onOpenWaves()
         },
-        onAllTracksClick = {},
+        onDownloadedTracksClick = {
+            if (selectedSource != HomeMusicSource.Local) onOpenDownloadedTracks(selectedSource)
+        },
         onVkRecommendationsClick = onOpenVkRecommendations,
         onVkMyTracksClick = onOpenVkMyTracks,
         mixedRecommendationLoading = mixedLoading,

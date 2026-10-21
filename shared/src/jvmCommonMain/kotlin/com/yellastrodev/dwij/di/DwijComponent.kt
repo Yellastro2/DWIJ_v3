@@ -12,7 +12,13 @@ import com.yellastrodev.dwij.data.cache.VkLocalStorage
 import com.yellastrodev.dwij.data.repo.LocalTrackDownloadProgress
 import com.yellastrodev.dwij.data.DataResult
 import com.yellastrodev.dwij.data.db.DwijDatabase
+import com.yellastrodev.dwij.data.entities.MusicSource
+import com.yellastrodev.dwij.data.entities.TrackInstance
 import com.yellastrodev.dwij.data.entities.dYaPlaylist
+import com.yellastrodev.dwij.data.entities.dYaWave
+import kotlinx.coroutines.flow.launchIn
+import kotlinx.coroutines.flow.onEach
+import com.yellastrodev.dwij.data.entities.toOfflinePlaybackTrack
 import com.yellastrodev.dwij.data.repo.CoverRepository
 import com.yellastrodev.dwij.data.repo.CatalogRepository
 import com.yellastrodev.dwij.data.repo.LocalCatalogResolver
@@ -66,11 +72,11 @@ import java.util.concurrent.atomic.AtomicBoolean
  *
  * Создаёт YamApiClient, восстанавливает отдельные сессии Яндекс/VK и собирает общие
  * репозитории, временное воспроизведение рекомендаций, HTTP-пульт с DNS-SD и постоянные настройки.
- * Подключает аудиокеш VK к общему лимиту хранения при старте.
+ * Подключает аудиокеш VK к общему лимиту хранения и общую политику офлайн-аудио.
  * Постоянные VK-bundle используют отдельный каталог и общую платформенную очередь загрузки.
  * Общий SongRepository передаётся VK-репозиторию напрямую; обратной зависимости нет.
  * Загрузка VK-обложек учитывает диагностический режим текущей OAuth или web-сессии.
- * Скан и автослияние мультисурсов используют постоянные настройки; слияние обновляет очередь на Main.
+ * Скан и автослияние мультисурсов используют постоянные настройки; слияние обновляет playerRepo на Main.
  * Desktop передаёт режим MP3 HLS для совместимости VK с JavaFX.
  *
  * Платформа передаёт системные реализации, низкоуровневое key-value хранилище
@@ -224,6 +230,31 @@ class DwijComponent private constructor(
         PlayerRepository(
             engine = playerEngine,
             resolveVkUri = vkMusicRepository::playbackUri,
+            resolveOfflineTrack = { song ->
+                song.toOfflinePlaybackTrack(trackCacheRepo::readyFile, vkMusicRepository::offlinePlaybackUri)
+            },
+            networkFailure = { track, platformFailure ->
+                when (track.source) {
+                    MusicSource.LOCAL -> false
+                    MusicSource.YANDEX ->
+                        track.playbackUri.startsWith("ya:") &&
+                            trackCacheRepo.readyFile(track.id) == null &&
+                            (trackCacheRepo.takePlaybackNetworkFailure(track.id) ?: platformFailure)
+                    MusicSource.VK ->
+                        vkMusicRepository.takePlaybackNetworkFailure(track.id) ?: platformFailure
+                }
+            },
+            probeOnline = { songs ->
+                val yandex = songs.firstNotNullOfOrNull { it.yandexInstances.firstOrNull() }
+                val vk = songs.firstNotNullOfOrNull { it.instances.filterIsInstance<TrackInstance.Vk>().firstOrNull() }
+                /** Отказ одного сервиса не мешает проверить другой; отмена общего scope сохраняется. */
+                suspend fun probe(block: suspend () -> Boolean): Boolean = try {
+                    kotlinx.coroutines.withTimeoutOrNull(3_500) { block() } == true
+                } catch (error: kotlinx.coroutines.CancellationException) { throw error }
+                catch (_: Exception) { false }
+                (yandex != null && probe { trackCacheRepo.probePlayback(yandex.track.id) }) ||
+                    (vk != null && probe { vkMusicRepository.probePlayback(vk) })
+            },
             settings = playbackSettings,
             scope = applicationScope,
             isTrackCached =
@@ -236,7 +267,13 @@ class DwijComponent private constructor(
                 )
             },
             logger = logger,
-        )
+        ).also { player ->
+            vkMusicRepository.isPlaybackOffline = { player.isOffline.value }
+            player.isOffline.onEach { offline ->
+                if (offline) waveRepository.stopObserving()
+                else if (player.dtracklist.value?.getType() == dYaWave.YA_WAVE) waveRepository.observePlayerState()
+            }.launchIn(applicationScope)
+        }
     }
 
     val waveRemoteSource:
@@ -256,6 +293,7 @@ class DwijComponent private constructor(
             playerRepository = playerRepo,
             isTrackCached =
                 trackCacheRepo::isCached,
+            isOffline = { playerRepo.isOffline.value },
             scope = applicationScope,
             logger = logger,
             onAuthorizationRequired =
@@ -365,7 +403,7 @@ class DwijComponent private constructor(
 
     /**
      * Подключает VK-кеш/bundle, импортирует отсутствующую метадату и отменяет неактивные чтения relay.
-     * Запускает скан/автослияние; завершённые объединения обновляют очередь без смены воспроизведения.
+     * Запускает скан/автослияние; завершённые объединения обновляют playerRepo без смены воспроизведения.
      */
     fun start() {
         if (
@@ -435,7 +473,7 @@ class DwijComponent private constructor(
             ) { sourceSongIds, mergedSongId ->
                 songRepository.songsByIds(listOf(mergedSongId)).firstOrNull()?.let { mergedSong ->
                     withContext(Dispatchers.Main) {
-                        playerRepository.applyMergedSong(sourceSongIds, mergedSong)
+                        playerRepo.applyMergedSong(sourceSongIds, mergedSong)
                     }
                 }
             }

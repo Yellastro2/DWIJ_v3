@@ -20,6 +20,9 @@ import androidx.compose.ui.unit.dp
 import com.yellastrodev.dwij.HomeMusicSource
 import com.yellastrodev.dwij.resources.Res
 import com.yellastrodev.dwij.resources.common_ok
+import com.yellastrodev.dwij.resources.playlists_source_local
+import com.yellastrodev.dwij.resources.playlists_source_yandex
+import com.yellastrodev.dwij.resources.playlists_source_vk
 import com.yellastrodev.dwij.resources.ic_player_play_v2
 import com.yellastrodev.dwij.resources.ic_playlist_create
 import com.yellastrodev.dwij.resources.ic_playlist_liked
@@ -44,7 +47,7 @@ import org.jetbrains.compose.resources.stringResource
 import org.jetbrains.compose.ui.tooling.preview.Preview
 
 /**
- * Полностью shared presentation-слой сетки плейлистов.
+ * Общая сетка плейлистов с индикаторами источников и переключением в «Всё сразу».
  *
  * Не зависит от Android R, Context или android.R.
  */
@@ -109,6 +112,7 @@ fun PlaylistGridContent(
                         onSourceSelected,
                     modifier =
                         Modifier.fillMaxWidth(),
+                    includeAll = true,
                 )
             },
             itemContent = {
@@ -251,6 +255,7 @@ fun PlaylistGridContent(
     }
 }
 
+/** Передаёт обложку, подписи и локализованный индикатор источника общей карточке. */
 @Composable
 private fun PlaylistGridScreenItemContent(
     item: PlaylistGridScreenItem,
@@ -301,6 +306,12 @@ private fun PlaylistGridScreenItemContent(
             details = item.details,
             highlighted =
                 item.highlighted,
+            sourceLabel = when (item.source) {
+                HomeMusicSource.Local -> stringResource(Res.string.playlists_source_local)
+                HomeMusicSource.Yandex -> stringResource(Res.string.playlists_source_yandex)
+                HomeMusicSource.Vk -> stringResource(Res.string.playlists_source_vk)
+                else -> null
+            },
         ),
         coverState = coverState,
         onClick = onClick,

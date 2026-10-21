@@ -12,16 +12,19 @@ import com.yellastrodev.dwij.data.entities.dYaPlaylist
 import com.yellastrodev.dwij.playback.feedback.PlaybackMetadataKeys
 import java.util.UUID
 
-/** Передаёт источник и URI в Media3, сохраняя Яндекс-feedback только для Яндекс-треков. */
+/** Передаёт источник, идентичность песни и URI в Media3 для воспроизведения и восстановления UI. */
 class AndroidMediaItemMapper {
 
-    /** Преобразует общий трек в MediaItem, включая HLS и независимую VK-метадату. */
+    /** Сохраняет ID логической песни и экземпляра, включая временные песни вне Room. */
     fun map(
         track: PlaybackTrack,
         tracklist: dTracklist?,
     ): MediaItem {
         val extras = Bundle().apply {
             putString(TRACK_ID, track.id)
+            putString(SONG_ID, track.songId)
+            putString(INSTANCE_ID, track.instanceId)
+            track.durationMs?.let { putLong(PlaybackMetadataKeys.PLAY_DURATION_MS, it) }
 
             putString(
                 PlaybackMetadataKeys.MUSIC_SOURCE,
@@ -48,13 +51,6 @@ class AndroidMediaItemMapper {
                             albumId.toString(),
                         )
                     }
-
-                track.durationMs?.let { durationMs ->
-                    putLong(
-                        PlaybackMetadataKeys.PLAY_DURATION_MS,
-                        durationMs,
-                    )
-                }
 
                 track.yandexTrack?.available?.let { available ->
                     putBoolean(
@@ -99,7 +95,9 @@ class AndroidMediaItemMapper {
             .build()
     }
 
-    private companion object {
-        const val ANDROID_PLAYBACK_REPORT_SOURCE = "dwij-android"
+    companion object {
+        const val SONG_ID = "dwij_song_id"
+        const val INSTANCE_ID = "dwij_instance_id"
+        private const val ANDROID_PLAYBACK_REPORT_SOURCE = "dwij-android"
     }
 }

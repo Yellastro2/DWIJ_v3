@@ -70,6 +70,8 @@ private enum class PendingRadialGestureResult {
  * Подписи назначений центрируются и переносятся в пределах ширины сектора.
  * В настройке previewInteractive разрешает прямой выбор сектора; enabled отключает все жесты.
  * showItemTitles позволяет экрану настройки заменить подписи Compose-кнопками удаления.
+ * После выбора сектор остаётся подсвеченным до конца закрытия остальных и ещё 100 мс;
+ * действие вызывается после этой паузы, чтобы навигация не обрывала анимацию.
  */
 @Composable
 fun RadialMenu(
@@ -106,11 +108,34 @@ fun RadialMenu(
         RadialMenuAnimationStyle.StaticPreview -> visible
     }
     var pressedIndex by remember { mutableIntStateOf(-1) }
+    var selectedIndex by remember(items) { mutableIntStateOf(-1) }
     val currentOnPrimaryClick = rememberUpdatedState(onPrimaryClick)
     val currentOnVisualActivation = rememberUpdatedState(onVisualActivation)
     val currentOnPressChange = rememberUpdatedState(onPressChange)
     val currentOnItemClick = rememberUpdatedState(onItemClick)
     val currentOnDismiss = rememberUpdatedState(onDismiss)
+    val isExitFinished = when (animationStyle) {
+        RadialMenuAnimationStyle.GlitchFlicker -> glitchFrame == HIDDEN_RADIAL_MENU_GLITCH_FRAME
+        RadialMenuAnimationStyle.Expand -> expansionProgress == 0f
+        RadialMenuAnimationStyle.StaticPreview -> !visible
+    }
+    LaunchedEffect(selectedIndex, visible, isExitFinished, enabled) {
+        if (!enabled) {
+            selectedIndex = -1
+        } else if (selectedIndex >= 0 && !visible && isExitFinished) {
+            delay(RADIAL_MENU_SELECTION_HOLD_MILLIS)
+            val selectedItem = items.getOrNull(selectedIndex)
+            selectedIndex = -1
+            selectedItem?.let { currentOnItemClick.value(it) }
+        }
+    }
+
+    /** Закрывает остальные сектора сразу, откладывая действие до завершения визуального выбора. */
+    fun selectItem(index: Int) {
+        if (selectedIndex >= 0) return
+        selectedIndex = index
+        currentOnDismiss.value()
+    }
     val density = LocalDensity.current
     val longPressTimeoutMillis = LocalViewConfiguration.current.longPressTimeoutMillis
     val contourWidth = with(density) { 1.4.dp.toPx() }
@@ -146,6 +171,10 @@ fun RadialMenu(
     ) {
         awaitEachGesture {
             val down = awaitFirstDown(requireUnconsumed = false)
+            if (selectedIndex >= 0) {
+                down.consume()
+                return@awaitEachGesture
+            }
             val startedInsideCenter = isInsideRadialCenter(
                 position = down.position,
                 width = size.width.toFloat(),
@@ -219,7 +248,7 @@ fun RadialMenu(
                             outerRadiusFraction = safeOuterRadiusFraction,
                         )
                         if (releasedIndex >= 0) {
-                            currentOnItemClick.value(items[releasedIndex])
+                            selectItem(releasedIndex)
                         } else {
                             currentOnDismiss.value()
                         }
@@ -291,7 +320,7 @@ fun RadialMenu(
                 } ?: -1
 
                 if (releasedIndex >= 0) {
-                    currentOnItemClick.value(items[releasedIndex])
+                    selectItem(releasedIndex)
                 } else {
                     currentOnDismiss.value()
                 }
@@ -317,7 +346,7 @@ fun RadialMenu(
         previewInteractive -> previewInput
         else -> Modifier
     })) {
-        if (items.isEmpty() || !isAnimationVisible) return@Canvas
+        if (items.isEmpty() || (!isAnimationVisible && selectedIndex < 0)) return@Canvas
 
         val center = Offset(size.width / 2f, size.height / 2f)
         val minDimension = min(size.width, size.height)
@@ -327,7 +356,9 @@ fun RadialMenu(
         val finalVisibleSweep = (itemSlotAngle - safeGap).coerceAtLeast(0.5f)
 
         items.forEachIndexed { index, item ->
-            val itemAnimation = when (animationStyle) {
+            val itemAnimation = if (index == selectedIndex) {
+                RadialMenuItemAnimation(finalOuterRadius, finalVisibleSweep, 1f, 1f)
+            } else when (animationStyle) {
                 RadialMenuAnimationStyle.GlitchFlicker -> radialMenuGlitchItemAnimation(
                     frame = glitchFrame,
                     index = index,
@@ -358,7 +389,7 @@ fun RadialMenu(
             val slotMiddle = startAngle + itemSlotAngle * (index + 0.5f)
             val currentStart = slotMiddle - currentSweep / 2f
             val itemAlpha = itemAnimation.alpha
-            val segmentColor = if (index == pressedIndex) {
+            val segmentColor = if (index == pressedIndex || index == selectedIndex) {
                 item.color.lighten(0.24f)
             } else {
                 item.color
@@ -397,7 +428,7 @@ fun RadialMenu(
                 color = segmentColor.copy(alpha = 0.92f * itemAlpha),
                 style = Stroke(width = contourWidth),
             )
-            if (index == pressedIndex) {
+            if (index == pressedIndex || index == selectedIndex) {
                 drawPath(
                     path = segmentPath,
                     brush = segmentBrush,
@@ -1003,6 +1034,7 @@ private val RADIAL_MENU_GLITCH_DURATION_MILLIS =
     RADIAL_MENU_GLITCH_FRAME_SPECS.sumOf { spec -> spec.holdMillis }
 
 private const val RADIAL_MENU_ANIMATION_DURATION_MILLIS = 520
+private const val RADIAL_MENU_SELECTION_HOLD_MILLIS = 100L
 private const val RADIAL_MENU_STAGGER_FRACTION = 0.055f
 
 private val RADIAL_MENU_EASING =

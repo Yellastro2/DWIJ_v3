@@ -33,7 +33,7 @@ import kotlinx.coroutines.withContext
 import org.jetbrains.compose.resources.stringResource
 import org.jetbrains.compose.resources.getString
 
-/** Показывает удерживаемую сетку и offline-обложки, отмечает членство и подтверждает удаление трека. */
+/** Показывает сетку с индикаторами VK и offline-обложками, отмечает членство и подтверждает удаление трека. */
 @Composable
 internal fun VkPlaylistGridRoute(
     component: DwijComponent,
@@ -97,11 +97,13 @@ internal fun VkPlaylistGridRoute(
         }
         if (trackToAdd == null && (authorized || savedPlaylists.any { it.fullId == VK_MY_TRACKS })) {
             add(PlaylistGridScreenItem(id = VK_MY_TRACKS, title = "Мои треки",
+                source = HomeMusicSource.Vk,
                 details = if (myTracksLoaded || myTracks.isNotEmpty()) "${myTracks.size} треков" else "",
                 artwork = PlaylistGridArtwork.Liked))
         }
         visiblePlaylists.filter { it.id >= 0 }.forEach { playlist ->
             add(PlaylistGridScreenItem(id = playlist.fullId, title = playlist.title,
+                source = HomeMusicSource.Vk,
                 details = "${playlist.count} треков", shouldLoadCover = playlist.coverUrl != null,
                 highlighted = pickedTrack?.let { audio ->
                     repository.audioIdentityIds(audio).any { it in playlistTracks[playlist.fullId].orEmpty() }

@@ -21,6 +21,7 @@ import java.util.concurrent.atomic.AtomicBoolean
  * Одна загрузка на трек: приоритет чтения, затем заполнение пробелов.
  * Чтение блокирует только поток загрузчика плеера. Ни один незаписанный байт
  * разреженного файла не выдаётся читателю. close удаляет только временный файл.
+ * Структурированная ошибка передаётся recovery до пробуждения читателя с IOException.
  */
 class StreamingTrackSession internal constructor(
     private val trackId: String,
@@ -97,7 +98,7 @@ class StreamingTrackSession internal constructor(
         checkReadable()
     }
 
-    /** Загружает диапазоны и связывает ID трека с безопасным хостом аудио в сетевых логах. */
+    /** Загружает диапазоны; перед отказом читателя публикует DataError для точной классификации recovery. */
     private suspend fun download() {
         try {
             val resolveStarted = System.nanoTime()
@@ -151,6 +152,7 @@ class StreamingTrackSession internal constructor(
             throw error
         } catch (error: Exception) {
             val dataError = (error as? StreamFailure)?.error ?: DataError.Storage(error)
+            if (!synchronized(lock) { closed }) onFailure(dataError)
             synchronized(lock) {
                 if (!closed && !complete) {
                     failure = IOException("Не удалось загрузить аудио ЯМ")
@@ -160,7 +162,6 @@ class StreamingTrackSession internal constructor(
                     lock.notifyAll()
                 }
             }
-            if (!synchronized(lock) { closed }) onFailure(dataError)
         } finally {
             synchronized(lock) {
                 if (!complete) {

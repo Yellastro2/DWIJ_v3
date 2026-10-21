@@ -91,7 +91,7 @@ import java.util.Locale
  * переключатель источников, сетка разделов, компактный плеер других вкладок
  * и нижняя навигация. Для VK вместо волны доступна сетка рекомендаций.
  * Каталог VK ведёт в готовые коллекции и рекомендации.
- * Режим «Всё сразу» включает только третью карточку смешанной подборки.
+ * Режим «Всё сразу» объединяет плейлисты, треки, подборку и скачанные ЯМ/VK.
  * Сектор «Настроить» открывает отдельный экран радиального меню.
  * Остальные сектора отображают назначения из общего хранилища и передают их на запуск.
  * Короткое нажатие при пустом плеере запускает отдельно назначенное действие центральной кнопки.
@@ -104,7 +104,7 @@ fun HomeScreen(
     onTracksClick: () -> Unit,
     onWaveClick: () -> Unit,
     onWavesClick: () -> Unit,
-    onAllTracksClick: () -> Unit,
+    onDownloadedTracksClick: () -> Unit,
     onArtistsClick: () -> Unit,
     onAlbumsClick: () -> Unit,
     onLikedClick: () -> Boolean,
@@ -365,9 +365,9 @@ fun HomeScreen(
                                 HomeMusicSource.Vk -> onVkRecommendationsClick
                                 else -> onWavesClick
                             },
-                            onAllTracksClick = onAllTracksClick,
+                            onDownloadedTracksClick = onDownloadedTracksClick,
                             waveEnabled = selectedSource != HomeMusicSource.Local && !mixedRecommendationLoading,
-                            otherActionsEnabled = selectedSource != HomeMusicSource.All,
+                            downloadedTracksEnabled = selectedSource != HomeMusicSource.Local,
                             waveTitle = when (selectedSource) {
                                 HomeMusicSource.All -> stringResource(if (mixedRecommendationLoading) Res.string.home_mixed_loading else Res.string.home_mixed_selection)
                                 HomeMusicSource.Vk -> stringResource(Res.string.home_recommendations)
@@ -1335,16 +1335,16 @@ fun MusicSourceSelector(
     }
 }
 
-/** Показывает разделы источника; карточка волны для VK открывает рекомендации. */
+/** Показывает разделы источника; четвёртая карточка открывает постоянные загрузки ЯМ/VK. */
 @Composable
 private fun HomeMenuGrid(
     onPlaylistsClick: () -> Unit,
     onTracksClick: () -> Unit,
     onWaveClick: () -> Unit,
-    onAllTracksClick: () -> Unit,
+    onDownloadedTracksClick: () -> Unit,
     waveEnabled: Boolean,
     waveTitle: String,
-    otherActionsEnabled: Boolean = true,
+    downloadedTracksEnabled: Boolean = true,
 ) {
     LazyVerticalGrid(
         columns = GridCells.Fixed(2),
@@ -1360,7 +1360,7 @@ private fun HomeMenuGrid(
                 frameRes = Res.drawable.dvizh_calm_glitch_frame_contour,
                 title = stringResource(Res.string.home_playlists),
                 onClick = onPlaylistsClick,
-                enabled = otherActionsEnabled,
+                enabled = true,
                 modifier = Modifier.height(110.dp),
             )
         }
@@ -1370,7 +1370,7 @@ private fun HomeMenuGrid(
                 frameRes = Res.drawable.dvizh_drive_glitch_frame_contour,
                 title = stringResource(Res.string.home_tracks),
                 onClick = onTracksClick,
-                enabled = otherActionsEnabled,
+                enabled = true,
                 modifier = Modifier.height(110.dp),
             )
         }
@@ -1388,9 +1388,9 @@ private fun HomeMenuGrid(
             HomeMenuCard(
                 textureRes = Res.drawable.bg_party_texture,
                 frameRes = Res.drawable.dvizh_orange_glitch_frame_contour,
-                title = stringResource(Res.string.home_all_tracks),
-                onClick = onAllTracksClick,
-                enabled = otherActionsEnabled,
+                title = stringResource(Res.string.home_downloaded_tracks),
+                onClick = onDownloadedTracksClick,
+                enabled = downloadedTracksEnabled,
                 modifier = Modifier.height(110.dp),
             )
         }
@@ -1442,6 +1442,7 @@ private fun HomeMenuCard(
     }
 }
 
+/** Показывает макет главной с карточкой скачанных треков. */
 @Preview(
     name = "Home screen",
     widthDp = 360,
@@ -1457,7 +1458,7 @@ private fun HomeScreenPreview() {
         onTracksClick = {},
         onWaveClick = {},
         onWavesClick = {},
-        onAllTracksClick = {},
+        onDownloadedTracksClick = {},
         onArtistsClick = {},
         onAlbumsClick = {},
         onLikedClick = { false },

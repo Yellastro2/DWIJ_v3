@@ -27,6 +27,7 @@ import kotlinx.coroutines.flow.asStateFlow
 import java.util.concurrent.atomic.AtomicBoolean
 import kotlin.coroutines.cancellation.CancellationException
 
+/** Управляет ЯМ-волной; автоматический refill и feedback приостановлены общим офлайн-режимом. */
 class WaveRepository(
     val remote: WaveRemoteSource,
     val trackRepository: TrackRepository,
@@ -36,6 +37,7 @@ class WaveRepository(
     private val scope: CoroutineScope,
     private val logger: YamLogger,
     private val onAuthorizationRequired: () -> Unit,
+    private val isOffline: () -> Boolean = { false },
 ) {
 
     val TAG = "WaveRepository"
@@ -216,10 +218,12 @@ class WaveRepository(
 
     /** Выполняет сетевую загрузку и публикует подготовленную очередь в общем репозитории плеера. */
     private suspend fun loadAndPlayWave(dtrackList: dTracklist?) {
+        if (isOffline()) return
         nextBatchJob?.cancel()
         nextBatchJob = null
         logger.debug(TAG, "[loadAndPlayWave] Запрашиваем ${dtrackList?.getWaveId() ?: "свою"} волну")
         val waveList = getWave(dtrackList)
+        if (isOffline()) return
         if (waveList.isEmpty()) {
             logger.warning(TAG, "[loadAndPlayWave] Сервер не вернул треки волны")
             return
@@ -309,7 +313,9 @@ class WaveRepository(
             .launchIn(scope)
     }
 
+    /** Онлайн-старт отправляет feedback и планирует refill; офлайн не запускает сетевых заданий. */
     private suspend fun onTrackStarted(trackId: String, sendFeedback: Boolean) {
+        if (isOffline()) return
         logger.debug(TAG, "[onTrackStarted] trackId=$trackId, feedback=$sendFeedback")
         curentWave?.let{
             if (sendFeedback) {
@@ -350,8 +356,10 @@ class WaveRepository(
     }
 
 
+    /** Завершает feedback предыдущей песни только онлайн. */
     suspend fun onTrackNext(trackId: String, position: Int, duration: Int) {
-        logger.debug(TAG, "onTrackNext: $trackId $position of $duration")
+        if (isOffline()) return
+        logger.debug(TAG, "[onTrackNext] Трек=$trackId, позиция=$position, длительность=$duration")
         curentWave?.let{
             if (position + skipOffset < duration)
                 remote.sendTrackSkip(it, trackId, position)
@@ -362,12 +370,14 @@ class WaveRepository(
 
     }
 
+    /** Догружает партию только онлайн; ответ, пришедший после переключения режима, не расширяет очередь. */
     private suspend fun updateWave(wave: dYaWave, lastTrackId: String) {
+        if (isOffline()) return
         logger.debug(TAG, "updateWave: $lastTrackId")
         val result = remote.getNextTracks(wave, lastTrackId)
         when(result){
             is YamResult.Success -> {
-                if (curentWave !== wave) {
+                if (curentWave !== wave || isOffline()) {
                     return
                 }
 

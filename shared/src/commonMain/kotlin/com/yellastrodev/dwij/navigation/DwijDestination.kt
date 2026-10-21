@@ -7,11 +7,15 @@ package com.yellastrodev.dwij.navigation
  * Android- и desktop-слоями.
  * VK-рекомендации используют самостоятельную запись back stack.
  * Настройка радиального меню открывается отдельным маршрутом.
+ * Общая фонотека трёх источников имеет собственную запись back stack.
+ * Скачанные треки открываются с зафиксированным фильтром источника.
  */
 object DwijDestination {
 
     const val HOME = "home"
     const val PLAYLISTS = "playlists"
+    const val ALL_TRACKS = "all-tracks"
+    const val DOWNLOADED_TRACKS = "downloaded-tracks"
     const val WAVES = "waves"
     const val VK_RECOMMENDATIONS = "vk-recommendations"
     const val CATALOG_ARTISTS = "catalog/artists"
@@ -38,6 +42,8 @@ object DwijDestination {
     const val ARG_LOCAL_MODE = "localMode"
     const val ARG_LOCAL_PLAYLIST_ID = "playlistId"
     const val ARG_TRACK_TO_ADD = "trackToAdd"
+    const val ARG_DOWNLOAD_SOURCE = "downloadSource"
+    const val DOWNLOADED_TRACKS_PATTERN = "$DOWNLOADED_TRACKS/{$ARG_DOWNLOAD_SOURCE}"
 
     const val OBJECT_PATTERN =
         "object/{$ARG_OBJECT_TYPE}/{$ARG_OBJECT_VALUE}"
@@ -48,6 +54,10 @@ object DwijDestination {
 
     const val PLAYLISTS_ADD_PATTERN =
         "$PLAYLISTS/add/{$ARG_TRACK_TO_ADD}"
+
+    /** Строит маршрут постоянных загрузок с источником Yandex, Vk либо All. */
+    fun downloadedTracksRoute(source: String): String =
+        "$DOWNLOADED_TRACKS/${source.encodeRouteComponent()}"
 
     /**
      * Строит маршрут музыкального объекта.

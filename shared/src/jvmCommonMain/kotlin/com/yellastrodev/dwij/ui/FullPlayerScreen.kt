@@ -108,7 +108,7 @@ import com.yellastrodev.dwij.playback.PlayerVolumeControl
 import com.yellastrodev.dwij.data.entities.MusicSource
 import kotlinx.coroutines.flow.MutableStateFlow
 
-/** Снимок плеера: происхождение песни в очереди отделено от источника воспроизводимого экземпляра. */
+/** Снимок плеера с общим офлайн-состоянием; происхождение песни отделено от источника аудио. */
 @Immutable
 data class FullPlayerUiState(
     val trackId: String?,
@@ -142,6 +142,7 @@ data class FullPlayerUiState(
     val canAddToPlaylist: Boolean = canLike,
     val canDislike: Boolean = canLike,
     val queueOrigin: MusicSource? = null,
+    val isOffline: Boolean = false,
 )
 
 /**
@@ -217,6 +218,7 @@ fun FullPlayerScreen(
                 showSourcesIndicator = state.hasMultipleSources ||
                     state.hasUnresolvedMatchCandidate,
                 queueOrigin = state.queueOrigin,
+                isOffline = state.isOffline,
                 canStartTrackWave = state.canStartTrackWave,
                 canDislike = state.canDislike,
                 isReactionPending = state.isLikePending,
@@ -382,13 +384,14 @@ private fun QueueOriginIndicator(origin: MusicSource, modifier: Modifier = Modif
     }
 }
 
-/** Рисует заголовок очереди, мультисурс и независимый источник сущности в текущем списке. */
+/** Рисует заголовок, индикатор офлайна слева от источников и действия текущей песни. */
 @Composable
 private fun FullPlayerTopBar(
     queueTitle: String,
     queuePosition: Int,
     showSourcesIndicator: Boolean,
     queueOrigin: MusicSource?,
+    isOffline: Boolean,
     canStartTrackWave: Boolean,
     canDislike: Boolean,
     isReactionPending: Boolean,
@@ -476,6 +479,18 @@ private fun FullPlayerTopBar(
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis,
             )
+        }
+        if (isOffline) {
+            val description = stringResource(Res.string.player_offline_indicator)
+            Canvas(Modifier.size(28.dp).semantics { contentDescription = description }) {
+                val color = Color(0xFFFFBF69)
+                val stroke = 1.6.dp.toPx()
+                drawArc(color, 215f, 110f, false, Offset(size.width * 0.16f, size.height * 0.23f),
+                    Size(size.width * 0.68f, size.height * 0.6f), style = Stroke(stroke, cap = StrokeCap.Round))
+                drawCircle(color, stroke, Offset(size.width * 0.5f, size.height * 0.72f))
+                drawLine(color, Offset(size.width * 0.22f, size.height * 0.2f),
+                    Offset(size.width * 0.8f, size.height * 0.8f), stroke, StrokeCap.Round)
+            }
         }
         queueOrigin?.let { origin -> QueueOriginIndicator(origin, Modifier.size(28.dp)) }
         if (showSourcesIndicator || isSavedLocally) {

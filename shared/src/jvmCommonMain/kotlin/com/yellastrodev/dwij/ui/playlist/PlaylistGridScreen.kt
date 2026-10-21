@@ -30,8 +30,12 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.pulltorefresh.PullToRefreshBox
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberUpdatedState
+import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.runtime.setValue
+import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -45,6 +49,7 @@ import androidx.compose.ui.unit.sp
 import com.yellastrodev.dwij.HomeMusicSource
 import com.yellastrodev.dwij.ui.theme.DwijColors
 import androidx.compose.runtime.getValue
+import kotlinx.coroutines.flow.collect
 
 /** Минимальный общий контракт элемента сетки плейлистов. */
 interface PlaylistGridEntry {
@@ -66,6 +71,8 @@ interface PlaylistGridEntry {
  *
  * Платформенный слой передаёт отрисовку переключателя
  * источника и конкретной плитки через Compose slots.
+ * В «Всё сразу» удерживает начало при поступлении данных до первой прокрутки
+ * или открытия карточки; затем сохраняет обычное восстановление позиции.
  */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -100,6 +107,27 @@ fun <T : PlaylistGridEntry> PlaylistGridScreen(
     onRefresh: () -> Unit = {},
 ) {
     val gridState = rememberLazyGridState()
+    var preserveScrollPosition by rememberSaveable(selectedSource) { mutableStateOf(false) }
+    val itemIds = items.map { it.id }
+
+    LaunchedEffect(gridState, selectedSource) {
+        if (selectedSource == HomeMusicSource.All) {
+            snapshotFlow { gridState.isScrollInProgress }.collect { scrolling ->
+                if (scrolling) preserveScrollPosition = true
+            }
+        }
+    }
+
+    LaunchedEffect(itemIds, selectedSource) {
+        if (
+            selectedSource == HomeMusicSource.All &&
+            !preserveScrollPosition &&
+            !gridState.isScrollInProgress
+        ) {
+            // При вставке источника перед видимой карточкой не удерживаем её ключ.
+            gridState.requestScrollToItem(0)
+        }
+    }
 
     val screenCoverStates = remember {
         mutableMapOf<String, PlaylistCoverState>()
@@ -198,6 +226,7 @@ fun <T : PlaylistGridEntry> PlaylistGridScreen(
                                         screenCoverStates,
                                     loadCover = loadCover,
                                     onClick = {
+                                        preserveScrollPosition = true
                                         onItemClick(item)
                                     },
                                     onLongClick = {

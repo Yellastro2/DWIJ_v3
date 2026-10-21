@@ -65,6 +65,7 @@ enum class PlaylistGridArtwork {
     PlayerFallback,
 }
 
+/** Данные карточки; источник задаёт индикатор и различает плейлисты общей сетки. */
 @Immutable
 data class PlaylistGridScreenItem(
     override val id: String,
@@ -75,6 +76,7 @@ data class PlaylistGridScreenItem(
     val artwork: PlaylistGridArtwork? = null,
     val highlighted: Boolean = false,
     override val isCreateAction: Boolean = false,
+    val source: HomeMusicSource? = null,
 ) : PlaylistGridEntry
 
 enum class PlaylistGridMessage {
@@ -740,7 +742,8 @@ fun PlaylistGridRoute(
     )
 }
 
-private fun buildYandexItems(
+/** Собирает карточки Яндекса, сохраняя порядок плейлистов и отметку источника. */
+internal fun buildYandexItems(
     playlists: List<dYaPlaylist>,
     pickedTrackId: String?,
     showCreateAction: Boolean,
@@ -771,6 +774,7 @@ private fun buildYandexItems(
             add(
                 PlaylistGridScreenItem(
                     id = playlist.getdId(),
+                    source = HomeMusicSource.Yandex,
                     title =
                         if (isLikedPlaylist) {
                             likedTitle
@@ -811,7 +815,8 @@ private fun buildYandexItems(
         }
 }
 
-private fun buildLocalItems(
+/** Собирает локальные карточки с форматом списка и отметкой источника. */
+internal fun buildLocalItems(
     playlists: List<LocalPlaylistSummary>,
     showCreateAction: Boolean,
     createTitle: String,
@@ -857,6 +862,7 @@ private fun buildLocalItems(
         add(
             PlaylistGridScreenItem(
                 id = playlist.playlistId,
+                source = HomeMusicSource.Local,
                 title = playlist.name,
                 fallbackArtwork =
                     PlaylistGridArtwork.PlayerFallback,

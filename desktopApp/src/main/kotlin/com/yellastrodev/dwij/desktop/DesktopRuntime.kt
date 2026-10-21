@@ -21,7 +21,7 @@ import kotlin.math.roundToLong
 
 /**
  * Windows runtime вокруг общего DwijComponent с независимыми DPAPI-сессиями Яндекс/VK.
- * VK HLS отдаётся JavaFX как MP3 без TS/PES-обёртки, с прежним форматом хранения.
+ * VK HLS отдаётся JavaFX как MP3 без TS/PES; аудио-relay соблюдает общий офлайн-режим.
  */
 class DesktopRuntime private constructor(
     val component: DwijComponent,
@@ -205,7 +205,7 @@ class DesktopRuntime private constructor(
                 )
             }
 
-            val audioRelay = lazy { DesktopAudioRelay.create(component.trackCacheRepo, logger) }
+            val audioRelay = lazy { DesktopAudioRelay.create(component.trackCacheRepo, logger) { component.playerRepo.isOffline.value } }
 
             val playerEngine =
                 DesktopPlayerEngine(

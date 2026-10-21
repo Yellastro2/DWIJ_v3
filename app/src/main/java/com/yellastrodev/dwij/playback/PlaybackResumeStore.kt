@@ -11,7 +11,7 @@ import com.yellastrodev.dwij.playback.feedback.PlaybackMetadataKeys
 import org.json.JSONArray
 import org.json.JSONObject
 
-/** Сохраняет компактную очередь и позицию для восстановления Media3 после смерти процесса. */
+/** Сохраняет очередь, source-идентичность и позицию для восстановления Media3 и UI после смерти процесса. */
 class PlaybackResumeStore(context: Context) {
     private val preferences = context.getSharedPreferences("playback_resume", Context.MODE_PRIVATE)
 
@@ -107,6 +107,8 @@ class PlaybackResumeStore(context: Context) {
         const val KEY_SNAPSHOT = "snapshot"
         val EXTRA_KEYS = listOf(
             TRACK_ID,
+            AndroidMediaItemMapper.SONG_ID,
+            AndroidMediaItemMapper.INSTANCE_ID,
             PlaybackMetadataKeys.MUSIC_SOURCE,
             PlaybackMetadataKeys.PLAY_ITEM_ID,
             PlaybackMetadataKeys.PLAY_ALBUM_ID,

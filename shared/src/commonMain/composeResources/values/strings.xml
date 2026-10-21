@@ -1,5 +1,6 @@
 
 <resources>
+    <string name="player_offline_indicator">Офлайн: воспроизведение из кеша и локальных файлов</string>
     <string name="home_source_vk_music">ВК Музыка</string>
     <string name="app_name">Д в и ж</string>
     <string name="no_auth">не авторизован</string>
@@ -242,6 +243,16 @@
     <string name="playlists_title">Плейлисты</string>
     <string name="playlists_add_track_title">Добавить в плейлист</string>
     <string name="playlists_empty_yandex">Плейлистов пока нет</string>
+    <string name="playlists_source_local">Лок.</string>
+    <string name="playlists_source_yandex">ЯМ</string>
+    <string name="playlists_source_vk">VK</string>
+    <string name="all_tracks_title">Треки · Всё сразу</string>
+    <string name="all_tracks_empty">В фонотеках пока нет треков</string>
+    <string name="all_tracks_load_failed">Не удалось загрузить или воспроизвести общую фонотеку</string>
+    <string name="home_downloaded_tracks">Скачанные</string>
+    <string name="downloaded_tracks_title">Скачанные · %1$s</string>
+    <string name="downloaded_tracks_empty">Скачанных треков пока нет</string>
+    <string name="downloaded_tracks_failed">Не удалось открыть скачанные треки. Проверьте, что файлы ещё есть на устройстве.</string>
     <string name="playlists_create">Создать плейлист</string>
     <string name="playlists_create_dialog_title">Новый плейлист</string>
     <string name="playlists_create_name_label">Название</string>

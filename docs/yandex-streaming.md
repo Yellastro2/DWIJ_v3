@@ -1,5 +1,11 @@
 # Потоковое воспроизведение ЯМ
 
+Автоматический переход после трёх окончательных сетевых отказов, локальная очередь
+и сетевые проверки описаны в [offline-playback.md](offline-playback.md).
+
+Общая [пауза API после HTTP 429](yandex-rate-limits.md) не задерживает
+`download-info`, аудиодиапазоны и чтение готового кэша.
+
 Android использует `YaLazyDataSourceFactory`: готовый постоянный файл или полный
 кэш открывается обычным Media3 DataSource. Для отсутствующего трека используется
 `StreamingTrackCache` из `shared/.../playback/stream`.

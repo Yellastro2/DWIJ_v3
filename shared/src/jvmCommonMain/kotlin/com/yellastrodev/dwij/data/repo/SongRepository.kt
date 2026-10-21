@@ -32,6 +32,7 @@ import kotlinx.coroutines.sync.withLock
  * добавляя признак ожидающего решения о совпадении. VK хранится в своей source-таблице;
  * сборка Song не запрашивает сеть и не создаёт адресов воспроизведения. VK-экраны наблюдают
  * отдельный поток общих песен с актуальными объединениями и кандидатами.
+ * Восстановление плеера получает актуальные песни по source-ID без сетевой загрузки.
  */
 class SongRepository(
     private val songDao: SongDao,
@@ -291,7 +292,8 @@ class SongRepository(
     suspend fun mergeInstances(instances: List<TrackInstance>): String =
         songDao.mergeInstances(instances.map(TrackInstance::id))
 
-    private suspend fun songsForSourceIds(
+    /** Возвращает актуальные песни по source-ID, сохраняя порядок и повторы найденных записей. */
+    suspend fun songsForSourceIds(
         source: MusicSource,
         sourceIds: List<String>,
     ): List<Song> {
