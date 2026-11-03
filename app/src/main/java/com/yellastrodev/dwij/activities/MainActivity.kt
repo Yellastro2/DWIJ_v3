@@ -27,6 +27,7 @@ import com.yellastrodev.dwij.models.AndroidPlayerCoverLoader
 import com.yellastrodev.dwij.models.PlayerModel
 import com.yellastrodev.dwij.navigation.AndroidDwijAppPlatform
 import com.yellastrodev.dwij.navigation.DwijApp
+import com.yellastrodev.dwij.ui.theme.DwijTheme
 import com.yellastrodev.dwij.ui.LocalYamLogger
 import com.yellastrodev.dwij.yApplication
 import com.yellastrodev.dwij.R
@@ -36,7 +37,7 @@ import kotlinx.coroutines.flow.receiveAsFlow
 /**
  * Android-точка входа приложения.
  *
- * Создаёт Android-зависимости и запускает полностью shared Compose-корень.
+ * Создаёт Android-зависимости, задаёт фиксированную тему и запускает shared Compose-корень.
  * Передаёт входящие ссылки на треки и альбомы в shared-навигацию.
  */
 class MainActivity : ComponentActivity() {
@@ -77,7 +78,7 @@ class MainActivity : ComponentActivity() {
         }
     }
 
-    /** Принимает стартовый intent до подписки Compose, сохраняя запрос в канале. */
+    /** Принимает стартовый intent и задаёт тему всему Compose-содержимому, включая системные подсказки приложения. */
     override fun onCreate(
         savedInstanceState: Bundle?,
     ) {
@@ -108,49 +109,51 @@ class MainActivity : ComponentActivity() {
             }
 
         setContent {
-            val dwijApplication =
-                this@MainActivity.application
-                        as yApplication
+            DwijTheme {
+                val dwijApplication =
+                    this@MainActivity.application
+                            as yApplication
 
-            CompositionLocalProvider(
-                LocalYamLogger provides
-                    dwijApplication
-                        .component
-                        .logger,
-            ) {
-                DwijApp(
-                    playerModel =
-                        playerModel,
-                    component =
-                        dwijApplication.component,
-                    platform =
-                        AndroidDwijAppPlatform,
-                    playerOpenRequests =
-                        playerOpenRequestFlow,
-                    yandexTrackRequests =
-                        yandexTrackRequestFlow,
-                    yandexAlbumRequests =
-                        yandexAlbumRequestFlow,
-                )
-                if (showYandexLinksDialog) {
-                    AlertDialog(
-                        onDismissRequest = { showYandexLinksDialog = false },
-                        title = { Text(getString(R.string.yandex_links_dialog_title)) },
-                        text = { Text(getString(R.string.yandex_links_dialog_message)) },
-                        confirmButton = {
-                            TextButton(onClick = {
-                                showYandexLinksDialog = false
-                                openLinkSettings()
-                            }) {
-                                Text(getString(R.string.yandex_links_dialog_settings))
-                            }
-                        },
-                        dismissButton = {
-                            TextButton(onClick = { showYandexLinksDialog = false }) {
-                                Text(getString(R.string.yandex_links_dialog_later))
-                            }
-                        },
+                CompositionLocalProvider(
+                    LocalYamLogger provides
+                        dwijApplication
+                            .component
+                            .logger,
+                ) {
+                    DwijApp(
+                        playerModel =
+                            playerModel,
+                        component =
+                            dwijApplication.component,
+                        platform =
+                            AndroidDwijAppPlatform,
+                        playerOpenRequests =
+                            playerOpenRequestFlow,
+                        yandexTrackRequests =
+                            yandexTrackRequestFlow,
+                        yandexAlbumRequests =
+                            yandexAlbumRequestFlow,
                     )
+                    if (showYandexLinksDialog) {
+                        AlertDialog(
+                            onDismissRequest = { showYandexLinksDialog = false },
+                            title = { Text(getString(R.string.yandex_links_dialog_title)) },
+                            text = { Text(getString(R.string.yandex_links_dialog_message)) },
+                            confirmButton = {
+                                TextButton(onClick = {
+                                    showYandexLinksDialog = false
+                                    openLinkSettings()
+                                }) {
+                                    Text(getString(R.string.yandex_links_dialog_settings))
+                                }
+                            },
+                            dismissButton = {
+                                TextButton(onClick = { showYandexLinksDialog = false }) {
+                                    Text(getString(R.string.yandex_links_dialog_later))
+                                }
+                            },
+                        )
+                    }
                 }
             }
         }

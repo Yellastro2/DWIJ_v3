@@ -110,12 +110,12 @@ data class dTrackArtistCrossRef(
     val artistLocalId: Long
 )
 
-/** Преобразует сетевой трек и отмечает момент получения актуальной доступности. */
+/** Сохраняет пустое название как признак неполной записи; такой трек доступен лишь из кеша. */
 fun YaTrack.toEntity(availabilityCheckedAt: Long = System.currentTimeMillis()): dYaTrack =
     dYaTrack(
         id = id,
         title = title,
-        available = available,
+        available = available && title.isNotBlank(),
         availabilityCheckedAt = availabilityCheckedAt,
         durationMs = durationMs,
         previewDurationMs = previewDurationMs,
@@ -128,3 +128,25 @@ fun YaTrack.toEntity(availabilityCheckedAt: Long = System.currentTimeMillis()): 
         this.artists = this@toEntity.artists.map { dYaArtist(id=it.id, name=it.name) }
         this.albums = this@toEntity.albums.map { dYaAlbum(it.id, it.title) }
     }
+
+/** Неполный ответ обновляет доступность, сохраняя известную метадату для локального воспроизведения. */
+internal fun dYaTrack.withStoredMetadata(previous: dYaTrack?): dYaTrack {
+    if (title.isNotBlank()) return this
+    return dYaTrack(
+        id = id,
+        title = previous?.title?.takeIf { it.isNotBlank() } ?: "Недоступный трек",
+        available = false,
+        availabilityCheckedAt = availabilityCheckedAt,
+        ogImageUri = previous?.ogImageUri ?: ogImageUri,
+        coverUri = previous?.coverUri ?: coverUri,
+        durationMs = previous?.durationMs ?: durationMs,
+        previewDurationMs = previous?.previewDurationMs ?: previewDurationMs,
+        storageDir = previous?.storageDir ?: storageDir,
+        fileSize = previous?.fileSize ?: fileSize,
+        trackSource = previous?.trackSource ?: trackSource,
+    ).apply {
+        artists = previous?.artists?.takeIf { it.isNotEmpty() } ?: this@withStoredMetadata.artists
+        albums = previous?.albums?.takeIf { it.isNotEmpty() } ?: this@withStoredMetadata.albums
+        playlists = previous?.playlists.orEmpty()
+    }
+}

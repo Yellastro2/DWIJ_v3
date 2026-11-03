@@ -34,7 +34,7 @@ data class LocalSyncSummary(
     val skipped: Boolean,
 )
 
-/** Room-backed локальная медиатека; MediaStore используется только для синхронизации. */
+/** Локальная медиатека Room; платформа синхронизирует индекс и проверяет чтение офлайн-файлов. */
 class LocalMusicRepository(
     private val dao: LocalLibraryDao,
     private val mediaStore: LocalMediaSource,
@@ -52,6 +52,11 @@ class LocalMusicRepository(
     /** Скрытые записи не теряются из индекса и доступны будущему экрану управления. */
     val hiddenTracks: Flow<List<LocalTrackEntity>> = dao.observeHiddenTracks()
     val songs: Flow<List<Song>> = songRepository.localSongs
+
+    /** Проверяет разрешение, видимость и чтение файла без синхронизации или сети; вызывается на IO. */
+    fun isTrackReadable(track: LocalTrackEntity): Boolean =
+        !track.isHidden && canReadAudio() && mediaStore.isTrackReadable(track)
+
     val playlists: Flow<List<LocalPlaylistEntity>> = dao.observePlaylists()
     val playlistSummaries: Flow<List<LocalPlaylistSummary>> = dao.observePlaylistSummaries()
 

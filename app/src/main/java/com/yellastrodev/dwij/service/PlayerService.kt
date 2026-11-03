@@ -21,6 +21,8 @@ import com.google.common.util.concurrent.ListenableFuture
 import com.yellastrodev.dwij.activities.MainActivity
 import com.yellastrodev.dwij.data.DataResult
 import com.yellastrodev.dwij.data.entities.Song
+import com.yellastrodev.dwij.data.entities.MusicSource
+import com.yellastrodev.dwij.data.entities.dYaLikeTracklist.Companion.KIND_LIKED
 import com.yellastrodev.dwij.data.repo.TrackCacheRepository
 import com.yellastrodev.dwij.data.source.YaLazyDataSourceFactory
 import com.yellastrodev.dwij.data.source.yandexStreamingTrackId
@@ -49,15 +51,13 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.collectLatest
-import kotlinx.coroutines.flow.first
-import kotlinx.coroutines.flow.flatMapLatest
-import kotlinx.coroutines.flow.flowOf
+import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 
-/** Владеет Media3, recovery-политикой офлайна и синхронизацией восстановленной очереди с UI. */
+/** Владеет Media3, восстановлением очереди и source-ID реакциями, включая временные подборки. */
 @OptIn(UnstableApi::class)
 class PlayerService : MediaSessionService() {
 
@@ -218,7 +218,7 @@ class PlayerService : MediaSessionService() {
         }
     }
 
-    /** Подключает восстановление и системную MediaSession с наблюдением за лайком. */
+    /** Подключает MediaSession; статус лайка наблюдает по составу любимых без требования Song в Room. */
     override fun onCreate() {
         super.onCreate()
 
@@ -283,12 +283,17 @@ class PlayerService : MediaSessionService() {
         addSession(mediaSession)
 
         serviceScope.launch {
-            applicationComponent.playerRepo.currentSong
-                .flatMapLatest { song ->
-                    song?.let { applicationComponent.songRepository.song(it.id) }
-                        ?: flowOf(null)
+            combine(
+                applicationComponent.playerRepo.currentSong,
+                applicationComponent.playlistRepository.playlists,
+            ) { song, playlists ->
+                song?.let {
+                    val trackId = it.yandexInstances.firstOrNull()?.track?.id
+                    val liked = playlists.firstOrNull { playlist -> playlist.kind == KIND_LIKED }
+                        ?.tracks?.any { entry -> entry.trackId == trackId } ?: it.isLiked
+                    it.copy(isLiked = liked)
                 }
-                .collectLatest(::updateLikeButton)
+            }.collectLatest(::updateLikeButton)
         }
 
         playerListener = AndroidPlayerListener(
@@ -341,7 +346,7 @@ class PlayerService : MediaSessionService() {
             .build()
     }
 
-    /** Повторно сверяет трек и его статус перед изменением Яндекс-плейлиста. */
+    /** Проверяет лайк по ID Яндекса, в том числе для временной песни без записи Song в Room. */
     private suspend fun toggleCurrentLike(mediaId: String?) {
         val currentSong = applicationComponent.playerRepo.currentSong.value ?: return
         val currentPlayback = applicationComponent.playerRepo.currentPlaybackTrack.value ?: return
@@ -349,22 +354,25 @@ class PlayerService : MediaSessionService() {
             currentPlayback.id != mediaId
         ) return
 
-        val song = applicationComponent.songRepository.song(currentSong.id).first() ?: return
+        val song = currentSong
         if (song.isLocalOnlyInLibrary) return
-        val yandexTrackId = song.yandexInstances.firstOrNull()?.track?.id ?: return
+        val yandexTrackId = song.yandexInstances
+            .firstOrNull { currentPlayback.source == MusicSource.YANDEX && it.track.id == currentPlayback.id }
+            ?.track?.id ?: song.yandexInstances.firstOrNull()?.track?.id ?: return
+        val liked = !applicationComponent.playlistRepository.isTrackLiked(yandexTrackId)
         if (applicationComponent.playerRepo.currentSong.value?.id != song.id ||
             player.currentMediaItem?.mediaId != mediaId
         ) return
 
         when (val result = applicationComponent.playlistRepository.setTrackLiked(
             yandexTrackId,
-            !song.isLiked,
+            liked,
         )) {
             is DataResult.Failure -> Log.w(
                 TAG,
                 "[toggleCurrentLike] Не удалось изменить лайк: trackId=$yandexTrackId, error=${result.error}",
             )
-            is DataResult.Success -> Unit
+            is DataResult.Success -> applicationComponent.playerRepo.applyYandexReaction(yandexTrackId, liked)
         }
     }
 

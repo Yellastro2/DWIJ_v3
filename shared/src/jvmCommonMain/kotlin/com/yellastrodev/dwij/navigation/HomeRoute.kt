@@ -49,7 +49,7 @@ import org.jetbrains.compose.resources.stringResource
 
 /**
  * Shared-route главного экрана.
- * Поиск выбирает независимый VK-репозиторий либо существующий локальный/Яндекс-сценарий.
+ * Поиск выбирает источник; разделитель VK переключает видимость личных треков без запроса.
  * «Треки» открывает полную фонотеку выбранного источника, включая объединённую коллекцию VK.
  * «Рекомендации» VK открывает карточки с загрузкой составов по нажатию.
  * Каталог VK отдельно открывает личные треки и объединённую фонотеку.
@@ -57,6 +57,7 @@ import org.jetbrains.compose.resources.stringResource
  * Четвёртая карточка открывает постоянные загрузки ЯМ, VK либо обоих источников.
  * Сектор «Настроить» передаёт переход к экрану радиального меню владельцу навигации.
  * Пять секторов запускают сохранённые коллекции независимо от вкладки источника.
+ * Технические причины отказа пишутся в лог, пользователю показывается короткое сообщение.
  *
  * Не зависит от Android Context, Activity Result API, WorkManager и Navigation.
  * Платформа передаёт разрешения, системный back-handler и действия переходов.
@@ -100,7 +101,7 @@ fun HomeRoute(
     var radialStarting by remember { mutableStateOf(false) }
     var radialMessage by remember { mutableStateOf<String?>(null) }
 
-    /** Проверяет локальный доступ и запускает одно назначение; ошибки оставляют прежнюю очередь. */
+    /** Проверяет доступ и запускает назначение; детали ошибки остаются в логе, прежняя очередь сохраняется. */
     fun startRadialTarget(target: RadialMenuTarget) {
         if (radialStarting || selection != null) return
         radialStarting = true
@@ -121,6 +122,7 @@ fun HomeRoute(
                         onOpenPlayer()
                     }
                     is com.yellastrodev.dwij.data.DataResult.Failure -> {
+                        logger.warning(TAG, "[startRadialTarget] Не удалось загрузить назначение: ${result.error}")
                         if (result.error == com.yellastrodev.dwij.data.DataError.Unauthorized &&
                             (target is RadialMenuTarget.YandexWave ||
                                 (target is RadialMenuTarget.Playlist && target.source == MusicSource.YANDEX) ||
@@ -128,7 +130,8 @@ fun HomeRoute(
                                     RadialMenuCollection.YANDEX_DAILY, RadialMenuCollection.YANDEX_LIKED,
                                     RadialMenuCollection.YANDEX_TRACKS)))
                         ) component.requireYandexAuthorization()
-                        radialMessage = (result.error as? com.yellastrodev.dwij.data.DataError.InvalidData)?.message
+                        radialMessage = (result.error as? com.yellastrodev.dwij.data.DataError.InvalidData)
+                            ?.takeIf { it.cause == null }?.message
                             ?: if (result.error == com.yellastrodev.dwij.data.DataError.Unauthorized)
                                 "Войдите в нужный музыкальный сервис в настройках"
                             else "Не удалось загрузить список. Повторите попытку"
@@ -163,6 +166,7 @@ fun HomeRoute(
             onAuthorizationRequired =
                 component::requireYandexAuthorization,
             vkRepository = component.vkMusicRepository,
+            logger = component.logger,
         )
     }
 
@@ -172,8 +176,9 @@ fun HomeRoute(
 
     val searchState by searchModel.state.collectAsState()
     val vkAuthorized by component.vkMusicRepository.authorized.collectAsState()
-    LaunchedEffect(vkAuthorized) {
-        if (selectedSource == HomeMusicSource.Vk) searchModel.retrySearch()
+    val vkSessionRevision by component.vkMusicRepository.sessionRevision.collectAsState()
+    LaunchedEffect(vkAuthorized, vkSessionRevision) {
+        searchModel.onVkSessionChanged(vkAuthorized, vkSessionRevision)
     }
     val localStorageRevision by
         component.trackCacheRepo.localStorageRevision.collectAsState()
@@ -416,6 +421,7 @@ fun HomeRoute(
         },
         searchContent = { searchModifier ->
             SearchScreen(
+                onLoadNextPage = searchModel::loadNextVkPage,
                 onErrorAction = {
                     if (searchState.error == com.yellastrodev.dwij.data.DataError.Unauthorized) onOpenSettings()
                     else searchModel.retrySearch()
@@ -467,6 +473,7 @@ fun HomeRoute(
                 },
                 onResultClick = { item ->
                     when (item) {
+                        is SearchResultItemUiModel.AddedDivider -> searchModel.toggleAddedSection()
                         is SearchResultItemUiModel.Track -> {
                             if (selection == null) searchModel.playTrack(item, onStarted = onOpenPlayer)
                         }

@@ -6,6 +6,7 @@ import com.yellastrodev.dwij.data.entities.Song
 import com.yellastrodev.dwij.data.entities.TrackInstance
 import com.yellastrodev.dwij.data.entities.dTracklist
 import com.yellastrodev.dwij.data.entities.toEntity
+import com.yellastrodev.dwij.data.entities.withStoredMetadata
 import com.yellastrodev.dwij.data.repo.PlaybackQueue
 import com.yellastrodev.yamusicsdk.YamApiClient
 import com.yellastrodev.yamusicsdk.YamLogger
@@ -19,7 +20,7 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import java.util.concurrent.atomic.AtomicBoolean
 
-/** Загружает рекомендацию и запускает временную очередь без записи метаданных и связей в БД. */
+/** Загружает временную рекомендацию; неполные треки допускает только при наличии аудио в кеше. */
 class DailyPlaylistPlayback(
     private val client: YamApiClient,
     private val player: PlaybackQueue,
@@ -42,11 +43,11 @@ class DailyPlaylistPlayback(
         return result
     }
 
-    /** Запускает уже загруженные треки в scope приложения, переживая закрытие экрана волн. */
+    /** Запускает доступные треки в scope приложения, переживая закрытие экрана волн. */
     fun play(details: PlaylistDetails): Boolean {
         if (isWaveLoading() || !starting.compareAndSet(false, true)) return false
         val songs = details.tracks
-            .filter { it.available || isTrackCached(it.id) }
+            .filter { (it.available && it.title.isNotBlank()) || isTrackCached(it.id) }
             .map { it.toDailyPlaylistSong() }
         if (songs.isEmpty()) {
             starting.set(false)
@@ -83,17 +84,18 @@ data class DailyPlaylistTracklist(val title: String) : dTracklist {
         com.yellastrodev.dwij.data.entities.MusicSource.YANDEX
 }
 
-/** Создаёт только снимок для плеера, не добавляя песню, артистов или связи в Room. */
+/** Создаёт временный снимок; неполная метадата получает подпись и не считается доступной по сети. */
 internal fun YaTrack.toDailyPlaylistSong(): Song {
     val instanceId = "daily:yandex:$id"
+    val track = toEntity().withStoredMetadata(null)
     return Song(
         id = "daily:song:$id",
-        title = title,
+        title = track.title,
         artists = artists.map { Artist("daily:artist:${it.id}", it.name) },
         albums = albums.map { Album("daily:album:${it.id}", it.title) },
         durationMs = durationMs?.toLong(),
         coverUri = ogImageUri ?: coverUri,
-        instances = listOf(TrackInstance.Yandex(instanceId, toEntity())),
+        instances = listOf(TrackInstance.Yandex(instanceId, track)),
         preferredInstanceId = instanceId,
         hasPendingMatchCandidate = false,
         isLocalOnlyInLibrary = false,

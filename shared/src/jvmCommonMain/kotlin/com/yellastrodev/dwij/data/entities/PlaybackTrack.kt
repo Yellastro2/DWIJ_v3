@@ -80,17 +80,16 @@ fun Song.toPlaybackTrack(
     }
 }
 
-/** Выбирает только готовый экземпляр, подставляя файл/локальный relay вместо сетевого URI. Вызывать на IO. */
+/** Выбирает готовый файл/локальный relay; доступ к локальной медиатеке проверяет платформа. Вызывать на IO. */
 fun Song.toOfflinePlaybackTrack(
     yandexFile: (String) -> java.io.File?,
     vkUri: (TrackInstance.Vk) -> String?,
+    isLocalReadable: (LocalTrackEntity) -> Boolean,
 ): PlaybackTrack? {
     val ordered = instances.sortedBy { if (it.id == preferredInstanceId) 0 else 1 }
     for (instance in ordered) {
         val uri = when (instance) {
-            is TrackInstance.Local -> instance.track.contentUri.takeIf { value ->
-                !value.startsWith("file:") || runCatching { java.io.File(java.net.URI(value)).isFile }.getOrDefault(false)
-            }
+            is TrackInstance.Local -> instance.track.contentUri.takeIf { isLocalReadable(instance.track) }
             is TrackInstance.Yandex -> yandexFile(instance.track.id)?.toURI()?.toString()
             is TrackInstance.Vk -> vkUri(instance)
         } ?: continue

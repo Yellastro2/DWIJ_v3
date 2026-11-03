@@ -55,18 +55,16 @@ import com.yellastrodev.dwij.ui.TrackSourceOptionUiModel
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableSharedFlow
-import kotlinx.coroutines.flow.filterNotNull
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.firstOrNull
 import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.flow.flowOn
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
-import kotlinx.coroutines.withTimeoutOrNull
 import org.jetbrains.compose.resources.getString
 import org.jetbrains.compose.resources.stringResource
 
-/** Shared-плеер с application-scoped индикатором офлайна; назначение волны сохраняет seed без запуска. */
+/** Общий плеер: реакции читаются по ID источника, включая временные очереди без Song в Room. */
 @Composable
 fun PlayerRoute(
     component: DwijComponent,
@@ -166,18 +164,6 @@ fun PlayerRoute(
             ?: false
     }
 
-    val databaseTrack by remember(currentTrackId) {
-        currentTrackId
-            ?.let(songRepository::song)
-            ?: flowOf(null)
-    }.collectAsState(initial = track)
-
-    val isYandexLiked = databaseTrack
-        ?.takeIf { song -> song.id == currentTrackId }
-        ?.isLiked
-        ?: track?.isLiked
-        ?: false
-
     var pendingLike by remember { mutableStateOf<PendingLikeMutation?>(null) }
     var vkLikePending by remember { mutableStateOf(false) }
     // Не допускаем конкурирующих лайка и дизлайка даже при переключении трека.
@@ -263,6 +249,9 @@ fun PlayerRoute(
             ?.track
 
     val yandexTrackId = yandexTrack?.id
+    val isYandexLiked = allPlaylists.firstOrNull { it.kind == KIND_LIKED }
+        ?.tracks?.any { it.trackId == yandexTrackId }
+        ?: (track?.isLiked == true)
     val vkAudio = if (playbackTrack?.source == MusicSource.VK) {
         track?.instances?.filterIsInstance<TrackInstance.Vk>()
             ?.firstOrNull { it.track.fullId == playbackTrack?.id }?.track
@@ -460,7 +449,7 @@ fun PlayerRoute(
     val saveLocallyStartedMessage =
         stringResource(Res.string.track_save_locally_started)
 
-    /** Для VK лайк управляет «Моими треками»; реакции Яндекс подтверждаются существующим Room-потоком. */
+    /** Репозиторий подтверждает ЯМ-лайк по source ID; наличие временной Song в Room не требуется. */
     fun mutateTrackReaction(dislike: Boolean) {
         val audio = vkAudio
         if (audio != null) {
@@ -478,11 +467,9 @@ fun PlayerRoute(
             return
         }
         val failedMessage = if (dislike) dislikeFailedMessage else likeFailedMessage
-        val requestSongId = currentTrackId
         val requestTrackId = yandexTrackId
-        if (requestSongId != null && requestTrackId != null && pendingLike == null) {
+        if (requestTrackId != null && pendingLike == null) {
             val request = PendingLikeMutation(
-                songId = requestSongId,
                 trackId = requestTrackId,
                 liked = !dislike && !isLiked,
             )
@@ -497,30 +484,13 @@ fun PlayerRoute(
                     )
                     when (val result = mutationResult) {
                         is DataResult.Success -> {
-                            val confirmedSong = withTimeoutOrNull(
-                                ROOM_LIKE_OBSERVATION_TIMEOUT_MS,
-                            ) {
-                                songRepository
-                                    .song(request.songId)
-                                    .filterNotNull()
-                                    .first { song -> song.isLiked == request.liked }
-                            }
-                            if (confirmedSong != null) {
-                                playerModel.applyUpdatedSong(confirmedSong)
-                                if (dislike) uiMessages.emit(dislikeSuccessMessage)
-                                logger.debug(
-                                    TAG,
-                                    "[mutateTrackReaction] Room и route подтвердили: " +
-                                        "trackId=${request.trackId}, liked=${request.liked}",
-                                )
-                            } else {
-                                logger.error(
-                                    TAG,
-                                    "[mutateTrackReaction] Room обновлён, но route не получил статус: " +
-                                        "trackId=${request.trackId}, liked=${request.liked}",
-                                )
-                                uiMessages.emit(failedMessage)
-                            }
+                            component.playerRepo.applyYandexReaction(request.trackId, request.liked)
+                            if (dislike) uiMessages.emit(dislikeSuccessMessage)
+                            logger.debug(
+                                TAG,
+                                "[mutateTrackReaction] Лайк подтверждён в Room по ID Яндекса: " +
+                                    "trackId=${request.trackId}, liked=${request.liked}",
+                            )
                         }
 
                         is DataResult.Failure -> {
@@ -893,10 +863,8 @@ private fun TrackInstance.isPlayable(cachedUnavailableYandexIds: Set<String>, pl
 
 private const val TAG = "PlayerRoute"
 
-private const val ROOM_LIKE_OBSERVATION_TIMEOUT_MS = 2_000L
-
+/** Сохраняет исходную цель реакции при переключении песни во время запроса. */
 private data class PendingLikeMutation(
-    val songId: String,
     val trackId: String,
     val liked: Boolean,
 )

@@ -14,6 +14,7 @@ import com.yellastrodev.dwij.data.entities.dTrackArtistCrossRef
 import com.yellastrodev.dwij.data.entities.dYaAlbum
 import com.yellastrodev.dwij.data.entities.dYaArtist
 import com.yellastrodev.dwij.data.entities.dYaTrack
+import com.yellastrodev.dwij.data.entities.withStoredMetadata
 import kotlin.collections.forEach
 
 /** Пакетно загружаемый Room-снимок трека с данными, нужными спискам и плееру. */
@@ -47,6 +48,7 @@ data class YandexTrackWithRelations(
     }
 }
 
+/** Хранит метаданные ЯМ, сохраняя известные поля при получении неполной записи. */
 @Dao
 interface dTrackDao {
 
@@ -128,16 +130,20 @@ interface dTrackDao {
 
     /**
      * Добавляет новые треки и обновляет существующие без REPLACE, чтобы не удалить
-     * каскадно их связи с плейлистами, альбомами и артистами.
+     * каскадно их связи с плейлистами, альбомами и артистами. Неполные записи сохраняют старую метадату.
      */
     @Transaction
     suspend fun insertAll(tracks: List<dYaTrack>) {
         if (tracks.isEmpty()) return
 
+        val incompleteIds = tracks.filter { it.title.isBlank() }.map { it.id }
+        val previous = getTracks(incompleteIds).associateBy { it.id }
+        val resolvedTracks = tracks.map { it.withStoredMetadata(previous[it.id]) }
+
         // 1. Определяем, какие треки уже есть
         val existingIds = getExistingTrackIds(tracks.map { it.id }).toSet()
-        val newTracks = tracks.filter { it.id !in existingIds }
-        val existingTracks = tracks.filter { it.id in existingIds }
+        val newTracks = resolvedTracks.filter { it.id !in existingIds }
+        val existingTracks = resolvedTracks.filter { it.id in existingIds }
 
         // 2. Вставляем только новые треки
         _insertTracks(newTracks)
@@ -146,17 +152,17 @@ interface dTrackDao {
         }
 
         // 3. Собираем все альбомы и связи
-        val allAlbums = tracks.flatMap { it.albums }.distinctBy { it.id }
+        val allAlbums = resolvedTracks.flatMap { it.albums }.distinctBy { it.id }
         insertAlbums(allAlbums)
 
-        val albumRefs = tracks.flatMap { track ->
+        val albumRefs = resolvedTracks.flatMap { track ->
             track.albums.map { album -> dTrackAlbumCrossRef(track.id, album.id) }
         }
         insertTrackAlbumCrossRefs(albumRefs)
 
         // 4. Артисты: вставляем по одному, чтобы сохранить insertArtist-логику
         val artistRefs = mutableListOf<dTrackArtistCrossRef>()
-        for (track in tracks) {
+        for (track in resolvedTracks) {
             for (artist in track.artists) {
                 val localId = insertArtist(artist) // твоя логика с поиском по имени
                 artistRefs.add(dTrackArtistCrossRef(track.id, localId))

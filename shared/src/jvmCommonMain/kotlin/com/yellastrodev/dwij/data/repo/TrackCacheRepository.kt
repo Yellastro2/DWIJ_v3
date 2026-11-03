@@ -43,6 +43,7 @@ data class LocalTrackDownloadProgress(
 /**
  * Управляет двумя уровнями ЯМ-аудио: ограничиваемым LRU-кэшем и постоянными
  * app-private файлами. Постоянный файл имеет приоритет; причины доставки и probe не смешиваются с кешем.
+ * Проверка офлайн-каталога учитывает оба уровня без обновления LRU.
  */
 class TrackCacheRepository(
     private val cacheDir: File,
@@ -81,6 +82,11 @@ class TrackCacheRepository(
 
     private fun cacheFile(trackId: String): File =
         File(cacheDir, "$trackId.mp3")
+
+    /** Проверяет постоянную копию и полный кеш без обновления LRU при просмотре списка. */
+    fun isReadyLocally(trackId: String): Boolean =
+        persistentFile(trackId).let { it.isFile && it.length() > 0L } ||
+            cacheFile(trackId).let { it.isFile && it.length() > 0L }
 
     /** Возвращает только готовый непустой файл; временные диапазоны сюда не попадают. */
     fun readyFile(trackId: String): File? =

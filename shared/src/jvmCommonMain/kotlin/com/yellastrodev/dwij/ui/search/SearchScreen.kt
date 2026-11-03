@@ -43,7 +43,7 @@ import org.jetbrains.compose.resources.stringResource
 import org.jetbrains.compose.ui.tooling.preview.Preview
 
 /**
- * Экран поиска источников: поле запроса, общая выдача и повтор запроса/переход к авторизации.
+ * Экран поиска: поле запроса, общая выдача, дозагрузка VK и повтор после ошибки/переход к авторизации.
  */
 @Composable
 fun SearchScreen(
@@ -59,6 +59,7 @@ fun SearchScreen(
     onRequestLocalTrackDownload: (trackId: String, title: String) -> Unit,
     onShareYandexTrack: (trackId: String) -> Unit,
     onErrorAction: () -> Unit = {},
+    onLoadNextPage: () -> Unit = {},
     modifier: Modifier = Modifier,
 ) {
     val recentQueries = listOf(
@@ -87,6 +88,7 @@ fun SearchScreen(
             onQueryClick = onQueryChange,
         )
         SearchResult(
+            onLoadNextPage = onLoadNextPage,
             onErrorAction = onErrorAction,
             state = state,
             loadTrackCover = loadTrackCover,

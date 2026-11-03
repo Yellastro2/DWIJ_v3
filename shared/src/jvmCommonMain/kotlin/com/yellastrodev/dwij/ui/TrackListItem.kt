@@ -50,6 +50,7 @@ enum class TrackSourceIndicator {
 /**
  * Универсальная строка трека. В обычном списке показывает доступность и дубли,
  * а в диалоге источников — тип (Яндекс/local/VK), галочку выбора либо номер приоритета.
+ * Для каждого явно заданного источника резервирует место и показывает его индикатор.
  * [onLongClick] используется только родительским списком для открытия контекстного меню.
  */
 @Composable
@@ -73,6 +74,7 @@ fun TrackListItem(
     val showSavedIndicator = sourceIndicator == null && item.isSavedLocally
     val topIndicatorCount = listOf(
         showMultiplicityIndicator,
+        sourceIndicator == TrackSourceIndicator.VK,
         showYandexIndicator,
         sourceIndicator == TrackSourceIndicator.LOCAL,
         showLocalOnlyIndicator,

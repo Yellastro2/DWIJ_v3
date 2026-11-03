@@ -2,7 +2,7 @@ package com.yellastrodev.dwij.ui.theme
 
 import androidx.compose.ui.graphics.Color
 
-/** Единая палитра shared-интерфейса без зависимости от платформенных ресурсов. */
+/** Фиксированная палитра shared-интерфейса и Material3-темы, независимая от темы устройства. */
 object DwijColors {
 
     // Общая палитра
@@ -20,6 +20,13 @@ object DwijColors {
     val MutedText = Color(0xFFAAAFC0)
     val ListSecondaryText = Color(0xFF969BAD)
     val LoadingPlaceholder = Color(0xFF202635)
+    val Surface = Color(0xFF1B1022)
+    val PrimaryContainer = Color(0xFF53003F)
+    val SecondaryContainer = Color(0xFF003544)
+    val TertiaryContainer = Color(0xFF34135C)
+    val InversePrimary = Color(0xFF9C0075)
+    val Error = Color(0xFFFFB4AB)
+    val ErrorContainer = Color(0xFF93000A)
 
     // Search
     val SearchEntityMeta = Color(0xFF8F96A9)

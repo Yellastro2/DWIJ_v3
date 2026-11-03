@@ -16,12 +16,19 @@ import java.security.MessageDigest
  *
  * Сканирует музыкальные каталоги файловой системы, читает доступные теги и
  * сохраняет прежние fallback'и по имени файла и каталогу для файлов без тегов.
+ * Проверяет чтение файла перед включением в офлайн-коллекцию.
  */
 class DesktopLocalMediaSource(
     private val musicDirectoryStore: DesktopMusicDirectoryStore,
     private val playlistExportDirectory: File,
     private val metadataReader: DesktopAudioMetadataReader,
 ) : LocalMediaSource {
+    /** Проверяет файл по URI, исключая удалённые, пустые и недоступные записи индекса. */
+    override fun isTrackReadable(track: LocalTrackEntity): Boolean = runCatching {
+        val file = File(URI(track.contentUri))
+        file.isFile && file.length() > 0L && file.inputStream().use { it.read() >= 0 }
+    }.getOrDefault(false)
+
 
     override fun currentGeneration(): String {
         val musicDirectories =

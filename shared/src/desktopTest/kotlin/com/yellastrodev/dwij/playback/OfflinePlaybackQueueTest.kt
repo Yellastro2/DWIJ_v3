@@ -5,6 +5,8 @@ import com.yellastrodev.dwij.data.entities.PlaybackTrack
 import com.yellastrodev.dwij.data.entities.dTracklist
 import com.yellastrodev.dwij.data.entities.toPlaybackTrack
 import com.yellastrodev.dwij.data.repo.PlayerRepository
+import com.yellastrodev.dwij.HomeMusicSource
+import com.yellastrodev.dwij.models.DownloadedTracklist
 import com.yellastrodev.dwij.utils.PlayerEvent
 import com.yellastrodev.dwij.utils.PlayerState
 import com.yellastrodev.yamusicsdk.NoOpYamLogger
@@ -17,6 +19,7 @@ import kotlinx.coroutines.cancel
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.withTimeout
 import kotlin.test.Test
@@ -24,8 +27,34 @@ import kotlin.test.assertEquals
 import kotlin.test.assertFalse
 import kotlin.test.assertTrue
 
-/** Проверяет границу движок/репозиторий: четвёртая сеть не запускается, текущий звук не перезапускается. */
+/** Проверяет автоматический/явный офлайн, исчезнувший кеш и поздние реакции без подмены чужих песен. */
 class OfflinePlaybackQueueTest {
+    /** Поздний ответ лайка обновляет прежнюю временную песню, не меняя новую и не запуская звук повторно. */
+    @Test
+    fun lateReactionUpdatesOnlyItsSourceTrack() = runBlocking {
+        val scope = CoroutineScope(SupervisorJob() + Dispatchers.Unconfined)
+        try {
+            val engine = Engine()
+            val repo = PlayerRepository(engine, Settings(), scope, { false }, {}, {}, NoOpYamLogger)
+            val songs = (1..2).map { YaTrack("$it", "Трек $it", true).toDailyPlaylistSong() }
+            repo.playQueue(songs, 0, LocalTracklist("test", "Тест"))
+            engine.state.value = engine.state.value.copy(currentIndex = 1)
+            withTimeout(3_000) { repo.currentSong.first { it?.id == songs[1].id } }
+            repo.applyYandexReaction("1", true)
+            assertEquals(songs[1].id, repo.currentSong.value?.id)
+            assertFalse(requireNotNull(repo.currentSong.value).isLiked)
+            engine.state.value = engine.state.value.copy(currentIndex = 0)
+            val first = withTimeout(3_000) { repo.currentSong.first { it?.id == songs[0].id } }
+            assertTrue(requireNotNull(first).isLiked)
+            assertEquals(songs[0].instances, first.instances)
+            repo.applyYandexReaction("1", false)
+            assertFalse(requireNotNull(repo.currentSong.value).isLiked)
+            assertEquals(1, engine.starts)
+        } finally {
+            scope.cancel()
+        }
+    }
+
     /** После третьего отказа выбирается готовый файл; probe возвращает полный состав с прежней позицией. */
     @Test fun switchesBeforeFourthOnlineTrackAndRestoresWithoutRestart() = runBlocking {
         val scope = CoroutineScope(SupervisorJob() + Dispatchers.Unconfined)
@@ -95,6 +124,45 @@ class OfflinePlaybackQueueTest {
             }
             withTimeout(3_000) { while (engine.tracks.isNotEmpty()) delay(10) }
             assertTrue(repo.isOffline.value)
+        } finally { scope.cancel() }
+    }
+
+    /** Явная офлайн-коллекция использует файлы даже онлайн и не принимает сетевую догрузку. */
+    @Test fun downloadedQueueUsesOnlyOfflineResolverWhileOnline() = runBlocking {
+        val scope = CoroutineScope(SupervisorJob() + Dispatchers.Unconfined)
+        try {
+            val engine = Engine()
+            val songs = (1..2).map { YaTrack("$it", "Трек $it", true).toDailyPlaylistSong() }
+            val repo = PlayerRepository(engine, Settings(), scope,
+                { error("Онлайн-выбор не должен вызываться") },
+                { error("Предзагрузка запрещена") }, {}, NoOpYamLogger,
+                resolveVkUri = { error("Сетевой VK-resolver запрещён") },
+                resolveOfflineTrack = { song -> song.toPlaybackTrack { true }?.copy(playbackUri = "file:///${song.id}.mp3") },
+                probeOnline = { error("Проверка сети не нужна локальной коллекции") })
+            val list = DownloadedTracklist(HomeMusicSource.All, "Скачанные", emptyList())
+            assertTrue(repo.tryPlayQueue(songs, 1, list))
+            assertFalse(repo.isOffline.value)
+            assertEquals(songs.map { "file:///${it.id}.mp3" }, engine.tracks.map { it.playbackUri })
+            assertEquals(1, engine.state.value.currentIndex)
+            repo.addTracks(songs)
+            assertEquals(2, engine.tracks.size)
+        } finally { scope.cancel() }
+    }
+
+    /** Исчезнувший до разрешения очереди кеш даёт отказ и очищает прежнюю сетевую очередь. */
+    @Test fun disappearedDownloadedQueueDoesNotStartNetworkOrKeepOldQueue() = runBlocking {
+        val scope = CoroutineScope(SupervisorJob() + Dispatchers.Unconfined)
+        try {
+            val engine = Engine()
+            val songs = listOf(YaTrack("1", "Трек", true).toDailyPlaylistSong())
+            val repo = PlayerRepository(engine, Settings(), scope, { false }, {}, {}, NoOpYamLogger,
+                resolveOfflineTrack = { null })
+            repo.playQueue(songs, 0, LocalTracklist("online", "Онлайн"))
+            assertEquals(1, engine.starts)
+            assertFalse(repo.tryPlayQueue(songs, 0, DownloadedTracklist(HomeMusicSource.All, "Скачанные", emptyList())))
+            assertTrue(engine.tracks.isEmpty())
+            assertFalse(engine.state.value.wantsToPlay)
+            assertEquals(1, engine.starts)
         } finally { scope.cancel() }
     }
 

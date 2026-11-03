@@ -1,6 +1,6 @@
 package com.yellastrodev.dwij.data.entities
 
-/** Конечная одиночная VK-очередь; завершение не должно запускать Яндекс-волну. */
+/** Конечный снимок треков поиска VK; завершение не должно запускать Яндекс-волну. */
 class VkSearchTracklist : dTracklist {
     /** Новый id заставляет плеер обновить истёкший URL даже при повторном выборе трека. */
     override fun getdId(): String = identity

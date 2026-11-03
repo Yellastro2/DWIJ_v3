@@ -18,8 +18,11 @@ data class M3uExportResult(
     val hash: String,
 )
 
-/** Платформенный источник локальных треков и публичных M3U-плейлистов. */
+/** Платформенный источник медиатеки, M3U-плейлистов и проверки чтения офлайн-файлов. */
 interface LocalMediaSource {
+    /** Проверяет фактическое чтение локального файла без сети; вызывается на IO. */
+    fun isTrackReadable(track: LocalTrackEntity): Boolean
+
     fun currentGeneration(): String
 
     fun findChangedBackingFiles(

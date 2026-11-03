@@ -20,6 +20,7 @@ import com.yellastrodev.dwij.desktop.navigation.DesktopDwijAppPlatform
 import com.yellastrodev.dwij.desktop.windows.WindowsTaskbarControls
 import com.yellastrodev.dwij.desktop.windows.DesktopWindowFrame
 import com.yellastrodev.dwij.models.PlayerModel
+import com.yellastrodev.dwij.ui.theme.DwijTheme
 import com.yellastrodev.dwij.navigation.DwijApp
 import com.yellastrodev.dwij.ui.LocalPlayerVolumeControl
 import com.yellastrodev.dwij.ui.LocalYamLogger
@@ -32,7 +33,7 @@ import java.awt.event.WindowEvent
 import kotlin.math.roundToLong
 
 /**
- * Запускает desktop-приложение с фирменной панелью Windows и сбросом фокуса при возврате.
+ * Запускает desktop-приложение в фиксированной теме с фирменной панелью Windows и сбросом фокуса.
  */
 fun main() {
     val runtime =
@@ -227,23 +228,25 @@ fun main() {
                 }
             }
 
-            CompositionLocalProvider(
-                LocalYamLogger provides
-                        component.logger,
-                LocalPlayerVolumeControl provides
-                        runtime.playerVolumeControl,
-            ) {
-                val appContent: @androidx.compose.runtime.Composable () -> Unit = {
-                    DwijApp(
-                        playerModel = playerModel,
-                        component = component,
-                        platform = platform,
-                    )
-                }
-                if (System.getProperty("os.name", "").startsWith("Windows", ignoreCase = true)) {
-                    DesktopWindowFrame(windowState, appContent)
-                } else {
-                    appContent()
+            DwijTheme {
+                CompositionLocalProvider(
+                    LocalYamLogger provides
+                            component.logger,
+                    LocalPlayerVolumeControl provides
+                            runtime.playerVolumeControl,
+                ) {
+                    val appContent: @androidx.compose.runtime.Composable () -> Unit = {
+                        DwijApp(
+                            playerModel = playerModel,
+                            component = component,
+                            platform = platform,
+                        )
+                    }
+                    if (System.getProperty("os.name", "").startsWith("Windows", ignoreCase = true)) {
+                        DesktopWindowFrame(windowState, appContent)
+                    } else {
+                        appContent()
+                    }
                 }
             }
         }

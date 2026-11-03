@@ -9,6 +9,7 @@ import com.yellastrodev.dwij.storage.ProtectedSessionPayloadStore
 import com.yellastrodev.vkmusicsdk.VkApiClient
 import com.yellastrodev.vkmusicsdk.VkApiException
 import com.yellastrodev.vkmusicsdk.VkAudio
+import com.yellastrodev.vkmusicsdk.VkAudioPage
 import com.yellastrodev.vkmusicsdk.VkHlsRelay
 import com.yellastrodev.vkmusicsdk.VkAudioCache
 import com.yellastrodev.vkmusicsdk.VkPlaylist
@@ -17,6 +18,8 @@ import com.yellastrodev.vkmusicsdk.VkWebSession
 import com.yellastrodev.yamusicsdk.YamLogger
 import java.io.Closeable
 import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.async
+import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -44,6 +47,12 @@ const val VK_MY_TRACKS = "0_-1"
 /** Зарезервированный маршрут объединения личной коллекции и всех плейлистов VK. */
 const val VK_ALL_TRACKS = "0_-2"
 
+/** Секции поиска; курсор считается до фильтрации дублей, ошибка глобальной части допускает повтор. */
+data class VkTrackSearchResult(
+    val added: List<VkAudio>, val global: List<VkAudio>,
+    val nextOffset: Int?, val globalError: DataError? = null,
+)
+
 /**
  * Сессия и коллекции VK; Room-кеш аккаунта доступен до сети, Song собирается общим индексом.
  * OAuth-токен либо браузерные cookies с обновляемым токеном сохраняются только в защищённом payload.
@@ -52,6 +61,7 @@ const val VK_ALL_TRACKS = "0_-2"
  * Desktop может получать MP3 HLS без TS-обёртки; формат кеша и offline-bundle сохраняется.
  * Явное сохранение публикует независимый offline-bundle вне LRU.
  * Сборка очередей использует отдельный mutex и не ожидает сетевого обновления фонотеки.
+ * Поиск разделяет личную коллекцию и глобальные треки и передаёт конечный снимок с выбранной позицией.
  * Конечные рекомендации загружаются по нажатию независимо от обновления личной фонотеки.
  */
 class VkMusicRepository(
@@ -682,20 +692,91 @@ class VkMusicRepository(
         }
     }
 
-    /** Ищет в VK; при сетевом отказе возвращает совпадения среди постоянно сохранённых треков. */
-    suspend fun search(query: String): DataResult<List<VkAudio>> {
+    /** Сохраняет контракт первой страницы поиска для вызовов без пагинации. */
+    suspend fun search(query: String): DataResult<List<VkAudio>> = when (val result = searchPage(query, 0)) {
+        is DataResult.Success -> DataResult.Success(result.value.items)
+        is DataResult.Failure -> result
+    }
+
+    /** Получает страницу VK; локальный fallback доступен только для первой страницы и не имеет продолжения. */
+    private suspend fun searchPage(query: String, offset: Int): DataResult<VkAudioPage> {
         val result = operation("search") {
             val active = client ?: throw VkApiException(5)
-            active.search(query).items.also { it.forEach(::rememberDownloadAudio) }
+            val page = active.search(query, offset = offset)
+            logger.info(TAG, "[search] audio.search: offset=$offset, всего=${page.count}, получено=${page.items.size}")
+            page.items.forEach(::rememberDownloadAudio)
+            page
         }
-        if (result is DataResult.Failure) {
+        if (result is DataResult.Failure && offset == 0) {
             val local = withContext(Dispatchers.IO) { localStorage?.audios().orEmpty().filter {
                 "${it.title} ${it.artistNames.joinToString(" ")}".contains(query.trim(), ignoreCase = true)
             } }
-            if (local.isNotEmpty()) return DataResult.Success(local)
+            if (local.isNotEmpty()) {
+                logger.info(TAG, "[search] Запрос не выполнен; найдено в постоянных загрузках=${local.size}")
+                return DataResult.Success(VkAudioPage(count = local.size, items = local))
+            }
         }
         return result
     }
+
+    /**
+     * Ищет по полному индексу «Моих треков» и параллельно запрашивает глобальный поиск.
+     * Не полагается на неподтверждённый search_own; исключает личные записи по ID/release/alias.
+     * Курсор продвигается по сырой странице, даже если после фильтрации в ней не осталось треков.
+     */
+    suspend fun searchSections(query: String, offset: Int = 0): DataResult<VkTrackSearchResult> = coroutineScope {
+        val revision = sessionRevision.value
+        val globalRequest = async { searchPage(query, offset) }
+        // Для поиска достаточно полного сохранённого снимка; мутации проверяют свежесть отдельно.
+        val libraryResult = if (myTracksLoaded.value || cachedLibrary?.myTrackIds() != null) {
+            DataResult.Success(Unit)
+        } else {
+            refreshMyTracks()
+        }
+        val globalResult = globalRequest.await()
+        if (libraryResult is DataResult.Failure) return@coroutineScope libraryResult
+        if (offset > 0 && globalResult is DataResult.Failure) return@coroutineScope globalResult
+        val library = myTracks.value
+        val aliases = myTrackAliases.value
+        val globalTracks = when (globalResult) {
+            is DataResult.Success -> globalResult.value.items
+            is DataResult.Failure -> emptyList()
+        }
+        val sections = withContext(Dispatchers.Default) {
+            val words = query.trim().split(Regex("\\s+"))
+                .filter { it.any(Char::isLetterOrDigit) }
+            val added = distinctVkLibraryTracks(library, library, aliases).filter { audio ->
+                val text = "${audio.title} ${audio.artistNames.joinToString(" ")}"
+                words.isNotEmpty() && words.all { text.contains(it, ignoreCase = true) }
+            }
+            val libraryIds = library.flatMap { audio ->
+                listOfNotNull(audio.fullId, audio.releaseAudioId?.takeIf(String::isNotBlank))
+            }.toHashSet()
+            val global = distinctVkLibraryTracks(globalTracks, library, aliases)
+                .filterNot { audio ->
+                    audio.fullId in libraryIds || audio.releaseAudioId in libraryIds ||
+                        aliases[audio.fullId] in libraryIds
+                }
+            val nextOffset = when (globalResult) {
+                is DataResult.Success -> (offset + globalTracks.size).takeIf {
+                    globalTracks.isNotEmpty() && it < globalResult.value.count
+                }
+                is DataResult.Failure -> offset
+            }
+            VkTrackSearchResult(added, global, nextOffset, (globalResult as? DataResult.Failure)?.error)
+        }
+        if (globalResult is DataResult.Failure && sections.added.isEmpty()) return@coroutineScope globalResult
+        operation("searchSections") {
+            check(revision == sessionRevision.value) { "Сессия VK изменилась во время поиска" }
+            logger.info(TAG, "[searchSections] offset=$offset, следующий=${sections.nextOffset}, фонотека=${library.size}, " +
+                "добавленных=${sections.added.size}, глобальных без дублей=${sections.global.size}")
+            sections
+        }
+    }
+
+    /** Удаляет повторы между страницами по source-id, release-id и подтверждённым личным aliases. */
+    fun distinctSearchTracks(tracks: List<VkAudio>): List<VkAudio> =
+        distinctVkLibraryTracks(tracks, myTracks.value, myTrackAliases.value)
 
     /** Обновляет только сетку; кеш составов и «Моих треков» сохраняется, сетевые ошибки не очищают экран. */
     suspend fun refreshPlaylists(): DataResult<Unit> = operation("refreshPlaylists") {
@@ -906,14 +987,21 @@ class VkMusicRepository(
     }
 
     /** Запускает выбранный трек без ожидания сетевого обновления фонотеки; индекс имеет свой mutex. */
-    suspend fun play(audio: VkAudio, player: PlayerRepository): DataResult<Unit> = operation("play") {
+    suspend fun play(audio: VkAudio, player: PlayerRepository): DataResult<Unit> =
+        playSearch(listOf(audio), 0, player)
+
+    /** Запускает конечный снимок поиска с выбранного трека; ссылки остальных разрешаются лениво. */
+    suspend fun playSearch(
+        tracks: List<VkAudio>, startIndex: Int, player: PlayerRepository,
+    ): DataResult<Unit> = operation("playSearch") {
         queueMutex.withLock {
             val session = sessionRevision.value
-            registerTracks(listOf(audio))
-            val queue = songs.songsForVkTracks(listOf(audio))
-            check(session == sessionRevision.value) { "Сессия VK изменилась при подготовке трека" }
-            require(queue.size == 1) { "Не удалось собрать трек VK" }
-            player.playQueue(queue, 0, VkSearchTracklist())
+            require(tracks.isNotEmpty() && startIndex in tracks.indices)
+            registerTracks(tracks)
+            val queue = songs.songsForVkTracks(tracks)
+            check(session == sessionRevision.value) { "Сессия VK изменилась при подготовке очереди поиска" }
+            require(queue.size == tracks.size) { "Не удалось собрать полный состав поиска VK" }
+            check(player.tryPlayQueue(queue, startIndex, VkSearchTracklist())) { "Не удалось запустить очередь поиска VK" }
         }
     }
     /** Преобразует ошибки VK в общий контракт, не логируя token, callback или signed URL. */

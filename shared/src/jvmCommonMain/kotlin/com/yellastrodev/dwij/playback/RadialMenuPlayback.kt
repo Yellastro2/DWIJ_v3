@@ -16,7 +16,7 @@ import kotlinx.coroutines.flow.first
 
 /**
  * Запускает коллекцию, сохранённый плейлист или новую ЯМ-волну по исходному seed.
- * Каждый вызов читает актуальное содержимое. Разрешения проверяет HomeRoute.
+ * Сохранённый ЯМ-список запускается без ожидания сети; обновление идёт отдельно. Разрешения проверяет HomeRoute.
  */
 internal suspend fun DwijComponent.playRadialMenuTarget(target: RadialMenuTarget): DataResult<Unit> {
     if (waveRepository.isLoading.value || dailyPlaylistPlayback.isStarting || mixedRecommendationPlayback.loading.value) {
@@ -80,7 +80,7 @@ internal suspend fun DwijComponent.playRadialMenuTarget(target: RadialMenuTarget
             }
         }
         RadialMenuCollection.YANDEX_LIKED -> {
-            playlistRepository.initialLoadComplete.first { it }
+            playlistRepository.localLoadComplete.first { it }
             if (playlistRepository.getLikeList() == null) {
                 val refresh = playlistRepository.refreshPlaylists()
                 if (refresh is DataResult.Failure) return refresh
@@ -103,16 +103,28 @@ internal suspend fun DwijComponent.playRadialMenuTarget(target: RadialMenuTarget
     }
 }
 
-/** Обновляет состав существующего ЯМ-плейлиста и собирает общие Song перед запуском. */
+/** Запускает сохранённый состав сразу; при отсутствии треков загружает список с сервера. */
 private suspend fun DwijComponent.playRadialYandexPlaylist(key: String): DataResult<Unit> {
-    playlistRepository.initialLoadComplete.first { it }
-    if (playlistRepository.playlists.value.none { it.playlistUuid == key }) {
+    playlistRepository.localLoadComplete.first { it }
+    var current = playlistRepository.getPlaylistsByKeys(listOf(key)).first().singleOrNull()
+    if (current == null) {
         val refresh = playlistRepository.refreshPlaylists()
         if (refresh is DataResult.Failure) return refresh
+        current = playlistRepository.getPlaylistsByKeys(listOf(key)).first().singleOrNull()
+            ?: return DataResult.Failure(DataError.NotFound("playlist", key))
+    }
+    val cached = trackRepository.cachedTracks(current.tracks.map { it.trackId })
+    if (cached.isNotEmpty()) {
+        val songs = songRepository.songsForYandexTracks(cached)
+        waveRepository.stopObserving()
+        playerRepo.playQueue(songs, 0, current)
+        playlistRepository.refreshPlaylistInBackground(key)
+        return DataResult.Success(Unit)
     }
     val refresh = playlistRepository.refreshPlaylist(key)
     if (refresh is DataResult.Failure) return refresh
-    val current = playlistRepository.playlistFlow(key).first()
+    current = playlistRepository.getPlaylistsByKeys(listOf(key)).first().singleOrNull()
+        ?: return DataResult.Failure(DataError.NotFound("playlist", key))
     val tracks = when (val result = trackRepository.getTracks(current.tracks.map { it.trackId })) {
         is DataResult.Failure -> return result
         is DataResult.Success -> result.value

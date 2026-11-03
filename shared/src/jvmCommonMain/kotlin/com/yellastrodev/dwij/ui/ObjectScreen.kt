@@ -67,6 +67,7 @@ import org.jetbrains.compose.resources.stringResource
  * Подходит плейлисту, альбому, исполнителю или абстрактной подборке: route передаёт только
  * заголовок, описание, обложку, доступные действия и подготовленные элементы списка.
  * [objectMenuContent] добавляет меню в правую часть закреплённой верхней панели.
+ * [playEnabled] позволяет отключить запуск пустой или уже подготавливаемой коллекции.
  */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -98,6 +99,7 @@ fun ObjectScreen(
     onRefresh: () -> Unit = {},
     selectionTarget: RadialMenuTarget? = null,
     waveSelectionTarget: RadialMenuTarget.YandexWave? = null,
+    playEnabled: Boolean = true,
 ) {
     val selection = LocalRadialMenuSelection.current
     Column(
@@ -135,6 +137,7 @@ fun ObjectScreen(
                         showWave = showWave && (selection == null || waveSelectionTarget != null),
                         onShareClick = onShareClick,
                         onPlayClick = onPlayClick,
+                        playEnabled = playEnabled,
                         onWaveClick = {
                             if (selection == null) onWaveClick()
                             else waveSelectionTarget?.let(selection.onSelect)
@@ -151,7 +154,7 @@ fun ObjectScreen(
     }
 }
 
-/** Рисует закреплённую верхнюю строку с кнопкой назад и текущим названием. */
+/** Рисует верхнюю строку; фон меню и цвета его содержимого согласованы общей темой Движа. */
 @Composable
 private fun ObjectTopBar(
     title: String,
@@ -258,7 +261,7 @@ private fun ObjectTopBar(
                 DropdownMenu(
                     expanded = isMenuExpanded,
                     onDismissRequest = { isMenuExpanded = false },
-                    modifier = Modifier.background(DwijColors.PlayerSnackbarBackground),
+                    containerColor = DwijColors.Surface,
                 ) {
                     menuContent { isMenuExpanded = false }
                 }
@@ -267,7 +270,7 @@ private fun ObjectTopBar(
     }
 }
 
-/** Рисует шапку объекта; в режиме выбора заменяет воспроизведение кнопкой назначения. */
+/** Рисует шапку с доступностью Play; в режиме выбора показывает кнопку назначения. */
 @Composable
 private fun ObjectHeader(
     title: String,
@@ -281,6 +284,7 @@ private fun ObjectHeader(
     onWaveClick: () -> Unit,
     selecting: Boolean,
     onAssign: (() -> Unit)?,
+    playEnabled: Boolean,
 ) {
     Box(
         modifier = Modifier
@@ -358,7 +362,7 @@ private fun ObjectHeader(
                         }
                     }
                 } else {
-                    ObjectPlayButton(onClick = onPlayClick)
+                    ObjectPlayButton(onClick = onPlayClick, enabled = playEnabled)
                     if (showWave) {
                         Spacer(modifier = Modifier.width(12.dp))
                         ObjectWaveButton(onClick = onWaveClick)
@@ -431,9 +435,9 @@ private fun ObjectCover(
     }
 }
 
-/** Использует наш сгенерированный PNG play без Material-иконки и текстовой плашки. */
+/** Рисует фирменный Play и отключает нажатия, когда запуск коллекции недоступен. */
 @Composable
-private fun ObjectPlayButton(onClick: () -> Unit) {
+private fun ObjectPlayButton(onClick: () -> Unit, enabled: Boolean) {
     Box(
         contentAlignment = Alignment.Center,
         modifier = Modifier
@@ -441,11 +445,12 @@ private fun ObjectPlayButton(onClick: () -> Unit) {
             .clip(RoundedCornerShape(18.dp))
             .background(DwijColors.ObjectActionBackground)
             .border(1.dp, DwijColors.Pink.copy(alpha = 0.85f), RoundedCornerShape(18.dp))
-            .clickable(onClick = onClick),
+            .clickable(enabled = enabled, onClick = onClick),
     ) {
         Image(
             painter = painterResource(Res.drawable.ic_player_play_v2),
             contentDescription = stringResource(Res.string.object_play_content_description),
+            alpha = if (enabled) 1f else 0.35f,
             contentScale = ContentScale.FillBounds,
             modifier = Modifier.requiredSize(width = 225.dp, height = 150.dp),
         )

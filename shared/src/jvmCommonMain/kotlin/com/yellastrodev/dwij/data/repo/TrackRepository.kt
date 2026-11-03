@@ -24,7 +24,7 @@ import java.io.OutputStream
 
 /**
  * Отдаёт треки из Room немедленно и лениво освежает их сетевые метаданные по TTL.
- * Проверка запускается только для явно запрошенного трека или набора треков.
+ * Проверка запускается только для явно запрошенного набора; cachedTracks читает Room без сети.
  */
 class TrackRepository(
     private val remote: TrackRemoteSource,
@@ -84,7 +84,7 @@ class TrackRepository(
         val storedTracks = local.getTracks(trackList.map(dYaTrack::id))
         publishTracks(storedTracks)
         songRepository.registerYandexTracks(storedTracks)
-        logger.debug(TAG, "[putTracks] Сохранено=${storedTracks.size}, в памяти=${_tracks.value.size}")
+        logger.debug(TAG, "[putTracks] Сохранено=${storedTracks.size}, в памяти=${_tracks.value.size}, неполных=${trackList.count { it.title.isBlank() }}")
     }
 
     /**
@@ -118,6 +118,14 @@ class TrackRepository(
     suspend fun getTracks(
         trackIds: List<String>
     ): DataResult<List<dYaTrack>> = loadTracks(trackIds)
+
+    /** Возвращает известные треки в порядке списка без сетевого ожидания и индексирует их для очереди. */
+    suspend fun cachedTracks(trackIds: List<String>): List<dYaTrack> {
+        val stored = local.getTracks(trackIds.distinct()).associateBy { it.id }
+        val tracks = trackIds.mapNotNull(stored::get)
+        songRepository.ensureYandexTracksIndexed(tracks)
+        return tracks
+    }
 
     /**
      * Сначала читает запрошенные треки из Room. Недостающие получает синхронно,
@@ -226,6 +234,11 @@ class TrackRepository(
         for (batch in trackIds.distinct().chunked(REMOTE_BATCH_SIZE)) {
             when (val result = remote.fetchTracks(batch)) {
                 is DataResult.Success -> {
+                    val incompleteIds = result.value.filter { it.title.isBlank() }.map { it.id }
+                    if (incompleteIds.isNotEmpty()) logger.warning(
+                        TAG,
+                        "[fetchAndStoreTracks] Получены записи без названия: всего=${incompleteIds.size}, id=${incompleteIds.take(5)}",
+                    )
                     local.insertAll(result.value)
                     val storedTracks = local.getTracks(result.value.map(dYaTrack::id))
                     publishTracks(storedTracks)

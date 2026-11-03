@@ -1,5 +1,6 @@
 package com.yellastrodev.dwij.playback
 
+import com.yellastrodev.dwij.data.repo.withYandexReaction
 import com.yellastrodev.dwij.data.entities.toPlaybackTrack
 import com.yellastrodev.yamusicsdk.entities.YaTrack
 import kotlin.test.Test
@@ -8,8 +9,30 @@ import kotlin.test.assertFalse
 import kotlin.test.assertNull
 import kotlin.test.assertTrue
 
-/** Проверяет воспроизведение временных снимков без данных фонотеки и связей плейлиста. */
+/** Проверяет временные снимки, их source-ID реакции и воспроизведение неполной метадаты только из кеша. */
 class DailyPlaylistPlaybackTest {
+
+    /** Реакция временной песни сохраняет её ID и экземпляры, повторное снятие работает по тому же source ID. */
+    @Test
+    fun reactionUpdatesTemporarySongByYandexId() {
+        val song = track(available = true).toDailyPlaylistSong()
+        val liked = song.withYandexReaction("123", true)
+        assertTrue(liked.isLiked)
+        assertEquals(song.id, liked.id)
+        assertEquals(song.instances, liked.instances)
+        assertFalse(liked.withYandexReaction("123", false).isLiked)
+        assertFalse(song.withYandexReaction("another-track", true).isLiked)
+    }
+
+    /** Даже available=true не разрешает сетевое воспроизведение записи без названия. */
+    @Test
+    fun incompleteMetadataRequiresCachedAudio() {
+        val song = YaTrack(id = "123", available = true).toDailyPlaylistSong()
+        assertEquals("Недоступный трек", song.title)
+        assertNull(song.toPlaybackTrack { false })
+        assertEquals("123", song.toPlaybackTrack { it == "123" }?.id)
+    }
+
     /** Временная песня передаёт плееру реальный ЯМ-ID, но не приобретает связи плейлиста. */
     @Test
     fun temporarySongPlaysWithoutPlaylistMembership() {

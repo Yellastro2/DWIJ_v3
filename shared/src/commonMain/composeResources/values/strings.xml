@@ -251,8 +251,10 @@
     <string name="all_tracks_load_failed">Не удалось загрузить или воспроизвести общую фонотеку</string>
     <string name="home_downloaded_tracks">Скачанные</string>
     <string name="downloaded_tracks_title">Скачанные · %1$s</string>
-    <string name="downloaded_tracks_empty">Скачанных треков пока нет</string>
-    <string name="downloaded_tracks_failed">Не удалось открыть скачанные треки. Проверьте, что файлы ещё есть на устройстве.</string>
+    <string name="downloaded_tracks_empty">Нет треков, доступных без интернета</string>
+    <string name="downloaded_tracks_failed">Не удалось проверить треки на устройстве. Обновите список.</string>
+    <string name="downloaded_tracks_unavailable">Выбранные файлы больше недоступны. Список обновлён.</string>
+    <string name="downloaded_tracks_play_failed">Не удалось начать воспроизведение. Повторите попытку.</string>
     <string name="playlists_create">Создать плейлист</string>
     <string name="playlists_create_dialog_title">Новый плейлист</string>
     <string name="playlists_create_name_label">Название</string>

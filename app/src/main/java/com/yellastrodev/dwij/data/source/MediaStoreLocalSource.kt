@@ -47,8 +47,15 @@ fun hasAudioPermission(context: Context): Boolean = ContextCompat.checkSelfPermi
     requiredAudioPermission(),
 ) == PackageManager.PERMISSION_GRANTED
 
-/** Выполняет все медленные обращения к MediaStore и публичным M3U-файлам. */
+/** Читает MediaStore и публичные M3U; проверяет доступность офлайн-аудио через ContentResolver. */
 class MediaStoreLocalSource(private val context: Context): LocalMediaSource {
+    /** Проверяет чтение MediaStore, включая отозванное разрешение и удалённый файл; вызывается на IO. */
+    override fun isTrackReadable(track: LocalTrackEntity): Boolean = runCatching {
+        val uri = Uri.parse(track.contentUri)
+        if (uri.scheme != "content" && uri.scheme != "file") return@runCatching false
+        context.contentResolver.openInputStream(uri)?.use { it.read() >= 0 } == true
+    }.getOrDefault(false)
+
     private val resolver: ContentResolver = context.contentResolver
 
     override fun scan(): LocalMediaSnapshot {

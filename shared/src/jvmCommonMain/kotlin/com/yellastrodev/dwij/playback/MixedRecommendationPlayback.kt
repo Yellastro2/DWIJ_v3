@@ -11,7 +11,7 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.sync.Mutex
 import java.util.UUID
 
-/** Запускает конечную подборку ЯМ/VK с сохранением строгого чередования и происхождения песен. */
+/** Запускает подборку ЯМ/VK с чередованием; неполные ЯМ-записи доступны только при наличии кеша. */
 class MixedRecommendationPlayback(
     private val daily: DailyPlaylistPlayback,
     private val vk: VkMusicRepository,
@@ -27,7 +27,7 @@ class MixedRecommendationPlayback(
     private val mutableLoading = MutableStateFlow(false)
     val loading = mutableLoading.asStateFlow()
 
-    /** Запрашивает оба списка, индексирует метаданные и запускает только сбалансированные пары ЯМ → VK. */
+    /** Запрашивает списки, проверяет полноту метаданных и запускает сбалансированные пары ЯМ → VK. */
     suspend fun play(title: String): DataResult<Unit> {
         if (!mutex.tryLock()) return DataResult.Failure(DataError.InvalidData("Подборка уже загружается"))
         mutableLoading.value = true
@@ -43,7 +43,7 @@ class MixedRecommendationPlayback(
                 if (vkResult is DataResult.Failure) return@coroutineScope vkResult
                 val details = (yaResult as YamResult.Success).value
                     ?: return@coroutineScope DataResult.Failure(DataError.InvalidData("Плейлист дня ЯМ недоступен"))
-                val yaTracks = details.tracks.filter { it.available || isCached(it.id) }.map { it.toEntity() }
+                val yaTracks = details.tracks.map { it.toEntity() }.filter { it.available || isCached(it.id) }
                 tracks.putTracks(yaTracks)
                 val yaSongs = songs.songsForYandexTracks(yaTracks)
                 val vkSongs = songs.songsForVkTracks((vkResult as DataResult.Success).value.tracks)

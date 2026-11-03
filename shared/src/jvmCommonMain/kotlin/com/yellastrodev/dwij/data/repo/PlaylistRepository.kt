@@ -13,6 +13,7 @@ import com.yellastrodev.dwij.utils.PlaylistsDiff.Companion.diffPlaylists
 import com.yellastrodev.yamusicsdk.YamLogger
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -27,6 +28,7 @@ import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import kotlin.collections.map
 
+/** Хранит снимки плейлистов и подтверждает реакции независимо от загрузки метаданных треков. */
 class PlaylistRepository(
     private val local: dPlaylistDao,
     private val remote: PlaylistRemoteSource,
@@ -38,9 +40,12 @@ class PlaylistRepository(
 
     private val _playlistMap = MutableStateFlow<Map<String, dYaPlaylist>>(emptyMap())
     private val _initialLoadComplete = MutableStateFlow(false)
+    private val _localLoadComplete = MutableStateFlow(false)
+    private val refreshingPlaylists = java.util.concurrent.ConcurrentHashMap.newKeySet<String>()
     private val likeMutationMutex = Mutex()
     private val playlistSaveMutex = Mutex()
     val initialLoadComplete: StateFlow<Boolean> = _initialLoadComplete
+    val localLoadComplete: StateFlow<Boolean> = _localLoadComplete
     val playlists: StateFlow<List<dYaPlaylist>> =
         _playlistMap.map { it.values.toList() }
             .stateIn(scope, SharingStarted.Eagerly, emptyList())
@@ -65,6 +70,8 @@ class PlaylistRepository(
                 throw error
             } catch (error: Exception) {
                 logger.error(TAG, "[init] Не удалось прочитать локальные плейлисты", error)
+            } finally {
+                _localLoadComplete.value = true
             }
 
             try {
@@ -302,6 +309,48 @@ class PlaylistRepository(
     fun getLikeList(): dYaPlaylist? =
         _playlistMap.value.values.find { it.kind == KIND_LIKED }
 
+    /** Читает подтверждённый лайк по ID Яндекса, включая песни временных очередей. */
+    suspend fun isTrackLiked(trackId: String): Boolean = local.isTrackLiked(trackId)
+
+    /** Освежает сохранённый плейлист после запуска, объединяя повторные запросы одного списка. */
+    fun refreshPlaylistInBackground(playlistUuid: String) {
+        if (!refreshingPlaylists.add(playlistUuid)) return
+        scope.launch(Dispatchers.IO) {
+            try {
+                when (val result = refreshPlaylist(playlistUuid)) {
+                    is DataResult.Success -> Unit
+                    is DataResult.Failure -> logger.warning(
+                        TAG, "[refreshPlaylistInBackground] Сохранённый список оставлен: ${result.error}",
+                    )
+                }
+            } catch (error: CancellationException) {
+                throw error
+            } catch (error: Exception) {
+                logger.error(TAG, "[refreshPlaylistInBackground] Не удалось обновить список", error)
+            } finally {
+                refreshingPlaylists.remove(playlistUuid)
+            }
+        }
+    }
+
+    /** Метаданные нужны списку и индексу, но их отказ не отменяет подтверждённое членство в любимых. */
+    private fun refreshLikedTracksInBackground(playlist: dYaPlaylist) {
+        scope.launch(Dispatchers.IO) {
+            try {
+                when (val result = trackRepo.getTracks(playlist.tracks.map { it.trackId })) {
+                    is DataResult.Success -> Unit
+                    is DataResult.Failure -> logger.warning(
+                        TAG, "[refreshLikedTracksInBackground] Лайки сохранены, метаданные не загружены: ${result.error}",
+                    )
+                }
+            } catch (error: CancellationException) {
+                throw error
+            } catch (error: Exception) {
+                logger.error(TAG, "[refreshLikedTracksInBackground] Не удалось загрузить метаданные", error)
+            }
+        }
+    }
+
     /** Дизлайк снимает лайк на сервере; синхронизируем это изменение с Room. */
     suspend fun dislikeTrack(trackId: String): DataResult<Unit> =
         likeMutationMutex.withLock {
@@ -350,7 +399,7 @@ class PlaylistRepository(
 
     /**
      * Повторяет чтение liked-плейлиста, пока удалённый снимок не содержит ожидаемую мутацию,
-     * затем сохраняет его и отдельно проверяет уже закоммиченное состояние Room.
+     * затем сохраняет его и проверяет состояние Room. Метаданные треков догружаются после подтверждения.
      */
     private suspend fun refreshLikedPlaylistUntil(
         trackId: String,
@@ -362,12 +411,6 @@ class PlaylistRepository(
                     val playlist = result.value
                     val remoteLiked = playlist.tracks.any { item -> item.trackId == trackId }
                     if (remoteLiked == liked) {
-                        when (val tracksResult = trackRepo.getTracks(
-                            playlist.tracks.map { it.trackId }
-                        )) {
-                            is DataResult.Success -> Unit
-                            is DataResult.Failure -> return tracksResult
-                        }
                         when (val saveResult = savePlaylist(playlist)) {
                             is DataResult.Success -> Unit
                             is DataResult.Failure -> return saveResult
@@ -388,6 +431,7 @@ class PlaylistRepository(
                             "[refreshLikedPlaylistUntil] Room подтвердил: " +
                                 "trackId=$trackId, liked=$liked",
                         )
+                        refreshLikedTracksInBackground(playlist)
                         return DataResult.Success(Unit)
                     }
 
@@ -413,22 +457,18 @@ class PlaylistRepository(
         )
     }
 
+    /** Сохраняет состав любимых до фоновой загрузки их метаданных. */
     private suspend fun refreshLikedPlaylist(): DataResult<Unit> {
         return try {
             when (val result = remote.fetchLikelist()) {
                 is DataResult.Success -> {
                     val playlist = result.value
-                    when (val tracksResult = trackRepo.getTracks(
-                        playlist.tracks.map { it.trackId }
-                    )) {
-                        is DataResult.Success -> Unit
-                        is DataResult.Failure -> return tracksResult
-                    }
                     when (val saveResult = savePlaylist(playlist)) {
                         is DataResult.Success -> Unit
                         is DataResult.Failure -> return saveResult
                     }
                     logger.debug(TAG, "[refreshLikedPlaylist] Список лайков обновлён")
+                    refreshLikedTracksInBackground(playlist)
                     DataResult.Success(Unit)
                 }
                 is DataResult.Failure -> {

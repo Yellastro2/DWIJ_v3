@@ -78,6 +78,7 @@ import java.util.concurrent.atomic.AtomicBoolean
  * Загрузка VK-обложек учитывает диагностический режим текущей OAuth или web-сессии.
  * Скан и автослияние мультисурсов используют постоянные настройки; слияние обновляет playerRepo на Main.
  * Desktop передаёт режим MP3 HLS для совместимости VK с JavaFX.
+ * Офлайн-выбор проверяет чтение локальных файлов через платформенный источник медиатеки.
  *
  * Платформа передаёт системные реализации, низкоуровневое key-value хранилище
  * обычных настроек и защищённое хранилище авторизации.
@@ -231,7 +232,10 @@ class DwijComponent private constructor(
             engine = playerEngine,
             resolveVkUri = vkMusicRepository::playbackUri,
             resolveOfflineTrack = { song ->
-                song.toOfflinePlaybackTrack(trackCacheRepo::readyFile, vkMusicRepository::offlinePlaybackUri)
+                song.toOfflinePlaybackTrack(
+                    trackCacheRepo::readyFile, vkMusicRepository::offlinePlaybackUri,
+                    localMusicRepository::isTrackReadable,
+                )
             },
             networkFailure = { track, platformFailure ->
                 when (track.source) {

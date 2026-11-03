@@ -23,7 +23,7 @@ import kotlinx.coroutines.launch
 import org.jetbrains.compose.resources.pluralStringResource
 import org.jetbrains.compose.resources.stringResource
 
-/** Показывает все постоянные загрузки ЯМ, VK либо обоих источников, независимо от состава плейлистов. */
+/** Показывает готовые офлайн-копии; во «Всё сразу» включает локальную медиатеку и полный кеш ЯМ/VK. */
 @Composable
 internal fun DownloadedTracksRoute(
     component: DwijComponent,
@@ -42,6 +42,7 @@ internal fun DownloadedTracksRoute(
             player = component.playerRepo,
             wave = component.waveRepository,
             logger = component.logger,
+            isLocalReadable = component.localMusicRepository::isTrackReadable,
         )
     }
     val state by model.state.collectAsState()
@@ -55,24 +56,27 @@ internal fun DownloadedTracksRoute(
     })
     val title = stringResource(Res.string.downloaded_tracks_title, sourceTitle)
     val failureMessage = stringResource(Res.string.downloaded_tracks_failed)
+    val unavailableMessage = stringResource(Res.string.downloaded_tracks_unavailable)
+    val playbackFailureMessage = stringResource(Res.string.downloaded_tracks_play_failed)
     LaunchedEffect(state.failed) {
         if (state.failed) snackbar.showSnackbar(failureMessage)
     }
     // Возврат из плеера также проверяет внешнее удаление файлов, сохраняя состояние списка.
     LaunchedEffect(model) { model.refresh() }
 
-    /** Включает выбранную сохранённую песню и сообщает о пропавшем файле или ошибке плеера. */
+    /** Запускает офлайн-песню, игнорирует повторное нажатие и различает пропавший файл и ошибку плеера. */
     fun play(songId: String?) {
-        if (playing) return
+        if (playing || state.entries.isEmpty()) return
         scope.launch {
+            if (model.playing.value) return@launch
             try {
                 if (model.play(songId, title)) onOpenPlayer()
-                else snackbar.showSnackbar(failureMessage)
+                else snackbar.showSnackbar(unavailableMessage)
             } catch (error: CancellationException) {
                 throw error
             } catch (error: Exception) {
                 component.logger.error("DownloadedTracksRoute", "[play] Не удалось включить скачанные треки", error)
-                snackbar.showSnackbar(failureMessage)
+                snackbar.showSnackbar(playbackFailureMessage)
             }
         }
     }
@@ -102,6 +106,7 @@ internal fun DownloadedTracksRoute(
             tracks = items,
             onBackClick = onBackClick,
             onPlayClick = { play(null) },
+            playEnabled = items.isNotEmpty() && !playing,
             onTrackClick = { _, item -> play(item.trackId) },
             loadTrackCover = { id -> songsById[id]?.let { playerModel.cover(it, maxEdgePx = 180).firstOrNull() } },
             showShare = false,

@@ -7,8 +7,9 @@ import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFalse
 import kotlin.test.assertNull
+import kotlin.test.assertTrue
 
-/** Проверяет границу постоянных загрузок, фильтр источников и исключение сетевых вариантов из очереди. */
+/** Проверяет доступные офлайн-источники, локальные файлы, объединённые песни и запрет сетевой очереди. */
 class DownloadedTracksTest {
     /** В ЯМ и VK показываются только сохранённые экземпляры своего источника. */
     @Test
@@ -59,9 +60,9 @@ class DownloadedTracksTest {
         assertEquals(emptyList(), downloadedTrackEntries(library, HomeMusicSource.All, { false }, { false }))
     }
 
-    /** Файлы MediaStore не становятся загрузками ЯМ/VK даже при наличии локального экземпляра у песни. */
+    /** «Всё сразу» включает читаемый локальный файл, сохраняя фильтры ЯМ/VK и видимость медиатеки. */
     @Test
-    fun ordinaryLocalMediaDoesNotEnterDownloads() {
+    fun allIncludesReadableLocalMediaButProviderFiltersDoNot() {
         val local = TrackInstance.Local("local:1", LocalTrackEntity(
             instanceId = "local:1", mediaStoreId = 1L, volumeName = "external",
             contentUri = "content://media/external/audio/media/1", displayName = "local.mp3",
@@ -71,7 +72,20 @@ class DownloadedTracksTest {
             relativePath = null, absolutePath = null,
         ))
         val localOnly = song("local", listOf(local))
-        assertEquals(emptyList(), downloadedTrackEntries(listOf(localOnly), HomeMusicSource.All, { true }, { true }))
+        val entries = downloadedTrackEntries(listOf(localOnly), HomeMusicSource.All, { false }, { false }, { true })
+        assertEquals(local, entries.single().song.instances.single())
+        assertEquals(MusicSource.LOCAL, entries.single().origin)
+        for (source in listOf(HomeMusicSource.Yandex, HomeMusicSource.Vk)) {
+            assertEquals(emptyList(), downloadedTrackEntries(listOf(localOnly), source, { true }, { true }, { true }))
+        }
+        assertEquals(emptyList(), downloadedTrackEntries(listOf(localOnly), HomeMusicSource.All, { false }, { false }, { false }))
+        val hidden = localOnly.copy(instances = listOf(local.copy(track = local.track.copy(isHidden = true))))
+        assertEquals(emptyList(), downloadedTrackEntries(listOf(hidden), HomeMusicSource.All, { false }, { false }, { true }))
+        val linked = localOnly.copy(instances = listOf(yandex("online"), local), preferredInstanceId = "yandex:online")
+        val selected = downloadedTrackEntries(listOf(linked), HomeMusicSource.All, { false }, { false }, { true }).single()
+        assertEquals(local.id, selected.song.preferredInstanceId)
+        assertEquals(MusicSource.LOCAL, selected.origin)
+        assertNull(selected.song.toOfflinePlaybackTrack({ null }, { null }, { false }))
     }
 
     /** Недоступный на сервисе ЯМ-трек остаётся воспроизводимым из постоянной копии. */
@@ -91,7 +105,18 @@ class DownloadedTracksTest {
         val list = DownloadedTracklist(HomeMusicSource.Vk, "Скачанные", listOf(entry))
         assertNull(list.yandexWaveSeed())
         assertFalse(list.preserveQueueOrder())
+        assertTrue(list.offlineOnly())
         assertEquals(MusicSource.VK, list.originOf(entry.song.id))
+    }
+
+    /** Полный кеш разрешается как файл; его исчезновение не возвращает ya:// даже при доступности на сервере. */
+    @Test
+    fun cachedYandexUsesFileAndNeverFallsBackToNetwork() {
+        val original = song("cached", listOf(yandex("cached")))
+        val file = java.io.File("cached.mp3").absoluteFile
+        val playback = original.toOfflinePlaybackTrack({ file }, { error("VK не нужен") }, { false })
+        assertEquals(file.toURI().toString(), playback?.playbackUri)
+        assertNull(original.toOfflinePlaybackTrack({ null }, { error("VK не нужен") }, { false }))
     }
 
     /** Минимальный ЯМ-экземпляр без сети и Room. */
